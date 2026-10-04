@@ -116,6 +116,31 @@ func TestRenderConfigMapGeneratorBlock_Empty(t *testing.T) {
 	}
 }
 
+// TestRenderConfigMapGeneratorBlock_Annotations: a spec's annotations are
+// written as the generator's options.annotations, in key order, quoted where
+// YAML would read another type; a spec without any is written as before.
+func TestRenderConfigMapGeneratorBlock_Annotations(t *testing.T) {
+	specs := []ConfigMapGeneratorSpec{
+		{Name: "values", Files: []string{"values.yaml"}, Annotations: map[string]string{"b.example/k": "enabled", "a.example/k": "true"}},
+		{Name: "plain", Files: []string{"a.txt"}, Annotations: map[string]string{}},
+	}
+	got := renderConfigMapGeneratorBlock(specs)
+	want := "configMapGenerator:\n" +
+		"  - name: values\n" +
+		"    files:\n" +
+		"      - values.yaml\n" +
+		"    options:\n" +
+		"      annotations:\n" +
+		"        a.example/k: \"true\"\n" +
+		"        b.example/k: enabled\n" +
+		"  - name: plain\n" +
+		"    files:\n" +
+		"      - a.txt\n"
+	if got != want {
+		t.Errorf("unexpected block:\nwant:\n%s\ngot:\n%s", want, got)
+	}
+}
+
 func TestRenderConfigMapGeneratorBlock_Multiple(t *testing.T) {
 	specs := []ConfigMapGeneratorSpec{
 		{Name: "myapp-values", Files: []string{"values.yaml"}},

@@ -92,10 +92,13 @@ type ExtraFile struct {
 
 // ConfigMapGeneratorSpec describes a single kustomize configMapGenerator entry.
 // Files are paths (relative to the layout directory) of files included in the
-// generated ConfigMap.
+// generated ConfigMap. Annotations are written as the entry's
+// options.annotations, which kustomize puts on the ConfigMap it generates:
+// the only way to annotate an object that exists only after the build.
 type ConfigMapGeneratorSpec struct {
-	Name  string
-	Files []string
+	Name        string
+	Files       []string
+	Annotations map[string]string
 }
 
 // resolveManifestFileName returns the effective ManifestFileNameFunc for this

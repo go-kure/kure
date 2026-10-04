@@ -62,6 +62,15 @@ func flattenSingleTier(root *ManifestLayout, rules LayoutRules) *ManifestLayout 
 	if child.origin.app != nil {
 		root.origin.app = child.origin.app
 	}
+	// The absorbed layout's application records are root's now, and a record
+	// whose own layout was the absorbed one names root: that is where the
+	// application's resources and generators live.
+	root.origin.apps = append(root.origin.apps, child.origin.apps...)
+	for i := range root.origin.apps {
+		if root.origin.apps[i].Layout == child {
+			root.origin.apps[i].Layout = root
+		}
+	}
 
 	return root
 }

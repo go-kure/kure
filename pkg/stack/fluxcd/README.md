@@ -544,6 +544,47 @@ through the typed Flux `Kustomization`; one that cannot be read that way (a fiel
 type, for one) is refused, with an error naming the layout that holds it and its namespace and
 name.
 
+### Delivery intent
+
+An application's `Delivery` (see [stack](/api-reference/stack/)) is written as kustomize-controller
+annotations on that application's objects, and on no other application's:
+
+| `stack.DeliveryIntent` field | Annotation |
+|---|---|
+| `PruneProtection` | `kustomize.toolkit.fluxcd.io/prune: disabled` |
+| `ForceReplace` | `kustomize.toolkit.fluxcd.io/force: enabled` |
+
+`IntegrateWithLayout` (and so `CreateLayoutWithResources`) sets them, under all three placements
+and every grouping, on:
+
+- every object the application emits, the items of a `List` included (the envelope is left alone);
+- every object a `LayoutAugmenter` adds to the application's own layout or a child layout below it;
+- every `configMapGenerator` of those layouts, as the entry's `options.annotations`, because
+  kustomize builds those ConfigMaps after kure has written the tree.
+
+An object's other annotations are kept. An application that sets no intent gets no annotation and
+its output does not change.
+
+An object or generator that already carries one of these annotations with **another** value is
+refused, with an error naming the application, the object (kind, namespace/name) or generator, the
+annotation and both values; the same value is left as it is, so integrating a layout again changes
+nothing. When the integration is refused, for this or any later reason, the annotations it added
+are taken back with the rest of its changes.
+
+Things to know:
+
+- The annotations are set on the objects the layout holds, not on copies. An `ApplicationConfig`
+  that returns the same object pointers on every `Generate` call therefore keeps them after a
+  successful integration, also when the intent is cleared afterwards; return fresh objects per call
+  to avoid that.
+- The integrator applies the intent. A layout that is walked and written without
+  `IntegrateWithLayout` or `CreateLayoutWithResources` carries none.
+- kustomize names a generated ConfigMap after its content. With `PruneProtection`, each content
+  change therefore leaves the previous ConfigMap in the cluster instead of pruning it; remove old
+  ones by hand, or leave the intent off an application whose generated values change often.
+- `Bundle.Prune` and `Bundle.Force` set `spec.prune` and `spec.force` on the whole generated
+  Kustomization and are independent of the per-application intent.
+
 ## Bootstrap Generation
 
 Generate Flux system bootstrap manifests. Two modes are supported:

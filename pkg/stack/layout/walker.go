@@ -413,6 +413,7 @@ func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) (
 		all = append(all, objs...)
 		if g.appFlat && !isAugmenter(app) {
 			target.Resources = append(target.Resources, objs...)
+			target.origin.apps = append(target.origin.apps, ApplicationObjects{Application: app, Objects: objs})
 			continue
 		}
 		appLayout := g.newLayout(app.Name, target.FullRepoPath())
@@ -426,6 +427,9 @@ func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) (
 		for _, gen := range appLayout.ConfigMapGenerators {
 			all = append(all, generatedConfigMap(gen.Name))
 		}
+		// Recorded after the augmenter ran: what it added to the layout, or
+		// in a layout below it, is the application's too.
+		target.origin.apps = append(target.origin.apps, ApplicationObjects{Application: app, Objects: subtreeResources(appLayout), Layout: appLayout})
 		target.Children = append(target.Children, appLayout)
 	}
 	return all, nil

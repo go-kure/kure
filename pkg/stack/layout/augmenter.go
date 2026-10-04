@@ -72,6 +72,12 @@ func renderConfigMapGeneratorBlock(specs []ConfigMapGeneratorSpec) string {
 				b.WriteString(fmt.Sprintf("      - %s\n", yamlString(f)))
 			}
 		}
+		if len(spec.Annotations) > 0 {
+			b.WriteString("    options:\n      annotations:\n")
+			for _, k := range slices.Sorted(maps.Keys(spec.Annotations)) {
+				b.WriteString(fmt.Sprintf("        %s: %s\n", yamlString(k), yamlString(spec.Annotations[k])))
+			}
+		}
 	}
 	return b.String()
 }
