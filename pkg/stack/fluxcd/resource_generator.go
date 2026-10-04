@@ -461,9 +461,14 @@ func objectName(obj client.Object) string {
 // whose spec.path is path, verbatim, and a Source when b.SourceRef has a URL.
 // Umbrella Children are not recursed. The generator computes no path: take
 // it from the layout that renders b (layout.OriginIndex.KustomizationPath).
+// A DependsOn bundle or a child that would get b's own Kustomization name is
+// an error: the Kustomization would refer to itself.
 func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]client.Object, error) {
 	if b == nil {
 		return nil, nil
+	}
+	if err := checkOwnUnitName(b); err != nil {
+		return nil, err
 	}
 
 	kustomization, err := g.kustomizationForBundle(b, path)
@@ -738,4 +743,31 @@ func (g *ResourceGenerator) GetName() string {
 // GetVersion returns the version of this resource generator.
 func (g *ResourceGenerator) GetVersion() string {
 	return "v1.0.0"
+}
+
+// checkOwnUnitName refuses a DependsOn bundle or an umbrella child that would
+// get b's own Kustomization name (Bundle.UnitName). The cluster and layout
+// entry points have layout.IndexOrigins refuse two rendered bundles with one
+// name; GenerateForBundle has no index, and without this check it would emit
+// a Kustomization that depends on itself or waits for itself.
+func checkOwnUnitName(b *stack.Bundle) error {
+	refuse := func(field string, other *stack.Bundle) error {
+		return errors.ResourceValidationError("Bundle", b.Name, field,
+			fmt.Sprintf("bundles %q and %q would both get a Flux Kustomization named %q: that name, the bundle's KustomizationName or else its Name, must be unique",
+				b.GetPath(), other.GetPath(), b.UnitName()), nil)
+	}
+	for _, dep := range b.DependsOn {
+		if dep != nil && dep != b && dep.UnitName() == b.UnitName() {
+			return refuse("dependsOn", dep)
+		}
+	}
+	if len(b.Children) > 0 {
+		b.InitializeUmbrella()
+	}
+	for _, child := range b.Children {
+		if child != nil && child != b && child.UnitName() == b.UnitName() {
+			return refuse("children", child)
+		}
+	}
+	return nil
 }

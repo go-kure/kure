@@ -272,3 +272,66 @@ func TestKustomizationName_GenerateForBundle(t *testing.T) {
 		t.Errorf("dependsOn = %v, want [db-cr external]", deps)
 	}
 }
+
+// TestKustomizationName_GenerateForBundleRefusesItsOwnName: GenerateForBundle
+// sees one bundle and the bundles it points at, with no origin index to
+// refuse two bundles with one Kustomization name. A dependency or an umbrella
+// child that would get the bundle's own name is refused there, naming both
+// bundles, instead of a Kustomization that depends on itself or waits for
+// itself.
+func TestKustomizationName_GenerateForBundleRefusesItsOwnName(t *testing.T) {
+	tests := []struct {
+		name  string
+		build func() *stack.Bundle
+		want  []string
+	}{
+		{
+			name: "dependency with the bundle's KustomizationName",
+			build: func() *stack.Bundle {
+				db := srBundle("db")
+				db.KustomizationName = "shared"
+				web := srBundle("web")
+				web.KustomizationName = "shared"
+				web.DependsOn = []*stack.Bundle{db}
+				return web
+			},
+			want: []string{`"web"`, `"db"`, `"shared"`},
+		},
+		{
+			name: "dependency whose KustomizationName is the bundle's Name",
+			build: func() *stack.Bundle {
+				db := srBundle("db")
+				db.KustomizationName = "web"
+				web := srBundle("web")
+				web.DependsOn = []*stack.Bundle{db}
+				return web
+			},
+			want: []string{`"web"`, `"db"`},
+		},
+		{
+			name: "umbrella child with the bundle's KustomizationName",
+			build: func() *stack.Bundle {
+				api := srBundle("shop-api")
+				api.KustomizationName = "apps-shop"
+				shop := srBundle("shop")
+				shop.KustomizationName = "apps-shop"
+				shop.Children = []*stack.Bundle{api}
+				return shop
+			},
+			want: []string{`"shop"`, `"shop/shop-api"`, `"apps-shop"`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			objs, err := fluxstack.NewResourceGenerator().GenerateForBundle(tt.build(), "clusters/demo/x")
+			if err == nil {
+				t.Fatalf("GenerateForBundle returned %d objects for a Kustomization that refers to itself", len(objs))
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not contain %s", err, want)
+				}
+			}
+		})
+	}
+}
