@@ -583,7 +583,8 @@ The items carry the ticket's numbers. Items 3, 4, 6, 8 and 10 have shipped; item
      the root node's layout, which after item 1 renders no bundle.
 3. **`GenerateFromCluster` takes the caller's layout rules.** Shipped.
    - Before: it took no rules and walked with `DefaultLayoutRules()`, so its paths disagreed with
-     a layout written with any other rules.
+     a layout written with rules that place directories differently (a `ClusterName`, a flat
+     grouping).
    - Now: `GenerateFromCluster(c, rules)` of `stack.Workflow` (`pkg/stack/workflow.go`) and of
      both engines (`WorkflowEngine.GenerateFromCluster` in `pkg/stack/fluxcd/workflow_engine.go`
      and in `pkg/stack/argocd/argo.go`) walks with `rules`, so every Kustomization's `spec.path`
