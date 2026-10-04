@@ -80,6 +80,35 @@ func TestDeliveryIntent_Refused(t *testing.T) {
 	}
 }
 
+// TestDeliveryIntent_RefusedForAHandBuiltLayout: a layout the caller built
+// carries no application records, so IntegrateWithLayout reads the intent from
+// the cluster it is given too, umbrella children included.
+func TestDeliveryIntent_RefusedForAHandBuiltLayout(t *testing.T) {
+	handBuilt := &layout.ManifestLayout{Name: "manifests"}
+	err := Engine().IntegrateWithLayout(handBuilt, intentCluster(stack.DeliveryIntent{PruneProtection: true}), layout.DefaultLayoutRules())
+	if err == nil {
+		t.Fatal("IntegrateWithLayout accepted a cluster whose application sets a delivery intent")
+	}
+	for _, want := range []string{`application "db"`, "delivery intent", "ArgoCD"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err, want)
+		}
+	}
+	if err := Engine().IntegrateWithLayout(handBuilt, intentCluster(stack.DeliveryIntent{}), layout.DefaultLayoutRules()); err != nil {
+		t.Errorf("without an intent: %v", err)
+	}
+	if err := Engine().IntegrateWithLayout(handBuilt, nil, layout.DefaultLayoutRules()); err != nil {
+		t.Errorf("without a cluster: %v", err)
+	}
+
+	// A node tree that loops back is read once, not forever.
+	c := intentCluster(stack.DeliveryIntent{})
+	c.Node.Children[0].Children = []*stack.Node{c.Node}
+	if err := Engine().IntegrateWithLayout(handBuilt, c, layout.DefaultLayoutRules()); err != nil {
+		t.Errorf("looping node tree without an intent: %v", err)
+	}
+}
+
 // TestDeliveryIntent_UnsetAccepted: without an intent the same cluster renders.
 func TestDeliveryIntent_UnsetAccepted(t *testing.T) {
 	c := intentCluster(stack.DeliveryIntent{})
