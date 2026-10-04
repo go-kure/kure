@@ -452,3 +452,23 @@ func TestGenerateForBundle_RefusesOverLimitReference(t *testing.T) {
 		})
 	}
 }
+
+// TestGenerateForBundle_RefusesNilDependency: Bundle.Validate refuses a nil
+// DependsOn entry, and GenerateForBundle is reached without it. The generator
+// names the bundle and the entry instead of dereferencing it, and returns
+// nothing.
+func TestGenerateForBundle_RefusesNilDependency(t *testing.T) {
+	b := &stack.Bundle{Name: "web", DependsOn: []*stack.Bundle{{Name: "db"}, nil}}
+	objs, err := fluxstack.NewResourceGenerator().GenerateForBundle(b, "clusters/prod/web")
+	if err == nil {
+		t.Fatal("GenerateForBundle() generated, want the nil dependency refused")
+	}
+	if objs != nil {
+		t.Errorf("GenerateForBundle() returned %v next to the error, want nothing to write", objs)
+	}
+	for _, want := range []string{"'web'", "dependency at index 1 is nil"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("GenerateForBundle() = %v, want it to contain %q", err, want)
+		}
+	}
+}

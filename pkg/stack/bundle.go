@@ -287,11 +287,13 @@ func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 	}
 	depNames := make(map[string]bool, len(a.DependsOn))
 	depBundleNames := make(map[string]bool, len(a.DependsOn))
-	for _, dep := range a.DependsOn {
-		if dep != nil {
-			depNames[dep.UnitName()] = true
-			depBundleNames[dep.Name] = true
+	for i, dep := range a.DependsOn {
+		if dep == nil {
+			return errors.ResourceValidationError("Bundle", a.Name, "dependsOn",
+				fmt.Sprintf("dependency at index %d is nil", i), nil)
 		}
+		depNames[dep.UnitName()] = true
+		depBundleNames[dep.Name] = true
 	}
 	// Validate NamedDependsOn: empty names, duplicates, cross-field duplicates.
 	namedDepNames := make(map[string]bool, len(a.NamedDependsOn))

@@ -216,8 +216,9 @@ func TestValidateCluster_DependencyCopyLeavesOtherRefusalsAlone(t *testing.T) {
 		}
 	})
 	t.Run("nil dependency", func(t *testing.T) {
-		if err := ValidateCluster(dependencyCluster(&Bundle{Name: "db"}, nil)); err != nil {
-			t.Fatalf("got %v, want nil as before", err)
+		err := ValidateCluster(dependencyCluster(&Bundle{Name: "db"}, nil))
+		if err == nil || !strings.Contains(err.Error(), "dependency at index 0 is nil") {
+			t.Fatalf("got %v, want the nil entry refused by Bundle.Validate, not read as a copy", err)
 		}
 	})
 }

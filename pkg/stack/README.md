@@ -88,6 +88,9 @@ without renaming the bundle or moving its directory; `UnitName()` returns the na
 Under the ArgoCD workflow the same value names the Application. A `NamedDependsOn` entry names
 such a resource, so it reaches a bundle that sets `KustomizationName` by that value.
 
+A nil `DependsOn` entry is refused by `Bundle.Validate`, with the bundle and the entry's index; the
+Flux generator refuses it the same way for a bundle it is handed unvalidated (`GenerateForBundle`).
+
 A `DependsOn` entry need not be the cluster's own bundle: another `Bundle` value with the same
 `Name` is a copy of it, and a cluster resolves it by `Name` to that bundle, so the dependency is on
 that bundle's Kustomization. Leave `KustomizationName` empty on a copy, or set the name of the
