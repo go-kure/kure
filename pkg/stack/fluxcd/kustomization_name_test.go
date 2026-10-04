@@ -112,6 +112,32 @@ func TestKustomizationName_NamesTheKustomizationAndItsReferences(t *testing.T) {
 	}
 }
 
+// TestKustomizationName_RootBundleDirectoryFollowsName: with a flat
+// BundleGrouping the root node's bundle renders in a directory of its own
+// inside the root node's (go-kure/kure#979). In every placement that directory
+// is named after the bundle's Name, and KustomizationName names the
+// Kustomization alone.
+func TestKustomizationName_RootBundleDirectoryFollowsName(t *testing.T) {
+	for _, placement := range allPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			rules := propertyGroupings["nodeOnly"]
+			rules.FluxPlacement = placement
+			got := kustomizationsByName(integrated(t, shopCluster(map[string]string{"platform": "core"}), rules))
+
+			if _, ok := got["platform"]; ok {
+				t.Error(`a Kustomization is named "platform", the root bundle's Name, although the bundle sets KustomizationName`)
+			}
+			k, ok := got["core"]
+			if !ok {
+				t.Fatalf("Kustomizations = %v, want core among them", slices.Sorted(maps.Keys(got)))
+			}
+			if k.Spec.Path != "platform/platform" {
+				t.Errorf(`Kustomization "core" has spec.path %q, want "platform/platform": the root bundle's directory follows its Name`, k.Spec.Path)
+			}
+		})
+	}
+}
+
 // renamedKeys returns baseline's names, sorted, with each renamed one replaced.
 func renamedKeys(baseline map[string]*kustv1.Kustomization, renamed map[string]string) []string {
 	var out []string

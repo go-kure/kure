@@ -47,6 +47,25 @@ func TestGenerateFromCluster_KustomizationName(t *testing.T) {
 	}
 }
 
+// TestGenerateFromCluster_RootBundleDirectoryFollowsName: the root node's
+// bundle renders in a directory of its own inside the root node's
+// (go-kure/kure#979). That directory is named after the bundle's Name, and
+// KustomizationName names the Application alone.
+func TestGenerateFromCluster_RootBundleDirectoryFollowsName(t *testing.T) {
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{
+		Name:   "platform",
+		Bundle: &stack.Bundle{Name: "core", KustomizationName: "core-cr"},
+	}}
+	objs, err := Engine().GenerateFromCluster(c, layout.DefaultLayoutRules())
+	if err != nil {
+		t.Fatalf("GenerateFromCluster: %v", err)
+	}
+	want := map[string]string{"core-cr": "platform/core"}
+	if got := appPaths(t, objs); !pathsEqual(got, want) {
+		t.Errorf("Application paths = %v, want %v", got, want)
+	}
+}
+
 // TestApplicationForBundle_KustomizationName: the one-bundle builder names
 // the Application and its dependencies the same way.
 func TestApplicationForBundle_KustomizationName(t *testing.T) {

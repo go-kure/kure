@@ -659,7 +659,9 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      every node it absorbs) are rendered into one directory inside it, named after the first of
      them: `<root>/<first bundle name>` (`renderBundle` and `rootUnit` in `walker.go`).
      `ManifestLayout.OriginUnit` (`origin.go`) returns that directory's layout. They stay one
-     unit: one directory, one Kustomization, named as before. `BundleGrouping: GroupByName`
+     unit: one directory, one Kustomization, named as before. The directory takes the bundle's
+     `Name`; a `KustomizationName` names the Kustomization alone, as for every other bundle
+     directory. `BundleGrouping: GroupByName`
      already gave each bundle a directory and is unchanged. Both walkers do this,
      `WalkClusterByPackage` in the tree of the package the root node is in. Its trees are
      otherwise placed as before, and not as `WalkCluster` places them: the root node without the
@@ -713,9 +715,16 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      `pkg/stack/fluxcd/units_test.go`; `TestFluxSeparate_UnnamedRootBuildAppliesNoBundle` and
      `TestFluxSeparate_RefusesLayoutInTheFluxDirectory` in
      `pkg/stack/fluxcd/generate_from_cluster_rules_test.go`;
+     `TestKustomizationName_RootBundleDirectoryFollowsName` in
+     `pkg/stack/fluxcd/kustomization_name_test.go`;
      `TestCreateLayoutWithResources_RefusesLayoutInTheArgoDirectory` in
      `pkg/stack/argocd/argo_test.go`; `TestGenerateFromCluster_UsesCallerRules` in
-     `pkg/stack/argocd/generate_from_cluster_rules_test.go` for `source.path`.
+     `pkg/stack/argocd/generate_from_cluster_rules_test.go` for `source.path`;
+     `TestGenerateFromCluster_RootBundleDirectoryFollowsName` in
+     `pkg/stack/argocd/kustomization_name_test.go`. The stored all-flat tree that
+     `unset_output_test.go` in `pkg/stack/fluxcd` compares
+     (`testdata/unset-kustomization-name/merged.txt`) was rewritten for the path move, so it is
+     no longer output from before `KustomizationName` existed; no object name in it changed.
 2. **An integrated Source is hosted inside the directory it delivers.** Target.
    - Before item 1: when the root node rendered a bundle, the Source landed in that bundle's
      directory (`integratedPlacement.add`), so the Kustomization that needed the Source was the
