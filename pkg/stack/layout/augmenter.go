@@ -103,13 +103,9 @@ func checkExtraFiles(ml *ManifestLayout, outDir outDirFunc, resourceFiles []stri
 	}
 	// No legitimate layout identity or generated file name contains "..",
 	// so one that does is refused rather than resolved: everything below can
-	// then compare paths that never climb out of the base and back in.
-	if err := refuseTraversal("layout namespace", ml.Namespace); err != nil {
-		return err
-	}
-	if err := refuseTraversal("layout name", ml.Name); err != nil {
-		return err
-	}
+	// then compare paths that never climb out of the base and back in. ml's
+	// own Namespace and Name were checked before any writer got here (see
+	// checkLayoutIdentity, which checkLayoutTree runs for every layout).
 	for _, f := range resourceFiles {
 		if err := refuseTraversal("generated resource file name", f); err != nil {
 			return err
@@ -232,6 +228,17 @@ func checkExtraFiles(ml *ManifestLayout, outDir outDirFunc, resourceFiles []stri
 		}
 	}
 	return nil
+}
+
+// checkLayoutIdentity refuses a layout whose Namespace or Name has a ".." path
+// segment, with or without extra files (go-kure/kure#977): every writer joins
+// the two onto its base, so such a layout, built by hand or renamed after the
+// walk, would be written outside the destination.
+func checkLayoutIdentity(ml *ManifestLayout) error {
+	if err := refuseTraversal("layout namespace", ml.Namespace); err != nil {
+		return err
+	}
+	return refuseTraversal("layout name", ml.Name)
 }
 
 // refuseTraversal fails when name (a layout's Namespace or Name, or a

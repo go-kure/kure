@@ -419,7 +419,9 @@ CR already present with the same name and `spec.path`, in the layout that would 
 the same name in another layout or with another path is an error, and under `FluxSeparate` an identical `flux-system` child — same directory, same
 resources, nothing beneath it — is kept rather than a second one appended; any other is refused. Every Flux Kustomization already in the tree counts — typed or unstructured, placed
 by an earlier integration, by the caller or emitted by an application, top-level or inside a
-`List` (kustomize builds a List's items): an identity (namespace/name) present twice, or taken by
+`List` (kustomize builds a List's items; a List is an object whose kind ends in `List` and that
+has an `items` field, and a List among the items is opened too, while a kind that does not end in
+`List` is one object whatever fields it has): an identity (namespace/name) present twice, or taken by
 a generated CR elsewhere, is refused in every placement, since the kustomize build would register
 the id twice. A generated Source has one definition across the whole pass: every Source of its
 identity — kind, namespace and name, whatever the API version (a `v1beta2` `GitRepository` is the
@@ -586,6 +588,18 @@ Controls how kustomization.yaml files reference resources:
   differ from the Explicit mode's: another generated target below it that no `kustomization.yaml`
   shields, or a YAML extra file in its build. See "Kustomization Generation" in the layout package
   README.
+
+The marks also tell the writers what Flux applies. In a tree the integrator generated a
+Kustomization for, the writers refuse a directory its parent's `kustomization.yaml` does not list
+and no Kustomization builds (an umbrella child, a directory that renders bundles, a directory
+child of a `FluxIntegratedPerLayout` parent): nothing would apply it. A tree the integrator built
+always passes, since every such directory is the `spec.path` of a Kustomization it generated, or
+of one already in the tree that it kept in place of its own (typed, unstructured or inside a
+List), and it marks the directory for either. One changed afterwards, or
+one you place Kustomizations in yourself, needs `SetFluxBuild` on each directory a Kustomization
+of yours builds. The writers also refuse two Flux Kustomizations of one namespace and name
+anywhere in a tree, whether or not the integrator ran. See "Layout paths" in the layout package
+README.
 
 ### Flux Placement
 

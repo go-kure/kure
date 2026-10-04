@@ -5,6 +5,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -38,7 +39,13 @@ import (
 //   - a KustomizationRecursive layout contradicts the output (see
 //     checkRecursiveLayouts);
 //   - one kustomize build takes in two layouts that hold one object (see
-//     checkBuildIdentities).
+//     checkBuildIdentities);
+//   - a layout's Namespace or Name has a ".." path segment (see
+//     checkLayoutIdentity);
+//   - two Flux Kustomizations share a namespace and name (see
+//     checkKustomizationNames);
+//   - in a tree Flux delivers, a layout its parent does not list is not marked
+//     as built by a Flux Kustomization (see checkUnappliedLayouts).
 //
 // Directories are compared case-insensitively, as on default macOS volumes.
 // plan is the writer's own, so the check and the write agree on every path
@@ -49,6 +56,12 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 	files := map[string]*ManifestLayout{}
 	var walk func(l *ManifestLayout) error
 	walk = func(l *ManifestLayout) error {
+		// An AppFileSingle child that climbs out of its parent's directory
+		// was refused, in the words of that case, before the walk reached it
+		// (see checkSingleChildEntry).
+		if err := checkLayoutIdentity(l); err != nil {
+			return err
+		}
 		dir, single := outDir(l)
 		if single {
 			// The whole file path is cleaned, as the writers clean it. The
@@ -108,7 +121,184 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 	if err := checkRecursiveLayouts(root, plan); err != nil {
 		return err
 	}
-	return checkBuildIdentities(root, plan)
+	if err := checkBuildIdentities(root, plan); err != nil {
+		return err
+	}
+	// Last, so a tree the checks above refuse is refused in their words.
+	if err := checkKustomizationNames(root); err != nil {
+		return err
+	}
+	return checkUnappliedLayouts(root, plan)
+}
+
+// fluxKustomizationGroup and fluxKustomizationKind identify a Flux
+// Kustomization at any version. The fluxcd package imports this one, so its
+// types cannot be used here.
+const (
+	fluxKustomizationGroup = "kustomize.toolkit.fluxcd.io"
+	fluxKustomizationKind  = "Kustomization"
+)
+
+// checkUnappliedLayouts refuses, in a tree Flux delivers, a layout that is
+// written and that nothing applies (go-kure/kure#977). The tree is one Flux
+// delivers when its root is marked with SetFluxBuild: the fluxcd package's
+// LayoutIntegrator marks the root of every tree it generated a Kustomization
+// for, and a caller that places Flux Kustomizations itself marks its tree the
+// same way. In any other tree, an Argo CD one included, nothing is checked:
+// the placement value does not tell the two apart.
+//
+// In such a tree a child its parent's kustomization.yaml does not list (see
+// childEntry: an umbrella child, a child that renders a bundle, a directory
+// child of a FluxIntegratedPerLayout parent, and for WriteToDisk and
+// WriteToTar a directory child of another package) is applied only by a Flux
+// Kustomization whose spec.path names its directory, so it must be marked as
+// well. The rule is childEntry's own, so the check and the listing cannot
+// disagree; a child of another package is not exempt, because the writers
+// write its directory into this tree and nothing here lists it. An
+// AppFileSingle child without resources writes no file, so there is nothing
+// to apply and it is not checked.
+func checkUnappliedLayouts(root *ManifestLayout, plan writerPlan) error {
+	if !root.fluxBuild {
+		return nil
+	}
+	var walk func(l *ManifestLayout) error
+	walk = func(l *ManifestLayout) error {
+		for _, child := range l.Children {
+			if child == nil {
+				continue
+			}
+			if _, single := plan.outDir(child); !child.fluxBuild && plan.childEntry(l, child) == "" && (!single || child.writesSingleFile()) {
+				return errors.NewFileError("write", layoutPath(child, plan), fmt.Sprintf(
+					"layout %q is not listed by its parent layout %q and no Flux Kustomization is recorded as building it: in a tree Flux delivers nothing would apply it; place a Flux Kustomization whose spec.path names it and mark the layout with SetFluxBuild",
+					child.FullRepoPath(), l.FullRepoPath()), nil)
+			}
+			if err := walk(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return walk(root)
+}
+
+// checkKustomizationNames refuses two Flux Kustomizations with one namespace
+// and name anywhere in the tree, marked or not (go-kure/kure#977). The
+// per-layout and per-build checks refuse one object held twice in what one
+// kustomize build takes in; two Kustomizations in directories that are applied
+// separately pass those, yet they are one object in the cluster, where each
+// apply would replace what the other wrote. A Kustomization is matched by its
+// group and kind, at any version, and an omitted namespace is "default". One
+// inside a List counts, a List opened as kustomize opens it (see builtObjects).
+func checkKustomizationNames(root *ManifestLayout) error {
+	holders := map[string]*ManifestLayout{}
+	var walk func(l *ManifestLayout) error
+	walk = func(l *ManifestLayout) error {
+		objs, err := builtObjects(l)
+		if err != nil {
+			return err
+		}
+		for _, obj := range objs {
+			gvk := obj.GetObjectKind().GroupVersionKind()
+			if gvk.Group != fluxKustomizationGroup || gvk.Kind != fluxKustomizationKind {
+				continue
+			}
+			acc, err := meta.Accessor(obj)
+			if err != nil {
+				return errors.Wrapf(err, "layout %q: read object metadata", l.FullRepoPath())
+			}
+			namespace := acc.GetNamespace()
+			if namespace == "" {
+				namespace = "default"
+			}
+			key := namespace + "/" + acc.GetName()
+			other, dup := holders[key]
+			switch {
+			case dup && other == l:
+				return errors.NewFileError("write", l.FullRepoPath(), fmt.Sprintf(
+					"layout %q holds the Flux Kustomization %s twice: Kustomization names must be unique", l.FullRepoPath(), key), nil)
+			case dup:
+				return errors.NewFileError("write", l.FullRepoPath(), fmt.Sprintf(
+					"layouts %q and %q both hold the Flux Kustomization %s: the two are one object in the cluster, wherever each is applied, so Kustomization names must be unique in a tree",
+					other.FullRepoPath(), l.FullRepoPath(), key), nil)
+			}
+			holders[key] = l
+		}
+		for _, child := range l.Children {
+			if child == nil {
+				continue
+			}
+			if err := walk(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return walk(root)
+}
+
+// builtObjects returns the objects kustomize builds from l's resources: each
+// resource, a List replaced by its items. A List is what kustomize opens as
+// one (resource.Factory in sigs.k8s.io/kustomize/api): an object whose kind
+// ends in "List" and that has an items field, opened again when an item is
+// itself such a List. A kind that does not end in "List" is one object,
+// whatever fields it has, and so is a List kind without items. A null items
+// field is an empty List. A List whose items field is not an array fails the
+// kustomize build; it is returned as the one object it is, since there is
+// nothing in it to read.
+func builtObjects(l *ManifestLayout) ([]runtime.Object, error) {
+	var out []runtime.Object
+	queue := make([]runtime.Object, 0, len(l.Resources))
+	for _, r := range l.Resources {
+		if r != nil {
+			queue = append(queue, r)
+		}
+	}
+	for len(queue) > 0 {
+		obj := queue[0]
+		queue = queue[1:]
+		items, isList, err := listItems(obj)
+		if err != nil {
+			return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+		}
+		if !isList {
+			out = append(out, obj)
+			continue
+		}
+		queue = append(queue, items...)
+	}
+	return out, nil
+}
+
+// listItems returns the items of obj when it is a List as builtObjects
+// defines one, and whether it is.
+func listItems(obj runtime.Object) (items []runtime.Object, isList bool, err error) {
+	if !strings.HasSuffix(obj.GetObjectKind().GroupVersionKind().Kind, "List") {
+		return nil, false, nil
+	}
+	if u, ok := obj.(*unstructured.Unstructured); ok {
+		raw, has := u.Object["items"]
+		switch {
+		case !has:
+			return nil, false, nil
+		case raw == nil:
+			return nil, true, nil
+		case !u.IsList():
+			return nil, false, nil
+		}
+		list, err := u.ToList()
+		if err != nil {
+			return nil, false, err
+		}
+		for i := range list.Items {
+			items = append(items, &list.Items[i])
+		}
+		return items, true, nil
+	}
+	if !meta.IsListType(obj) {
+		return nil, false, nil
+	}
+	items, err = meta.ExtractList(obj)
+	return items, err == nil, err
 }
 
 // checkBuildIdentities refuses two layouts holding objects with one identity
