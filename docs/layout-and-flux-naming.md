@@ -402,12 +402,10 @@ together through both entry points, the set case, and the gotk control.
 
 ### FileNaming applied everywhere ([go-kure/kure#976](https://github.com/go-kure/kure/issues/976))
 
-**Implemented.** Part 1 describes the behaviour below as current.
+**Shipped.** `LayoutRules.FileNaming` names every file `WriteToDisk` and `WriteToTar` write for
+that tree. Part 1 describes the behaviour below as current.
 
-**Target.** `LayoutRules.FileNaming` names every file `WriteToDisk` and `WriteToTar` write for
-that tree.
-
-**Design outline.**
+**What it does.**
 
 - The `FluxSeparate` `flux-system/` layout takes the rules' FileNaming
   (`layout_integrator.go:1389-1398`). Rules passed to `IntegrateWithLayout` that leave it unset
@@ -419,13 +417,16 @@ that tree.
   `:453-467`). `resolveManifestFileName` (`manifest.go:92-99`) has no parent to read.
 - `WriteManifest` already names every layout's files from its `Config`, so the gap existed only
   under `WriteToDisk` and `WriteToTar`.
-- Breaking: with `FileNamingKindName`, the files of `flux-system/` and of augmenter layouts are
-  renamed.
+- With `FileNamingKindName`, no file in `flux-system/` or in an augmenter layout is named
+  `{namespace}-{kind}-{name}.yaml`, unless that layout, or a layout above it, was given another
+  FileNaming. An augmenter can give one to the application's layout too, and the layouts below
+  that leave theirs unset then take it.
 
-**Acceptance.** With `FileNamingKindName`, no file in `flux-system/` or in an augmenter layout is
-named `{namespace}-{kind}-{name}.yaml`, unless that layout, or a layout above it, was given
-another FileNaming. An augmenter can give one to the application's layout too, and the layouts
-below that leave theirs unset then take it.
+**Breaking.** With `FileNamingKindName`, the files of `flux-system/` and of augmenter layouts are
+renamed.
+
+**Tests.** `pkg/stack/layout/filenaming_inherit_test.go` and
+`pkg/stack/fluxcd/filenaming_separate_test.go` cover both cases through both writers.
 
 ### The writers validate a Flux-delivered tree ([go-kure/kure#977](https://github.com/go-kure/kure/issues/977))
 
