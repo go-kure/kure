@@ -218,7 +218,9 @@ path resolved under the output directory and cleaned, without regard to case; it
 directories, says nothing about an `AppFileSingle` layout, which is a file, and does not
 describe `WriteToDisk("")`, which writes a rooted path as an absolute one), so a name that
 differs only in case, or one that resolves to the same directory (`/web`, `./web`), is refused
-too. Rename one of them. `BundleGrouping: GroupByName` is no way around it: the bundle's directory is
+too. Rename one of them. A bundle name that resolves to the root node's directory itself (`.`,
+`/`) names no directory inside it and is refused the same way, naming the bundle and the
+directory. `BundleGrouping: GroupByName` is no way around either: the bundle's directory is
 the same there, the walk does not check it, and the writers refuse the tree.
 
 The workflow engines add a directory of their own to the top of the tree: `flux-system` (Flux,

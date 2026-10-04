@@ -477,6 +477,49 @@ func TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory(t *testing.T) {
 	}
 }
 
+// TestWalk_RefusesRootBundleNamedLikeTheRootNodesDirectory: with a flat
+// BundleGrouping the root node's bundle has a directory named after it inside
+// the root node's (go-kure/kure#979). A name that resolves to the root node's
+// directory itself (".", "/") names no directory inside it, so both walkers
+// refuse it, with and without a ClusterName, instead of returning a tree the
+// writers refuse. Under BundleGrouping by name the walk is unchanged.
+func TestWalk_RefusesRootBundleNamedLikeTheRootNodesDirectory(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rules layout.LayoutRules
+		dir   string
+	}{
+		"no ClusterName":      {nodeOnly, "platform"},
+		"ClusterName prod":    {withClusterName(nodeOnly, "prod"), "prod/platform"},
+		"NodeGrouping flat":   {nodeFlat, "platform"},
+		"ClusterName is root": {withClusterName(nodeOnly, "platform"), "platform"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, alias := range []string{".", "/", "./"} {
+				want := fmt.Sprintf("bundle %q would be rendered to directory %q, which is the root node's", alias, tc.dir)
+				if _, err := layout.WalkCluster(twoTier(alias, "web-bundle"), tc.rules); err == nil || !strings.Contains(err.Error(), want) {
+					t.Errorf("WalkCluster: got %v, want the refusal %q", err, want)
+				}
+				// WalkClusterByPackage places the root node without the
+				// ClusterName.
+				wantPkg := fmt.Sprintf("bundle %q would be rendered to directory %q, which is the root node's", alias, "platform")
+				if _, err := layout.WalkClusterByPackage(twoTier(alias, "web-bundle"), tc.rules); err == nil || !strings.Contains(err.Error(), wantPkg) {
+					t.Errorf("WalkClusterByPackage: got %v, want the refusal %q", err, wantPkg)
+				}
+			}
+		})
+	}
+
+	// By name the walk never refused such a name and still does not; the
+	// writers refuse the tree.
+	ml, err := layout.WalkCluster(twoTier(".", "web-bundle"), groupByName)
+	if err != nil {
+		t.Fatalf("BundleGrouping by name: %v", err)
+	}
+	if err := ml.WriteToDisk(t.TempDir()); err == nil || !strings.Contains(err.Error(), "resolve to the same directory") {
+		t.Errorf("BundleGrouping by name, WriteToDisk: got %v, want the writers' same-directory refusal", err)
+	}
+}
+
 // TestManifestLayout_SameDirectory: two layouts are one directory when their
 // paths, resolved under the output directory and cleaned, are equal without
 // regard to case, which is how the writers tell directories apart.
