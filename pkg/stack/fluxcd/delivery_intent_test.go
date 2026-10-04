@@ -924,6 +924,111 @@ func TestDeliveryIntent_IntegratingAgainChangesNothing(t *testing.T) {
 	}
 }
 
+// TestDeliveryIntent_RawItemReadAsWritten: an item a typed List holds as a
+// runtime.RawExtension is written from its raw JSON when it has any, so that
+// is the object the intent is checked on. An object held beside the raw JSON
+// is not written: it refuses nothing, whatever it carries, and stays as it is.
+func TestDeliveryIntent_RawItemReadAsWritten(t *testing.T) {
+	raw := []byte(`{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"raw-cm","namespace":"default","annotations":{"` + pruneKey + `":"disabled"}}}`)
+	for _, placement := range placements {
+		t.Run(string(placement), func(t *testing.T) {
+			unwritten := *annotatedCM("raw-cm", pruneKey, "enabled")
+			var obj client.Object = rawListOf(runtime.RawExtension{Raw: raw, Object: unwritten})
+			app := stack.NewApplication("listed", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+			app.Delivery = stack.DeliveryIntent{PruneProtection: true}
+			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app)}}
+			ml := integrated(t, c, recursiveRules("nodeOnly", placement))
+			for writer, w := range writeAll(t, ml) {
+				checkApplied(t, writer, appliedObjects(t, w, ml), []string{"raw-cm"}, map[string]string{pruneKey: "disabled"})
+			}
+			if got := unwritten.GetAnnotations(); !mapsEqual(got, map[string]string{pruneKey: "enabled"}) {
+				t.Errorf("the object beside the raw JSON has annotations %v, want it unchanged", got)
+			}
+		})
+	}
+}
+
+// TestDeliveryIntent_SourceAlsoDerivedFromSourceRef: an application may emit
+// the Source a bundle's SourceRef derives; the integrated placements take the
+// two for one object. They still do when the application carries an intent:
+// the derived copy carries the same annotations, so every copy that is applied
+// is the same object, and integrating again changes nothing.
+func TestDeliveryIntent_SourceAlsoDerivedFromSourceRef(t *testing.T) {
+	webRef := &stack.SourceRef{Kind: "GitRepository", Name: "web-git", Namespace: "flux-system", URL: "https://example.com/web.git", Branch: "main"}
+	want := map[string]string{pruneKey: "disabled", forceKey: "enabled"}
+	emitted := func(t *testing.T, form string) client.Object {
+		t.Helper()
+		gen, err := fluxstack.NewResourceGenerator().GenerateForBundle(&stack.Bundle{Name: "web", SourceRef: webRef}, "x")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(gen) != 2 {
+			t.Fatalf("got %d generated objects, want the Kustomization and its GitRepository", len(gen))
+		}
+		if form == "typed" {
+			return gen[1]
+		}
+		content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(gen[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		u := &unstructured.Unstructured{Object: content}
+		u.SetGroupVersionKind(gen[1].GetObjectKind().GroupVersionKind())
+		if form == "in a List" {
+			return wrapInList(u)
+		}
+		// Raw JSON is written as it is, so it carries the annotations
+		// already. The object beside it is not written; the writers' own
+		// duplicate check reads it.
+		u.SetAnnotations(want)
+		raw, err := u.MarshalJSON()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rawListOf(runtime.RawExtension{Raw: raw, Object: u})
+	}
+	for _, form := range []string{"typed", "in a List", "raw JSON in a typed List"} {
+		for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+			t.Run(form+"/"+string(placement), func(t *testing.T) {
+				obj := emitted(t, form)
+				sources := stack.NewApplication("sources", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+				sources.Delivery = stack.DeliveryIntent{PruneProtection: true, ForceReplace: true}
+				web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", SourceRef: webRef, Applications: []*stack.Application{cmApp("web-app")}}}
+				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", sources), Children: []*stack.Node{web}}}
+				rules := propertyGroupings["nodeOnly"]
+				rules.FluxPlacement = placement
+				ml := integrated(t, c, rules)
+
+				// Every copy of the Source that is applied, the application's
+				// and any the integration hosts, carries the intent.
+				for writer, w := range writeAll(t, ml) {
+					found := 0
+					for _, o := range appliedObjects(t, w, ml) {
+						if o.GetKind() != "GitRepository" {
+							continue
+						}
+						found++
+						if got := deliveryAnnotations(&o); !mapsEqual(got, want) {
+							t.Errorf("%s: GitRepository %q is applied with delivery annotations %v, want %v", writer, o.GetName(), got, want)
+						}
+					}
+					if found == 0 {
+						t.Errorf("%s: no GitRepository is applied", writer)
+					}
+				}
+
+				first := writtenFiles(t, ml)
+				if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules); err != nil {
+					t.Fatalf("second IntegrateWithLayout: %v", err)
+				}
+				if second := writtenFiles(t, ml); !mapsEqual(first, second) {
+					t.Errorf("the second integration changed the written tree")
+				}
+			})
+		}
+	}
+}
+
 // writtenFiles writes ml to disk and returns every file's content by path.
 func writtenFiles(t *testing.T, ml *layout.ManifestLayout) map[string]string {
 	t.Helper()

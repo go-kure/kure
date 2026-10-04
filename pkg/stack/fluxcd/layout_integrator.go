@@ -92,7 +92,7 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 	// on its objects, whatever the placement. They are set in place, which
 	// saveLayouts does not cover (it keeps the same objects), so a refusal
 	// takes them back through undoDelivery.
-	undoDelivery, err := applyDeliveryIntents(ml)
+	deliverySources, undoDelivery, err := applyDeliveryIntents(ml)
 	if err != nil {
 		restore()
 		return err
@@ -106,7 +106,7 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 		// augmenter-added child layouts); PerBundle stops at bundle
 		// boundaries and lets kustomize include a bundle's application
 		// directories.
-		err = li.addIntegratedFluxToLayout(ml, c, rules.FluxPlacement == layout.FluxIntegratedPerLayout)
+		err = li.addIntegratedFluxToLayout(ml, c, rules.FluxPlacement == layout.FluxIntegratedPerLayout, deliverySources)
 	}
 	if err != nil {
 		undoDelivery()
@@ -277,6 +277,11 @@ type integratedPlacement struct {
 	// hostSourcesOncePerBuild keeps each derived Source once per build.
 	derived map[string]bool
 	placed  map[client.Object]bool
+	// delivery maps the sourceKey of every Source an application with a
+	// delivery intent emits to the annotations that intent asks for
+	// (applyDeliveryIntents): a Source this pass derives with that identity
+	// carries them as well.
+	delivery map[string]map[string]string
 }
 
 // hostedObject is an object and the layout whose Resources hold it (directly
@@ -314,7 +319,10 @@ type sourceScope struct {
 // PerLayout layout as a CR file. A bundle-less node layout's CR is named
 // <path with "/" replaced by "-">-node: with ClusterName "." node web's path is
 // "web", which is also the name of its bundle's CR.
-func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster, perLayout bool) error {
+//
+// delivery is what applyDeliveryIntents recorded for the Sources of
+// applications with a delivery intent.
+func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster, perLayout bool, delivery map[string]map[string]string) error {
 	ix, err := layout.IndexOrigins(ml, c)
 	if err != nil {
 		return err
@@ -328,6 +336,7 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		generated: map[string]bool{},
 		derived:   map[string]bool{},
 		placed:    map[client.Object]bool{},
+		delivery:  delivery,
 	}
 	existing, err := indexExistingKustomizations(ml, nil)
 	if err != nil {
@@ -1067,6 +1076,18 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 			// build already holds one.
 			to = p.root
 			p.derived[key] = true
+			// A Source that an application with a delivery intent emits is
+			// that application's object, and the derived one is the same
+			// object: it carries the intent's annotations too, so that every
+			// copy applied is the same. One that already sets another value
+			// is left as it is, and is then a different definition below.
+			if want := p.delivery[key]; len(want) > 0 {
+				if _, _, conflict := conflicting(obj.GetAnnotations(), want); !conflict {
+					if merged, changed := merge(obj.GetAnnotations(), want); changed {
+						obj.SetAnnotations(merged)
+					}
+				}
+			}
 			kept := false
 			for _, s := range p.sources[key] {
 				if !sameObject(s.obj, obj) {
