@@ -132,3 +132,53 @@ func TestGenerateForBundle_NamesUmbrellaChildByPath(t *testing.T) {
 		}
 	}
 }
+
+// TestGenerateForBundle_RefusesOverLimitReference: the Kustomization built for
+// a bundle also names other bundles' Kustomizations: an umbrella's children as
+// health checks, its DependsOn bundles as dependencies. GenerateForBundle
+// builds neither of those, so nothing else would check their names: a
+// reference to a name Flux cannot reconcile is refused like the bundle's own,
+// with the referenced bundle's path, and nothing is returned.
+func TestGenerateForBundle_RefusesOverLimitReference(t *testing.T) {
+	long := strings.Repeat("a", stack.KustomizationNameMaxLength+1)
+	cases := []struct {
+		name     string
+		bundle   func() *stack.Bundle
+		wantPath string
+	}{
+		{
+			"umbrella child",
+			func() *stack.Bundle {
+				return &stack.Bundle{Name: "platform", Children: []*stack.Bundle{{Name: "infra"}, {Name: long}}}
+			},
+			"'platform/" + long + "'",
+		},
+		{
+			"dependency",
+			func() *stack.Bundle {
+				return &stack.Bundle{Name: "web", DependsOn: []*stack.Bundle{{Name: "db"}, {Name: long}}}
+			},
+			"'" + long + "'",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			b := tc.bundle()
+			if err := b.Validate(); err != nil {
+				t.Fatalf("Validate() = %v, want nil: the limit is not the model's", err)
+			}
+			objs, err := fluxstack.NewResourceGenerator().GenerateForBundle(b, "clusters/prod/"+b.Name)
+			if err == nil {
+				t.Fatal("GenerateForBundle() generated, want the over-limit refusal")
+			}
+			if objs != nil {
+				t.Errorf("GenerateForBundle() returned %v next to the error, want nothing to write", objs)
+			}
+			for _, want := range []string{tc.wantPath, "at most 63 characters"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("GenerateForBundle() = %v, want it to contain %q", err, want)
+				}
+			}
+		})
+	}
+}

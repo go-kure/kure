@@ -867,7 +867,12 @@ checked only there. It is Flux's, so `stack.ValidateCluster` and
 ArgoCD workflow renders; they do refuse a name that is not a DNS-1123
 subdomain, so that refusal reaches `GenerateFromCluster` and
 `CreateLayoutWithResources` from cluster validation first. `GenerateForBundle` takes a bundle no
-validation has seen and gets the whole rule from the generator. The error
+validation has seen and gets the whole rule from the generator. The same
+check covers the bundles a Kustomization refers to: each umbrella child, named
+in a health check, and each `DependsOn` bundle, named in `spec.dependsOn`.
+`GenerateForBundle` builds no Kustomization for them, so it refuses an
+umbrella whose child's name Flux cannot reconcile instead of returning a
+reference to it. A `NamedDependsOn` entry is written as given. The error
 names the bundle by `Bundle.GetPath`: an umbrella child of a walked cluster is
 reported with its umbrella's path before its own name (`platform/platform-infra`).
 
