@@ -50,12 +50,18 @@ func NewResourceGenerator() *ResourceGenerator {
 }
 
 // GenerateFromCluster creates Flux Kustomizations and Sources from a cluster
-// definition. It runs stack.ValidateCluster first to fail fast on structural
-// errors (umbrella cycles, disjointness violations, etc.), then walks the
-// cluster with rules and generates from that layout (see GenerateFromLayout).
+// definition: it walks the cluster with rules and generates from that layout
+// (see GenerateFromLayout).
 //
-// The spec.path values are therefore the directories WalkCluster writes under
-// rules, so rules must be the ones the caller writes the tree with: with
+// It refuses, in this order: FluxIntegratedPerLayout rules (below), whatever
+// the cluster; invalid rules with an absent or empty cluster, which otherwise
+// yields nothing; a cluster stack.ValidateCluster refuses (umbrella cycles,
+// disjointness violations, etc.), before the walk; and rules the walk refuses
+// (layout.LayoutRules.Validate), reported like every other walk error. Invalid
+// rules are therefore an error whatever the cluster is.
+//
+// The spec.path values are the directories WalkCluster writes under rules, so
+// rules must be the ones the caller writes the tree with: with
 // layout.DefaultLayoutRules, the root node at <root> and its children at
 // <root>/<child>. The objects are returned as a list and placed nowhere
 // (CreateLayoutWithResources places them in the layout it walks), and the list
@@ -74,7 +80,9 @@ func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.L
 		return nil, errors.Errorf("GenerateFromCluster does not support FluxPlacement %q: the Kustomizations that apply a per-layout tree's child directories exist only in a layout; use CreateLayoutWithResources with these rules", rules.FluxPlacement)
 	}
 	if c == nil || c.Node == nil {
-		return nil, nil
+		// Nothing to generate; the walk still refuses rules it would not walk.
+		_, err := layout.WalkCluster(nil, rules)
+		return nil, err
 	}
 	if err := stack.ValidateCluster(c); err != nil {
 		return nil, err

@@ -270,7 +270,8 @@ What changed, and what to do:
   `Namespace` has a `..` path segment, with or without extra files.
 - **The walk validates its rules.** `WalkCluster` and `WalkClusterByPackage` run
   `LayoutRules.Validate` on the rules they are given, and so does every entry point that walks
-  (`CreateLayoutWithResources`). An unknown value of a grouping, `FilePer`, `FluxPlacement` or
+  (`CreateLayoutWithResources`, `GenerateFromCluster`), also for an absent or empty cluster. An
+  unknown value of a grouping, `FilePer`, `FluxPlacement` or
   `FileNaming` is now an error; before, it was walked as if it were another value. A `ClusterName`
   with a `..` path segment is refused at the walk instead of at write, also one the walk would
   have cleaned away (`x/../platform`). An unset value is still valid and takes its default. Fix
@@ -308,7 +309,8 @@ What changed, and what to do:
   writes. Pass the rules you write the tree with; `layout.DefaultLayoutRules()` keeps the paths it
   returned before. The Flux engine refuses rules with `FluxIntegratedPerLayout`: that tree's child
   directories are applied by Kustomizations only `CreateLayoutWithResources` places, so use that
-  entry point for the placement.
+  entry point for the placement. Rules the walk refuses are an error from both engines, whatever
+  the cluster is: an absent or empty cluster returns nothing only with valid rules.
 - **Integrate walked layouts only.** `IntegrateWithLayout` refuses a layout `layout.WalkCluster`
   did not build from the same cluster — build the tree with `WalkCluster` instead of by hand.
 - **PerLayout hosts.** Under `FluxIntegratedPerLayout` a node bundle's CR now sits in the parent of

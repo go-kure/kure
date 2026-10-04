@@ -42,14 +42,13 @@ func Engine() *WorkflowEngine {
 // generateFromLayout), so each source.path is the directory a walk with those
 // rules writes the bundle to. The rules must be the ones the caller writes
 // the tree with, and are held to what CreateLayoutWithResources accepts (see
-// layoutRules).
+// layoutRules, then the walk's layout.LayoutRules.Validate). An absent or
+// empty cluster is walked too, so invalid rules are an error whatever the
+// cluster is; with valid rules it yields nothing.
 func (w *WorkflowEngine) GenerateFromCluster(c *stack.Cluster, rulesInterface stack.LayoutRulesProvider) ([]client.Object, error) {
 	rules, err := layoutRules(rulesInterface)
 	if err != nil {
 		return nil, err
-	}
-	if c == nil || c.Node == nil {
-		return nil, nil
 	}
 	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {
