@@ -35,6 +35,23 @@ func TestNewApplicationAndSetters(t *testing.T) {
 	}
 }
 
+// TestDeliveryIntentDefaultsOff: a new application asks for nothing, and each
+// field on its own is an intent.
+func TestDeliveryIntentDefaultsOff(t *testing.T) {
+	app := NewApplication("name", "ns", nil)
+	if !app.Delivery.IsZero() {
+		t.Errorf("new application carries a delivery intent: %+v", app.Delivery)
+	}
+	for name, intent := range map[string]DeliveryIntent{
+		"prune": {PruneProtection: true},
+		"force": {ForceReplace: true},
+	} {
+		if intent.IsZero() {
+			t.Errorf("%s: IsZero reports a set intent as unset", name)
+		}
+	}
+}
+
 // TestGenerate exercises the Generate method with and without configuration.
 func TestGenerate(t *testing.T) {
 	app := NewApplication("app", "ns", nil)

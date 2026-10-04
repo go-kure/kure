@@ -11,7 +11,27 @@ type Application struct {
 	Name      string
 	Namespace string
 	Config    ApplicationConfig
+	// Delivery states how the delivery engine should treat this application's
+	// objects. The zero value asks for nothing.
+	Delivery DeliveryIntent
 }
+
+// DeliveryIntent is what an application asks of the engine that delivers its
+// objects, stated without naming the engine. The workflow that renders the
+// application maps it its own way: the Flux workflow sets Flux's per-object
+// annotations (see the fluxcd package); a workflow with no mapping refuses a
+// set intent rather than dropping it.
+type DeliveryIntent struct {
+	// PruneProtection keeps the application's objects in the cluster when
+	// they are removed from the source.
+	PruneProtection bool
+	// ForceReplace allows the application's objects to be deleted and
+	// recreated when a change touches an immutable field.
+	ForceReplace bool
+}
+
+// IsZero reports whether the intent asks for nothing.
+func (d DeliveryIntent) IsZero() bool { return d == DeliveryIntent{} }
 
 // ApplicationConfig describes the behaviour of specific application types.
 type ApplicationConfig interface {
