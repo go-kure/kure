@@ -631,6 +631,9 @@ func TestCreateLayoutWithResources_RefusesLayoutInTheArgoDirectory(t *testing.T)
 		"root bundle":            {named("argocd", "web"), `bundle "argocd" is rendered to "platform/argocd", the directory the ArgoCD Applications are written to`},
 		"root bundle, case only": {named("ArgoCD", "web"), `bundle "ArgoCD" is rendered to "platform/ArgoCD", the directory the ArgoCD Applications are written to`},
 		"child node":             {named("platform-bundle", "argocd"), `node "argocd" is rendered to "platform/argocd", the directory the ArgoCD Applications are written to`},
+		// A name that resolves to the same directory is the same directory.
+		"child node, rooted name":    {named("platform-bundle", "/argocd"), `node "/argocd" is rendered to "platform/argocd", the directory the ArgoCD Applications are written to`},
+		"child node, dot-slash name": {named("platform-bundle", "./argocd"), `node "./argocd" is rendered to "platform/argocd", the directory the ArgoCD Applications are written to`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := Engine().CreateLayoutWithResources(tc.c, layout.DefaultLayoutRules()); err == nil || !strings.Contains(err.Error(), tc.want) {

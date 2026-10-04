@@ -660,14 +660,16 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      them: `<root>/<first bundle name>` (`renderBundle` and `rootUnit` in `walker.go`).
      `ManifestLayout.OriginUnit` (`origin.go`) returns that directory's layout. They stay one
      unit: one directory, one Kustomization, named as before. `BundleGrouping: GroupByName`
-     already gave each bundle a directory and is unchanged. Both walkers do this, so relative to
-     the root node's directory a bundle's directory is the same in `WalkCluster` and
-     `WalkClusterByPackage` (the latter places the root node without the `ClusterName`, as
-     before).
+     already gave each bundle a directory and is unchanged. Both walkers do this,
+     `WalkClusterByPackage` in the tree of the package the root node is in. Its trees are
+     otherwise placed as before, and not as `WalkCluster` places them: the root node without the
+     `ClusterName`, and no directory for a node outside the package.
    - A child node of the root named like that directory is refused by the walk, naming the node,
-     the bundle and the directory (`rootUnit.checkRootUnitName` in `walker.go`). Names are
-     compared as the writers compare directories, so one that differs only in case is refused
-     too. `BundleGrouping: GroupByName` is no way around it: the walk does not check there, and
+     the bundle and the directory (`rootUnit.checkRootUnitName` in `walker.go`). The two
+     directories are compared as the writers compare them (`ManifestLayout.SameDirectory` in
+     `manifest.go`: the cleaned path, without regard to case), so a name that differs only in
+     case, or one that resolves to the same directory (`/web`, `./web`), is refused too. The
+     engines' refusals below compare the same way. `BundleGrouping: GroupByName` is no way around it: the walk does not check there, and
      the writers refuse the tree.
    - The engines' own directory at the top of the tree must be free. Under `FluxSeparate` a root
      node's bundle (or a child node) rendered to `<top>/flux-system` is refused by

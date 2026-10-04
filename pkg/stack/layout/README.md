@@ -206,14 +206,15 @@ rendered into one directory inside it, named after the first of them:
 They stay one unit: one directory and one Flux Kustomization or ArgoCD Application, named after
 the first bundle. `ManifestLayout.OriginUnit()` on the root node's layout returns that directory's
 layout. Every other node is unchanged: its bundle renders in the node's directory. Both walkers do
-this. The unnamed wrapper `WalkClusterByPackage` builds for a package the root node is not in is
+this, `WalkClusterByPackage` in the tree of the package the root node is in. The unnamed wrapper `WalkClusterByPackage` builds for a package the root node is not in is
 not the root node's directory and is unchanged: under `NodeGrouping: GroupFlat` it renders the
 bundles merged into it, and the Flux integration refuses such a tree (its top renders a bundle).
 
 A child node of the root that carries the name of that directory is refused by the walk, since
-both would be written to one place; the error names the node, the bundle and the directory. A name
-that differs only in case is refused too: the writers compare directories without regard to case.
-Rename one of them. `BundleGrouping: GroupByName` is no way around it: the bundle's directory is
+both would be written to one place; the error names the node, the bundle and the directory. The
+two directories are compared as the writers compare them (`ManifestLayout.SameDirectory`: the
+cleaned path, without regard to case), so a name that differs only in case, or one that resolves
+to the same directory (`/web`, `./web`), is refused too. Rename one of them. `BundleGrouping: GroupByName` is no way around it: the bundle's directory is
 the same there, the walk does not check it, and the writers refuse the tree.
 
 The workflow engines add a directory of their own to the top of the tree: `flux-system` (Flux,
@@ -594,7 +595,7 @@ Augmenters may attach sub-layouts as `Children` of a per-app `ManifestLayout`. I
 - `!child.UmbrellaChild`
 - `child.ApplicationFileMode != AppFileSingle`
 - The child renders no bundle (a child that does already has that bundle's CR in the parent).
-- A source can be resolved: the `SourceRef` of the nearest layout at or above the parent that renders bundles (the root node's layout renders none and counts with the `SourceRef` of its own bundle, see [The root node's bundles](#the-root-nodes-bundles)), else the one `SourceRef` the URL-less bundles below the child share. A missing or incomplete `SourceRef` (nil, empty, or without `Kind` or `Name`) causes `IntegrateWithLayout` to return a hard error — a `Kustomization` without `spec.sourceRef` is rejected by Flux.
+- A source can be resolved: the `SourceRef` of the nearest layout at or above the parent that renders bundles (with `BundleGrouping: GroupFlat` the root node's layout renders none and counts with the `SourceRef` of its own bundle, see [The root node's bundles](#the-root-nodes-bundles); with `GroupByName` no node's layout counts), else the one `SourceRef` the URL-less bundles below the child share. A missing or incomplete `SourceRef` (nil, empty, or without `Kind` or `Name`) causes `IntegrateWithLayout` to return a hard error — a `Kustomization` without `spec.sourceRef` is rejected by Flux.
 
 The parent's `kustomization.yaml` lists that CR file as one of its own resources, so every child the writers do not reference as a directory has a backing CR. The integrator applies this rule at any depth.
 

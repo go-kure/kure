@@ -125,6 +125,17 @@ func (ml *ManifestLayout) FullRepoPath() string {
 	return filepath.ToSlash(filepath.Join(ns, ml.Name))
 }
 
+// SameDirectory reports whether ml and other resolve to one directory as the
+// writers compare directories: the cleaned FullRepoPath, without regard to
+// case. A Name such as "/web" or "./web" resolves to the directory of "web",
+// and the writers refuse a tree in which two layouts share a directory.
+func (ml *ManifestLayout) SameDirectory(other *ManifestLayout) bool {
+	if ml == nil || other == nil {
+		return false
+	}
+	return normDir(ml.FullRepoPath()) == normDir(other.FullRepoPath())
+}
+
 // FullRepoPathWithPackage returns the repository path including package-specific prefix
 func (ml *ManifestLayout) FullRepoPathWithPackage() string {
 	basePath := ml.FullRepoPath()
