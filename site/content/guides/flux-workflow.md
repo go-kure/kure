@@ -277,10 +277,12 @@ What changed, and what to do:
   the value the error names. The Flux `IntegrateWithLayout` runs the same check in place of its
   own placement check, so its error for an unknown placement now names the field `FluxPlacement`
   (it was `fluxPlacement`).
-- **`LayoutRules` has no `ApplicationFileMode`.** No walk ever applied it, so a value set there
-  changed nothing; the field is removed. Code that sets it no longer compiles: delete the line,
-  the output stays the same. To write an application as one file, set
-  `Config.ApplicationFileMode` for `WriteManifest`, or the layout's own `ApplicationFileMode`.
+- **`LayoutRules` has no `ApplicationFileMode`.** No walk ever applied it, so a valid value set
+  there changed no layout and no file; the field is removed. Code that sets it no longer
+  compiles: delete the line, the layouts and the files written stay the same. A `LayoutRules`
+  value serialised as a whole no longer carries the key, and an unknown value there is no longer
+  an error. To write an application as one file, set `Config.ApplicationFileMode` for
+  `WriteManifest`, or the layout's own `ApplicationFileMode`.
 
 See the [Layout Engine reference](/api-reference/layout/) for the full rule.
 
