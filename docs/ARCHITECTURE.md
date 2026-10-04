@@ -828,6 +828,22 @@ because the API server defines their scope — so an entry added there for a CRD
 never read, and the same error comes back. That table is only the right place when the kind you are
 adding is itself a Kubernetes built-in.
 
+A built-in gets no scope error to remind you: the table's default for a built-in is namespaced, so
+a cluster-scoped one that is missing from it is generated with a namespace argument. The only check
+that moves by itself is the baseline count, which says the number changed and not that the scope is
+wrong. Registering a group version of `k8s.io/api` therefore comes with five edits, all in the same
+change. Check each kind's scope against the `+genclient:nonNamespaced` tag on its upstream type, then:
+
+- add every cluster-scoped kind to `builtinClusterScoped`;
+- add the same kinds to the frozen fixture in `pkg/kubernetes/internal/kinds/scope_test.go`, which
+  must agree with the table in both directions;
+- move the baseline counts in `pkg/kubernetes/internal/kinds/derived_test.go`;
+- add each kind with its scope to the cases of `TestRegistered_KnownKindsAndScopes`
+  (`pkg/kubernetes/internal/kinds/kinds_test.go`), the one place that states a scope independently
+  of the table;
+- drop the kind from `clusterScopedUnregisteredKinds` in `pkg/manifest` if it was listed there — a
+  test fails until you do.
+
 #### 3. Add sugar only in one of the three admitted classes
 
 A helper must be an appender, a pointer/nil-init setter, or a named composite (see

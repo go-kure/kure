@@ -13,11 +13,16 @@ import (
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
+	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	netv1 "k8s.io/api/networking/v1"
+	nodev1 "k8s.io/api/node/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	storv1 "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -171,6 +176,35 @@ func TestScheme_RegisteredTypes(t *testing.T) {
 		}
 		if len(gvks) == 0 {
 			t.Errorf("no GVKs found for %T", obj)
+		}
+	}
+
+	// The base kinds of scheduling/v1, discovery/v1, coordination/v1, node/v1
+	// and admissionregistration/v1, each at exactly its own GVK.
+	baseKinds := []struct {
+		obj  runtime.Object
+		want schema.GroupVersionKind
+	}{
+		{&schedulingv1.PriorityClass{}, schedulingv1.SchemeGroupVersion.WithKind("PriorityClass")},
+		{&discoveryv1.EndpointSlice{}, discoveryv1.SchemeGroupVersion.WithKind("EndpointSlice")},
+		{&coordinationv1.Lease{}, coordinationv1.SchemeGroupVersion.WithKind("Lease")},
+		{&nodev1.RuntimeClass{}, nodev1.SchemeGroupVersion.WithKind("RuntimeClass")},
+		{&admissionregistrationv1.MutatingWebhookConfiguration{}, admissionregistrationv1.SchemeGroupVersion.WithKind("MutatingWebhookConfiguration")},
+		{&admissionregistrationv1.ValidatingWebhookConfiguration{}, admissionregistrationv1.SchemeGroupVersion.WithKind("ValidatingWebhookConfiguration")},
+		{&admissionregistrationv1.ValidatingAdmissionPolicy{}, admissionregistrationv1.SchemeGroupVersion.WithKind("ValidatingAdmissionPolicy")},
+		{&admissionregistrationv1.ValidatingAdmissionPolicyBinding{}, admissionregistrationv1.SchemeGroupVersion.WithKind("ValidatingAdmissionPolicyBinding")},
+		{&admissionregistrationv1.MutatingAdmissionPolicy{}, admissionregistrationv1.SchemeGroupVersion.WithKind("MutatingAdmissionPolicy")},
+		{&admissionregistrationv1.MutatingAdmissionPolicyBinding{}, admissionregistrationv1.SchemeGroupVersion.WithKind("MutatingAdmissionPolicyBinding")},
+	}
+
+	for _, c := range baseKinds {
+		gvks, _, err := Scheme.ObjectKinds(c.obj)
+		if err != nil {
+			t.Errorf("failed to get GVKs for %T: %v", c.obj, err)
+			continue
+		}
+		if len(gvks) != 1 || gvks[0] != c.want {
+			t.Errorf("GVKs for %T = %v, want exactly [%s]", c.obj, gvks, c.want)
 		}
 	}
 }

@@ -44,7 +44,24 @@ for _, obj := range append(objects, more...) {
 
 By default, only GVKs registered in the kure scheme are accepted. To parse
 arbitrary Kubernetes YAML (CRDs, custom operators, etc.) use
-`ParseYAMLWithOptions` or `ParseFileWithOptions` with `AllowUnstructured`:
+`ParseYAMLWithOptions` or `ParseFileWithOptions` with `AllowUnstructured`.
+
+Which kinds are typed follows the scheme, so it widens when kure registers more.
+`PriorityClass`, `EndpointSlice`, `Lease`, `RuntimeClass`, the two webhook
+configurations and the four admission policy kinds are registered and come back as
+their `k8s.io/api` types in both modes; a caller that matched them as
+`*unstructured.Unstructured` must match the typed object instead. `APIService` and
+`VerticalPodAutoscaler` are not registered and still need `AllowUnstructured`. The
+full list is the [generated table](/api-reference/api-tables/).
+
+A list document follows the same split. With `AllowUnstructured`, a `<Kind>List` of
+a kind that is not registered is flattened into its items. A `<Kind>List` of a
+registered kind decodes to the typed list, which is not a single object, and is
+refused in both modes: a `DeploymentList` always was, and a `PriorityClassList` or a
+`LeaseList` is from the moment its kind is registered. Write one document per item
+instead.
+
+The fallback in use:
 
 <!-- doc-example: pkg/io ExampleParseYAMLWithOptions -->
 ```go
