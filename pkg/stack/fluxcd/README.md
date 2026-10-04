@@ -300,8 +300,9 @@ The error names both bundles, the target and the object it reaches. Narrow the t
 bundle's own objects, or give the bundles directories of their own (`NodeGrouping` or
 `BundleGrouping` `GroupByName`). Not covered: objects inside an `ExtraFiles` file (they are not
 kustomize resources) and objects without a kind. Known gap: under `FluxIntegratedPerLayout` the
-check does not see a generated ConfigMap that the shared directory itself builds after a
-`FlattenSingleTier` collapse (go-kure/kure#979).
+check does not see a generated ConfigMap that the shared directory itself builds. A
+`FlattenSingleTier` collapse was the known way to such a directory, and it no longer collapses a
+directory that renders a bundle; whether another input reaches the gap is open (go-kure/kure#979).
 
 The generator computes no path, the integrator matches nothing by name, and `FlattenSingleTier`
 rewrites nothing afterwards: it collapses no directory that renders a bundle
