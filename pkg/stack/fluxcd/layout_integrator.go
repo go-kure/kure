@@ -1511,22 +1511,28 @@ func normalizeRulesPlacement(rules layout.LayoutRules) layout.LayoutRules {
 // (RawExtension.MarshalJSON), so it is read in that order: meta.ExtractList
 // reads the object first, and would name an object the written file does not
 // hold when the two differ. The raw JSON is returned as a runtime.Unknown.
+//
+// meta.ExtractList reads the list, so whatever it accepts as a list of items
+// is accepted here and whatever it refuses (an Items pointer that is nil,
+// among others) is refused with its error. It decides by the element type of
+// the Items slice, and so does the correction: a named slice type and a
+// pointer to the slice are read alike. An empty item is a nil entry.
 func typedListItems(list runtime.Object) ([]runtime.Object, error) {
+	items, err := meta.ExtractList(list)
+	if err != nil || len(items) == 0 {
+		return items, err
+	}
 	ptr, err := meta.GetItemsPtr(list)
 	if err != nil {
 		return nil, err
 	}
-	raws, ok := ptr.(*[]runtime.RawExtension)
-	if !ok {
-		return meta.ExtractList(list)
+	slice := reflect.ValueOf(ptr).Elem()
+	if slice.Type().Elem() != reflect.TypeFor[runtime.RawExtension]() {
+		return items, nil
 	}
-	items := make([]runtime.Object, 0, len(*raws))
-	for _, item := range *raws {
-		switch {
-		case item.Raw != nil:
-			items = append(items, &runtime.Unknown{Raw: item.Raw})
-		case item.Object != nil:
-			items = append(items, item.Object)
+	for i := range items {
+		if raw := slice.Index(i).Interface().(runtime.RawExtension).Raw; raw != nil {
+			items[i] = &runtime.Unknown{Raw: raw}
 		}
 	}
 	return items, nil

@@ -152,6 +152,101 @@ func TestIntegrateWithLayout_RawListItemMustBeJSON(t *testing.T) {
 	}
 }
 
+// rawItemSlice is a named slice type of raw items, as a hand-written list type
+// can declare its Items field.
+type rawItemSlice []runtime.RawExtension
+
+// namedRawItems is a typed List whose Items field has a named slice type.
+type namedRawItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             rawItemSlice `json:"items"`
+}
+
+func (l *namedRawItems) DeepCopyObject() runtime.Object {
+	c := *l
+	c.Items = slices.Clone(l.Items)
+	return &c
+}
+
+// pointerRawItems is a typed List whose Items field is a pointer to the slice.
+type pointerRawItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             *[]runtime.RawExtension `json:"items"`
+}
+
+func (l *pointerRawItems) DeepCopyObject() runtime.Object {
+	c := *l
+	if l.Items != nil {
+		items := slices.Clone(*l.Items)
+		c.Items = &items
+	}
+	return &c
+}
+
+// TestIntegrateWithLayout_RawItemFirstWhateverTheSliceType: an item that
+// carries raw JSON and an object is read from the raw JSON, which is what the
+// writers serialize, whatever the Go type of the List's Items field: a named
+// slice type, or a pointer to the slice. A nil pointer cannot be read as a
+// list of items and is refused with a read error.
+func TestIntegrateWithLayout_RawItemFirstWhateverTheSliceType(t *testing.T) {
+	listMeta := metav1.TypeMeta{APIVersion: "v1", Kind: "List"}
+	item := func(t *testing.T) runtime.RawExtension {
+		t.Helper()
+		raw, err := json.Marshal(fluxKustomization("web", "elsewhere"))
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		return runtime.RawExtension{Raw: raw, Object: fluxKustomization("other", "platform")}
+	}
+	cases := map[string]struct {
+		emitted func(t *testing.T) client.Object
+		want    string
+	}{
+		"named slice type": {
+			emitted: func(t *testing.T) client.Object {
+				l := &namedRawItems{TypeMeta: listMeta, Items: rawItemSlice{item(t)}}
+				l.Name, l.Namespace = "holder", "default"
+				return l
+			},
+			want: `already has Flux Kustomization "web"`,
+		},
+		"pointer to the slice": {
+			emitted: func(t *testing.T) client.Object {
+				l := &pointerRawItems{TypeMeta: listMeta, Items: &[]runtime.RawExtension{item(t)}}
+				l.Name, l.Namespace = "holder", "default"
+				return l
+			},
+			want: `already has Flux Kustomization "web"`,
+		},
+		"nil pointer to the slice": {
+			emitted: func(t *testing.T) client.Object {
+				l := &pointerRawItems{TypeMeta: listMeta}
+				l.Name, l.Namespace = "holder", "default"
+				return l
+			},
+			want: "read list items",
+		},
+	}
+	for name, tc := range cases {
+		for _, placement := range placements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				obj := tc.emitted(t)
+				platformApp := stack.NewApplication("platform-ks", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+				web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
+				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
+				rules := propertyGroupings["nodeOnly"]
+				rules.FluxPlacement = placement
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+				if err == nil || !strings.Contains(err.Error(), tc.want) {
+					t.Errorf("got %v, want an error containing %q", err, tc.want)
+				}
+			})
+		}
+	}
+}
+
 // umbrellaCluster: prod -> apps (node) -> platform (umbrella bundle) with the
 // child bundles infra and services, infra holding the child bundle network.
 func umbrellaCluster() *stack.Cluster {
