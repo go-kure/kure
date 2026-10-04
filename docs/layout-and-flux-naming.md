@@ -484,8 +484,9 @@ words.
     Kustomizations by a typed assertion directly in a layout's resources, so a kept one that was
     unstructured or sat inside a List left its directory unmarked, and this check would have
     refused a tree that wrote before. It now reads each layout through `resourceItems` and
-    `fluxKustomizationPath`. `checkPlacedReconcileOrder` and `indexGenerated` still read by the
-    typed assertion; they need the typed fields, so that change is item 6 of go-kure/kure#979.
+    `fluxKustomizationPath`. `checkPlacedReconcileOrder` and `indexGenerated` need the typed
+    fields and read a kept one through `generatedKustomizations` since item 6 of
+    go-kure/kure#979 (below).
 - **A duplicate Kustomization namespace/name anywhere in the tree**
   (`checkKustomizationNames`), marked or not. The writers already refused one
   object held twice within a layout or within one kustomize build (section 1.7); two
@@ -584,6 +585,21 @@ rejects it.
    - Expected: both modes point at the same directory for the same root.
 
 **Acceptance.** Each case has a test rendering the input above and asserting the expected tree.
+
+**Shipped: a kept Kustomization is checked in whatever form it has** (item 6 of the ticket; the
+four cases above are still targets). Under the two integrated placements, the checks that look
+at a layout's Flux Kustomizations read both the Kustomizations the integration generates and the
+ones it keeps in place of its own through one helper, `generatedKustomizations` in
+`layout_integrator.go`, which returns them in typed form. Those checks are: a Source once per
+kustomize build (`integratedPlacement.hostSourcesOncePerBuild`), the root build leaving the
+Sources it hosts unchanged (`integratedPlacement.checkRootBuildKeepsHostedSources`) and the
+reconcile order of placed objects (`checkPlacedReconcileOrder`). A kept Kustomization is
+therefore held to the same refusals whether the caller supplied it typed, unstructured or inside
+a `List`. One that cannot be read as a Flux Kustomization is refused with an error naming the
+layout and the object's namespace and name, and the caller's tree is left as it was. Which
+Kustomizations count as kept did not change, and `FluxSeparate` is not affected.
+`pkg/stack/fluxcd/kept_forms_test.go` covers each check and the refusal under the integrated
+placements, with the kept Kustomization typed, unstructured and inside a `List`.
 
 ### Documentation corrections ([go-kure/kure#980](https://github.com/go-kure/kure/issues/980))
 
