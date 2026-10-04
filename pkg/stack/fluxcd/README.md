@@ -523,19 +523,6 @@ for _, obj := range objects {
 ```
 <!-- doc-example:end -->
 
-### Root node name
-
-The root node's name is a path segment of the gotk bootstrap Kustomization's `spec.path` and of
-the `FluxInstance`'s `spec.sync.path`. `GenerateBootstrap` and `GenerateFluxInstance` take a
-node, not a cluster, so they check that name themselves with `stack.ValidateDirectoryName`: a
-name holding `/`, `\` or a NUL byte, or `.` or `..`, is refused. No root node and an unnamed root
-are valid; neither adds a segment.
-
-The check runs only where a path is built. In `gotk` mode the bootstrap Kustomization always has
-a `spec.path`, so the name is always checked. A `FluxInstance` gets a `spec.sync` only when
-`BootstrapConfig.SourceURL` is set: without one, flux-operator mode and `GenerateFluxInstance` do
-not use the root name and do not check it.
-
 ### Sync name
 
 `BootstrapConfig.SyncName` becomes the `FluxInstance`'s `spec.sync.name`: the name flux-operator
@@ -572,6 +559,19 @@ fmt.Println(fi.Name, fi.Spec.Sync.Name, fi.Spec.Sync.Ref)
 - It is not the `FluxInstance`'s own `metadata.name`, which is always `FluxInstanceName` (`flux`):
   the CRD accepts no other. `BootstrapGenerator.BootstrapName` names the bootstrap Kustomization
   only.
+
+### Root node name
+
+The root node's name is a path segment of the gotk bootstrap Kustomization's `spec.path` and of
+the `FluxInstance`'s `spec.sync.path`. `GenerateBootstrap` and `GenerateFluxInstance` take a
+node, not a cluster, so they check that name themselves with `stack.ValidateDirectoryName`: a
+name holding `/`, `\` or a NUL byte, or `.` or `..`, is refused. No root node and an unnamed root
+are valid; neither adds a segment.
+
+The check runs only where a path is built. In `gotk` mode the bootstrap Kustomization always has
+a `spec.path`, so the name is always checked. A `FluxInstance` gets a `spec.sync` only when
+`BootstrapConfig.SourceURL` is set: without one, flux-operator mode and `GenerateFluxInstance` do
+not use the root name and do not check it.
 
 ## Configuration
 

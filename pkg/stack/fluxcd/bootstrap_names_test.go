@@ -1,6 +1,7 @@
 package fluxcd_test
 
 import (
+	"path"
 	"strings"
 	"testing"
 
@@ -79,7 +80,8 @@ func TestBootstrap_RootNodeName(t *testing.T) {
 		})
 	}
 
-	// The accepted name is the path segment, unchanged.
+	// The accepted name is the last path segment, unchanged. What precedes it
+	// is the bootstrap path's own rule, tested with that rule.
 	objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.ModeGotk), &stack.Node{Name: "prod.eu"})
 	if err != nil {
 		t.Fatal(err)
@@ -90,9 +92,9 @@ func TestBootstrap_RootNodeName(t *testing.T) {
 			paths = append(paths, k.Spec.Path)
 		}
 	}
-	want := fluxstack.DefaultBootstrapPathRoot + "/prod.eu"
-	if len(paths) != 1 || paths[0] != want {
-		t.Fatalf("bootstrap Kustomization spec.path = %v, want [%s]", paths, want)
+	const want = "prod.eu"
+	if len(paths) != 1 || path.Base(paths[0]) != want {
+		t.Fatalf("bootstrap Kustomization spec.path = %v, want one path whose last segment is %s", paths, want)
 	}
 }
 
