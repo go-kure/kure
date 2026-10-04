@@ -438,27 +438,55 @@ rejects it.
 **Design outline.**
 
 - **Names that become Kustomization names** (`Bundle.Name` or `KustomizationName`,
-  `Node.KustomizationName`) must be DNS-1123 subdomains of at most 63 characters. The extra limit
+  `Node.KustomizationName`) must be DNS-1123 subdomains of at most 63 characters
+  (`stack.ValidateKustomizationName`, `stack.KustomizationNameMaxLength`). The extra limit
   exists because Flux labels the objects it applies with the Kustomization's name, and a label
-  value is limited to 63 characters; the ticket verifies this against kustomize-controller.
+  value is limited to 63 characters. Verified: kustomize-controller v1.9.5 passes the
+  Kustomization's name as owner (`internal/controller/kustomization_controller.go:462`) and
+  `fluxcd/pkg/ssa` v0.76.2 writes it as the value of the `kustomize.toolkit.fluxcd.io/name`
+  label (`manager.go:66-78`).
 - **Names that become directories** (node names, bundle and `DirName`, application names under
-  `ApplicationGrouping: GroupByName`) must be non-empty, contain neither `/` nor `\`, and not be
-  `.` or `..`. Both separators are refused because `FullRepoPath` joins the name with
-  `filepath.Join` (`manifest.go:101-107`), which treats `\` as a separator on Windows: a name such
-  as `..\outside` would otherwise leave the layout directory.
+  `ApplicationGrouping: GroupByName`) must be non-empty, contain neither `/` nor `\` nor a NUL
+  byte, and not be `.` or `..` (`stack.ValidateDirectoryName`). Both separators are refused
+  because `FullRepoPath` joins the name with `filepath.Join` (`manifest.go:101-107`), which
+  treats `\` as a separator on Windows: a name such as `..\outside` would otherwise leave the
+  layout directory. A NUL byte is refused because a directory with one in its name cannot be
+  created, so the name would fail only when the tree is written. Characters that only some file
+  systems refuse are not checked.
   The unnamed root is exempt: an empty root name is valid and never becomes a directory name
   (section 1.2, cluster wrapper; `walker.go:28-39`, `pkg/stack/layout/parentpath_test.go:436-446`).
-- **Where:** bundle and node names are validated in `Bundle.Validate` (`bundle.go:174-270`) and
-  `ValidateCluster` (`pkg/stack/validate.go:29`). An application name becomes a directory only
+- **Node names are checked under every layout grouping.** A node name is a segment of the node's
+  path in the model before it is a directory: `Node.GetPath` and the path map join node names
+  with `/` (`pkg/stack/cluster.go:160-187`) whatever the layout rules are. Two unnamed children
+  of one node share a path, and so do a node named `a/b` and a node `b` below its sibling `a`.
+  A cluster with an unnamed node below the root, or with a separator in a node name, is
+  therefore refused also where `NodeGrouping: GroupFlat` gives the node no directory.
+- **Where:** bundle and node names are validated in `Bundle.Validate` (the bundle and every
+  umbrella descendant) and `ValidateCluster`, so the walker, the integrator and the generator
+  all get them. An application name becomes a directory only
   where the application gets its own layout, which depends on the layout rules
   (`ApplicationGrouping: GroupByName`, or an augmenter that takes its own layout).
   `ValidateCluster` takes no rules, and `pkg/stack` cannot import the layout package, so that
   check runs in the walker. The error names the bundle's or node's path.
-- **Existing fixtures** with a name the rules refuse are renamed in the same change
-  (`pkg/stack/fluxcd/fluxcd_test.go:621-631` uses `Y-infra`, `Y-services` and `Y-apps`).
+- **Entry points that never run `ValidateCluster`** check for themselves. `GenerateForBundle`
+  checks the Kustomization name of the bundle it is handed. The bootstrap generator checks a
+  non-empty root node name as a directory name where it builds a path from it: always in gotk
+  mode (the bootstrap Kustomization's `spec.path`), and in flux-operator mode and
+  `GenerateFluxInstance` only when a sync is built, that is when `SourceURL` is set (the
+  FluxInstance's `sync.path`). Without a sync the root name is not read and not checked.
+- **Not covered here:** names kure derives are checked where they are derived
+  ([go-kure/kure#973](https://github.com/go-kure/kure/issues/973)); layout names changed after
+  the walk are contained by the pre-write check
+  ([go-kure/kure#977](https://github.com/go-kure/kure/issues/977)). Nothing is shortened: the
+  caller chooses a valid name.
+- **Existing fixtures** with a name the rules refuse are renamed in the same change: the
+  upper-case bundles `Y-infra`, `Y-services` and `Y-apps` in `pkg/stack/fluxcd/fluxcd_test.go`
+  become lower-case, `webA` and `webB` become `web-a` and `web-b`, and two unnamed child nodes
+  in an ArgoCD test get names.
 
 **Acceptance.** A 64-character Kustomization name, an upper-case name, and a directory name with
-`/` or with `\` are each refused, naming the path. Dotted names and an unnamed root stay accepted.
+`/`, with `\` or with a NUL byte are each refused, naming the path. Dotted names and an unnamed
+root stay accepted.
 
 ### Behaviour bugs ([go-kure/kure#979](https://github.com/go-kure/kure/issues/979))
 
