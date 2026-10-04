@@ -348,6 +348,30 @@ func TestKustomizationName_GenerateForBundleRefusesItsOwnName(t *testing.T) {
 			},
 			want: []string{`"web"`, "DependsOn"},
 		},
+		{
+			name: "health check on the bundle's KustomizationName",
+			build: func() *stack.Bundle {
+				web := srBundle("web")
+				web.KustomizationName = "shared"
+				web.HealthChecks = []stack.HealthCheck{{
+					APIVersion: "kustomize.toolkit.fluxcd.io/v1", Kind: "Kustomization",
+					Name: "shared", Namespace: fluxstack.DefaultNamespace,
+				}}
+				return web
+			},
+			want: []string{`"web"`, `"shared"`, "HealthChecks"},
+		},
+		{
+			name: "health check on the bundle's Name, no KustomizationName, no namespace",
+			build: func() *stack.Bundle {
+				web := srBundle("web")
+				web.HealthChecks = []stack.HealthCheck{{
+					APIVersion: "kustomize.toolkit.fluxcd.io/v1", Kind: "Kustomization", Name: "web",
+				}}
+				return web
+			},
+			want: []string{`"web"`, "HealthChecks"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -361,5 +385,29 @@ func TestKustomizationName_GenerateForBundleRefusesItsOwnName(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A health check is refused only when it is on the bundle's own Kustomization:
+// the same name in another namespace, another kind with that name, and another
+// Kustomization are written as given.
+func TestKustomizationName_GenerateForBundleKeepsOtherHealthChecks(t *testing.T) {
+	web := srBundle("web")
+	web.KustomizationName = "shared"
+	web.HealthChecks = []stack.HealthCheck{
+		{APIVersion: "kustomize.toolkit.fluxcd.io/v1", Kind: "Kustomization", Name: "shared", Namespace: "tenant-a"},
+		{APIVersion: "apps/v1", Kind: "Deployment", Name: "shared", Namespace: fluxstack.DefaultNamespace},
+		{APIVersion: "kustomize.toolkit.fluxcd.io/v1", Kind: "Kustomization", Name: "web"},
+	}
+	objs, err := fluxstack.NewResourceGenerator().GenerateForBundle(web, "clusters/demo/x")
+	if err != nil {
+		t.Fatalf("GenerateForBundle refused health checks on other objects: %v", err)
+	}
+	k, ok := objs[0].(*kustv1.Kustomization)
+	if !ok {
+		t.Fatalf("first object is %T, want a Kustomization", objs[0])
+	}
+	if len(k.Spec.HealthChecks) != 3 {
+		t.Errorf("got %d health checks, want the 3 given: %v", len(k.Spec.HealthChecks), k.Spec.HealthChecks)
 	}
 }
