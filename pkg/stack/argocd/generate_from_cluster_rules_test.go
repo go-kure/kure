@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	kerrors "github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/argocd"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -170,6 +171,57 @@ func TestGenerateFromCluster_RefusedRules(t *testing.T) {
 		objs, err := argocd.Engine().GenerateFromCluster(rulesCluster("platform"), rules)
 		if err == nil || !strings.Contains(err.Error(), "FluxPlacement") || objs != nil {
 			t.Errorf("FluxPlacement %s: got %v, %v; want a refusal", p, objs, err)
+		}
+	}
+}
+
+// TestGenerateFromCluster_InvalidRules: rules the walk refuses (an unknown
+// option value, a ClusterName with a ".." segment) are an error whatever the
+// cluster is, an absent or empty one included, as they are for
+// CreateLayoutWithResources; the error is the rules' validation error, which
+// names the field. With valid rules such a cluster yields nothing.
+func TestGenerateFromCluster_InvalidRules(t *testing.T) {
+	clusters := map[string]func() *stack.Cluster{
+		"cluster with bundles":        func() *stack.Cluster { return rulesCluster("platform") },
+		"nil cluster":                 func() *stack.Cluster { return nil },
+		"cluster without a root node": func() *stack.Cluster { return &stack.Cluster{Name: "empty"} },
+	}
+	for field, set := range map[string]func(*layout.LayoutRules){
+		"NodeGrouping":        func(r *layout.LayoutRules) { r.NodeGrouping = "sideways" },
+		"BundleGrouping":      func(r *layout.LayoutRules) { r.BundleGrouping = "sideways" },
+		"ApplicationGrouping": func(r *layout.LayoutRules) { r.ApplicationGrouping = "sideways" },
+		"FilePer":             func(r *layout.LayoutRules) { r.FilePer = "sideways" },
+		"FluxPlacement":       func(r *layout.LayoutRules) { r.FluxPlacement = "sideways" },
+		"FileNaming":          func(r *layout.LayoutRules) { r.FileNaming = "sideways" },
+		"ClusterName":         func(r *layout.LayoutRules) { r.ClusterName = "a/../b" },
+	} {
+		rules := layout.DefaultLayoutRules()
+		set(&rules)
+		if err := rules.Validate(); err == nil {
+			t.Fatalf("%s: the rules are valid, so the case tests nothing", field)
+		}
+		for clusterName, build := range clusters {
+			objs, err := argocd.Engine().GenerateFromCluster(build(), rules)
+			var verr *kerrors.ValidationError
+			if !errors.As(err, &verr) || verr.Field != field {
+				t.Errorf("%s, invalid %s: got %v, want the rules' validation error for that field", clusterName, field, err)
+			}
+			if objs != nil {
+				t.Errorf("%s, invalid %s: got %d objects with the refusal", clusterName, field, len(objs))
+			}
+			if _, createErr := argocd.Engine().CreateLayoutWithResources(build(), rules); !errors.As(createErr, &verr) || verr.Field != field {
+				t.Errorf("%s, invalid %s: CreateLayoutWithResources got %v, want the same refusal", clusterName, field, createErr)
+			}
+		}
+	}
+
+	for clusterName, build := range clusters {
+		if clusterName == "cluster with bundles" {
+			continue
+		}
+		objs, err := argocd.Engine().GenerateFromCluster(build(), layout.DefaultLayoutRules())
+		if err != nil || objs != nil {
+			t.Errorf("%s, valid rules: got %v, %v; want nothing", clusterName, objs, err)
 		}
 	}
 }

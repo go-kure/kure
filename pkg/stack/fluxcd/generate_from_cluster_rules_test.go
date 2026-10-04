@@ -2,6 +2,7 @@ package fluxcd_test
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	kerrors "github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -266,6 +268,89 @@ func TestGenerateFromCluster_PerBundleMatchesSeparate(t *testing.T) {
 	}
 	if !reflect.DeepEqual(perBundle, separate) {
 		t.Errorf("per-bundle objects differ from the separate placement's:\n got %v\nwant %v", specPaths(perBundle), specPaths(separate))
+	}
+}
+
+// invalidRules are rules LayoutRules.Validate refuses, by the field its error
+// names: one unknown option value each, and a ClusterName with a ".." segment.
+func invalidRules() map[string]layout.LayoutRules {
+	out := map[string]layout.LayoutRules{}
+	for field, set := range map[string]func(*layout.LayoutRules){
+		"NodeGrouping":        func(r *layout.LayoutRules) { r.NodeGrouping = "sideways" },
+		"BundleGrouping":      func(r *layout.LayoutRules) { r.BundleGrouping = "sideways" },
+		"ApplicationGrouping": func(r *layout.LayoutRules) { r.ApplicationGrouping = "sideways" },
+		"FilePer":             func(r *layout.LayoutRules) { r.FilePer = "sideways" },
+		"FluxPlacement":       func(r *layout.LayoutRules) { r.FluxPlacement = "sideways" },
+		"FileNaming":          func(r *layout.LayoutRules) { r.FileNaming = "sideways" },
+		"ClusterName":         func(r *layout.LayoutRules) { r.ClusterName = "a/../b" },
+	} {
+		rules := layout.DefaultLayoutRules()
+		set(&rules)
+		out[field] = rules
+	}
+	return out
+}
+
+// TestGenerateFromCluster_InvalidRules: rules the walk refuses are an error
+// from the generator and the engine whatever the cluster is, an absent or
+// empty one included, and no object comes back. The error carries the rules'
+// validation error, which names the field.
+func TestGenerateFromCluster_InvalidRules(t *testing.T) {
+	clusters := map[string]func() *stack.Cluster{
+		"cluster with bundles":        func() *stack.Cluster { return threeTier("platform", "apps", "web", nil) },
+		"nil cluster":                 func() *stack.Cluster { return nil },
+		"cluster without a root node": func() *stack.Cluster { return &stack.Cluster{Name: "empty"} },
+	}
+	for field, rules := range invalidRules() {
+		if err := rules.Validate(); err == nil {
+			t.Fatalf("%s: the rules are valid, so the case tests nothing", field)
+		}
+		for clusterName, build := range clusters {
+			calls := map[string]func() ([]client.Object, error){
+				"generator": func() ([]client.Object, error) {
+					return fluxstack.NewResourceGenerator().GenerateFromCluster(build(), rules)
+				},
+				"engine": func() ([]client.Object, error) {
+					return fluxstack.NewWorkflowEngine().GenerateFromCluster(build(), rules)
+				},
+			}
+			for caller, call := range calls {
+				objs, err := call()
+				var verr *kerrors.ValidationError
+				if !errors.As(err, &verr) || verr.Field != field {
+					t.Errorf("%s, %s, invalid %s: got %v, want the rules' validation error for that field", caller, clusterName, field, err)
+				}
+				if objs != nil {
+					t.Errorf("%s, %s, invalid %s: got %d objects with the refusal", caller, clusterName, field, len(objs))
+				}
+			}
+		}
+	}
+
+	// Valid rules: an absent or empty cluster yields nothing and no error.
+	for clusterName, build := range clusters {
+		if clusterName == "cluster with bundles" {
+			continue
+		}
+		objs, err := fluxstack.NewResourceGenerator().GenerateFromCluster(build(), layout.DefaultLayoutRules())
+		if err != nil || objs != nil {
+			t.Errorf("%s, valid rules: got %v, %v; want nothing", clusterName, objs, err)
+		}
+	}
+
+	// The per-layout placement is refused before the other rules are read:
+	// with an invalid rule as well, the caller gets the placement refusal.
+	for field, rules := range invalidRules() {
+		if field == "FluxPlacement" {
+			continue
+		}
+		rules.FluxPlacement = layout.FluxIntegratedPerLayout
+		for clusterName, build := range clusters {
+			_, err := fluxstack.NewResourceGenerator().GenerateFromCluster(build(), rules)
+			if err == nil || !strings.Contains(err.Error(), "CreateLayoutWithResources") {
+				t.Errorf("%s, per-layout with invalid %s: got %v, want the placement refusal", clusterName, field, err)
+			}
+		}
 	}
 }
 
