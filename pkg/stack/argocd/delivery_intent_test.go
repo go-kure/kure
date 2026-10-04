@@ -58,15 +58,12 @@ func TestDeliveryIntent_Refused(t *testing.T) {
 					}
 				}
 			}
-			_, err := Engine().GenerateFromCluster(intentCluster(intent), layout.DefaultLayoutRules())
-			check("GenerateFromCluster", err)
-
 			for gname, rules := range map[string]layout.LayoutRules{
 				"default": layout.DefaultLayoutRules(),
 				"flat":    {BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupFlat},
 				"byName":  {BundleGrouping: layout.GroupByName, ApplicationGrouping: layout.GroupByName},
 			} {
-				_, err = Engine().CreateLayoutWithResources(intentCluster(intent), rules)
+				_, err := Engine().CreateLayoutWithResources(intentCluster(intent), rules)
 				check("CreateLayoutWithResources/"+gname, err)
 
 				c := intentCluster(intent)
@@ -112,10 +109,6 @@ func TestDeliveryIntent_RefusedForAHandBuiltLayout(t *testing.T) {
 // TestDeliveryIntent_UnsetAccepted: without an intent the same cluster renders.
 func TestDeliveryIntent_UnsetAccepted(t *testing.T) {
 	c := intentCluster(stack.DeliveryIntent{})
-	objs, err := Engine().GenerateFromCluster(c, layout.DefaultLayoutRules())
-	if err != nil || len(objs) != 3 {
-		t.Fatalf("GenerateFromCluster: %d objects, %v; want the three Applications", len(objs), err)
-	}
 	if _, err := Engine().CreateLayoutWithResources(intentCluster(stack.DeliveryIntent{}), layout.DefaultLayoutRules()); err != nil {
 		t.Errorf("CreateLayoutWithResources: %v", err)
 	}
