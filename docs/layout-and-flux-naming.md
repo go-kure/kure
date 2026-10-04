@@ -402,8 +402,9 @@ together through both entry points, the set case, and the gotk control.
 
 ### FileNaming applied everywhere ([go-kure/kure#976](https://github.com/go-kure/kure/issues/976))
 
-**Shipped.** `LayoutRules.FileNaming` names every file `WriteToDisk` and `WriteToTar` write for
-that tree. Part 1 describes the behaviour below as current.
+**Shipped.** `LayoutRules.FileNaming` names the resource files `WriteToDisk` and `WriteToTar`
+write, in every layout of that tree. It does not name `kustomization.yaml`, an extra file, or the
+one `<Name>.yaml` of an `AppFileSingle` layout. Part 1 describes the behaviour below as current.
 
 **What it does.**
 
