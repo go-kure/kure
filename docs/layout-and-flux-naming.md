@@ -712,9 +712,11 @@ name that is not one path segment where the application gets a directory; in the
 Kustomization name over 63 characters, and under `FluxIntegratedPerLayout` a layout whose name
 cannot name its Kustomization; a root node name that is not one path segment where the bootstrap
 builds a path from it, or in gotk mode not a DNS-1123 subdomain. None of these could be applied or
-written safely. Existing fixtures with such names are renamed in the same change: the upper-case bundles `Y-infra`,
-`Y-services` and `Y-apps` in `pkg/stack/fluxcd/fluxcd_test.go` become lower-case, `webA` and `webB`
-become `web-a` and `web-b`, and two unnamed child nodes in an ArgoCD test get names.
+written safely. A nil `DependsOn` entry is refused at validation, where it used to fail in the
+generator. Existing fixtures with such names are renamed in the same change: the upper-case
+bundles `Y-infra`, `Y-services` and `Y-apps` in `pkg/stack/fluxcd/fluxcd_test.go` become
+lower-case, `webA` and `webB` become `web-a` and `web-b`, and two unnamed child nodes in an ArgoCD
+test get names.
 
 **Tests.** `pkg/stack/names_test.go` holds the rule tables and the model's checks, the
 `KustomizationName` value included. `bundle_names_test.go` in `pkg/stack/fluxcd` covers the
