@@ -524,11 +524,11 @@ func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]c
 // each DependsOn bundle, written as a dependency. Their own Kustomizations
 // are not built here (GenerateForBundle builds none of them), so a reference
 // to a name Flux cannot reconcile would otherwise be returned unchecked. A
-// NamedDependsOn entry is the caller's reference to an object kure does not
-// build, and is written as given. The error names the bundle by its path
-// (Bundle.GetPath), which for an umbrella child of a walked cluster holds its
-// umbrella's. path is the caller's, so no directory rule applies to the name
-// here.
+// NamedDependsOn entry is a caller-supplied reference that need not name a
+// bundle kure builds, and is written as given. The error names the bundle by
+// its path (Bundle.GetPath), which for an umbrella child of a walked cluster
+// holds its umbrella's. path is the caller's, so no directory rule applies to
+// the name here.
 func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string) (client.Object, error) {
 	if err := checkKustomizationName(b); err != nil {
 		return nil, err
