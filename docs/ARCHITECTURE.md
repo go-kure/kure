@@ -713,8 +713,10 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error)
 func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*ManifestLayout, error)
 ```
 
-Both validate the cluster first (`stack.ValidateCluster`), then apply the grouping axes described
-above.
+Both validate the rules they are given (`LayoutRules.Validate`: an unknown option value or a
+`ClusterName` with a `..` path segment is an error) and then the cluster
+(`stack.ValidateCluster`), before they apply the grouping axes described above. No entry point
+that walks validates the rules on its own.
 
 ---
 
@@ -1277,6 +1279,7 @@ guesses a name it was handed cannot be composed with a caller that generates nam
 |---|---|---|
 | Constructors | Nothing. An unregistered type panics — a programming error, not input | `pkg/kubernetes/create.go` |
 | Domain model | Bundle rules: name present, no nil application, no cycle or duplicate name among umbrella `Bundle.Children`, and no bundle owned by two umbrellas or by both an umbrella and a `Node`; no cycle in the `Node` tree | `stack.ValidateCluster`, `Bundle.Validate` |
+| Layout rules | Known option values, and a `ClusterName` without a `..` path segment; run by both walks on the rules as given, and by the Flux `IntegrateWithLayout` | `layout.LayoutRules.Validate` |
 | Explicit validators | Opt-in checks a caller runs when it wants them | `kubernetes.ValidatePodSpecPSA`, `gvk.ValidateGVK`, `io.ValidateOutputFormat` |
 | The cluster | Schema, admission, CRD structural rules | apply time |
 

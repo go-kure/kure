@@ -268,6 +268,15 @@ What changed, and what to do:
   a `List`: they are one object in the cluster.
 - **No `..` in a layout's name or namespace.** Every writer refuses a layout whose `Name` or
   `Namespace` has a `..` path segment, with or without extra files.
+- **The walk validates its rules.** `WalkCluster` and `WalkClusterByPackage` run
+  `LayoutRules.Validate` on the rules they are given, and so does every entry point that walks
+  (`CreateLayoutWithResources`). An unknown value of a grouping, `ApplicationFileMode`, `FilePer`,
+  `FluxPlacement` or `FileNaming` is now an error; before, it was walked as if it were another
+  value. A `ClusterName` with a `..` path segment is refused at the walk instead of at write, also
+  one the walk would have cleaned away (`x/../platform`). An unset value is still valid and takes
+  its default. Fix the value the error names. The Flux `IntegrateWithLayout` runs the same check
+  in place of its own placement check, so its error for an unknown placement now names the field
+  `FluxPlacement` (it was `fluxPlacement`).
 
 See the [Layout Engine reference](/api-reference/layout/) for the full rule.
 

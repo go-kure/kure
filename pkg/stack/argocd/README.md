@@ -112,7 +112,7 @@ for _, child := range ml.Children {
 ```
 <!-- doc-example:end -->
 
-`CreateLayoutWithResources` generates the base manifest layout via `layout.WalkCluster` with the caller's rules, generates the Applications from that same layout (so every `source.path` is a directory it writes), then appends an `argocd/` child layout containing them. The `argocd/` directory sits inside the root layout's own directory, where the root's `kustomization.yaml` references it. An integrated `FluxPlacement` (`FluxIntegratedPerLayout`, `FluxIntegratedPerBundle`) is refused: the writer would then reference child layouts through Flux CRs, which an Argo layout does not have, so nothing would apply `argocd/`.
+`CreateLayoutWithResources` generates the base manifest layout via `layout.WalkCluster` with the caller's rules, generates the Applications from that same layout (so every `source.path` is a directory it writes), then appends an `argocd/` child layout containing them. The `argocd/` directory sits inside the root layout's own directory, where the root's `kustomization.yaml` references it. An integrated `FluxPlacement` (`FluxIntegratedPerLayout`, `FluxIntegratedPerBundle`) is refused: the writer would then reference child layouts through Flux CRs, which an Argo layout does not have, so nothing would apply `argocd/`. Every other rule is validated by the walk (`layout.LayoutRules.Validate`): an unknown option value or a `ClusterName` with a `..` path segment is an error naming the field, and no layout is returned.
 
 A `KustomizationRecursive` layout gets no `kustomization.yaml`, and the Applications do not set
 `source.directory.recurse` (go-kure/kure#144), so Argo CD applies only the manifest files at the

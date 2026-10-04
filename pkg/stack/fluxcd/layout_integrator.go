@@ -52,6 +52,9 @@ func NewLayoutIntegrator(generator *ResourceGenerator) *LayoutIntegrator {
 //
 // Placement is driven by rules.FluxPlacement. FluxUnset is treated as
 // FluxSeparate to match DefaultLayoutRules and the walker's normalization.
+// The rules are validated first, as given, by the check the walks use
+// (layout.LayoutRules.Validate): this call reads the placement and the file
+// naming of a tree it did not walk.
 //
 // Every placement first indexes the layout's origins (layout.IndexOrigins): a
 // hand-built, partial or other-cluster tree is refused rather than matched by
@@ -61,6 +64,9 @@ func NewLayoutIntegrator(generator *ResourceGenerator) *LayoutIntegrator {
 // would host it is kept; one with the same name elsewhere or with another
 // path is an error.
 func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) error {
+	if err := rules.Validate(); err != nil {
+		return err
+	}
 	if ml == nil || c == nil || c.Node == nil {
 		return nil
 	}
@@ -74,10 +80,6 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 	// already holds Flux Kustomizations placed outside its applications (an
 	// earlier integration's, or a caller's) was placed by them, so it is not
 	// re-placed; and a refused call puts the tree back as it was.
-	if !isFluxPlacement(rules.FluxPlacement) {
-		return errors.NewValidationError("fluxPlacement", string(rules.FluxPlacement), "LayoutRules",
-			[]string{string(layout.FluxIntegratedPerLayout), string(layout.FluxIntegratedPerBundle), string(layout.FluxSeparate)})
-	}
 	if ml.FluxPlacement != rules.FluxPlacement {
 		if placed := placedKustomization(ml); placed != "" {
 			return errors.Errorf("layout %q already holds Flux Kustomization %q, placed for %q: it cannot be integrated again as %q", ml.FullRepoPath(), placed, ml.FluxPlacement, rules.FluxPlacement)
@@ -177,11 +179,6 @@ func placedKustomization(ml *layout.ManifestLayout) string {
 	return find(ml)
 }
 
-// isFluxPlacement reports whether p is one of the three placements.
-func isFluxPlacement(p layout.FluxPlacement) bool {
-	return p == layout.FluxSeparate || p == layout.FluxIntegratedPerLayout || p == layout.FluxIntegratedPerBundle
-}
-
 // setPlacement sets placement on l and every layout below it, augmenter
 // children included.
 func setPlacement(l *layout.ManifestLayout, placement layout.FluxPlacement) {
@@ -200,9 +197,13 @@ func setPlacement(l *layout.ManifestLayout, placement layout.FluxPlacement) {
 // (FluxUnset -> FluxSeparate) and the normalized rules are passed to the
 // SourceRef validation gate, WalkCluster, and IntegrateWithLayout. This
 // guarantees a single placement authority per call.
+//
+// The rules are validated by the walk, not here (layout.LayoutRules.Validate),
+// also for a nil cluster: invalid rules are an error whatever the cluster is.
 func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules layout.LayoutRules) (*layout.ManifestLayout, error) {
 	if c == nil {
-		return nil, nil
+		// Nothing to build; the walk still refuses rules it would not walk.
+		return layout.WalkCluster(nil, rules)
 	}
 
 	// Fail fast on umbrella / disjointness / multi-package violations before

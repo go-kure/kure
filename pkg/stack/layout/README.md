@@ -162,6 +162,24 @@ share a file name are written into one multi-document file, as `FilePerKind` int
 - **FileNaming**: Resource file naming pattern (see [File Naming Modes](#file-naming-modes))
 - **ClusterName**: Optional cluster name prefix for cluster-aware directory paths
 
+`WalkCluster` and `WalkClusterByPackage` validate the rules they are given before they build
+anything (`LayoutRules.Validate`), so no caller has to and no entry point that walks checks on its
+own. The rules are validated as given, then unset values take their defaults: an unset value is
+valid. Two things are refused, each with an error naming the field and the value:
+
+- an unknown value of `NodeGrouping`, `BundleGrouping`, `ApplicationGrouping`,
+  `ApplicationFileMode`, `FilePer`, `FluxPlacement` or `FileNaming`. It is not walked as if it
+  were another value;
+- a `ClusterName` with a `..` path segment (`../prod`, `clusters/../prod`). The cluster directory
+  is the top layout's `Namespace`, which the writers refuse with such a segment, so the walk
+  refuses it first. This is stricter than the writers in one case, by design: `x/../platform`
+  over a root node `platform` would be cleaned to `platform` and written, and is refused all the
+  same. Every other spelling is accepted and written: `.`, a nested or rooted path, a trailing
+  slash, dots inside a segment (`a..b`).
+
+The rules are checked whatever the cluster is: a nil cluster with invalid rules returns the rules
+error, not a nil layout.
+
 ### 3. Two Main Walker Functions
 - **WalkCluster()**: Standard hierarchical layout (Node → Bundle → App structure)
 - **WalkClusterByPackage()**: Groups by PackageRef for multi-source scenarios
