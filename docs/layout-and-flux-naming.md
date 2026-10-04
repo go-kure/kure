@@ -64,7 +64,7 @@ Flux objects to that tree in one of three placements: `FluxSeparate` (the defaul
 | Umbrella child directory | `<parent dir>/<child bundle name>`, marked `UmbrellaChild` | `walker.go:353-376` |
 | Application directory | none by default. `ApplicationGrouping: GroupByName` adds `<bundle dir>/<app name>`. Under the default flat grouping an application whose config is a `LayoutAugmenter` still gets its own directory, unless the config also implements `LayoutIntentAugmenter` and `WantsOwnLayout()` returns false; it is then merged like any other application. | `walker.go:386-422`, `:469-486` |
 | Resource file | `WriteToDisk` and `WriteToTar` name by the layout's own FileNaming: default `{namespace}-{kind}-{name}.yaml` (empty namespace: `cluster`); `FileNamingKindName` gives `{kind}-{name}.yaml`. `WriteManifest` names every layout's files from its `Config` instead. | `pkg/stack/layout/config.go:62-70`, `writerplan.go:228-250`, `:299-306` |
-| Generated Kustomization file | under `WriteToDisk` and `WriteToTar`, named by the host layout's FileNaming; the `flux-system/` layout of `FluxSeparate` has no FileNaming, so it always uses the default (`flux-system-kustomization-<name>.yaml`). Layouts an augmenter adds do not inherit FileNaming. | `manifest.go:88-95`, `pkg/stack/fluxcd/layout_integrator.go:1431-1436` |
+| Generated Kustomization file | under `WriteToDisk` and `WriteToTar`, named by the host layout's FileNaming; the `flux-system/` layout of `FluxSeparate` has no FileNaming, so it always uses the default (`flux-system-kustomization-<name>.yaml`). Layouts an augmenter adds do not inherit FileNaming. | `manifest.go:88-95`, `pkg/stack/fluxcd/layout_integrator.go:1457-1462` |
 | `kustomization.yaml` child entries | a child directory is listed unless it is an `UmbrellaChild`, renders a bundle, or the parent is `FluxIntegratedPerLayout` | `writerplan.go:69-89` |
 
 `LayoutRules.FlattenSingleTier` (default false) collapses one layer, and only at the walked root:
@@ -82,7 +82,7 @@ child must be a terminal, non-umbrella layout (`pkg/stack/layout/flatten.go:27-9
   first bundle (`resource_generator.go:134-145`; `pkg/stack/layout/origin.go:166-181`).
 - Under `FluxIntegratedPerLayout`, a bundle-less node layout gets a Kustomization named
   `<path with / replaced by ->-node`, and an application or augmenter layout one named after the
-  layout (`layout_integrator.go:1253-1262`).
+  layout (`layout_integrator.go:1279-1288`).
 
 **Where each placement puts them.**
 
@@ -162,7 +162,7 @@ them.
   When the root node renders a bundle, that layout is the bundle's own directory.
 
 **The `flux-system` directory.** Its name is a constant, and under `FluxSeparate` it is placed
-directly under the walked root (`layout_integrator.go:1431-1436`).
+directly under the walked root (`layout_integrator.go:1457-1462`).
 
 **Bootstrap, flux-operator mode (the default).**
 - Emits the embedded flux-operator install bundle (`v0.58.1`) and a `FluxInstance` named `flux`.
@@ -180,8 +180,8 @@ directly under the walked root (`layout_integrator.go:1431-1436`).
 | Input | Result | Source |
 |---|---|---|
 | Two bundles with the same name | refused wherever the origin index is built: the integrator under every placement, `GenerateFromLayout` and the ArgoCD workflow. `WalkCluster` and the writers alone do not check it. | `origin.go:122-123`; callers `layout_integrator.go:307`, `resource_generator.go:90`, `pkg/stack/argocd/argo.go:68` |
-| A payload Kustomization named like its bundle, in the namespace of the generated Kustomization (the generator's `DefaultNamespace`) | refused under `FluxSeparate`. Under the two integrated placements it is refused unless it sits in the layout that hosts the generated Kustomization and has the same `spec.path`: that one is kept as it is, and none is generated for the bundle. A bundle rendered in the walked root layout is its own host, so its payload can meet this. The check compares namespace and name, so it does not refuse the same name in another namespace. | `layout_integrator.go:951-956`, `:1022-1027`, `:1231-1236`, `:1376-1378`; `resource_generator.go:495-498` |
-| A Kustomization name generated twice in one integration | refused by the integrator. The key is the bare name: every generated Kustomization is in `DefaultNamespace`. | `layout_integrator.go:1246-1252`; `resource_generator.go:495-498`, `:655-658` |
+| A payload Kustomization named like its bundle, in the namespace of the generated Kustomization (the generator's `DefaultNamespace`) | refused under `FluxSeparate`. Under the two integrated placements it is refused unless it sits in the layout that hosts the generated Kustomization and has the same `spec.path`: that one is kept as it is, and none is generated for the bundle. A bundle rendered in the walked root layout is its own host, so its payload can meet this. The check compares namespace and name, so it does not refuse the same name in another namespace. | `layout_integrator.go:951-956`, `:1022-1027`, `:1257-1262`, `:1402-1404`; `resource_generator.go:495-498` |
+| A Kustomization name generated twice in one integration | refused by the integrator. The key is the bare name: every generated Kustomization is in `DefaultNamespace`. | `layout_integrator.go:1272-1278`; `resource_generator.go:495-498`, `:655-658` |
 | `FluxIntegratedPerLayout` with `ApplicationGrouping: GroupByName`, application named like its bundle (the common case) | refused as a name used twice | same |
 | `FluxIntegratedPerLayout`, augmenter application named like its bundle | refused as a name used twice | same |
 | Two directory layouts resolving to one directory | refused by the writers | `pkg/stack/layout/treecheck.go:77-83` |
@@ -217,7 +217,7 @@ What a consumer can do today:
 
 1. **Stale line references.** The `normalizeRulesPlacement` comment cites
    `pkg/stack/layout/types.go:154-163` and `walker.go:42-43`
-   (`layout_integrator.go:1460-1463`); neither is the code it names.
+   (`layout_integrator.go:1486-1489`); neither is the code it names.
 2. **SourceRef message.** It says "FluxIntegratedPerLayout mode requires a SourceRef" when
    `FluxIntegratedPerBundle` triggers it too (`pkg/stack/fluxcd/validate.go:50`, reached for both
    placements from `layout_integrator.go:218-222`).
@@ -302,19 +302,19 @@ Kustomization (for example `00-infra` for the Kustomization `shop-infra`).
   `Node.NamedDependsOn []string`.
 - **Where they are used:** they feed `createKustomizationForLayout`
   (`resource_generator.go:645-671`). `KustomizationName` replaces the fixed `<path>-node` name
-  (`layout_integrator.go:1257-1262`) when set.
+  (`layout_integrator.go:1283-1288`) when set.
 - **Placements:** node-level Kustomizations exist only under `FluxIntegratedPerLayout`
   (`layout_integrator.go:905-936`), and only for a node whose layout renders no bundle (`:907`).
   Under the other placements, on a node that `NodeGrouping: GroupFlat` merges away, and on a node
   whose layout renders a bundle, setting these fields is refused, not silently ignored.
 - **Unset fields change nothing for nodes:** a node Kustomization keeps its `<path>-node` name.
 - **Collisions:** a node `KustomizationName` equal to a bundle's effective Kustomization name is
-  refused, as any name used twice is today (`layout_integrator.go:1246-1252`).
+  refused, as any name used twice is today (`layout_integrator.go:1272-1278`).
 - **Reconciliation settings:** a node Kustomization takes the generator's interval and prune and
   sets no `wait` today (`resource_generator.go:645-671`). The ticket decides whether a node
   carries its own.
 - **Application and augmenter layouts, a breaking rename:** under `FluxIntegratedPerLayout` they
-  get Kustomizations named after the layout (`layout_integrator.go:1257-1262`). These collide with
+  get Kustomizations named after the layout (`layout_integrator.go:1283-1288`). These collide with
   the bundle's whenever the application shares the bundle's name (section 1.7). The default
   becomes `<unit name>-<layout name>`, which renames these Kustomizations even when no new field
   is set. Changing with it:
@@ -409,7 +409,7 @@ one `<Name>.yaml` of an `AppFileSingle` layout. Part 1 describes the behaviour b
 **What it does.**
 
 - The `FluxSeparate` `flux-system/` layout takes the rules' FileNaming
-  (`layout_integrator.go:1431-1436`).
+  (`layout_integrator.go:1457-1462`).
 - Layouts an augmenter adds inherit their parent's FileNaming when they leave it unset.
 - This is done in the walker, after the augmenter runs (`augmentAppLayout`, `walker.go:438-451`).
   `resolveManifestFileName` (`manifest.go:88-95`) has no parent to read.
@@ -469,7 +469,7 @@ words.
   object held twice within a layout or within one kustomize build (section 1.7); two
   Kustomizations of one name in separately applied directories passed. The layout package cannot
   import fluxcd (fluxcd imports layout), so the integrator's `claim`
-  (`layout_integrator.go:1246-1252`) cannot be reused. The check matches the group
+  (`layout_integrator.go:1272-1278`) cannot be reused. The check matches the group
   `kustomize.toolkit.fluxcd.io`, kind `Kustomization`, at any version; an omitted namespace is
   `default`.
 
@@ -481,7 +481,10 @@ has, as is a List kind without `items`; null `items` hold nothing. A typed List 
 as raw JSON (`runtime.RawExtension`), which the writers serialize as the object it encodes: it is
 read as that object, and an empty item holds nothing. The integrator's
 `resourceItems` (`layout_integrator.go:1138`) follows the same rule, so the integrator and the
-writers agree on which Kustomizations and Sources a tree holds. The existing per-layout and
+writers agree on which Kustomizations and Sources a tree holds. An item of a typed List need not
+carry object metadata (`metav1.List` has none): the integrator opens such a List too, and reads
+any other such item as the object the writers serialize for it. The writers refuse a Flux
+Kustomization whose namespace and name they cannot read. The existing per-layout and
 per-build identity checks are unchanged.
 
 **Acceptance.**

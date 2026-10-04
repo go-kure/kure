@@ -1,6 +1,7 @@
 package fluxcd_test
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -58,6 +60,78 @@ func rawListOf(items ...runtime.RawExtension) *rawItems {
 	l := &rawItems{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "List"}, Items: items}
 	l.Name, l.Namespace = "holder", "default"
 	return l
+}
+
+// bareObject is a runtime.Object without object metadata methods: a typed List
+// can hold one as an item, and it is not a client.Object.
+type bareObject struct {
+	metav1.TypeMeta `json:",inline"`
+	Metadata        map[string]any `json:"metadata,omitempty"`
+	Spec            map[string]any `json:"spec,omitempty"`
+}
+
+func (b *bareObject) DeepCopyObject() runtime.Object {
+	c := *b
+	return &c
+}
+
+// bareOf returns obj as a bareObject: the same serialized object, without the
+// metadata methods.
+func bareOf(t *testing.T, obj client.Object) *bareObject {
+	t.Helper()
+	raw, err := json.Marshal(obj)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	b := &bareObject{}
+	if err := json.Unmarshal(raw, b); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	return b
+}
+
+// jsonAs is a runtime.Object without object metadata methods that serializes
+// as the JSON it holds, or not at all when it holds none.
+type jsonAs struct {
+	metav1.TypeMeta
+	raw string
+}
+
+func (j *jsonAs) DeepCopyObject() runtime.Object {
+	c := *j
+	return &c
+}
+
+func (j *jsonAs) MarshalJSON() ([]byte, error) {
+	if j.raw == "" {
+		return nil, errors.New("not serializable")
+	}
+	return []byte(j.raw), nil
+}
+
+// TestIntegrateWithLayout_ListItemMustSerializeAsObject: an item of a typed
+// List that has no object metadata is read as the object the writers serialize
+// for it, so one that does not serialize, or not as an object, is refused in
+// place of being left out.
+func TestIntegrateWithLayout_ListItemMustSerializeAsObject(t *testing.T) {
+	items := map[string]*jsonAs{
+		"does not serialize": {},
+		"not an object":      {raw: `"text"`},
+	}
+	for name, item := range items {
+		for _, placement := range placements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				var obj client.Object = rawListOf(runtime.RawExtension{Object: item})
+				app := stack.NewApplication("raw", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app)}}
+				rules := recursiveRules("nodeOnly", placement)
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+				if err == nil || !strings.Contains(err.Error(), "read list items") {
+					t.Errorf("got %v, want a list read error", err)
+				}
+			})
+		}
+	}
 }
 
 // TestIntegrateWithLayout_RawListItemMustBeJSON: a raw item of a typed List
