@@ -405,6 +405,88 @@ func TestDeliveryIntent_GeneratorConflictRefused(t *testing.T) {
 	}
 }
 
+// annotatedGenerator is hookAugmenter with annotations of its own on its
+// configMapGenerator.
+type annotatedGenerator struct {
+	hookAugmenter
+	annotations map[string]string
+}
+
+func (a *annotatedGenerator) AugmentLayout(ml *layout.ManifestLayout) error {
+	if err := a.hookAugmenter.AugmentLayout(ml); err != nil {
+		return err
+	}
+	ml.ConfigMapGenerators[0].Annotations = a.annotations
+	return nil
+}
+
+// TestDeliveryIntent_PatchScopeSeesGeneratedAnnotations: kustomize puts a
+// generator's options.annotations on the ConfigMap it generates, so in a
+// directory several bundles share, another bundle's patch that selects by one
+// of them reaches that ConfigMap and is refused as for a written object,
+// whether the delivery intent or the generator itself set the annotation.
+func TestDeliveryIntent_PatchScopeSeesGeneratedAnnotations(t *testing.T) {
+	tests := map[string]struct {
+		app      func() *stack.Application
+		selector string
+		refused  bool
+	}{
+		"set by the delivery intent": {
+			app: func() *stack.Application {
+				hook := stack.NewApplication("hook", "default", &hookAugmenter{app: "hook"})
+				hook.Delivery = stack.DeliveryIntent{PruneProtection: true}
+				return hook
+			},
+			selector: pruneKey + "=disabled",
+			refused:  true,
+		},
+		"no intent, nothing to select": {
+			app: func() *stack.Application {
+				return stack.NewApplication("hook", "default", &hookAugmenter{app: "hook"})
+			},
+			selector: pruneKey + "=disabled",
+		},
+		"set by the generator": {
+			app: func() *stack.Application {
+				return stack.NewApplication("hook", "default", &annotatedGenerator{
+					hookAugmenter: hookAugmenter{app: "hook"},
+					annotations:   map[string]string{"tier": "backend"},
+				})
+			},
+			selector: "tier=backend",
+			refused:  true,
+		},
+	}
+	for name, tt := range tests {
+		for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerBundle} {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				c := mergedCluster(func(_, b1, b2 *stack.Bundle) {
+					b2.Applications = append(b2.Applications, tt.app())
+					// The name keeps the target off hook's written objects.
+					b1.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Name: "hook-values", AnnotationSelector: tt.selector}}}
+				})
+				rules := allFlat
+				rules.FluxPlacement = placement
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+				if !tt.refused {
+					if err != nil {
+						t.Fatalf("CreateLayoutWithResources: %v", err)
+					}
+					return
+				}
+				if err == nil {
+					t.Fatal("the integration accepted a patch that reaches another bundle's generated ConfigMap")
+				}
+				for _, want := range []string{`"b1"`, `"b2"`, "hook-values"} {
+					if !strings.Contains(err.Error(), want) {
+						t.Errorf("error %q does not contain %q", err, want)
+					}
+				}
+			})
+		}
+	}
+}
+
 // TestDeliveryIntent_KeepsOtherAnnotations: an object's and a generator's own
 // annotations stay beside the ones the intent adds, and a value that is
 // already the wanted one is accepted.

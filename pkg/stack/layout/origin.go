@@ -45,6 +45,33 @@ type ApplicationObjects struct {
 	// those of the layouts below it) are the application's. Nil when the
 	// application's objects were written into its bundle's directory.
 	Layout *ManifestLayout
+	// generated are the stand-ins OriginBundleObjects holds for the
+	// ConfigMaps Layout's own ConfigMapGenerators build (generatedConfigMap).
+	generated []client.Object
+}
+
+// syncGenerated gives every generated ConfigMap's stand-in the annotations its
+// configMapGenerator entry sets now. kustomize puts them on the ConfigMap it
+// builds, where a patch target's annotation selector reads them, and an entry
+// can gain some after the walk (a workflow applying a delivery intent).
+func (o *origin) syncGenerated() {
+	for _, rec := range o.apps {
+		if rec.Layout == nil {
+			continue
+		}
+		for _, standIn := range rec.generated {
+			for _, gen := range rec.Layout.ConfigMapGenerators {
+				if gen.Name != standIn.GetName() {
+					continue
+				}
+				if len(gen.Annotations) == 0 {
+					standIn.SetAnnotations(nil)
+				} else {
+					standIn.SetAnnotations(gen.Annotations)
+				}
+			}
+		}
+	}
 }
 
 // subtreeResources returns the resources of l and of every layout below it.
@@ -77,8 +104,11 @@ func (ml *ManifestLayout) OriginBundles() []*stack.Bundle { return ml.origin.bun
 
 // OriginBundleObjects returns the objects bundle b's applications render in
 // this layout's directory or its per-app directories. Nil when b is not one
-// of OriginBundles.
+// of OriginBundles. A ConfigMap a configMapGenerator builds is among them as a
+// stand-in: its kind and name, and the annotations its entry sets at the time
+// of the call.
 func (ml *ManifestLayout) OriginBundleObjects(b *stack.Bundle) []client.Object {
+	ml.origin.syncGenerated()
 	return ml.origin.objects[b]
 }
 

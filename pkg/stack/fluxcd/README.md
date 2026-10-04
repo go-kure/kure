@@ -263,7 +263,8 @@ that instead of generating it:
 
 - an untargeted patch in a shared directory is refused;
 - a targeted patch is refused when its `Target` selects any object another bundle in that
-  directory renders, a ConfigMap an augmenter's `configMapGenerator` makes included. Matching is
+  directory renders, a ConfigMap an augmenter's `configMapGenerator` makes included (matched with
+  the annotations its entry sets, those of a [delivery intent](#delivery-intent) among them). Matching is
   kustomize's own: `Group`, `Version`, `Kind`, `Name` and `Namespace` are anchored regular
   expressions (an empty one matches anything; `Namespace` is matched against the object's
   effective namespace, `default` for a namespaced object that names none), `LabelSelector` and
