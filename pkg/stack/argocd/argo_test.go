@@ -667,6 +667,67 @@ func TestGenerateFromCluster_Refusals(t *testing.T) {
 	}
 }
 
+// TestArgoWorkflow_LongBundleName pins that the 63-character limit of a Flux
+// Kustomization name is not the model's: a bundle name between 64 and 253
+// characters validates, and the ArgoCD workflow renders an Application named
+// after it, for a node's bundle and for an umbrella child.
+func TestArgoWorkflow_LongBundleName(t *testing.T) {
+	for _, n := range []int{stack.KustomizationNameMaxLength + 1, 253} {
+		long := strings.Repeat("a", n)
+		childLong := strings.Repeat("b", n)
+		build := func() *stack.Cluster {
+			umbrella := &stack.Bundle{Name: "platform", Children: []*stack.Bundle{{Name: childLong}}}
+			return &stack.Cluster{Name: "c", Node: &stack.Node{Name: "root", Children: []*stack.Node{
+				{Name: "apps", Bundle: &stack.Bundle{Name: long}},
+				{Name: "platform", Bundle: umbrella},
+			}}}
+		}
+		applications := func(t *testing.T, objs []client.Object) map[string]bool {
+			t.Helper()
+			names := map[string]bool{}
+			for _, o := range objs {
+				if o.GetObjectKind().GroupVersionKind().Kind == "Application" {
+					names[o.GetName()] = true
+				}
+			}
+			return names
+		}
+		check := func(t *testing.T, names map[string]bool) {
+			t.Helper()
+			for _, want := range []string{long, childLong, "platform"} {
+				if !names[want] {
+					t.Errorf("no Application named after the %d-character bundle %q", len(want), want)
+				}
+			}
+		}
+
+		if err := stack.ValidateCluster(build()); err != nil {
+			t.Fatalf("ValidateCluster() with %d-character bundle names = %v, want nil", n, err)
+		}
+
+		objs, err := Engine().GenerateFromCluster(build())
+		if err != nil {
+			t.Fatalf("GenerateFromCluster() with %d-character bundle names = %v, want nil", n, err)
+		}
+		check(t, applications(t, objs))
+
+		result, err := Engine().CreateLayoutWithResources(build(), layout.LayoutRules{})
+		if err != nil {
+			t.Fatalf("CreateLayoutWithResources() with %d-character bundle names = %v, want nil", n, err)
+		}
+		var rendered []client.Object
+		var collect func(l *layout.ManifestLayout)
+		collect = func(l *layout.ManifestLayout) {
+			rendered = append(rendered, l.Resources...)
+			for _, c := range l.Children {
+				collect(c)
+			}
+		}
+		collect(result.(*layout.ManifestLayout))
+		check(t, applications(t, rendered))
+	}
+}
+
 // TestGenerateFromLayout_UmbrellaDependencyChain pins that ArgoCD, which has
 // no umbrella health checks, accepts an acyclic dependency chain through an
 // umbrella: c (an umbrella child of p) depends on b, and b on p.

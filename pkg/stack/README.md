@@ -151,18 +151,30 @@ It also rejects a `Node` tree containing a cycle, naming the node where the
 cycle closes.
 
 **Names:** a bundle name and a node name are checked when the model is
-validated, so a name that could never be applied is refused before anything is
-written. Nothing is shortened or rewritten: the caller chooses a valid name.
+validated, and a limit that only one delivery engine has is checked by that
+engine's workflow when it generates, so a name that could never be applied is
+refused before anything is written. Nothing is shortened or rewritten: the
+caller chooses a valid name.
 
 | Name | Rule | Checked by |
 |---|---|---|
-| Bundle, including every umbrella child | a Flux Kustomization name and a directory name | `Bundle.Validate` |
+| Bundle, including every umbrella child | a DNS-1123 subdomain and a directory name | `Bundle.Validate` |
+| Bundle, including every umbrella child, in the Flux workflow | a Flux Kustomization name | the Flux generator, where it builds the Kustomization |
 | Node | a directory name, under every layout grouping; an unnamed root is allowed, it adds no path segment | `ValidateCluster` |
 | Application | a directory name, only where the layout rules give the application a directory | `layout.WalkCluster` |
 
+- **Bundle name**: a DNS-1123 subdomain, at most 253 characters: lower-case
+  letters, digits, `-` and `.`, starting and ending with a letter or digit.
+  `my.app` is valid; `My-App` is not. This is what holds for every delivery
+  engine, because the engine applies the bundle with an object named after it
+  (a Flux Kustomization, an ArgoCD Application).
 - **Kustomization name** (`ValidateKustomizationName`): a DNS-1123 subdomain
-  of at most `KustomizationNameMaxLength` (63) characters. `my.app` is valid;
-  `My-App` is not. The limit is 63 and not the 253 of an object name because
+  of at most `KustomizationNameMaxLength` (63) characters. The limit is Flux's,
+  so `Bundle.Validate` and `ValidateCluster` do not apply it: the Flux
+  workflow refuses a longer bundle name where it builds the bundle's
+  Kustomization, before anything is written, and the same name validates and
+  renders an Application in the ArgoCD workflow. The limit is 63 and not the
+  253 of an object name because
   Flux writes the Kustomization's name into a label value on every object it
   applies. Read in kustomize-controller v1.9.5, the version this module pins:
   the reconciler hands the name to the apply manager as the owner of the
@@ -191,12 +203,15 @@ from the root, and `ValidateCluster` adds the node a refused bundle is attached
 to (`bundle "web" at node "apps/web" failed validation`). An umbrella child
 without a name is refused earlier, by the check on `Children`, which names its
 parent and the child's index. Both functions are exported so that code deriving
-a name from these fields can check the result with the same rule. Two Flux
+a name from these fields can check the result with the same rule. The Flux
+generator's refusal of a bundle name over 63 characters names the bundle by
+`Bundle.GetPath`, which for an umbrella child of a walked cluster holds its
+umbrella's path (`platform/platform-infra`). Two Flux
 entry points take a bundle or a node that no cluster validation has seen and
-apply the rule themselves: the generator checks the Kustomization name of a
-bundle it is handed directly (`GenerateForBundle`), and the bootstrap generator
-checks the root node's name as a directory name wherever it builds a path from
-it.
+apply a rule themselves: the generator checks the whole Kustomization name
+rule on a bundle it is handed directly (`GenerateForBundle`), and the bootstrap
+generator checks the root node's name as a directory name wherever it builds a
+path from it.
 
 ### Application
 
