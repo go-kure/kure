@@ -135,3 +135,19 @@ func TestBootstrap_RootNodeName_NoSync(t *testing.T) {
 		t.Fatalf("got %d objects next to the error", len(objs))
 	}
 }
+
+// TestBootstrap_RootNodeName_NilConfig: a nil config still means "nothing to
+// generate", whatever the root is named. The name check runs before the nil
+// check in GenerateFluxInstance, so it must accept a nil config itself.
+func TestBootstrap_RootNodeName_NilConfig(t *testing.T) {
+	for _, root := range []*stack.Node{nil, {}, {Name: "production"}, {Name: "../outside"}} {
+		fi, err := fluxstack.NewBootstrapGenerator().GenerateFluxInstance(nil, root)
+		if err != nil || fi != nil {
+			t.Fatalf("GenerateFluxInstance(nil, %+v) = %v, %v; want nil, nil", root, fi, err)
+		}
+		objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(nil, root)
+		if err != nil || objs != nil {
+			t.Fatalf("GenerateBootstrap(nil, %+v) = %v, %v; want nil, nil", root, objs, err)
+		}
+	}
+}
