@@ -364,6 +364,15 @@ func TestKustomizationName_GenerateForBundleRefusesItsOwnName(t *testing.T) {
 			want: []string{`"web"`, "DependsOn"},
 		},
 		{
+			name: "the bundle itself in Children",
+			build: func() *stack.Bundle {
+				shop := srBundle("shop")
+				shop.Children = []*stack.Bundle{srBundle("shop-api"), shop}
+				return shop
+			},
+			want: []string{`"shop"`, "Children"},
+		},
+		{
 			name: "health check on the bundle's KustomizationName",
 			build: func() *stack.Bundle {
 				web := srBundle("web")

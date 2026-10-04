@@ -740,10 +740,11 @@ umbrella closure, because the walker renders every umbrella child as a layout
 of its own. It builds no origin index either, so it cannot see every bundle
 that shares a Kustomization name; what it does see it checks: a `DependsOn`
 bundle or a child that would get `b`'s own Kustomization name
-(`KustomizationName`, or `Name` without it), `b` itself in `DependsOn`, that
-name in `NamedDependsOn`, or a health check on `b`'s own Kustomization, is an
-error, since the Kustomization would otherwise depend on itself or wait for
-itself. Two children that would get one Kustomization name are an error as
+(`KustomizationName`, or `Name` without it), `b` itself in `DependsOn` or in
+`Children`, that name in `NamedDependsOn`, or a health check on `b`'s own
+Kustomization, is an error, since the Kustomization would otherwise depend on
+itself or wait for itself. A longer cycle of `Children` is `Bundle.Validate`'s
+to refuse. Two children that would get one Kustomization name are an error as
 well: the umbrella would health-check one Kustomization twice. The health
 check on `b`'s own Kustomization stays accepted when `b.Wait` is true, and is
 written as given: Flux ignores `spec.healthChecks` under `spec.wait`, so
