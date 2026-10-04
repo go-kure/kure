@@ -583,11 +583,21 @@ rejects it.
    - Current: `manifests/<root>` (`generateFluxSystemKustomization`) against `./<root>`
      (`generateFluxInstance`).
    - Expected: both modes point at the same directory for the same root.
+5. **Under `FluxIntegratedPerLayout` the patch-scope check does not see a generated ConfigMap.**
+   - Current: `checkPatchScope` in `resource_generator.go` counts only the objects held in the
+     unit's `Resources`. A ConfigMap that a `configMapGenerator` builds is not among them, so it
+     is skipped, also when the unit's own directory builds it. With every grouping flat and
+     `FlattenSingleTier: true`, a bundle whose one augmenter application adds a generator
+     collapses into the shared directory; another merged bundle's patch that targets that
+     ConfigMap is accepted, although the shared Kustomization builds the ConfigMap and applies
+     the patch to it. Without the collapse the result is right.
+   - Expected: the check sees every object the unit's directory builds, generated ConfigMaps
+     included, and a paired collapsed and not-collapsed test pins it.
 
 **Acceptance.** Each case has a test rendering the input above and asserting the expected tree.
 
 **Shipped: a kept Kustomization is checked in whatever form it has** (item 6 of the ticket; the
-four cases above are still targets). Under the two integrated placements, the checks that look
+five cases above are still targets). Under the two integrated placements, the checks that look
 at a layout's Flux Kustomizations read both the Kustomizations the integration generates and the
 ones it keeps in place of its own through one helper, `generatedKustomizations` in
 `layout_integrator.go`, which returns them in typed form. Those checks are: a Source once per
