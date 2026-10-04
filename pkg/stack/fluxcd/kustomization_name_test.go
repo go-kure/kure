@@ -407,7 +407,11 @@ func TestKustomizationName_GenerateForBundleKeepsOtherHealthChecks(t *testing.T)
 	if !ok {
 		t.Fatalf("first object is %T, want a Kustomization", objs[0])
 	}
-	if len(k.Spec.HealthChecks) != 3 {
-		t.Errorf("got %d health checks, want the 3 given: %v", len(k.Spec.HealthChecks), k.Spec.HealthChecks)
+	var got []stack.HealthCheck
+	for _, hc := range k.Spec.HealthChecks {
+		got = append(got, stack.HealthCheck{APIVersion: hc.APIVersion, Kind: hc.Kind, Name: hc.Name, Namespace: hc.Namespace})
+	}
+	if !slices.Equal(got, web.HealthChecks) {
+		t.Errorf("health checks = %v, want the 3 given: %v", got, web.HealthChecks)
 	}
 }
