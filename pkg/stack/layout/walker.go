@@ -80,14 +80,16 @@ type rootUnit struct {
 
 // checkRootUnitName refuses a child node of the root that is named like the
 // directory of the root's bundles: both would be written to one directory.
-// Names are compared as the writers compare directories (normDir), so one that
-// differs only in case is refused here too, not when the tree is written.
+// The two directories are compared as the writers compare them (SameDirectory),
+// so a name that differs only in case, or one that resolves to the same
+// directory ("/web", "./web"), is refused here too, not when the tree is
+// written.
 func (r *rootUnit) checkRootUnitName() error {
 	if r == nil || r.unit == nil {
 		return nil
 	}
 	for _, child := range r.layout.Children {
-		if child != r.unit && normDir(child.Name) == normDir(r.unit.Name) {
+		if child != r.unit && child.SameDirectory(r.unit) {
 			return errors.ResourceValidationError("Node", child.Name, "name",
 				fmt.Sprintf("node %q and bundle %q are both rendered to directory %q: the root node's bundle has a directory named after it, so no child node of the root may carry that name",
 					child.Name, r.unit.Name, r.unit.FullRepoPath()), nil)
@@ -282,10 +284,9 @@ func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*Mani
 		var ml *ManifestLayout
 		if g.includes(rootPkg) {
 			// As in WalkCluster: a named root's parent is the tree root ".",
-			// and the root node's layout renders no bundle (rootUnit), so a
-			// bundle's directory relative to the root node's is the same in
-			// both walks. (This walk places the root node without the
-			// ClusterName.)
+			// and the root node's layout renders no bundle (rootUnit). (This
+			// walk places the root node without the ClusterName, and a node
+			// outside the package adds no directory.)
 			g.root = &rootUnit{node: c.Node}
 			var err error
 			ml, err = walkNode(c.Node, rootAncestors(c.Node), g, nil)

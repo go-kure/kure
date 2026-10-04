@@ -1,8 +1,6 @@
 package argocd
 
 import (
-	"strings"
-
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -286,10 +284,12 @@ func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterf
 		// a directory named after it (go-kure/kure#979), and a child node in
 		// one named after the node: either of them named like the
 		// Applications' directory would share it with them, which the
-		// writers refuse only when the tree is written. Names are compared
-		// as the writers compare directories, case-insensitively.
+		// writers refuse only when the tree is written. The directories are
+		// compared as the writers compare them (SameDirectory): cleaned, and
+		// without regard to case.
+		argoPlace := &layout.ManifestLayout{Name: argoDirName, Namespace: ml.FullRepoPath()}
 		for _, child := range ml.Children {
-			if child == nil || !strings.EqualFold(child.Name, argoDirName) {
+			if !child.SameDirectory(argoPlace) {
 				continue
 			}
 			// A node's directory is named after the node, whatever it renders.

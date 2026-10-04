@@ -211,6 +211,9 @@ func TestFluxSeparate_RefusesLayoutInTheFluxDirectory(t *testing.T) {
 		"root bundle":            {func() *stack.Cluster { return bundleNamed("flux-system") }, `bundle "flux-system" is rendered to "platform/flux-system", the directory the Flux resources are written to`},
 		"root bundle, case only": {func() *stack.Cluster { return bundleNamed("Flux-System") }, `bundle "Flux-System" is rendered to "platform/Flux-System", the directory the Flux resources are written to`},
 		"child node":             {func() *stack.Cluster { return nodeNamed("flux-system") }, `node "flux-system" is rendered to "platform/flux-system", the directory the Flux resources are written to`},
+		// A name that resolves to the same directory is the same directory.
+		"child node, rooted name":    {func() *stack.Cluster { return nodeNamed("/flux-system") }, `node "/flux-system" is rendered to "platform/flux-system", the directory the Flux resources are written to`},
+		"child node, dot-slash name": {func() *stack.Cluster { return nodeNamed("./flux-system") }, `node "./flux-system" is rendered to "platform/flux-system", the directory the Flux resources are written to`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
@@ -238,6 +241,12 @@ func TestFluxSeparate_RefusesLayoutInTheFluxDirectory(t *testing.T) {
 			writeAll(t, integrated(t, bundleNamed("flux-system"), r))
 		})
 	}
+	// The comparison is the writers': a name they write to a directory of its
+	// own is not refused. U+017F equals "s" under Unicode case folding and
+	// is not its lower case, which is what the writers compare.
+	t.Run("a name the writers keep apart", func(t *testing.T) {
+		writeAll(t, integrated(t, nodeNamed("flux-ſystem"), rules))
+	})
 }
 
 // unlistedDirs walks build() with rules, writes the tree with every layout

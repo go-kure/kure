@@ -1,6 +1,7 @@
 package layout_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -432,6 +433,18 @@ func TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory(t *testing.T) {
 			if _, err := layout.WalkClusterByPackage(twoTier("WEB", "web-bundle"), rules); err == nil || !strings.Contains(err.Error(), wantCase) {
 				t.Errorf("WalkClusterByPackage: got %v, want the refusal %q", err, wantCase)
 			}
+			// So is a node name that resolves to the bundle's directory.
+			for _, alias := range []string{"/web", "./web", "web/"} {
+				wantAlias := fmt.Sprintf("node %q and bundle %q are both rendered to directory", alias, "web")
+				c := twoTier("web", "web-bundle")
+				c.Node.Children[0].Name = alias
+				if _, err := layout.WalkCluster(c, rules); err == nil || !strings.Contains(err.Error(), wantAlias) {
+					t.Errorf("WalkCluster: got %v, want the refusal %q", err, wantAlias)
+				}
+				if _, err := layout.WalkClusterByPackage(c, rules); err == nil || !strings.Contains(err.Error(), wantAlias) {
+					t.Errorf("WalkClusterByPackage: got %v, want the refusal %q", err, wantAlias)
+				}
+			}
 		})
 	}
 
@@ -454,6 +467,36 @@ func TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory(t *testing.T) {
 	}
 	if err := ml.WriteToDisk(t.TempDir()); err == nil || !strings.Contains(err.Error(), "resolve to the same directory") {
 		t.Errorf("BundleGrouping by name, WriteToDisk: got %v, want the writers' same-directory refusal", err)
+	}
+}
+
+// TestManifestLayout_SameDirectory: two layouts are one directory when their
+// cleaned paths are equal without regard to case, which is how the writers
+// tell directories apart.
+func TestManifestLayout_SameDirectory(t *testing.T) {
+	at := func(namespace, name string) *layout.ManifestLayout {
+		return &layout.ManifestLayout{Namespace: namespace, Name: name}
+	}
+	for _, tc := range []struct {
+		a, b *layout.ManifestLayout
+		want bool
+	}{
+		{at("platform", "web"), at("platform", "web"), true},
+		{at("platform", "web"), at("platform", "WEB"), true},
+		{at("platform", "web"), at("platform", "/web"), true},
+		{at("platform", "web"), at("platform", "./web"), true},
+		{at("platform", "web"), at("platform", "web/"), true},
+		{at("platform", "web"), at(".", "platform/web"), true},
+		{at("platform", "web"), at("platform", "web2"), false},
+		{at("platform", "web"), at("other", "web"), false},
+		// Equal under Unicode case folding, not in lower case.
+		{at("platform", "flux-system"), at("platform", "flux-ſystem"), false},
+		{at("platform", "web"), nil, false},
+		{nil, at("platform", "web"), false},
+	} {
+		if got := tc.a.SameDirectory(tc.b); got != tc.want {
+			t.Errorf("SameDirectory(%v, %v) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
 	}
 }
 
