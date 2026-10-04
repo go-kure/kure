@@ -419,10 +419,10 @@ per-app layout its application. A level merged by a `GroupFlat` axis, and a `Fla
 collapse, move the absorbed nodes and bundles into the absorbing layout's origins; a merged
 application has no origin of its own. Hand-built layouts have none.
 `OriginBundleObjects(b)` returns the objects bundle `b`'s applications render in that directory
-or its per-app directories (plus a stand-in for each ConfigMap an augmenter's
-`configMapGenerator` makes: its kind and name, and the annotations the entry sets at the time of
-the call): the Flux generator uses it to refuse a patch that would reach another bundle sharing
-the directory.
+or its per-app directories (plus a stand-in for each ConfigMap a `configMapGenerator` makes in an
+augmenter application's layout or a layout below it: its kind and name, and the annotations the
+entry sets at the time of the call): the Flux generator uses it to refuse a patch that would
+reach another bundle sharing the directory.
 `OriginApplicationObjects()` returns, per application rendered in a layout, the application, its
 objects and its own layout: the objects are what the application emitted plus, for an application
 with its own directory, what a `LayoutAugmenter` added there or below; the layout is nil for an
