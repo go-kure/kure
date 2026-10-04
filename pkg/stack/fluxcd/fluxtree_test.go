@@ -40,6 +40,44 @@ func typedListOf(kind string, items ...*unstructured.Unstructured) *typedItems {
 	return l
 }
 
+// rawItems is a typed List whose items are runtime.RawExtension values, each
+// either an object or the raw JSON of one, as the core v1 List holds them.
+type rawItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []runtime.RawExtension `json:"items"`
+}
+
+func (l *rawItems) DeepCopyObject() runtime.Object {
+	c := *l
+	c.Items = slices.Clone(l.Items)
+	return &c
+}
+
+func rawListOf(items ...runtime.RawExtension) *rawItems {
+	l := &rawItems{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "List"}, Items: items}
+	l.Name, l.Namespace = "holder", "default"
+	return l
+}
+
+// TestIntegrateWithLayout_RawListItemMustBeJSON: a raw item of a typed List
+// that is not JSON cannot be read as the object it stands for, and the
+// integration says so in place of leaving it out.
+func TestIntegrateWithLayout_RawListItemMustBeJSON(t *testing.T) {
+	for _, placement := range placements {
+		t.Run(string(placement), func(t *testing.T) {
+			var obj client.Object = rawListOf(runtime.RawExtension{Raw: []byte("{")})
+			app := stack.NewApplication("raw", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app)}}
+			rules := recursiveRules("nodeOnly", placement)
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+			if err == nil || !strings.Contains(err.Error(), "read list items") {
+				t.Errorf("got %v, want a list read error", err)
+			}
+		})
+	}
+}
+
 // umbrellaCluster: prod -> apps (node) -> platform (umbrella bundle) with the
 // child bundles infra and services, infra holding the child bundle network.
 func umbrellaCluster() *stack.Cluster {

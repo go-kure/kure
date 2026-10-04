@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -297,8 +298,30 @@ func listItems(obj runtime.Object) (items []runtime.Object, isList bool, err err
 	if !meta.IsListType(obj) {
 		return nil, false, nil
 	}
-	items, err = meta.ExtractList(obj)
-	return items, err == nil, err
+	extracted, err := meta.ExtractList(obj)
+	if err != nil {
+		return nil, false, err
+	}
+	// A typed List can hold an item as raw JSON (runtime.RawExtension), which
+	// the writers serialize as the object it encodes: it is read as that
+	// object. An empty item holds nothing.
+	for _, item := range extracted {
+		raw, isRaw := item.(*runtime.Unknown)
+		switch {
+		case item == nil:
+		case !isRaw:
+			items = append(items, item)
+		default:
+			u := &unstructured.Unstructured{}
+			if err := json.Unmarshal(raw.Raw, &u.Object); err != nil {
+				return nil, false, err
+			}
+			if u.Object != nil {
+				items = append(items, u)
+			}
+		}
+	}
+	return items, true, nil
 }
 
 // checkBuildIdentities refuses two layouts holding objects with one identity

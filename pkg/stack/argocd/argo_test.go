@@ -1,6 +1,7 @@
 package argocd
 
 import (
+	"io"
 	"strings"
 	"testing"
 
@@ -639,6 +640,46 @@ func TestCreateLayoutWithResources_UsesWalkedRules(t *testing.T) {
 		if _, err := Engine().CreateLayoutWithResources(argoTestCluster(), rules); err == nil || !strings.Contains(err.Error(), "FluxPlacement") {
 			t.Errorf("FluxPlacement %s: got %v, want a refusal", p, err)
 		}
+	}
+}
+
+// TestCreateLayoutWithResources_UmbrellaTreeWrites: an ArgoCD tree is not one
+// Flux delivers, so nothing in it is marked with SetFluxBuild, and the
+// writers' check for a directory no Flux Kustomization builds
+// (go-kure/kure#977) does not apply: a tree with an umbrella child, which its
+// parent's kustomization.yaml does not list, is written by every writer.
+func TestCreateLayoutWithResources_UmbrellaTreeWrites(t *testing.T) {
+	rules := layout.LayoutRules{BundleGrouping: layout.GroupByName, ApplicationGrouping: layout.GroupByName, ClusterName: "prod"}
+	result, err := Engine().CreateLayoutWithResources(argoTestCluster(), rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ml := result.(*layout.ManifestLayout)
+	umbrellaChildren := 0
+	var walk func(l *layout.ManifestLayout)
+	walk = func(l *layout.ManifestLayout) {
+		if l.FluxBuild() {
+			t.Errorf("layout %q is marked as built by a Flux Kustomization", l.FullRepoPath())
+		}
+		if l.UmbrellaChild {
+			umbrellaChildren++
+		}
+		for _, c := range l.Children {
+			walk(c)
+		}
+	}
+	walk(ml)
+	if umbrellaChildren == 0 {
+		t.Fatal("the tree has no umbrella child layout")
+	}
+	if err := ml.WriteToDisk(t.TempDir()); err != nil {
+		t.Errorf("WriteToDisk: %v", err)
+	}
+	if err := ml.WriteToTar(io.Discard); err != nil {
+		t.Errorf("WriteToTar: %v", err)
+	}
+	if err := layout.WriteManifest(t.TempDir(), layout.DefaultLayoutConfig(), ml); err != nil {
+		t.Errorf("WriteManifest: %v", err)
 	}
 }
 

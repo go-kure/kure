@@ -139,7 +139,8 @@ and an omitted namespace counts as `default`. The error names both layouts. A Ku
 a List counts, where a List is what kustomize opens as one: an object whose kind ends in `List`
 and that has an `items` field, opened again when an item is itself such a List. A kind that does
 not end in `List` is one object, whatever fields it has, and so is a List kind without `items`; a
-List whose `items` is null holds nothing.
+List whose `items` is null holds nothing. An item a typed List holds as raw JSON
+(`runtime.RawExtension`) is read as the object it encodes.
 
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)
