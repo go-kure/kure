@@ -13,6 +13,7 @@ import (
 	_ "github.com/go-kure/kure/internal/kuretest"
 	kureio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/stack"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 // TestGenerateFromCluster_UnsetOutputUnchanged: a cluster that sets no
@@ -27,7 +28,7 @@ func TestGenerateFromCluster_UnsetOutputUnchanged(t *testing.T) {
 	dbn.SetParent(r)
 	webn.SetParent(r)
 
-	objs, err := Engine().GenerateFromCluster(&stack.Cluster{Name: "demo", Node: r})
+	objs, err := Engine().GenerateFromCluster(&stack.Cluster{Name: "demo", Node: r}, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("GenerateFromCluster: %v", err)
 	}

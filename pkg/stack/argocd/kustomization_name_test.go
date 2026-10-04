@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/go-kure/kure/pkg/stack"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 // TestGenerateFromCluster_KustomizationName: under the ArgoCD workflow
@@ -23,7 +24,7 @@ func TestGenerateFromCluster_KustomizationName(t *testing.T) {
 	dbn.SetParent(r)
 	webn.SetParent(r)
 
-	objs, err := Engine().GenerateFromCluster(&stack.Cluster{Name: "demo", Node: r})
+	objs, err := Engine().GenerateFromCluster(&stack.Cluster{Name: "demo", Node: r}, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("GenerateFromCluster: %v", err)
 	}
@@ -75,7 +76,7 @@ func TestGenerateFromCluster_DuplicateKustomizationName(t *testing.T) {
 		{Name: "a", Bundle: &stack.Bundle{Name: "shop-a", KustomizationName: "shop"}},
 		{Name: "b", Bundle: &stack.Bundle{Name: "shop-b", KustomizationName: "shop"}},
 	}}}
-	_, err := Engine().GenerateFromCluster(c)
+	_, err := Engine().GenerateFromCluster(c, layout.DefaultLayoutRules())
 	if err == nil {
 		t.Fatal("GenerateFromCluster accepted two bundles with one Application name")
 	}
