@@ -214,7 +214,8 @@ A child node of the root that carries the name of that directory is refused by t
 both would be written to one place; the error names the node, the bundle and the directory. The
 two directories are compared as the writers compare them (`ManifestLayout.SameDirectory`: the
 path resolved under the output directory and cleaned, without regard to case; it compares
-directories, and says nothing about an `AppFileSingle` layout, which is a file), so a name that
+directories, says nothing about an `AppFileSingle` layout, which is a file, and does not
+describe `WriteToDisk("")`, which writes a rooted path as an absolute one), so a name that
 differs only in case, or one that resolves to the same directory (`/web`, `./web`), is refused
 too. Rename one of them. `BundleGrouping: GroupByName` is no way around it: the bundle's directory is
 the same there, the walk does not check it, and the writers refuse the tree.
