@@ -13,6 +13,7 @@ import (
 	"github.com/fluxcd/pkg/envsubst"
 	fluxkustomize "github.com/fluxcd/pkg/kustomize"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -1131,11 +1132,29 @@ func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 		if r == nil {
 			continue
 		}
-		items, err := objectItems(r)
-		if err != nil {
-			return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+		if u, ok := r.(*unstructured.Unstructured); ok && u.IsList() {
+			list, err := u.ToList()
+			if err != nil {
+				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+			}
+			for i := range list.Items {
+				out = append(out, &list.Items[i])
+			}
+			continue
 		}
-		out = append(out, items...)
+		if meta.IsListType(r) {
+			items, err := meta.ExtractList(r)
+			if err != nil {
+				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+			}
+			for _, item := range items {
+				if obj, ok := item.(client.Object); ok {
+					out = append(out, obj)
+				}
+			}
+			continue
+		}
+		out = append(out, r)
 	}
 	return out, nil
 }

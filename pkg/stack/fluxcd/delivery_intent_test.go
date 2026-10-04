@@ -3,6 +3,8 @@ package fluxcd_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -427,24 +429,112 @@ func TestDeliveryIntent_KeepsOtherAnnotations(t *testing.T) {
 }
 
 // TestDeliveryIntent_ListItems: an application that emits a List has its
-// items annotated; kustomize builds the items, not the envelope.
+// items annotated, a List inside the List included; kustomize builds the
+// items, not the envelopes.
 func TestDeliveryIntent_ListItems(t *testing.T) {
 	for _, placement := range placements {
 		t.Run(string(placement), func(t *testing.T) {
 			a, _ := (*cmObj("item-a")).(*unstructured.Unstructured)
 			b, _ := (*cmObj("item-b")).(*unstructured.Unstructured)
-			list := wrapInList(a, b)
+			c1, _ := (*cmObj("item-c")).(*unstructured.Unstructured)
+			inner, _ := wrapInList(c1).(*unstructured.Unstructured)
+			list := wrapInList(a, b, inner)
 			app := stack.NewApplication("listed", "default", &fakeAppConfig{objs: []*client.Object{&list}})
 			app.Delivery = stack.DeliveryIntent{PruneProtection: true}
 			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app, cmApp("other"))}}
 			ml := integrated(t, c, recursiveRules("nodeOnly", placement))
 			for writer, w := range writeAll(t, ml) {
 				applied := appliedObjects(t, w, ml)
-				checkApplied(t, writer, applied, []string{"item-a", "item-b"}, map[string]string{pruneKey: "disabled"})
+				checkApplied(t, writer, applied, []string{"item-a", "item-b", "item-c"}, map[string]string{pruneKey: "disabled"})
 				checkApplied(t, writer, applied, []string{"other-cm"}, map[string]string{})
+				for i := range applied {
+					if o := &applied[i]; strings.HasSuffix(o.GetKind(), "List") {
+						t.Errorf("%s: a %s envelope is applied", writer, o.GetKind())
+					}
+				}
 			}
 		})
 	}
+}
+
+// TestDeliveryIntent_NestedListConflictRefused: a conflicting value on an
+// object inside a List inside a List is found like any other.
+func TestDeliveryIntent_NestedListConflictRefused(t *testing.T) {
+	deep, _ := (*annotatedCM("deep", pruneKey, "enabled")).(*unstructured.Unstructured)
+	inner, _ := wrapInList(deep).(*unstructured.Unstructured)
+	list := wrapInList(inner)
+	app := stack.NewApplication("listed", "default", &fakeAppConfig{objs: []*client.Object{&list}})
+	app.Delivery = stack.DeliveryIntent{PruneProtection: true}
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app)}}
+	rules := recursiveRules("nodeOnly", layout.FluxSeparate)
+	ml, err := layout.WalkCluster(c, rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+	if err == nil {
+		t.Fatal("a conflicting annotation inside a nested List was accepted")
+	}
+	for _, want := range []string{`application "listed"`, `ConfigMap "default/deep"`, pruneKey} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err, want)
+		}
+	}
+}
+
+// TestDeliveryIntent_ResourceWithItemsField: only a kind ending in "List" is
+// an envelope, as for kustomize. A resource of another kind that has a
+// top-level items array is one object and carries the annotation itself; what
+// its items hold is its own data and stays as it is.
+func TestDeliveryIntent_ResourceWithItemsField(t *testing.T) {
+	for _, placement := range placements {
+		t.Run(string(placement), func(t *testing.T) {
+			inv := &unstructured.Unstructured{Object: map[string]any{
+				"apiVersion": "example.com/v1",
+				"kind":       "Inventory",
+				"metadata":   map[string]any{"name": "inventory", "namespace": "default"},
+				"items":      []any{map[string]any{"sku": "a"}},
+			}}
+			var obj client.Object = inv
+			app := stack.NewApplication("stock", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+			app.Delivery = stack.DeliveryIntent{PruneProtection: true, ForceReplace: true}
+			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app)}}
+			ml := integrated(t, c, recursiveRules("nodeOnly", placement))
+			for writer, w := range writeAll(t, ml) {
+				found := 0
+				for _, o := range appliedObjects(t, w, ml) {
+					if o.GetKind() != "Inventory" {
+						continue
+					}
+					found++
+					want := map[string]string{pruneKey: "disabled", forceKey: "enabled"}
+					if got := deliveryAnnotations(&o); !mapsEqual(got, want) {
+						t.Errorf("%s: Inventory is applied with delivery annotations %v, want %v", writer, got, want)
+					}
+					items, _, _ := unstructured.NestedSlice(o.Object, "items")
+					if len(items) != 1 || !reflect.DeepEqual(items[0], map[string]any{"sku": "a"}) {
+						t.Errorf("%s: Inventory items = %v, want them unchanged", writer, items)
+					}
+				}
+				if found != 1 {
+					t.Errorf("%s: Inventory is applied %d times, want once", writer, found)
+				}
+			}
+		})
+	}
+}
+
+// typedList is a typed object that is a list type: a client.Object with Items.
+type typedList struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	Items []corev1.ConfigMap
+}
+
+func (l *typedList) DeepCopyObject() runtime.Object {
+	c := *l
+	c.Items = slices.Clone(l.Items)
+	return &c
 }
 
 // TestDeliveryIntent_TypedObjects: typed objects are annotated like
@@ -472,6 +562,21 @@ func TestDeliveryIntent_TypedObjects(t *testing.T) {
 	}
 	if noted.Annotations["example.com/note"] != "x" {
 		t.Errorf("b lost its own annotation: %v", noted.Annotations)
+	}
+
+	// A typed list is an envelope too: its items carry the annotation.
+	list := &typedList{Items: []corev1.ConfigMap{
+		{ObjectMeta: metav1.ObjectMeta{Name: "l1", Namespace: "default"}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "l2", Namespace: "default"}},
+	}}
+	integrated(t, cluster(list), rules)
+	for i := range list.Items {
+		if got := list.Items[i].Annotations; got[pruneKey] != "disabled" {
+			t.Errorf("typed list item %q has annotations %v, want the prune annotation", list.Items[i].Name, got)
+		}
+	}
+	if list.Annotations != nil {
+		t.Errorf("the typed list envelope carries annotations %v", list.Annotations)
 	}
 
 	clash := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "d", Namespace: "default", Annotations: map[string]string{pruneKey: "enabled"}}}

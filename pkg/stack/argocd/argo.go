@@ -153,12 +153,63 @@ func (w *WorkflowEngine) applicationForBundle(b *stack.Bundle, path string) (cli
 
 // IntegrateWithLayout adds ArgoCD Applications to an existing manifest layout.
 // For ArgoCD, this is typically not needed as Applications reference external repos.
-// It adds nothing, and refuses a layout whose applications set a delivery
-// intent (see refuseDeliveryIntent).
+// It adds nothing, and refuses a delivery intent set by an application the
+// layout records (see refuseDeliveryIntent) or by one of c's applications: a
+// layout the caller built records none, so c is read as well.
 func (w *WorkflowEngine) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) error {
 	// ArgoCD Applications typically don't need layout integration
 	// as they reference external repositories
-	return refuseDeliveryIntent(ml)
+	if err := refuseDeliveryIntent(ml); err != nil {
+		return err
+	}
+	return refuseClusterDeliveryIntent(c)
+}
+
+// refuseClusterDeliveryIntent fails when an application of c — in a node's
+// bundle or in an umbrella child below it — sets a delivery intent. Each node
+// and bundle is read once, so a tree that loops back ends.
+func refuseClusterDeliveryIntent(c *stack.Cluster) error {
+	if c == nil {
+		return nil
+	}
+	nodes := map[*stack.Node]bool{}
+	bundles := map[*stack.Bundle]bool{}
+	var bundle func(b *stack.Bundle) error
+	bundle = func(b *stack.Bundle) error {
+		if b == nil || bundles[b] {
+			return nil
+		}
+		bundles[b] = true
+		for _, app := range b.Applications {
+			if app != nil && !app.Delivery.IsZero() {
+				return errors.Errorf("application %q (bundle %q) sets a delivery intent, which the ArgoCD workflow cannot express yet; leave Application.Delivery unset or use the Flux workflow",
+					app.Name, b.Name)
+			}
+		}
+		for _, child := range b.Children {
+			if err := bundle(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	var node func(n *stack.Node) error
+	node = func(n *stack.Node) error {
+		if n == nil || nodes[n] {
+			return nil
+		}
+		nodes[n] = true
+		if err := bundle(n.Bundle); err != nil {
+			return err
+		}
+		for _, child := range n.Children {
+			if err := node(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return node(c.Node)
 }
 
 // refuseDeliveryIntent fails when an application rendered in the walked tree
