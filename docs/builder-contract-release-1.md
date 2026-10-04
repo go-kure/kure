@@ -1466,7 +1466,7 @@ fixed path segments with no override.
 | `DefaultBootstrapName` | `"flux-system"` | the bootstrap `Kustomization`'s name (and, until go-kure/kure#847, the `FluxInstance`'s — now fixed at `FluxInstanceName`, `"flux"`, the only name the CRD accepts) |
 | `DefaultFluxMode` | `"flux-operator"` | `GenerateBootstrap`'s empty-mode fallback, its dispatch switch, and `SupportedBootstrapModes` |
 | `DefaultSourceKind` | `"OCIRepository"` | `generateFluxSystemKustomization`, `generateFluxInstance` |
-| `DefaultBootstrapPathRoot` | `"manifests"` | `generateFluxSystemKustomization` |
+| `DefaultBootstrapPathRoot` | `"manifests"` | `generateFluxSystemKustomization` (removed again by go-kure/kure#979: the gotk bootstrap `Kustomization`'s `spec.path` is now the root node's directory, the one the `FluxInstance`'s `sync.path` names) |
 | `DefaultFluxDirName` | `"flux-system"` | `addSeparateFluxToLayout`, twice |
 | `DefaultSourceRef` | `"latest"` | `generateOCISource` |
 | `DefaultSyncPath` | `"./"` | `generateFluxInstance` |
@@ -1479,7 +1479,8 @@ copied into exported generator fields (`DefaultInterval`, `DefaultNamespace`,
 `DefaultMode`, `DefaultBootstrapName`); the rest are overridden by naming the
 corresponding input, and the three with no override (`DefaultBootstrapPathRoot`,
 `DefaultFluxDirName`, `DefaultSyncPath`) now say so instead of being described
-as though they had one.
+as though they had one. `DefaultBootstrapPathRoot` has since been removed
+(go-kure/kure#979), which leaves two.
 
 Adding that field made a nameless object reachable for the first time, so an
 empty `BootstrapName` resolves back to `DefaultBootstrapName` at emission. Both
@@ -1610,7 +1611,8 @@ the same call in flux-operator mode returned a valid `FluxInstance`.
 `rootName` is now the single place the name is read, and returns `""` for a nil
 or unnamed node. A nil root node yields `spec.path: manifests` and
 `sourceRef.name: flux-system`, which is what the unnamed-node case already
-produced.
+produced. (Since go-kure/kure#979 both cases yield `spec.path: .`, the root of
+the source.)
 
 ### Changed: `prune` and `wait` are pass-through inputs
 

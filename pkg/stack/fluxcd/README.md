@@ -247,7 +247,6 @@ for the identifier to find every place its value can reach emitted YAML.
 | `DefaultSourceName` | `flux-system` | the root node has no name | naming the root `stack.Node` |
 | `DefaultFluxMode` | `flux-operator` | `BootstrapConfig.FluxMode` is empty | setting `BootstrapConfig.FluxMode` |
 | `DefaultSourceKind` | `OCIRepository` | `BootstrapConfig.SourceKind` does not name `GitRepository`, the empty string included | setting `BootstrapConfig.SourceKind` |
-| `DefaultBootstrapPathRoot` | `manifests` | building the bootstrap Kustomization's `spec.path` | not overrideable; the root node's name is joined onto it |
 | `DefaultFluxDirName` | `flux-system` | a separate Flux layout needs a directory | not overrideable |
 | `DefaultSourceRef` | `latest` | an OCI source, or an OCI `FluxInstance` sync, has no `SourceRef` | setting `BootstrapConfig.SourceRef` |
 | `DefaultSyncPath` | `./` | the root node has no name | not overrideable; it is the prefix a sync path is built from |
@@ -255,9 +254,9 @@ for the identifier to find every place its value can reach emitted YAML.
 Three of these — `DefaultInterval`, `DefaultNamespace` and `DefaultBootstrapName` —
 are copied into exported generator fields by `NewResourceGenerator` / `NewBootstrapGenerator`, and
 a field assigned afterwards is never overridden. The rest are applied where they are used and are
-overridden by naming the corresponding input, as the last column says. Three defaults have no
+overridden by naming the corresponding input, as the last column says. Two defaults have no
 override at all and say so, rather than being listed as though they had one; `FluxInstanceName`
-is the fourth row without one, and is not a default at all (next but one paragraph).
+is the third row without one, and is not a default at all (next but one paragraph).
 
 An empty `BootstrapGenerator.BootstrapName` resolves back to `DefaultBootstrapName` at emission.
 A generator built as a struct literal rather than through `NewBootstrapGenerator` leaves the field
@@ -547,6 +546,28 @@ for _, obj := range objects {
 }
 ```
 <!-- doc-example:end -->
+
+### The directory the bootstrap applies
+
+Both modes point Flux at the same directory for the same root node (go-kure/kure#979): the root
+node's directory as a walk without a `ClusterName` writes it, which is the root node's name,
+relative to the root of the source. Each mode spells it the way its field requires:
+
+| Root node | `"gotk"`: bootstrap Kustomization `spec.path` | `"flux-operator"`: `FluxInstance` `spec.sync.path` |
+|---|---|---|
+| named `prod` | `prod` | `./prod` |
+| unnamed, or none passed | `.` | `./` |
+
+`spec.path` is spelled like every other Kustomization path this package writes (see
+[Kustomization paths](#kustomization-paths)): no leading `./`, and `.` for the root of the source.
+`spec.sync.path` is `DefaultSyncPath` followed by the directory. Flux treats `x` and `./x` alike.
+`"gotk"` mode used to write `manifests/<root>`, a prefix none of the layout writers produces; a
+consumer that depends on such a prefix sets `spec.path` on the returned Kustomization.
+
+The bootstrap is given the root node, not the layout rules. A tree walked with a `ClusterName`,
+or one whose root node is unnamed, can have its root in another directory (the table under
+[Kustomization paths](#kustomization-paths) has examples); the bootstrap path does not follow
+that.
 
 ### Sync name
 
