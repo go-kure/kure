@@ -45,11 +45,18 @@ type ManifestLayout struct {
 	// in flux-system (separate placement), with spec.path = this layout's
 	// directory.
 	UmbrellaChild bool
-	// DependsOn lists sibling layout names whose Kustomization CRs must reconcile
-	// before this layout's CR. Augmenters (LayoutAugmenter) set this field. The
-	// Flux layout integrator translates it into spec.dependsOn only on the
-	// Kustomization CR it generates for this layout itself, which it does only
-	// under FluxIntegratedPerLayout and only for a child layout that is not an
+	// DependsOn lists the names of the Flux Kustomization CRs that must
+	// reconcile before this layout's CR. Augmenters (LayoutAugmenter) set this
+	// field. The Flux layout integrator copies each entry verbatim into
+	// spec.dependsOn; it does not resolve a layout to its CR. An application
+	// or augmenter layout's CR is named after the layout, so a sibling's
+	// layout name is its CR name; the CR of a node layout that renders no
+	// bundle is named "<path with / replaced by ->-node" instead, and that is
+	// the name to list.
+	//
+	// The integrator writes spec.dependsOn only on the Kustomization CR it
+	// generates for this layout itself, which it does only under
+	// FluxIntegratedPerLayout and only for a child layout that is not an
 	// umbrella child, is not AppFileSingle and renders no bundle. In every
 	// other case the field is dropped without an error: under
 	// FluxIntegratedPerBundle and FluxSeparate an augmenter's ordering

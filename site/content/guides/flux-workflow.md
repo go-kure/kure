@@ -457,7 +457,7 @@ A child layout receives a CR when:
 
 ### Ordered reconciliation with DependsOn
 
-Set `ManifestLayout.DependsOn` to a list of sibling layout names to express reconciliation order between hook groups. The integrator translates these into `spec.dependsOn` entries on the emitted CR:
+Set `ManifestLayout.DependsOn` to the names of the sibling layouts' CRs to express reconciliation order between hook groups; a hook-group layout's CR is named after the layout. The integrator copies the entries verbatim into `spec.dependsOn` on the emitted CR, and only under `FluxIntegratedPerLayout`:
 
 <!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowDependsOn -->
 ```go
