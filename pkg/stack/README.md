@@ -179,7 +179,7 @@ written. Nothing is shortened or rewritten: the caller chooses a valid name.
 | Name | Rule | Checked by |
 |---|---|---|
 | Bundle, including every umbrella child | a Flux Kustomization name and a directory name | `Bundle.Validate` |
-| Node | a directory name; an unnamed root is allowed, it has no directory of its own | `ValidateCluster` |
+| Node | a directory name, under every layout grouping; an unnamed root is allowed, it adds no path segment | `ValidateCluster` |
 | Application | a directory name, only where the layout rules give the application a directory | `layout.WalkCluster` |
 
 - **Kustomization name** (`ValidateKustomizationName`): a DNS-1123 subdomain
@@ -192,9 +192,20 @@ written. Nothing is shortened or rewritten: the caller chooses a valid name.
   manager sets it as the value of the `kustomize.toolkit.fluxcd.io/name` label
   (`github.com/fluxcd/pkg/ssa` v0.76.2, `manager.go:66-78`).
 - **Directory name** (`ValidateDirectoryName`): one path segment. It is not
-  empty, not `.` or `..`, and holds neither `/` nor `\`. The backslash is
-  refused on every platform, so a name such as `..\outside` cannot leave its
-  directory where the backslash is a separator.
+  empty, not `.` or `..`, and holds neither `/` nor `\` nor a NUL byte. The
+  backslash is refused on every platform, so a name such as `..\outside` cannot
+  leave its directory where the backslash is a separator. A NUL byte is refused
+  because a directory with one in its name cannot be created; characters that
+  only some file systems refuse are not checked.
+
+A node name is checked whatever the layout rules are, also where flat node
+grouping absorbs the node into its parent's directory. The name is a segment
+of the node's path in the model before it is a directory: `Node.GetPath` and
+the path map join node names with `/`, so two unnamed children of one node
+have the same path, and so do a node named `a/b` and a node `b` below a
+sibling `a`. A cluster with an unnamed node below the
+root, or with a separator in a node name, is therefore refused under every
+grouping.
 
 An error from either rule names where the name sits: a bundle by its path from
 the bundle that was validated (`platform/platform-infra`), a node by its path
@@ -206,7 +217,8 @@ a name from these fields can check the result with the same rule. Two Flux
 entry points take a bundle or a node that no cluster validation has seen and
 apply the rule themselves: the generator checks the Kustomization name of a
 bundle it is handed directly (`GenerateForBundle`), and the bootstrap generator
-checks the root node's name as a directory name.
+checks the root node's name as a directory name wherever it builds a path from
+it.
 
 ### Application
 

@@ -1294,9 +1294,11 @@ guesses a name it was handed cannot be composed with a caller that generates nam
 The domain-model row is about bundles, plus one shape rule and one name rule for nodes.
 `ValidateCluster` walks `Node.Children` once to find the attached bundles and to scan for a
 `PackageRef`, and rejects a `Node` graph containing a cycle, naming the node where it closes. The
-same walk checks every node name, because a node name becomes a directory: it must be one path
-segment (not empty, not `.` or `..`, no `/` or `\`), and only the root may be unnamed, since it has
-no directory of its own. A bundle name is checked as a directory name too, and as a Flux
+same walk checks every node name. A node name is a segment of the node's path in the model
+(`Node.GetPath` joins the names with `/`) and of its directory when the layout gives it one, so
+the check does not depend on the layout rules: it must be one path segment (not empty, not `.` or
+`..`, no `/`, `\` or NUL byte), and only the root may be unnamed, since it adds no segment. A
+bundle name is checked as a directory name too, and as a Flux
 Kustomization name: a DNS-1123 subdomain of at most 63 characters, the limit of the label value
 Flux writes the name into. A refused name is reported with its node or bundle path and is never
 shortened; `pkg/stack/README.md` has the rules in full. An application name is not part of this

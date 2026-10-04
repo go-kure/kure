@@ -71,3 +71,47 @@ func TestWalkCluster_ApplicationNames(t *testing.T) {
 		})
 	}
 }
+
+// TestWalkCluster_NodeNamesUnderFlatGrouping: with NodeGrouping flat a child
+// node is absorbed into its parent's directory, so its name becomes no
+// directory. It is refused all the same, by the cluster validation the walk
+// runs first: a node name is a segment of the node's path in the model, where
+// an empty name or one holding "/" gives two nodes one path key.
+func TestWalkCluster_NodeNamesUnderFlatGrouping(t *testing.T) {
+	rules := layout.DefaultLayoutRules()
+	rules.NodeGrouping = layout.GroupFlat
+
+	tests := []struct {
+		name      string
+		childName string
+		wantErr   []string // every substring must be in the error; nil means accepted
+	}{
+		{"named child", "apps", nil},
+		{"unnamed child", "", []string{`node "root/"`, "empty"}},
+		{"child with a slash", "a/b", []string{`node "root/a/b"`, "path separator"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := stack.NewApplication("web", "ns", &fakeConfig{objs: []*client.Object{makeCM("cm")}})
+			node := &stack.Node{Name: tt.childName, Bundle: &stack.Bundle{Name: "web", Applications: []*stack.Application{app}}}
+			root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
+			node.SetParent(root)
+
+			_, err := layout.WalkCluster(&stack.Cluster{Name: "demo", Node: root}, rules)
+			if tt.wantErr == nil {
+				if err != nil {
+					t.Fatalf("WalkCluster() = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("WalkCluster() = nil, want an error")
+			}
+			for _, want := range tt.wantErr {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("WalkCluster() = %v, want it to contain %q", err, want)
+				}
+			}
+		})
+	}
+}

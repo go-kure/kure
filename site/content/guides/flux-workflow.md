@@ -83,6 +83,15 @@ Each bundle needs a `SourceRef` naming the Flux source its Kustomization reads f
 the placement Step 3 uses, does not enforce one, and without it the Kustomizations written to
 `flux-system/` carry an empty `sourceRef`, which Flux's CRD rejects.
 
+Names are checked when the cluster is validated, which the layout walk of Step 3 does before it
+renders anything. A bundle name becomes the name of its Flux Kustomization, so it must be a
+DNS-1123 subdomain of at most 63 characters: lower-case letters, digits, `-` and `.`, starting and
+ending with a letter or digit (`my.app` is valid, `My-App` and a 64-character name are not). The limit is 63 because Flux writes the name into a label value on every object it
+applies. A node name must be one path segment: not empty, not `.` or `..`, and without `/`, `\` or
+a NUL byte; only the root node may be unnamed. A refused name is reported with its node or bundle
+path, and Kure never shortens one. See the [Stack reference](/api-reference/stack/) for the rules
+in full.
+
 The fluent builder (`stack.NewClusterBuilder`) builds a single path from the root, not a tree
 like this one: `WithNode` sets the root node, so a second call replaces it; a second `WithBundle`
 on one node replaces the first; and `WithChild` descends into the child it adds, with no way back
@@ -757,6 +766,12 @@ for _, obj := range objects {
 into the full reference the operator's `GitRepository` needs (`main` becomes `refs/heads/main`).
 A value that already starts with `refs/` — a tag such as `refs/tags/v1.0.0` — is passed through
 unchanged in `"flux-operator"` mode only; `"gotk"` mode always treats a Git `SourceRef` as a branch.
+
+The root node's name becomes a segment of the path the bootstrap applies, so it is checked as a
+directory name wherever a path is built from it: always in `"gotk"` mode, and in
+`"flux-operator"` mode when `SourceURL` is set (without one the `FluxInstance` has no sync and the
+name is not used). A name holding `/`, `\` or a NUL byte, or `.` or `..`, is refused; no root node
+and an unnamed root are valid.
 
 ### Bootstrap namespace
 
