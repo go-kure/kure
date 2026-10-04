@@ -328,12 +328,20 @@ func manifestPlan(basePath string, cfg Config) writerPlan {
 			// resources of its own. With FlattenSingleTier the root may
 			// absorb a collapsed child's Resources, in which case it does
 			// need one, and so does one that holds an AppFileSingle child's
-			// file (a child with no resources writes none).
+			// file (a child with no resources writes none). An unnamed root
+			// node is rendered into that directory: when it has a bundle,
+			// which is rendered one directory lower (OriginUnit), the
+			// directory keeps its kustomization.yaml, as it did while it
+			// rendered the bundle itself. Without one, a Flux Kustomization
+			// whose spec.path is this directory would build every file below
+			// it, the bundle's included, and apply them a second time
+			// (go-kure/kure#979).
 			skipClusterRoot := l.Namespace != "" &&
 				strings.Count(l.Namespace, string(filepath.Separator)) == 0 &&
 				l.Name == "" &&
 				len(sorted) == 0 &&
 				!l.rendersBundle() &&
+				l.origin.unit == nil &&
 				!slices.ContainsFunc(l.Children, func(c *ManifestLayout) bool {
 					return c != nil && manifestAppMode(c, cfg) == AppFileSingle && c.writesSingleFile()
 				})

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	kerrors "github.com/go-kure/kure/pkg/errors"
@@ -144,6 +145,98 @@ func TestGenerateFromCluster_UnnamedRootUnderClusterName(t *testing.T) {
 		if p == "cluster" || strings.HasPrefix(p, "cluster/") {
 			t.Errorf("Kustomization %s has spec.path %q: the default rules' directory, not the caller's", cr, p)
 		}
+	}
+}
+
+// TestFluxSeparate_UnnamedRootBuildAppliesNoBundle: an unnamed root is
+// rendered into the ClusterName directory, and its bundle one directory lower
+// (go-kure/kure#979). That directory keeps its kustomization.yaml in every
+// writer, listing the Flux directory only: without one, the Kustomization that
+// builds it would take in every file below, and apply each bundle's objects
+// beside the bundle's own Kustomization.
+func TestFluxSeparate_UnnamedRootBuildAppliesNoBundle(t *testing.T) {
+	for _, clusterName := range []string{".", "prod"} {
+		t.Run(clusterName, func(t *testing.T) {
+			rules := layout.DefaultLayoutRules()
+			rules.FluxPlacement = layout.FluxSeparate
+			rules.ClusterName = clusterName
+			ml := integrated(t, unnamedRoot(), rules)
+			for writer, w := range writeAll(t, ml) {
+				top := filepath.Join(w.root, ml.FullRepoPath(), "kustomization.yaml")
+				data, err := os.ReadFile(top)
+				if err != nil {
+					t.Errorf("%s: the root node's directory has no kustomization.yaml: %v", writer, err)
+					continue
+				}
+				if !bytes.Contains(data, []byte("- "+fluxstack.DefaultFluxDirName+"\n")) {
+					t.Errorf("%s: the root kustomization.yaml does not list %s:\n%s", writer, fluxstack.DefaultFluxDirName, data)
+				}
+				objs := fluxBuild(t, w.root, ml.FullRepoPath(), unstructured.Unstructured{Object: map[string]any{}})
+				crs := 0
+				for id := range objs {
+					if strings.Contains(id, "ConfigMap") {
+						t.Errorf("%s: the build of the root node's directory applies %s, a bundle's object", writer, id)
+					}
+					if strings.Contains(id, "Kustomization") {
+						crs++
+					}
+				}
+				if crs != 2 {
+					t.Errorf("%s: the build of the root node's directory holds %d Kustomizations, want the two bundles': %v", writer, crs, keys(objs))
+				}
+			}
+		})
+	}
+}
+
+// TestFluxSeparate_RefusesLayoutInTheFluxDirectory: the root node's bundle is
+// rendered in a directory named after it, inside the root node's
+// (go-kure/kure#979), and a child node in one named after the node. Named like
+// the Flux directory, either would share it with the Flux resources, so the
+// integration refuses it before anything is written. The integrated placements
+// have no Flux directory, and write the tree.
+func TestFluxSeparate_RefusesLayoutInTheFluxDirectory(t *testing.T) {
+	bundleNamed := func(name string) *stack.Cluster { return threeTier(name, "apps", "web", nil) }
+	nodeNamed := func(name string) *stack.Cluster {
+		c := threeTier("platform", "apps", "web", nil)
+		c.Node.Children[0].Name = name
+		return c
+	}
+	rules := layout.DefaultLayoutRules()
+	rules.FluxPlacement = layout.FluxSeparate
+	for name, tc := range map[string]struct {
+		build func() *stack.Cluster
+		want  string
+	}{
+		"root bundle":            {func() *stack.Cluster { return bundleNamed("flux-system") }, `bundle "flux-system" is rendered to "platform/flux-system", the directory the Flux resources are written to`},
+		"root bundle, case only": {func() *stack.Cluster { return bundleNamed("Flux-System") }, `bundle "Flux-System" is rendered to "platform/Flux-System", the directory the Flux resources are written to`},
+		"child node":             {func() *stack.Cluster { return nodeNamed("flux-system") }, `node "flux-system" is rendered to "platform/flux-system", the directory the Flux resources are written to`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+			if _, err := li.CreateLayoutWithResources(tc.build(), rules); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("CreateLayoutWithResources: got %v, want the refusal %q", err, tc.want)
+			}
+			c := tc.build()
+			ml, err := layout.WalkCluster(c, rules)
+			if err != nil {
+				t.Fatalf("WalkCluster: %v", err)
+			}
+			before := len(ml.Children)
+			if err := li.IntegrateWithLayout(ml, c, rules); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("IntegrateWithLayout: got %v, want the refusal %q", err, tc.want)
+			}
+			if len(ml.Children) != before {
+				t.Errorf("the refused integration left %d children, the walk %d", len(ml.Children), before)
+			}
+		})
+	}
+	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout} {
+		t.Run(string(placement), func(t *testing.T) {
+			r := rules
+			r.FluxPlacement = placement
+			writeAll(t, integrated(t, bundleNamed("flux-system"), r))
+		})
 	}
 }
 

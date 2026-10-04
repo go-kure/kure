@@ -391,6 +391,9 @@ func TestWalkCluster_FlattenKeepsMergedUnitDirectory(t *testing.T) {
 	if len(ml.ExtraFiles) != 0 || len(ml.ConfigMapGenerators) != 0 {
 		t.Errorf("the top took over the augmenter's files: ExtraFiles=%d ConfigMapGenerators=%d", len(ml.ExtraFiles), len(ml.ConfigMapGenerators))
 	}
+	if x := layoutAt(t, ml, "r/b/x"); len(x.ExtraFiles) != 1 || len(x.ConfigMapGenerators) != 1 {
+		t.Errorf("the augmenter's directory lost its files: ExtraFiles=%d ConfigMapGenerators=%d", len(x.ExtraFiles), len(x.ConfigMapGenerators))
+	}
 	_, bundles := originPaths(ml)
 	if got := bundles["b"]; got != "r/b" {
 		t.Errorf("bundle b origin at %q, want r/b", got)

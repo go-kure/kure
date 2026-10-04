@@ -428,11 +428,17 @@ What changed, and what to do:
   on, the objects can be deleted by the outer owner and re-created by the inner Kustomization.
 - **A child node named like that directory is refused.** A child node of the root node whose name
   is the name of the root node's bundle's directory would render to the same path; the walk
-  refuses it, naming both. Rename one.
+  refuses it, naming both, also when the names differ only in case. Rename one.
+- **A root node's bundle named `flux-system` is refused under `FluxSeparate`.** Without a
+  `ClusterName` its directory would be the one the Flux resources are written to. Rename the
+  bundle, or use an integrated placement. The ArgoCD engine refuses one named `argocd` the same
+  way.
 - **`FlattenSingleTier` collapses no directory that renders a bundle.** A collapsed directory's
   Kustomization would have no parent to sit in. On a walked tree the option now only collapses a
-  single child node that has neither a bundle nor child nodes; a tree that relied on it to put a
-  single-bundle application at the top keeps its directories.
+  single child directory that renders no bundle and has no directory below it (a node with neither
+  a bundle nor child nodes, or one with bundle-less nodes merged into it by a flat
+  `NodeGrouping`); a tree that relied on it to put a single-bundle application at the top keeps
+  its directories.
 - **A tree whose top renders a bundle is not integrated.** `IntegrateWithLayout` refuses it in
   every placement; integrate the whole tree `layout.WalkCluster` returns, not a subtree of it.
 
@@ -552,7 +558,7 @@ A child layout receives a CR when:
 - `!child.UmbrellaChild`
 - `child.ApplicationFileMode != AppFileSingle`
 - it renders no bundle (a child that does already has that bundle's CR in the parent)
-- a source resolves: the `SourceRef` of the nearest bundle-rendering layout at or above the parent, with both `Kind` and `Name` set, else the one `SourceRef` the URL-less bundles below the child share (nil, empty struct, missing either field, or ambiguous is a hard error — a `Kustomization` without `spec.sourceRef` is invalid)
+- a source resolves: the `SourceRef` of the nearest bundle-rendering layout at or above the parent, with both `Kind` and `Name` set (the root node's directory renders no bundle and counts with the `SourceRef` of the root node's own bundle), else the one `SourceRef` the URL-less bundles below the child share (nil, empty struct, missing either field, or ambiguous is a hard error — a `Kustomization` without `spec.sourceRef` is invalid)
 
 `CreateLayoutWithResources` validates SourceRef completeness for all bundles before layout walking. Both the node bundle and every umbrella child bundle must have `SourceRef.Kind` and `SourceRef.Name` set when either inline mode (`FluxIntegratedPerLayout` or `FluxIntegratedPerBundle`) is active — both emit bundle/node CRs carrying a `spec.sourceRef`. `FluxSeparate` and non-Flux callers are unaffected.
 

@@ -1,6 +1,8 @@
 package argocd
 
 import (
+	"strings"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -11,6 +13,10 @@ import (
 
 // Ensure WorkflowEngine implements the stack.Workflow interface
 var _ stack.Workflow = (*WorkflowEngine)(nil)
+
+// argoDirName is the directory CreateLayoutWithResources writes the
+// Applications to, inside the directory of the layout the walk returns.
+const argoDirName = "argocd"
 
 func init() {
 	// Register the ArgoCD workflow factory with the stack package
@@ -276,10 +282,30 @@ func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterf
 	}
 
 	if len(apps) > 0 {
+		// The directory must be free. The root node's bundle is rendered in
+		// a directory named after it (go-kure/kure#979), and a child node in
+		// one named after the node: either of them named like the
+		// Applications' directory would share it with them, which the
+		// writers refuse only when the tree is written. Names are compared
+		// as the writers compare directories, case-insensitively.
+		for _, child := range ml.Children {
+			if child == nil || !strings.EqualFold(child.Name, argoDirName) {
+				continue
+			}
+			// A node's directory is named after the node, whatever it renders.
+			switch {
+			case len(child.OriginNodes()) > 0:
+				return nil, errors.Errorf("node %q is rendered to %q, the directory the ArgoCD Applications are written to: rename the node",
+					child.OriginNodes()[0].Name, child.FullRepoPath())
+			case len(child.OriginBundles()) > 0:
+				return nil, errors.Errorf("bundle %q is rendered to %q, the directory the ArgoCD Applications are written to: rename the bundle",
+					child.OriginBundles()[0].Name, child.FullRepoPath())
+			}
+		}
 		// Namespace is ml's own directory, since ml references this layout as
 		// a child (go-kure/kure#771).
 		argoCDLayout := &layout.ManifestLayout{
-			Name:       "argocd",
+			Name:       argoDirName,
 			Namespace:  ml.FullRepoPath(),
 			FilePer:    layout.FilePerResource,
 			FileNaming: ml.FileNaming,

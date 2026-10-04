@@ -73,7 +73,9 @@ child must be a terminal, non-umbrella layout that renders no bundle (`flattenSi
 `canFlatten` in `pkg/stack/layout/flatten.go`, called from `WalkCluster`). It does not reach an
 application directory deeper in the tree. The last condition is go-kure/kure#979: a directory that
 renders a bundle is applied by its own Kustomization, which the top of the tree cannot host. In a
-walked tree the one child left to collapse is a node without a bundle and without child nodes.
+walked tree the one child left to collapse is a directory that renders no bundle and has none
+below it: a node without a bundle and without child nodes, or, under `NodeGrouping: GroupFlat`, a
+node with the bundle-less nodes below it merged into it.
 
 ### 1.3 Flux Kustomizations: name, host and listing
 
@@ -658,10 +660,25 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      them: `<root>/<first bundle name>` (`renderBundle` and `rootUnit` in `walker.go`).
      `ManifestLayout.OriginUnit` (`origin.go`) returns that directory's layout. They stay one
      unit: one directory, one Kustomization, named as before. `BundleGrouping: GroupByName`
-     already gave each bundle a directory and is unchanged. Both walkers do this, so a bundle's
-     directory is the same in `WalkCluster` and `WalkClusterByPackage`.
+     already gave each bundle a directory and is unchanged. Both walkers do this, so relative to
+     the root node's directory a bundle's directory is the same in `WalkCluster` and
+     `WalkClusterByPackage` (the latter places the root node without the `ClusterName`, as
+     before).
    - A child node of the root named like that directory is refused by the walk, naming the node,
-     the bundle and the directory (`rootUnit.checkRootUnitName` in `walker.go`).
+     the bundle and the directory (`rootUnit.checkRootUnitName` in `walker.go`). Names are
+     compared as the writers compare directories, so one that differs only in case is refused
+     too. `BundleGrouping: GroupByName` is no way around it: the walk does not check there, and
+     the writers refuse the tree.
+   - The engines' own directory at the top of the tree must be free. Under `FluxSeparate` a root
+     node's bundle (or a child node) rendered to `<top>/flux-system` is refused by
+     `addSeparateFluxToLayout` in `layout_integrator.go`, and one rendered to `<top>/argocd` by
+     `WorkflowEngine.CreateLayoutWithResources` in `pkg/stack/argocd/argo.go`. Before item 1 a
+     root bundle of that name was written into the root node's directory and accepted; a child
+     node of that name was already refused, by the writers.
+   - An unnamed root under a `ClusterName` is rendered into the `ClusterName` directory, which
+     keeps its `kustomization.yaml` under `WriteManifest` although it now holds no resource
+     (`manifestPlan` in `writerplan.go`): without one, the Kustomization that builds it would
+     take in every file below it, each bundle's included.
    - Every Kustomization is hosted in the parent of the directory it applies
      (`integratedPlacement.place` in `layout_integrator.go`), or in `flux-system/` under
      `FluxSeparate`. `LayoutIntegrator.IntegrateWithLayout` refuses a tree whose top renders a
@@ -687,9 +704,14 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      `TestFlattenSingleTier_KeepsBundleDirectories` in `pkg/stack/layout/origin_test.go`;
      `TestFlatten_KeepsADirectoryThatRendersABundle` in `pkg/stack/layout/flatten_test.go`;
      `TestReconcileOrder_RootBundleAppliesNoCR`,
+     `TestRootBundleDirectoryHostsItsUmbrellaChildren`,
      `TestPerLayout_RootNodeLayoutKeepsTheRootBundlesSource` and
      `TestIntegrateWithLayout_RefusesATopThatRendersABundle` in
-     `pkg/stack/fluxcd/units_test.go`; `TestGenerateFromCluster_UsesCallerRules` in
+     `pkg/stack/fluxcd/units_test.go`; `TestFluxSeparate_UnnamedRootBuildAppliesNoBundle` and
+     `TestFluxSeparate_RefusesLayoutInTheFluxDirectory` in
+     `pkg/stack/fluxcd/generate_from_cluster_rules_test.go`;
+     `TestCreateLayoutWithResources_RefusesLayoutInTheArgoDirectory` in
+     `pkg/stack/argocd/argo_test.go`; `TestGenerateFromCluster_UsesCallerRules` in
      `pkg/stack/argocd/generate_from_cluster_rules_test.go` for `source.path`.
 2. **An integrated Source is hosted inside the directory it delivers.** Target.
    - Before item 1: when the root node rendered a bundle, the Source landed in that bundle's
@@ -705,9 +727,11 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      keeps in place of its own when that one builds the root node's layout: the layout
      Kustomization of the root node's layout under `FluxIntegratedPerLayout` below a
      `ClusterName` wrapper. The reconcile-order check (`checkPlacedReconcileOrder`) refused a
-     root bundle that waits while a child's bundle depends on it; the root bundle's directory
-     now holds no Kustomization, so that cycle is gone. The check still refuses it below the
-     root, and for a kept Kustomization.
+     root bundle that waits while a child node's bundle depends on it; the root bundle's
+     directory now holds no child node's Kustomization, so that cycle is gone. (It still hosts
+     those of the bundle's umbrella children and, under `FluxIntegratedPerLayout`, of the
+     layouts inside it.) The check still refuses it below the root, and for a kept
+     Kustomization.
    - Expected: a Source is hosted in a build that is applied before any Kustomization that
      references it, never inside a directory delivered through it, with a render test of that
      invariant and refusals worded for what they still guard.
