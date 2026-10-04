@@ -469,7 +469,7 @@ engine's annotations. The Flux workflow turns that intent into the Flux annotati
 **Tests.** `pkg/stack/fluxcd/delivery_intent_test.go` covers both flags under every placement and
 grouping, on disk and in tar, the objects of an augmenter's child layout, a generated ConfigMap,
 the conflict refusals, the rollback after a later refusal, and the unchanged output without an
-intent. `pkg/stack/argocd/delivery_intent_test.go` covers the ArgoCD refusal.
+intent. The delivery-intent tests in `pkg/stack/argocd` cover the ArgoCD refusal.
 
 ### Bootstrap refuses an empty distribution ([go-kure/kure#975](https://github.com/go-kure/kure/issues/975))
 
