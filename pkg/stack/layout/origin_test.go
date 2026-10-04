@@ -416,9 +416,6 @@ func TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory(t *testing.T) {
 	for name, rules := range map[string]layout.LayoutRules{
 		"no ClusterName":   nodeOnly,
 		"ClusterName prod": withClusterName(nodeOnly, "prod"),
-		// The ClusterName ends in the root node's name and is rooted: the
-		// writers resolve it under their output directory.
-		"ClusterName /platform": withClusterName(nodeOnly, "/platform"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := layout.WalkCluster(twoTier("web", "web-bundle"), rules); err == nil || !strings.Contains(err.Error(), want) {
@@ -449,6 +446,13 @@ func TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory(t *testing.T) {
 				}
 			}
 		})
+	}
+
+	// A rooted ClusterName that ends in the root node's name: the writers
+	// resolve it under their output directory, and so does the refusal.
+	// WalkClusterByPackage takes no ClusterName.
+	if _, err := layout.WalkCluster(twoTier("web", "web-bundle"), withClusterName(nodeOnly, "/platform")); err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("ClusterName /platform, WalkCluster: got %v, want the refusal %q", err, want)
 	}
 
 	// The names differ: nothing is refused, and the two are siblings.

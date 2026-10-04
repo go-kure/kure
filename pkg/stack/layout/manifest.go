@@ -131,7 +131,10 @@ func (ml *ManifestLayout) FullRepoPath() string {
 // without regard to case. A Name such as "/web" or "./web" resolves to the
 // directory of "web", and the writers refuse a tree in which two layouts share
 // a directory. It says nothing about a layout a writer writes as a single file
-// (AppFileSingle), which has no directory of its own.
+// (AppFileSingle), which has no directory of its own. WriteToDisk with an
+// empty base path is the one writer call it does not describe: that call has
+// no output directory to resolve a rooted path under, and writes it as an
+// absolute path.
 func (ml *ManifestLayout) SameDirectory(other *ManifestLayout) bool {
 	if ml == nil || other == nil {
 		return false
