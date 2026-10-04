@@ -432,8 +432,9 @@ applies, and any tree in which two Kustomizations share a name.
 
 ### Name validation ([go-kure/kure#978](https://github.com/go-kure/kure/issues/978))
 
-**Target.** A name that cannot work is refused when the model is validated, not after the cluster
-rejects it.
+**Target.** A name that cannot work is refused before anything is written, not after the cluster
+rejects it: when the model is validated, or, for a limit only Flux has, when the Flux workflow
+generates.
 
 **Design outline.**
 
@@ -470,10 +471,13 @@ rejects it.
   subdomain and a directory name. The 63-character limit is checked where the Flux workflow
   builds a Kustomization from a bundle (`kustomizationForBundle`, reached from
   `GenerateFromLayout`, the layout integrator and `GenerateForBundle`), before anything is
-  written and with the bundle's path in the error, an umbrella child included. A bundle name
-  of 64 to 253 characters therefore validates and renders an Application in the ArgoCD
-  workflow. An application name becomes a directory only
-  where the application gets its own layout, which depends on the layout rules
+  written and with the bundle's path in the error, an umbrella child included. The names of
+  other bundles written into that Kustomization, an umbrella's children as health checks and
+  `DependsOn` bundles as dependencies, get the same check there, so `GenerateForBundle`, which
+  builds no Kustomization for them, returns no reference to a name Flux cannot reconcile. A
+  bundle name of 64 to 253 characters therefore validates and renders an Application in the
+  ArgoCD workflow. An application name becomes a directory only where the application gets its
+  own layout, which depends on the layout rules
   (`ApplicationGrouping: GroupByName`, or an augmenter that takes its own layout).
   `ValidateCluster` takes no rules, and `pkg/stack` cannot import the layout package, so that
   check runs in the walker. The error names the bundle's or node's path.

@@ -479,13 +479,19 @@ func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]c
 // limit is checked: it is Flux's, so Bundle.Validate and stack.ValidateCluster
 // accept a longer name, which another engine can deliver. Every Kustomization
 // built from a bundle is built here, umbrella children included, before
-// anything is written. The error names the bundle by its path
+// anything is written. The same check covers the other bundles this
+// Kustomization names: each umbrella child, written as a health check, and
+// each DependsOn bundle, written as a dependency. Their own Kustomizations
+// are not built here (GenerateForBundle builds none of them), so a reference
+// to a name Flux cannot reconcile would otherwise be returned unchecked. A
+// NamedDependsOn entry is the caller's reference to an object kure does not
+// build, and is written as given. The error names the bundle by its path
 // (Bundle.GetPath), which for an umbrella child of a walked cluster holds its
 // umbrella's. path is the caller's, so no directory rule applies to the name
 // here.
 func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string) (client.Object, error) {
-	if err := stack.ValidateKustomizationName(b.Name); err != nil {
-		return nil, errors.ResourceValidationError("Bundle", b.GetPath(), "name", err.Error(), nil)
+	if err := checkKustomizationName(b); err != nil {
+		return nil, err
 	}
 
 	interval := g.DefaultInterval
@@ -574,6 +580,9 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string)
 			if child == nil {
 				continue
 			}
+			if err := checkKustomizationName(child); err != nil {
+				return nil, err
+			}
 			kust.Spec.HealthChecks = append(kust.Spec.HealthChecks, metaapi.NamespacedObjectKindReference{
 				APIVersion: kustv1.GroupVersion.String(),
 				Kind:       "Kustomization",
@@ -629,6 +638,9 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string)
 
 	// Add dependencies
 	for _, dep := range b.DependsOn {
+		if err := checkKustomizationName(dep); err != nil {
+			return nil, err
+		}
 		kust.Spec.DependsOn = append(kust.Spec.DependsOn, kustv1.DependencyReference{
 			Name: dep.Name,
 		})
@@ -640,6 +652,16 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string)
 	}
 
 	return kust, nil
+}
+
+// checkKustomizationName refuses a bundle whose name cannot be a Flux
+// Kustomization's (stack.ValidateKustomizationName), naming the bundle by its
+// path.
+func checkKustomizationName(b *stack.Bundle) error {
+	if err := stack.ValidateKustomizationName(b.Name); err != nil {
+		return errors.ResourceValidationError("Bundle", b.GetPath(), "name", err.Error(), nil)
+	}
+	return nil
 }
 
 // parseBundleDuration parses one of a bundle's duration fields, returning a
