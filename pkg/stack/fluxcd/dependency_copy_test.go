@@ -147,6 +147,37 @@ func TestDependencyCopy_Resolves(t *testing.T) {
 	}
 }
 
+// TestDependencyCopy_ResolvesOnTheNameInEffect: a bundle without a
+// KustomizationName is named by its Name, so a copy that sets that Name as its
+// KustomizationName names the same Kustomization. It is the bundle in every
+// placement and on the entry point without a layout.
+func TestDependencyCopy_ResolvesOnTheNameInEffect(t *testing.T) {
+	cluster := func() *stack.Cluster {
+		c, dbCopy := copyCluster("db")
+		c.Node.Children[0].Bundle.KustomizationName = ""
+		if dbCopy.UnitName() != c.Node.Children[0].Bundle.UnitName() {
+			t.Fatalf("the copy is named %q, the bundle %q", dbCopy.UnitName(), c.Node.Children[0].Bundle.UnitName())
+		}
+		return c
+	}
+	for _, placement := range allPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			rules := propertyGroupings["nodeOnly"]
+			rules.FluxPlacement = placement
+			got := kustomizationsByName(integrated(t, cluster(), rules))
+			if got["web"] == nil {
+				t.Fatal("no Kustomization named web")
+			}
+			if deps := dependsOnNames(got["web"]); !slices.Equal(deps, []string{"db"}) {
+				t.Errorf("web dependsOn = %v, want [db]", deps)
+			}
+		})
+	}
+	if _, err := fluxstack.NewResourceGenerator().GenerateFromCluster(cluster(), layout.DefaultLayoutRules()); err != nil {
+		t.Errorf("GenerateFromCluster: %v", err)
+	}
+}
+
 // TestDependencyCopy_GenerateForBundleWritesTheNameGiven: the one-bundle entry
 // point has no cluster to compare a dependency with. It is unchanged: it
 // writes the name the DependsOn bundle carries.

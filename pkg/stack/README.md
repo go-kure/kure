@@ -90,10 +90,11 @@ such a resource, so it reaches a bundle that sets `KustomizationName` by that va
 
 A `DependsOn` entry need not be the cluster's own bundle: another `Bundle` value with the same
 `Name` is a copy of it, and a cluster resolves it by `Name` to that bundle, so the dependency is on
-that bundle's Kustomization. Leave `KustomizationName` empty on a copy, or set the bundle's.
-`ValidateCluster` refuses, before it validates the bundles one by one:
+that bundle's Kustomization. Leave `KustomizationName` empty on a copy, or set the name of the
+bundle's Kustomization (its `UnitName()`: the bundle's `KustomizationName`, or its `Name` when it
+sets none). `ValidateCluster` refuses, before it validates the bundles one by one:
 
-- a copy that sets another `KustomizationName` than the bundle it stands for, naming both;
+- a copy that sets a `KustomizationName` other than that name, naming both;
 - a copy of a bundle whose Kustomization name is also in the dependant's `NamedDependsOn`: one
   dependency in both lists.
 

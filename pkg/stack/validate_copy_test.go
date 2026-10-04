@@ -89,6 +89,27 @@ func TestValidateCluster_DependencyCopy(t *testing.T) {
 			want: []string{`bundle "web"`, `copy of bundle "db"`, `KustomizationName "x"`, `KustomizationName ""`},
 		},
 		{
+			// The names in effect are compared, not the fields: the bundle is
+			// named db by its Name, the copy by its KustomizationName.
+			name: "a copy that sets as KustomizationName the Name of a bundle that has none",
+			cluster: func() *Cluster {
+				return dependencyCluster(&Bundle{Name: "db"}, &Bundle{Name: "db", KustomizationName: "db"})
+			},
+		},
+		{
+			name: "a name-only copy of a bundle whose KustomizationName is its Name",
+			cluster: func() *Cluster {
+				return dependencyCluster(&Bundle{Name: "db", KustomizationName: "db"}, &Bundle{Name: "db"})
+			},
+		},
+		{
+			name: "a copy that sets the Name as KustomizationName, which is also a named dependency",
+			cluster: func() *Cluster {
+				return dependencyCluster(&Bundle{Name: "db"}, &Bundle{Name: "db", KustomizationName: "db"}, "db")
+			},
+			want: []string{`dependency "db" ` + inBoth},
+		},
+		{
 			// Bundle.Validate alone reports "x" in both lists: the copy's name,
 			// which no Kustomization of this cluster gets.
 			name: "the copy's KustomizationName is also a named dependency",

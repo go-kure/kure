@@ -140,8 +140,9 @@ func ValidateCluster(c *Cluster) error {
 // copy stands for the cluster's bundle of that name and the dependency is on
 // that bundle's Kustomization, whatever the copy says. Two inputs are refused:
 //
-//   - a copy that sets a KustomizationName other than the bundle's. A copy
-//     that leaves it empty says nothing, and is the bundle;
+//   - a copy that sets a KustomizationName other than the name in effect of
+//     the bundle (Bundle.UnitName). A copy that leaves it empty says nothing,
+//     and is the bundle;
 //   - a copy standing for a bundle whose Kustomization name (Bundle.UnitName)
 //     is also in the dependant's NamedDependsOn: one dependency in both lists.
 //
@@ -201,8 +202,12 @@ func validateDependencyCopies(c *Cluster, nodeOrder []*Node) error {
 // dependencyCopyRefusal returns why dep, a copy of the cluster's bundle of in
 // the DependsOn of b, is refused, or "" when it is not. layout.IndexOrigins
 // reports the same two reasons in the same words.
+//
+// The names in effect are compared, not the fields: a copy that sets as its
+// KustomizationName the Name of a bundle that sets none names the same
+// Kustomization as that bundle.
 func dependencyCopyRefusal(b, dep, of *Bundle) string {
-	if dep.KustomizationName != "" && dep.KustomizationName != of.KustomizationName {
+	if dep.KustomizationName != "" && dep.UnitName() != of.UnitName() {
 		return fmt.Sprintf("bundle %q depends on a copy of bundle %q with KustomizationName %q, but that bundle has KustomizationName %q: a DependsOn bundle is resolved by its Name, so a copy leaves KustomizationName empty or sets the bundle's",
 			b.GetPath(), of.GetPath(), dep.KustomizationName, of.KustomizationName)
 	}

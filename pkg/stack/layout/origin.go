@@ -97,8 +97,8 @@ type OriginIndex struct {
 //     written into its Namespace, not into its own directory;
 //   - a DependsOn bundle that is a copy of a rendered bundle (another bundle
 //     with its Name, which UnitName resolves to it) and sets a
-//     KustomizationName other than the rendered bundle's, naming both. A copy
-//     that leaves the field empty is the rendered bundle;
+//     KustomizationName other than the rendered bundle's name in effect,
+//     naming both. A copy that leaves the field empty is the rendered bundle;
 //   - such a copy of a bundle whose Kustomization name is also in the
 //     dependant's NamedDependsOn: one dependency in both lists, which
 //     Bundle.Validate cannot see through the copy. stack.ValidateCluster
@@ -182,7 +182,9 @@ func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) 
 // KustomizationName names a Kustomization the dependency does not reach, and a
 // copy of a bundle whose Kustomization name is also in the dependant's
 // NamedDependsOn is one dependency in both lists. A copy that leaves
-// KustomizationName empty says nothing and is accepted.
+// KustomizationName empty says nothing and is accepted, and so is one that
+// sets the rendered bundle's name in effect (Bundle.UnitName): the names are
+// compared, not the fields.
 //
 // stack.ValidateCluster refuses both first, in these words, on every path
 // that walks the cluster; this is the check for a tree walked earlier.
@@ -196,7 +198,7 @@ func (ix *OriginIndex) checkDependencyCopies() error {
 			if of == nil || of == dep {
 				continue
 			}
-			if dep.KustomizationName != "" && dep.KustomizationName != of.KustomizationName {
+			if dep.KustomizationName != "" && dep.UnitName() != of.UnitName() {
 				return errors.Errorf("bundle %q depends on a copy of bundle %q with KustomizationName %q, but that bundle has KustomizationName %q: a DependsOn bundle is resolved by its Name, so a copy leaves KustomizationName empty or sets the bundle's",
 					b.GetPath(), of.GetPath(), dep.KustomizationName, of.KustomizationName)
 			}
@@ -221,7 +223,8 @@ func (ix *OriginIndex) Units() []*ManifestLayout { return ix.units }
 // unique, so a copy of a rendered bundle (the fluent builder copies bundles)
 // resolves like the original, whatever KustomizationName the copy carries
 // (IndexOrigins refuses a DependsOn copy that sets another one than the
-// rendered bundle's). A bundle outside the index keeps its own name in effect.
+// rendered bundle's name in effect). A bundle outside the index keeps its own
+// name in effect.
 func (ix *OriginIndex) UnitName(b *stack.Bundle) string {
 	if rendered := ix.byName[b.Name]; rendered != nil {
 		return ix.unitOf(rendered)
