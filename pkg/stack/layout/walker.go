@@ -424,20 +424,23 @@ func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) (
 			return nil, err
 		}
 		inheritFileNaming(appLayout)
+		var generated []client.Object
 		for _, gen := range appLayout.ConfigMapGenerators {
-			all = append(all, generatedConfigMap(gen.Name))
+			generated = append(generated, generatedConfigMap(gen.Name))
 		}
+		all = append(all, generated...)
 		// Recorded after the augmenter ran: what it added to the layout, or
 		// in a layout below it, is the application's too.
-		target.origin.apps = append(target.origin.apps, ApplicationObjects{Application: app, Objects: subtreeResources(appLayout), Layout: appLayout})
+		target.origin.apps = append(target.origin.apps, ApplicationObjects{Application: app, Objects: subtreeResources(appLayout), Layout: appLayout, generated: generated})
 		target.Children = append(target.Children, appLayout)
 	}
 	return all, nil
 }
 
 // generatedConfigMap stands for the ConfigMap a configMapGenerator entry
-// makes when kustomize builds the directory: its identity only (kind, and the
-// name before the content-hash suffix), for matching patch targets.
+// makes when kustomize builds the directory, for matching patch targets: its
+// identity (kind, and the name before the content-hash suffix) and, once
+// origin.syncGenerated has run, the annotations the entry sets.
 func generatedConfigMap(name string) client.Object {
 	cm := &unstructured.Unstructured{}
 	cm.SetAPIVersion("v1")
