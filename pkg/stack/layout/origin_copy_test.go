@@ -81,6 +81,40 @@ func TestIndexOrigins_DependencyCopy(t *testing.T) {
 	}
 }
 
+// TestIndexOrigins_DependencyCopyWithTheNameInEffect: the copy is compared
+// with the rendered bundle on the name in effect, not on the field. A bundle
+// without a KustomizationName is named by its Name, so a copy that sets that
+// Name as its KustomizationName names the same Kustomization and is the
+// bundle; any other value is refused.
+func TestIndexOrigins_DependencyCopyWithTheNameInEffect(t *testing.T) {
+	db := &stack.Bundle{Name: "db", Applications: []*stack.Application{configMapApp("db")}}
+	copyOfDB := *db
+	web := &stack.Bundle{Name: "web", Applications: []*stack.Application{configMapApp("web")},
+		DependsOn: []*stack.Bundle{&copyOfDB}}
+	dbn := &stack.Node{Name: "dbn", Bundle: db}
+	webn := &stack.Node{Name: "webn", Bundle: web}
+	r := &stack.Node{Name: "r", Children: []*stack.Node{dbn, webn}}
+	dbn.SetParent(r)
+	webn.SetParent(r)
+	c := &stack.Cluster{Name: "demo", Node: r}
+	ml := walk(t, c, nodeOnly)
+
+	copyOfDB.KustomizationName = "db"
+	ix, err := layout.IndexOrigins(ml, c)
+	if err != nil {
+		t.Fatalf("IndexOrigins refuses a copy that names the bundle's Kustomization: %v", err)
+	}
+	if got := ix.UnitDependencies(layoutAt(t, ml, "r/webn")); len(got) != 1 || got[0] != "db" {
+		t.Errorf("UnitDependencies(web) = %v, want [db]", got)
+	}
+	if verr := stack.ValidateCluster(c); verr != nil {
+		t.Errorf("ValidateCluster refuses what IndexOrigins accepts: %v", verr)
+	}
+
+	copyOfDB.KustomizationName = "x"
+	assertIndexError(t, ml, c, `copy of bundle "db" with KustomizationName "x"`)
+}
+
 // TestIndexOrigins_DependencyCopyOfAnUmbrellaChild: the copy is compared with
 // the rendered bundle wherever that sits, and the bundle is named by its path.
 func TestIndexOrigins_DependencyCopyOfAnUmbrellaChild(t *testing.T) {

@@ -36,7 +36,7 @@ A deployment unit corresponding to a single GitOps reconciliation resource (e.g.
 - **Umbrella composition** via `Children` (see below)
 - **Reconciliation settings**: interval, pruning, timeouts. `Interval`, `Timeout` and `RetryInterval` are Go duration strings (`"10m"`); empty means the default, and a value that does not parse is a validation error rather than a silent fallback
 - **Labels and annotations** for metadata
-- **A name for the generated resource** via `KustomizationName`: the Flux Kustomization (or ArgoCD Application) is named after the bundle unless this is set. The bundle's `Name` stays its identity and its directory, and a `NamedDependsOn` entry names the generated resource, so it uses this value when one is set. A `DependsOn` entry that is a copy of a bundle of the cluster (same `Name`) is that bundle: it leaves `KustomizationName` empty or sets the bundle's
+- **A name for the generated resource** via `KustomizationName`: the Flux Kustomization (or ArgoCD Application) is named after the bundle unless this is set. The bundle's `Name` stays its identity and its directory, and a `NamedDependsOn` entry names the generated resource, so it uses this value when one is set. A `DependsOn` entry that is a copy of a bundle of the cluster (same `Name`) is that bundle: it leaves `KustomizationName` empty or sets the name of the bundle's generated resource
 
 #### Umbrella Bundles
 
