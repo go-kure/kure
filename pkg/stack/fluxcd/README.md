@@ -481,8 +481,10 @@ and every grouping, on:
 
 - every object the application emits. For a `List` that is what it holds, a `List` inside it
   included, and never the envelope. As in kustomize, an object is a `List` when its kind ends in
-  `List` and it has an `items` field; a kind ending in `List` without `items`, and any other kind
-  with an `items` field, is one object and carries the annotation itself;
+  `List` and it has an `items` field in the written file; a kind ending in `List` without `items`
+  (a typed object that leaves an empty one out included), and any other kind with an `items`
+  field, is one object and carries the annotation itself. A typed object written as a `List`
+  whose items the integrator cannot reach is refused;
 - every object a `LayoutAugmenter` adds to the application's own layout or a child layout below it;
 - every `configMapGenerator` of those layouts, as the entry's `options.annotations`, because
   kustomize builds those ConfigMaps after kure has written the tree.
