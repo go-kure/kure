@@ -392,7 +392,8 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) erro
 }
 
 // checkPlacedReconcileOrder runs checkReconcileOrder over the Kustomizations
-// this integration placed (generated: their namespace/name keys), with the
+// this integration placed or kept (generated: their namespace/name keys; a
+// kept one in whatever form it has, generatedKustomizations), with the
 // creation rule integrated placement adds: a CR exists only once the
 // Kustomization whose directory references reach its file has applied, and a
 // CR the root directory reaches is created by the Flux bootstrap. Under
@@ -402,22 +403,29 @@ func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string
 	var kusts []*kustv1.Kustomization
 	hostOf := map[string]*layout.ManifestLayout{}
 	layoutAt := map[string]*layout.ManifestLayout{}
-	var index func(l *layout.ManifestLayout)
-	index = func(l *layout.ManifestLayout) {
+	var index func(l *layout.ManifestLayout) error
+	index = func(l *layout.ManifestLayout) error {
 		layoutAt[path.Clean(l.FullRepoPath())] = l
-		for _, obj := range l.Resources {
-			if k, ok := obj.(*kustv1.Kustomization); ok && generated[crKey(k.Namespace, k.Name)] {
-				kusts = append(kusts, k)
-				hostOf[crKey(k.Namespace, k.Name)] = l
-			}
+		own, err := generatedKustomizations(l, generated)
+		if err != nil {
+			return err
+		}
+		for _, k := range own {
+			kusts = append(kusts, k)
+			hostOf[crKey(k.Namespace, k.Name)] = l
 		}
 		for _, child := range l.Children {
 			if child != nil {
-				index(child)
+				if err := index(child); err != nil {
+					return err
+				}
 			}
 		}
+		return nil
 	}
-	index(root)
+	if err := index(root); err != nil {
+		return err
+	}
 
 	reach := func(l *layout.ManifestLayout, into map[*layout.ManifestLayout]bool) {
 		for _, b := range buildDirectories(l) {
@@ -517,7 +525,10 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout
 	if len(p.derived) == 0 {
 		return nil
 	}
-	layoutAt, crs := p.indexGenerated(top)
+	layoutAt, crs, err := p.indexGenerated(top)
+	if err != nil {
+		return err
+	}
 	builds := []*layout.ManifestLayout{top}
 	seen := map[*layout.ManifestLayout]bool{top: true}
 	if !seen[p.root] {
@@ -579,26 +590,31 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout
 
 // indexGenerated maps every layout under top by its directory, and returns in
 // depth-first layout order every Kustomization this pass placed or kept
-// (generated).
-func (p *integratedPlacement) indexGenerated(top *layout.ManifestLayout) (map[string]*layout.ManifestLayout, []*kustv1.Kustomization) {
+// (generated), in typed form whatever form it has (generatedKustomizations).
+func (p *integratedPlacement) indexGenerated(top *layout.ManifestLayout) (map[string]*layout.ManifestLayout, []*kustv1.Kustomization, error) {
 	layoutAt := map[string]*layout.ManifestLayout{}
 	var crs []*kustv1.Kustomization
-	var index func(l *layout.ManifestLayout)
-	index = func(l *layout.ManifestLayout) {
+	var index func(l *layout.ManifestLayout) error
+	index = func(l *layout.ManifestLayout) error {
 		layoutAt[path.Clean(l.FullRepoPath())] = l
-		for _, obj := range l.Resources {
-			if k, ok := obj.(*kustv1.Kustomization); ok && p.generated[crKey(k.Namespace, k.Name)] {
-				crs = append(crs, k)
-			}
+		own, err := generatedKustomizations(l, p.generated)
+		if err != nil {
+			return err
 		}
+		crs = append(crs, own...)
 		for _, child := range l.Children {
 			if child != nil {
-				index(child)
+				if err := index(child); err != nil {
+					return err
+				}
 			}
 		}
+		return nil
 	}
-	index(top)
-	return layoutAt, crs
+	if err := index(top); err != nil {
+		return nil, nil, err
+	}
+	return layoutAt, crs, nil
 }
 
 // buildScope returns the layouts whose objects a kustomize build of b holds:
@@ -651,7 +667,10 @@ func (p *integratedPlacement) checkRootBuildKeepsHostedSources(top *layout.Manif
 	if len(hosted) == 0 {
 		return nil
 	}
-	layoutAt, crs := p.indexGenerated(top)
+	layoutAt, crs, err := p.indexGenerated(top)
+	if err != nil {
+		return err
+	}
 	rf := provider.NewDefaultDepProvider().GetResourceFactory()
 	for _, k := range crs {
 		b := layoutAt[path.Clean(k.Spec.Path)]
@@ -1536,4 +1555,42 @@ func typedListItems(list runtime.Object) ([]runtime.Object, error) {
 		}
 	}
 	return items, nil
+}
+
+// generatedKustomizations returns, in typed form and in the order kustomize
+// builds them, the Flux Kustomizations of l that this integration placed or
+// kept (generated: their namespace/name keys). It reads l as kustomize builds
+// it (resourceItems), so one the integration kept in place of its own (add)
+// counts in whatever form it has: typed, unstructured or inside a List. One
+// that is not typed is converted through its JSON, and a conversion failure is
+// an error naming the layout and the object, never a Kustomization the
+// integrator's checks leave out (go-kure/kure#979).
+func generatedKustomizations(l *layout.ManifestLayout, generated map[string]bool) ([]*kustv1.Kustomization, error) {
+	objs, err := resourceItems(l)
+	if err != nil {
+		return nil, err
+	}
+	var out []*kustv1.Kustomization
+	for _, obj := range objs {
+		if _, ok := fluxKustomizationPath(obj); !ok {
+			continue
+		}
+		key := crKey(obj.GetNamespace(), obj.GetName())
+		if !generated[key] {
+			continue
+		}
+		k, ok := obj.(*kustv1.Kustomization)
+		if !ok {
+			raw, err := json.Marshal(obj)
+			if err == nil {
+				k = &kustv1.Kustomization{}
+				err = json.Unmarshal(raw, k)
+			}
+			if err != nil {
+				return nil, errors.Wrapf(err, "layout %q: read Flux Kustomization %q in typed form", l.FullRepoPath(), key)
+			}
+		}
+		out = append(out, k)
+	}
+	return out, nil
 }

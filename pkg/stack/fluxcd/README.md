@@ -471,6 +471,17 @@ Kustomizations the caller or an application places are not builds kure answers f
 `flux-system`, which is built beside the rest of the tree, so a Source with a generated Source's
 identity anywhere else in the tree is refused even when it is identical.
 
+A Kustomization the integration keeps in place of its own (same name and `spec.path`, in the
+layout that would host it) is checked as the generated one would be, with what the kept object
+itself sets and in whatever form it has: typed, unstructured or inside a `List`
+(go-kure/kure#979). Its `spec.path` is a build in which a generated Source may appear once; when
+that build holds the root node's layout, its patches and postBuild are checked against the Sources
+hosted there; and its `dependsOn`, `wait` and health checks enter the reconcile-order check (see
+[One Kustomization per directory](#one-kustomization-per-directory)). An unstructured one is read
+through the typed Flux `Kustomization`; one that cannot be read that way (a field of the wrong
+type, for one) is refused, with an error naming the layout that holds it and its namespace and
+name.
+
 ## Bootstrap Generation
 
 Generate Flux system bootstrap manifests. Two modes are supported:
