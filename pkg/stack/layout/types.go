@@ -155,8 +155,10 @@ type LayoutRules struct {
 	//
 	// A directory that renders a bundle is never collapsed: its Flux
 	// Kustomization is hosted by its parent, and the top of the tree has
-	// none. In a walked tree that leaves one case: a single child node that
-	// has neither a bundle nor child nodes.
+	// none. In a walked tree that leaves one case: a single child directory
+	// that renders no bundle and has no directory below it. That is a node
+	// with neither a bundle nor child nodes, or, under NodeGrouping flat, a
+	// node with the bundle-less nodes below it merged into it.
 	//
 	// Only effective for WalkCluster (not WalkClusterByPackage, which uses
 	// synthetic unnamed wrappers to express package boundaries).

@@ -211,8 +211,21 @@ not the root node's directory and is unchanged: under `NodeGrouping: GroupFlat` 
 bundles merged into it, and the Flux integration refuses such a tree (its top renders a bundle).
 
 A child node of the root that carries the name of that directory is refused by the walk, since
-both would be written to one place; the error names the node, the bundle and the directory. Rename
-one of them, or set `BundleGrouping: GroupByName`.
+both would be written to one place; the error names the node, the bundle and the directory. A name
+that differs only in case is refused too: the writers compare directories without regard to case.
+Rename one of them. `BundleGrouping: GroupByName` is no way around it: the bundle's directory is
+the same there, the walk does not check it, and the writers refuse the tree.
+
+The workflow engines add a directory of their own to the top of the tree: `flux-system` (Flux,
+`FluxSeparate`) and `argocd` (ArgoCD). When the top is the root node's directory, a root node's
+bundle or a child node with that name would share it, and the engine refuses the tree, naming the
+bundle or node and the directory.
+
+An unnamed root node under a `ClusterName` is rendered into the `ClusterName` directory, and its
+bundle into `<ClusterName>/<bundle>`. `WriteManifest` writes no `kustomization.yaml` into an empty
+`ClusterName` directory; into this one it does, as it did while the directory rendered the bundle.
+Without it, a Flux Kustomization that builds the directory would take in every file below it, each
+bundle's included.
 
 **Breaking change (go-kure/kure#979).** Before, the root node's bundles rendered in the root
 node's directory. Their files, the Flux Kustomization's `spec.path` and the ArgoCD Application's
@@ -581,7 +594,7 @@ Augmenters may attach sub-layouts as `Children` of a per-app `ManifestLayout`. I
 - `!child.UmbrellaChild`
 - `child.ApplicationFileMode != AppFileSingle`
 - The child renders no bundle (a child that does already has that bundle's CR in the parent).
-- A source can be resolved: the `SourceRef` of the nearest layout at or above the parent that renders bundles, else the one `SourceRef` the URL-less bundles below the child share. A missing or incomplete `SourceRef` (nil, empty, or without `Kind` or `Name`) causes `IntegrateWithLayout` to return a hard error — a `Kustomization` without `spec.sourceRef` is rejected by Flux.
+- A source can be resolved: the `SourceRef` of the nearest layout at or above the parent that renders bundles (the root node's layout renders none and counts with the `SourceRef` of its own bundle, see [The root node's bundles](#the-root-nodes-bundles)), else the one `SourceRef` the URL-less bundles below the child share. A missing or incomplete `SourceRef` (nil, empty, or without `Kind` or `Name`) causes `IntegrateWithLayout` to return a hard error — a `Kustomization` without `spec.sourceRef` is rejected by Flux.
 
 The parent's `kustomization.yaml` lists that CR file as one of its own resources, so every child the writers do not reference as a directory has a backing CR. The integrator applies this rule at any depth.
 
@@ -617,7 +630,7 @@ Conservative collapse preconditions — ALL must hold:
 
 A directory that renders a bundle is applied by its own Flux Kustomization, which its parent hosts. Collapsing it into the top of the tree, which has no parent, would make that Kustomization part of the build it applies, so it is left where it is.
 
-What it still collapses in a walked tree is a single child node that has neither a bundle nor child nodes: a `ClusterName` directory over such a root node, or a root node over one such child. The absorbing layout takes over the collapsed layout's origin node (see [Layout origins](#layout-origins)). A hand-built tree, which carries no origins, collapses as before. Nothing is rewritten after generation: a Flux CR a caller adds to the walked tree keeps the `spec.path` it was given.
+What it still collapses in a walked tree is a single child directory that renders no bundle and has no directory below it: a node that has neither a bundle nor child nodes, or, under `NodeGrouping: GroupFlat`, a node with the bundle-less nodes below it merged into its directory. That is a `ClusterName` directory over such a root node, or a root node over one such child. The absorbing layout takes over the collapsed layout's origin nodes (see [Layout origins](#layout-origins)). A hand-built tree, which carries no origins, collapses as before. Nothing is rewritten after generation: a Flux CR a caller adds to the walked tree keeps the `spec.path` it was given.
 
 **Breaking change (go-kure/kure#979).** Before, a single child that rendered a bundle was collapsed too: a root node `apps` with one bundle under `ClusterName: cluster-name` was written to `cluster-name/`. It is now written to `cluster-name/apps/<bundle>/` with or without the flag (see [The root node's bundles](#the-root-nodes-bundles)).
 

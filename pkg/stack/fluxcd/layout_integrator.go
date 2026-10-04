@@ -1477,6 +1477,26 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 			fluxDir = child
 		}
 	}
+	// The directory must be free. The root node's bundle is rendered in a
+	// directory named after it (go-kure/kure#979), and a child node in one
+	// named after the node: either of them named like the Flux directory
+	// would share it with the Flux resources, which the writers refuse only
+	// when the tree is written. Names are compared as the writers compare
+	// directories, case-insensitively.
+	for _, child := range ml.Children {
+		if child == nil || !strings.EqualFold(child.Name, DefaultFluxDirName) {
+			continue
+		}
+		// A node's directory is named after the node, whatever it renders.
+		switch {
+		case len(child.OriginNodes()) > 0:
+			return errors.Errorf("node %q is rendered to %q, the directory the Flux resources are written to under FluxSeparate: rename the node, or use an integrated placement",
+				child.OriginNodes()[0].Name, child.FullRepoPath())
+		case len(child.OriginBundles()) > 0:
+			return errors.Errorf("bundle %q is rendered to %q, the directory the Flux resources are written to under FluxSeparate: rename the bundle, or use an integrated placement",
+				child.OriginBundles()[0].Name, child.FullRepoPath())
+		}
+	}
 	// The flux-system directory is applied beside the rest of the tree, so
 	// a generated Kustomization's identity must not already be taken there
 	// (an earlier flux-system child is compared as a whole below).

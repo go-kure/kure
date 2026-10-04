@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -459,10 +460,11 @@ func TestReconcileOrder_WaitOnAppliedCR(t *testing.T) {
 }
 
 // TestReconcileOrder_RootBundleAppliesNoCR pins that the root node's bundle is
-// in no such cycle: its Kustomization builds the bundle's own directory, which
-// holds no CR, so it can wait while the bundle of a child node depends on it,
-// in every placement (go-kure/kure#979). Before, it built the root node's
-// directory, the CRs the bootstrap applies included.
+// in no such cycle with a child node's bundle: its Kustomization builds the
+// bundle's own directory, which holds no child node's CR (here none at all),
+// so it can wait while the bundle of a child node depends on it, in every
+// placement (go-kure/kure#979). Before, it built the root node's directory,
+// the CRs the bootstrap applies included.
 func TestReconcileOrder_RootBundleAppliesNoCR(t *testing.T) {
 	yes := true
 	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
@@ -485,6 +487,27 @@ func TestReconcileOrder_RootBundleAppliesNoCR(t *testing.T) {
 		}
 		if unit := layoutAtPath(t, ml, "r/a"); len(crNames(unit.Resources)) != 0 {
 			t.Errorf("%s: r/a holds the CRs %v, want none", placement, crNames(unit.Resources))
+		}
+	}
+}
+
+// TestRootBundleDirectoryHostsItsUmbrellaChildren: the directory of the root
+// node's bundle holds no child node's CR, but it still hosts the CRs of the
+// bundle's umbrella children under the integrated placements, as every
+// bundle's directory does. The root node's directory hosts the bundle's own.
+func TestRootBundleDirectoryHostsItsUmbrellaChildren(t *testing.T) {
+	for _, placement := range integratedPlacements {
+		u := srBundle("u", cmApp("u-app"))
+		a := srBundle("a", cmApp("a-app"))
+		a.Children = []*stack.Bundle{u}
+		rules := propertyGroupings["nodeOnly"]
+		rules.FluxPlacement = placement
+		ml := integrated(t, &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "r", Bundle: a}}, rules)
+		if got := crNames(layoutAtPath(t, ml, "r/a").Resources); !slices.Contains(got, "u") {
+			t.Errorf("%s: r/a holds the CRs %v, want the umbrella child's (u)", placement, got)
+		}
+		if got := crNames(ml.Resources); !reflect.DeepEqual(got, []string{"a"}) {
+			t.Errorf("%s: r holds the CRs %v, want the root bundle's only (a)", placement, got)
 		}
 	}
 }

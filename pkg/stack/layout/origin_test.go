@@ -423,6 +423,15 @@ func TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory(t *testing.T) {
 			if _, err := layout.WalkClusterByPackage(twoTier("web", "web-bundle"), rules); err == nil || !strings.Contains(err.Error(), want) {
 				t.Errorf("WalkClusterByPackage: got %v, want the refusal %q", err, want)
 			}
+			// A name that differs only in case is one directory to the
+			// writers, so it is refused here as well.
+			const wantCase = `node "web" and bundle "WEB" are both rendered to directory`
+			if _, err := layout.WalkCluster(twoTier("WEB", "web-bundle"), rules); err == nil || !strings.Contains(err.Error(), wantCase) {
+				t.Errorf("WalkCluster: got %v, want the refusal %q", err, wantCase)
+			}
+			if _, err := layout.WalkClusterByPackage(twoTier("WEB", "web-bundle"), rules); err == nil || !strings.Contains(err.Error(), wantCase) {
+				t.Errorf("WalkClusterByPackage: got %v, want the refusal %q", err, wantCase)
+			}
 		})
 	}
 
@@ -436,17 +445,24 @@ func TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory(t *testing.T) {
 	if got, want := collectRepoPaths(ml), []string{"platform", "platform/web"}; !slices.Equal(got, want) {
 		t.Errorf("NodeGrouping flat: layouts = %v, want %v", got, want)
 	}
-	// By name the walk never refused the pair and still does not.
-	if _, err := layout.WalkCluster(twoTier("web", "web-bundle"), groupByName); err != nil {
-		t.Errorf("BundleGrouping by name: %v", err)
+	// By name the walk never refused the pair and still does not. It is no
+	// way around the refusal: the bundle's directory is platform/web there
+	// too, and the writers refuse the tree.
+	ml, err := layout.WalkCluster(twoTier("web", "web-bundle"), groupByName)
+	if err != nil {
+		t.Fatalf("BundleGrouping by name: %v", err)
+	}
+	if err := ml.WriteToDisk(t.TempDir()); err == nil || !strings.Contains(err.Error(), "resolve to the same directory") {
+		t.Errorf("BundleGrouping by name, WriteToDisk: got %v, want the writers' same-directory refusal", err)
 	}
 }
 
 // TestFlattenSingleTier_KeepsBundleDirectories: FlattenSingleTier never
 // collapses a directory that renders a bundle into the top of the tree, which
 // has no parent to host its Flux Kustomization (go-kure/kure#979). What it
-// still collapses is a single child node that has neither bundle nor children,
-// and that node's origin moves with it.
+// still collapses is a single child directory that renders no bundle and has
+// none below it: a node with neither bundle nor children, or one with the
+// bundle-less nodes below it merged into it. Its node origins move with it.
 func TestFlattenSingleTier_KeepsBundleDirectories(t *testing.T) {
 	flatten := func(r layout.LayoutRules) layout.LayoutRules {
 		r.FlattenSingleTier = true
@@ -496,6 +512,14 @@ func TestFlattenSingleTier_KeepsBundleDirectories(t *testing.T) {
 			t.Fatalf("layouts = %v, want %v", got, want)
 		}
 		assertOrigin(t, ml, []string{"platform", "empty"}, nil)
+	})
+	t.Run("bundle-less nodes merged into one directory collapse together", func(t *testing.T) {
+		root := &stack.Node{Name: "apps", Children: []*stack.Node{{Name: "empty", Children: []*stack.Node{{Name: "deeper"}}}}}
+		ml := walk(t, &stack.Cluster{Name: "demo", Node: root}, flatten(withClusterName(nodeFlat, "prod")))
+		if got, want := collectRepoPaths(ml), []string{"prod"}; !slices.Equal(got, want) {
+			t.Fatalf("layouts = %v, want %v", got, want)
+		}
+		assertOrigin(t, ml, []string{"apps", "empty", "deeper"}, nil)
 	})
 }
 

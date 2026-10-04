@@ -612,6 +612,45 @@ func TestGenerateFromCluster_ApplicationPathIsLayoutDir(t *testing.T) {
 	}
 }
 
+// TestCreateLayoutWithResources_RefusesLayoutInTheArgoDirectory: the root
+// node's bundle is rendered in a directory named after it, inside the root
+// node's (go-kure/kure#979), and a child node in one named after the node.
+// Named like the Applications' directory, either would share it with them, so
+// the call refuses it instead of returning a tree the writers refuse.
+func TestCreateLayoutWithResources_RefusesLayoutInTheArgoDirectory(t *testing.T) {
+	named := func(bundle, node string) *stack.Cluster {
+		c := argoTestCluster()
+		c.Node.Bundle.Name = bundle
+		c.Node.Children[0].Name = node
+		return c
+	}
+	for name, tc := range map[string]struct {
+		c    *stack.Cluster
+		want string
+	}{
+		"root bundle":            {named("argocd", "web"), `bundle "argocd" is rendered to "platform/argocd", the directory the ArgoCD Applications are written to`},
+		"root bundle, case only": {named("ArgoCD", "web"), `bundle "ArgoCD" is rendered to "platform/ArgoCD", the directory the ArgoCD Applications are written to`},
+		"child node":             {named("platform-bundle", "argocd"), `node "argocd" is rendered to "platform/argocd", the directory the ArgoCD Applications are written to`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Engine().CreateLayoutWithResources(tc.c, layout.DefaultLayoutRules()); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("got %v, want the refusal %q", err, tc.want)
+			}
+		})
+	}
+	// Under a ClusterName the Applications' directory is beside the root
+	// node's, so the same names are written.
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "prod"
+	result, err := Engine().CreateLayoutWithResources(named("argocd", "web"), rules)
+	if err != nil {
+		t.Fatalf("ClusterName prod: %v", err)
+	}
+	if err := result.(*layout.ManifestLayout).WriteToDisk(t.TempDir()); err != nil {
+		t.Errorf("ClusterName prod, WriteToDisk: %v", err)
+	}
+}
+
 // TestCreateLayoutWithResources_UsesWalkedRules: the Applications point at the
 // directories of the layout this call walked with the caller's rules, not at
 // a second derivation.

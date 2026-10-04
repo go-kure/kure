@@ -1417,7 +1417,8 @@ func TestWalkCluster_ClusterName_UnnamedRoot_WithChildNodes(t *testing.T) {
 
 // TestWalkCluster_ClusterName_UnnamedRoot_WithUmbrella verifies that an
 // unnamed root node with a bundle that has umbrella children produces
-// umbrella child sub-layouts under the cluster layout.
+// umbrella child sub-layouts under the bundle's directory, which is inside the
+// cluster layout (go-kure/kure#979).
 func TestWalkCluster_ClusterName_UnnamedRoot_WithUmbrella(t *testing.T) {
 	childApp := makeUmbrellaApp("child-app", "cm-child")
 	childBundle := &stack.Bundle{
@@ -1441,9 +1442,17 @@ func TestWalkCluster_ClusterName_UnnamedRoot_WithUmbrella(t *testing.T) {
 	if ml == nil {
 		t.Fatalf("nil layout returned")
 	}
-	// Umbrella child appears under the cluster layout (unnamed root)
-	if len(ml.Children) == 0 {
-		t.Fatalf("expected umbrella child layouts under cluster layout, got 0")
+	// The cluster layout (the unnamed root's) renders no bundle: the umbrella
+	// has a directory inside it, and its child one inside that.
+	unit := ml.OriginUnit()
+	if unit == nil || unit.FullRepoPath() != "demo/platform" {
+		t.Fatalf("expected the umbrella's directory at demo/platform, got %v", collectRepoPaths(ml))
+	}
+	if len(unit.Children) != 1 {
+		t.Fatalf("expected one umbrella child layout under %q, got %v", unit.FullRepoPath(), collectRepoPaths(ml))
+	}
+	if leaf := unit.Children[0]; leaf.Name != "leaf" || leaf.FullRepoPath() != "demo/platform/leaf" || !leaf.UmbrellaChild {
+		t.Errorf("umbrella child = %q at %q (UmbrellaChild %v), want leaf at demo/platform/leaf, flagged", leaf.Name, leaf.FullRepoPath(), leaf.UmbrellaChild)
 	}
 }
 
