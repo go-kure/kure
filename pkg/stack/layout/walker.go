@@ -412,6 +412,7 @@ func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) (
 		if err := augmentAppLayout(app, appLayout); err != nil {
 			return nil, err
 		}
+		inheritFileNaming(appLayout)
 		for _, gen := range appLayout.ConfigMapGenerators {
 			all = append(all, generatedConfigMap(gen.Name))
 		}
@@ -447,6 +448,22 @@ func augmentAppLayout(app *stack.Application, ml *ManifestLayout) error {
 		return errors.Wrapf(err, "augment layout for application %q", app.Name)
 	}
 	return nil
+}
+
+// inheritFileNaming gives every layout below ml that leaves FileNaming unset
+// its parent's, so the layouts an augmenter added are named like the tree
+// they sit in. A layout that sets its own keeps it, and passes it on to the
+// layouts below it.
+func inheritFileNaming(ml *ManifestLayout) {
+	for _, child := range ml.Children {
+		if child == nil {
+			continue
+		}
+		if child.FileNaming == FileNamingUnset {
+			child.FileNaming = ml.FileNaming
+		}
+		inheritFileNaming(child)
+	}
 }
 
 // wantsOwnLayout reports whether an augmenting config wants its own layout.

@@ -20,10 +20,14 @@ type ManifestLayout struct {
 	FilePer             FileExportMode
 	ApplicationFileMode ApplicationFileMode
 	Mode                KustomizationMode
-	FluxPlacement       FluxPlacement  // Track flux placement mode for kustomization generation
-	FileNaming          FileNamingMode // Controls resource file naming pattern
-	Resources           []client.Object
-	Children            []*ManifestLayout
+	FluxPlacement       FluxPlacement // Track flux placement mode for kustomization generation
+	// FileNaming is the naming pattern of this layout's resource files under
+	// WriteToDisk and WriteToTar. The writers read it from the layout itself,
+	// never from its parent: the walkers set it from LayoutRules.FileNaming,
+	// and give a layout an augmenter added and left unset its parent's.
+	FileNaming FileNamingMode
+	Resources  []client.Object
+	Children   []*ManifestLayout
 	// ExtraFiles are arbitrary files written alongside resource YAMLs in this
 	// layout's directory. Typical use: a values.yaml referenced by a
 	// configMapGenerator entry. Augmenters (LayoutAugmenter) attach these.

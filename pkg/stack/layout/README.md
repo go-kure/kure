@@ -216,6 +216,26 @@ Controls how resource YAML files are named:
 
 `FileNamingKindName` drops the namespace prefix, which is useful when each application already has its own directory (e.g., Pattern A / CentralizedControlPlane). The naming mode is propagated through all writers: `WriteManifest`, `WriteToDisk`, and `WriteToTar`.
 
+`WriteManifest` names every layout's files from its `Config`. `WriteToDisk` and `WriteToTar` name
+each layout's files from that layout's own `FileNaming`, which `LayoutRules.FileNaming` sets across
+the tree:
+
+- every layout a walker creates carries the rules' `FileNaming`;
+- a layout an augmenter adds and leaves unset takes its parent's, at any depth;
+- the `flux-system/` directory of `FluxSeparate` takes the rules' (the root layout's when the rules
+  passed to `IntegrateWithLayout` leave it unset);
+- a layout that sets its own `FileNaming` keeps it, and the layouts below it inherit that one.
+
+A layout added to a tree by hand, outside a walker, is not touched: set its `FileNaming` yourself.
+
+**Breaking change (go-kure/kure#976).** Before, the `flux-system/` directory and the layouts an
+augmenter added always used the default pattern unless the augmenter set `FileNaming` itself. With
+`FileNamingKindName` (the `CentralizedControlPlane` preset included) those files are renamed:
+`flux-system/flux-system-kustomization-<name>.yaml` becomes `flux-system/kustomization-<name>.yaml`,
+and an augmenter layout's `<namespace>-<kind>-<name>.yaml` becomes `<kind>-<name>.yaml`. Each
+directory's `kustomization.yaml` lists the new names. Update anything outside kure that reads those
+files by name. An augmenter that needs the old names sets `FileNamingDefault` on the layouts it adds.
+
 ### Kustomization Generation
 - **KustomizationExplicit**: Lists all manifest files explicitly
 - **KustomizationRecursive**: Writes no `kustomization.yaml` into the layout's directory; every
@@ -431,6 +451,9 @@ type LayoutIntentAugmenter interface {
 | `GroupFlat` | own child layout + `AugmentLayout` | resources merged into the bundle's directory, `AugmentLayout` **not** called (no layout exists to pass it) |
 
 A config that implements only `LayoutAugmenter` keeps today's presence-only behaviour unchanged.
+
+After `AugmentLayout` returns, every layout below the per-app layout that leaves `FileNaming` unset
+takes its parent's (see [File Naming Modes](#file-naming-modes)).
 
 #### Sub-Layout Children and Flux Integration
 

@@ -187,6 +187,14 @@ Kustomization: it lists the manifests and subdirectories kustomize builds from i
 Flux Kustomizations are the `flux-system-kustomization-*.yaml` files, which
 `flux-system/kustomization.yaml` lists.
 
+Those names are the default pattern, `{namespace}-{kind}-{name}.yaml`. Under `WriteToDisk` and
+`WriteToTar`, `LayoutRules.FileNaming` names the files of every layout of the tree, `flux-system/`
+and the layouts an augmenter adds included: with `FileNamingKindName` the directory holds
+`kustomization-cert-manager.yaml` and `kustomization-web-tier.yaml`. Before go-kure/kure#976 those
+two kinds of layout kept the default pattern whatever the rules said, so their files are renamed
+for a tree written with `FileNamingKindName`; see the
+[Layout Engine reference](/api-reference/layout/#file-naming-modes).
+
 ## Layout Configuration
 
 The [Layout Engine](/api-reference/layout) supports multiple grouping and file organization strategies:

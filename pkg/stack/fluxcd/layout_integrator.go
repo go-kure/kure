@@ -87,7 +87,7 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 
 	var err error
 	if rules.FluxPlacement == layout.FluxSeparate {
-		err = li.addSeparateFluxToLayout(ml, c)
+		err = li.addSeparateFluxToLayout(ml, c, rules.FileNaming)
 	} else {
 		// Both inline placements put Flux CRs in the tree. They differ only
 		// in granularity: PerLayout emits a CR for every layout node (incl.
@@ -1295,8 +1295,9 @@ func effectiveNamespace(obj client.Object) string {
 // resources, generated from the layout itself (GenerateFromLayout) so every
 // spec.path is a directory this layout writes. A flux-system child left by an
 // earlier integration is kept when it holds the same resources and is an
-// error when it does not.
-func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster) error {
+// error when it does not. A directory this call creates names its files by
+// fileNaming, the rules'; left unset, by ml's own.
+func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster, fileNaming layout.FileNamingMode) error {
 	fluxResources, err := li.Generator.GenerateFromLayout(ml, c)
 	if err != nil {
 		return errors.ResourceValidationError("Cluster", c.Name, "flux-resources",
@@ -1381,11 +1382,19 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	// this layout as a child, so it must sit below ml. Joined onto
 	// ml.Namespace instead, it landed beside ml when ml had a Name, and the
 	// reference dangled (go-kure/kure#771).
+	//
+	// FileNaming is the rules', so the directory's files are named like the
+	// rest of the tree; rules that leave it unset take ml's, the parent's
+	// (go-kure/kure#976).
+	if fileNaming == layout.FileNamingUnset {
+		fileNaming = ml.FileNaming
+	}
 	fluxLayout := &layout.ManifestLayout{
-		Name:      DefaultFluxDirName,
-		Namespace: ml.FullRepoPath(),
-		FilePer:   layout.DefaultLayoutRules().FilePer,
-		Resources: fluxResources,
+		Name:       DefaultFluxDirName,
+		Namespace:  ml.FullRepoPath(),
+		FilePer:    layout.DefaultLayoutRules().FilePer,
+		FileNaming: fileNaming,
+		Resources:  fluxResources,
 	}
 
 	ml.Children = append(ml.Children, fluxLayout)
