@@ -306,6 +306,19 @@ fmt.Println(provider.Spec.SecretRef.Name, alert.Spec.EventSeverity, receiver.Spe
 ```
 <!-- doc-example:end -->
 
+## Image Automation
+
+The three kinds of `image.toolkit.fluxcd.io/v1` each have a constructor:
+`CreateImageRepository` and `CreateImagePolicy` (types from
+`github.com/fluxcd/image-reflector-controller/api`) and `CreateImageUpdateAutomation`
+(type from `github.com/fluxcd/image-automation-controller/api`). All three are
+namespaced and carry identity only.
+
+`ImageRepository` and `ImagePolicy` have no setters: every field of their specs is
+assigned directly on the upstream type. `ImageUpdateAutomation` keeps the pointer
+setters `SetImageUpdateAutomationGitSpec`, `SetImageUpdateAutomationPolicySelector`
+and `SetImageUpdateAutomationUpdateStrategy`.
+
 ## Flux Operator
 
 <!-- doc-example: pkg/kubernetes/fluxcd ExampleCreateFluxInstance -->

@@ -502,8 +502,8 @@ is an explicit opt-in to the upstream behaviour: a manifests base is downloaded 
 generation time — the named release for a `vX.Y.Z` value, the latest release for anything else
 (upstream selects a release only for a `v`-prefixed version). `TestVendoredPinsMatchGoMod` fails when
 `GotkVersion` or `FluxOperatorVersion` differs from its `go.mod` require, or when a controller
-image in the gotk bundle differs from the matching `fluxcd/<controller>/api` require (controllers
-without an API module, such as image-reflector-controller, are not compared); see
+image in the gotk bundle differs from the matching `fluxcd/<controller>/api` require (a controller
+whose API module kure does not require is not compared); see
 `internal/gotk` for the refresh procedure after a flux2 bump.
 
 <!-- doc-example: pkg/stack/fluxcd ExampleWorkflowEngine_GenerateBootstrap -->

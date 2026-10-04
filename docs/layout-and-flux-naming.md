@@ -564,6 +564,13 @@ eight generic Lists; one nested deeper is refused. Both shapes used to be refuse
 caller that relied on that refusal, for instance to reject list documents in its input, now gets
 the objects and has to check for lists itself before parsing.
 
+**Shipped: the Flux image kinds.** `ImageRepository` and `ImagePolicy`
+(image.toolkit.fluxcd.io/v1, namespaced) have a generated constructor in `pkg/kubernetes/fluxcd`.
+Their Go types come from `github.com/fluxcd/image-reflector-controller/api`, a new direct
+dependency at the version the pinned flux2 release uses; it rides the `fluxcd` update group with
+the other controller API modules, and the vendored install bundle already carried its two
+definitions. Parsing changes for them as it did for the ten kinds above.
+
 **Still open: the kinds that need a new module dependency.** The ticket decides each one; a kind
 that is added meets the same criteria.
 
@@ -571,7 +578,6 @@ that is added meets the same criteria.
 |---|---|---|
 | `APIService` | `k8s.io/kube-aggregator` | a new dependency for one kind |
 | `VerticalPodAutoscaler` | `k8s.io/autoscaler/vertical-pod-autoscaler` | a new dependency; not an upstream core API |
-| `ImageRepository`, `ImagePolicy` | `github.com/fluxcd/image-reflector-controller/api` | a new dependency; kure has only image-automation-controller today |
 
 The same list, with what a caller does in the meantime, is in `pkg/kubernetes/README.md` under
 "Base kinds covered".

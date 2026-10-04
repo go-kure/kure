@@ -57,11 +57,12 @@ their signature, so a cluster-scoped kind takes only a name
 The base kinds go beyond workloads and RBAC: `PriorityClass`, `EndpointSlice`,
 `Lease`, `RuntimeClass`, the two webhook configurations and the four admission
 policy kinds each have a wrapper too (`kubernetes.CreatePriorityClass("critical")`,
-`kubernetes.CreateLease("leader", "kube-system")`). `APIService`,
-`VerticalPodAutoscaler`, `ImageRepository` and `ImagePolicy` have none: their Go
+`kubernetes.CreateLease("leader", "kube-system")`). The Flux image kinds
+`ImageRepository` and `ImagePolicy` have theirs in `pkg/kubernetes/fluxcd`, next to
+`ImageUpdateAutomation`. `APIService` and `VerticalPodAutoscaler` have none: their Go
 types live in modules kure does not depend on. The
 [builder contract](/api-reference/kubernetes-builders/) lists what is covered and
-why those four are not.
+why those two are not.
 
 A kind with a wrapper is also a kind `io.ParseYAML` returns as its upstream Go
 type. That changes what a parse returns when kure starts registering a kind: a

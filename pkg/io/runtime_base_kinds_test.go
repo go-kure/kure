@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	reflectorv1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -37,6 +38,10 @@ func TestParseYAML_BaseKindsAreTyped(t *testing.T) {
 		{"admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicyBinding", &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}},
 		{"admissionregistration.k8s.io/v1", "MutatingAdmissionPolicy", &admissionregistrationv1.MutatingAdmissionPolicy{}},
 		{"admissionregistration.k8s.io/v1", "MutatingAdmissionPolicyBinding", &admissionregistrationv1.MutatingAdmissionPolicyBinding{}},
+		// The Flux image kinds, registered from image-reflector-controller's API
+		// module, changed the same way.
+		{"image.toolkit.fluxcd.io/v1", "ImageRepository", &reflectorv1.ImageRepository{}},
+		{"image.toolkit.fluxcd.io/v1", "ImagePolicy", &reflectorv1.ImagePolicy{}},
 	}
 	for _, c := range cases {
 		doc := fmt.Sprintf("apiVersion: %s\nkind: %s\nmetadata:\n  name: sample\n", c.apiVersion, c.kind)

@@ -14,6 +14,7 @@ import (
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	imagev1 "github.com/fluxcd/image-automation-controller/api/v1"
+	reflectorv1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
@@ -91,6 +92,7 @@ func registerAllSchemes() error {
 		fluxv1.AddToScheme,
 		helmv2.AddToScheme,
 		imagev1.AddToScheme,
+		reflectorv1.AddToScheme,
 		kustv1.AddToScheme,
 		notificationv1.AddToScheme,
 		notificationv1beta3.AddToScheme,

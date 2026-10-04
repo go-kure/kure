@@ -9,6 +9,7 @@ import (
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
+	reflectorv1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
@@ -195,6 +196,10 @@ func TestScheme_RegisteredTypes(t *testing.T) {
 		{&admissionregistrationv1.ValidatingAdmissionPolicyBinding{}, admissionregistrationv1.SchemeGroupVersion.WithKind("ValidatingAdmissionPolicyBinding")},
 		{&admissionregistrationv1.MutatingAdmissionPolicy{}, admissionregistrationv1.SchemeGroupVersion.WithKind("MutatingAdmissionPolicy")},
 		{&admissionregistrationv1.MutatingAdmissionPolicyBinding{}, admissionregistrationv1.SchemeGroupVersion.WithKind("MutatingAdmissionPolicyBinding")},
+		// The Flux image kinds of image-reflector-controller share the group
+		// version image-automation-controller registers ImageUpdateAutomation in.
+		{&reflectorv1.ImageRepository{}, reflectorv1.GroupVersion.WithKind("ImageRepository")},
+		{&reflectorv1.ImagePolicy{}, reflectorv1.GroupVersion.WithKind("ImagePolicy")},
 	}
 
 	for _, c := range baseKinds {
