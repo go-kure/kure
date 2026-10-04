@@ -50,9 +50,11 @@ Which kinds are typed follows the scheme, so it widens when kure registers more.
 `PriorityClass`, `EndpointSlice`, `Lease`, `RuntimeClass`, the two webhook
 configurations and the four admission policy kinds are registered and come back as
 their `k8s.io/api` types in both modes; a caller that matched them as
-`*unstructured.Unstructured` must match the typed object instead. `APIService` and
-`VerticalPodAutoscaler` are not registered and still need `AllowUnstructured`. The
-full list is the [generated table](/api-reference/api-tables/).
+`*unstructured.Unstructured` must match the typed object instead. The same holds for
+`APIService`, typed as its `k8s.io/kube-aggregator` type, and for the Flux
+`ImageRepository` and `ImagePolicy`. `VerticalPodAutoscaler` is not registered and
+still needs `AllowUnstructured`. The full list is the
+[generated table](/api-reference/api-tables/).
 
 A list document is flattened into its items; the list itself is never returned.
 The items come back in the list's order and take the list's place in a

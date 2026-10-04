@@ -44,6 +44,7 @@ func (k Kind) Key() string { return k.GVK.Group + "/" + k.GVK.Kind }
 var packageRoutes = []struct{ prefix, pkg string }{
 	{"k8s.io/api/", ""},
 	{"k8s.io/apiextensions-apiserver/", ""},
+	{"k8s.io/kube-aggregator/", ""},
 	{"sigs.k8s.io/gateway-api/", ""},
 	{"github.com/cert-manager/", "certmanager"},
 	{"github.com/cilium/", "cilium"},

@@ -12,8 +12,8 @@ live-cluster upgrade effects are not a constraint.
 
 - **kure** generates YAML objects from Go APIs: base Kubernetes objects with their full spec, the
   layout of those objects in directories, and the Flux objects that deliver them. Covering every
-  base kind is its responsibility; the four kinds still without a constructor are listed under
-  [go-kure/kure#981](https://github.com/go-kure/kure/issues/981).
+  base kind is its responsibility; the one kind left out of scope is recorded, with the reason,
+  under [go-kure/kure#981](https://github.com/go-kure/kure/issues/981).
 - **An application-level consumer** turns one application into kure's model
   (`Cluster`, `Node`, `Bundle`, `Application`). It is delivery-agnostic: it puts no Flux
   Kustomizations, health checks, reconciliation settings or Flux annotations on top of an
@@ -584,8 +584,9 @@ The fluxcd README claims tied to the behaviour bugs change with
 
 ### Builders for missing base kinds ([go-kure/kure#981](https://github.com/go-kure/kure/issues/981))
 
-**Target.** kure supports every base object with its full spec. Each kind below gets a generated
-`Create<Kind>` from its registered scheme (`mise run builders:generate`).
+**Shipped.** kure supports every base object with its full spec. Each kind below has a generated
+`Create<Kind>` from its registered scheme (`mise run builders:generate`). One kind is out of scope,
+`VerticalPodAutoscaler`; the reason is at the end of this section.
 
 **Shipped: the kinds `k8s.io/api` provides.** Ten kinds have a generated constructor that sets
 identity only, are covered by the whole-object identity test and appear in the generated kind
@@ -621,21 +622,28 @@ dependency at the version the pinned flux2 release uses; it rides the `fluxcd` u
 the other controller API modules, and the vendored install bundle already carried its two
 definitions. Parsing changes for them as it did for the ten kinds above.
 
-**Still open: the kinds that need a new module dependency.** The ticket decides each one; a kind
-that is added meets the same criteria.
+**Shipped: `APIService`.** `APIService` (apiregistration.k8s.io/v1, cluster-scoped) has a generated
+constructor in `pkg/kubernetes`. It is a built-in whose Go type lives in `k8s.io/kube-aggregator`,
+a new direct dependency of which kure imports the API package only. The module is pinned in the
+`replace` block of `go.mod` at the release of the other `k8s.io` modules and rides the `kubernetes`
+update group with them. Parsing changes for it as it did for the kinds above, and `pkg/manifest`
+answers its scope from the generated table: it was the last entry of the residual list, which is
+empty now.
 
-| Kinds | Go type lives in | Why not yet |
-|---|---|---|
-| `APIService` | `k8s.io/kube-aggregator` | a new dependency for one kind |
-| `VerticalPodAutoscaler` | `k8s.io/autoscaler/vertical-pod-autoscaler` | a new dependency; not an upstream core API |
-
-The same list, with what a caller does in the meantime, is in `pkg/kubernetes/README.md` under
-"Base kinds covered".
+**Out of scope: `VerticalPodAutoscaler`.** It gets no constructor and is not registered, for three
+reasons. Its Go type lives in `k8s.io/autoscaler/vertical-pod-autoscaler`, which is the whole
+autoscaler component and not an API-only module, and the kind is not part of the Kubernetes API.
+Requiring that module moves the versions of 17 indirect dependencies kure shares with its other
+modules (measured at v1.8.0). And registering its group version also registers
+`VerticalPodAutoscalerCheckpoint`, the autoscaler's internal state. What stays available: parse it
+with `AllowUnstructured`, or build it with the module's own types in the calling program. The same
+is in `pkg/kubernetes/README.md` under "Base kinds covered".
 
 **Tests.** The identity test (`pkg/kubernetes/identity_test.go`) compares each constructor's whole
 object, and the generated `pkg/kubernetes/zz_generated_create_test.go` calls each wrapper by name.
 `pkg/kubernetes/scheme_test.go` asserts each kind's registration.
-`pkg/io/runtime_base_kinds_test.go` parses each kind in both modes and keeps `APIService` as the
-control that is still refused. `pkg/io/runtime_lists_test.go` covers list documents in both modes:
-a typed list of each kind, an empty list, a generic `List` with mixed items, and the order of a
-multi-document stream.
+`pkg/io/runtime_base_kinds_test.go` parses each kind in both modes and keeps
+`VerticalPodAutoscaler` as the control: refused by a strict parse, untyped with `AllowUnstructured`. `pkg/io/runtime_lists_test.go` covers list documents in both modes:
+a typed list of each kind, an empty list, a generic `List` with mixed items, the order of a
+multi-document stream, an item that does not decode or is `null` in either shape, and the nesting
+bound.

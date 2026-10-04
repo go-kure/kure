@@ -38,6 +38,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -86,6 +87,7 @@ func registerAllSchemes() error {
 		nodev1.AddToScheme,
 		admissionregistrationv1.AddToScheme,
 		apiextensionsv1.AddToScheme,
+		apiregistrationv1.AddToScheme,
 		cmacme.AddToScheme,
 		certv1.AddToScheme,
 		cmmeta.AddToScheme,

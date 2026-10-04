@@ -28,6 +28,7 @@ type generatedKind struct {
 // generatedKinds lists every generated wrapper; the identity test walks the
 // scheme and fails on any registered kind missing here.
 var generatedKinds = []generatedKind{
+	{GVK: schema.GroupVersionKind{Group: "apiregistration.k8s.io", Version: "v1", Kind: "APIService"}, Namespaced: false, Create: func(name, _ string) client.Object { return kubernetes.CreateAPIService(name) }},
 	{GVK: schema.GroupVersionKind{Group: "gateway.networking.k8s.io", Version: "v1", Kind: "BackendTLSPolicy"}, Namespaced: true, Create: func(name, namespace string) client.Object { return kubernetes.CreateBackendTLSPolicy(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Binding"}, Namespaced: true, Create: func(name, namespace string) client.Object { return kubernetes.CreateBinding(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "storage.k8s.io", Version: "v1", Kind: "CSIDriver"}, Namespaced: false, Create: func(name, _ string) client.Object { return kubernetes.CreateCSIDriver(name) }},
