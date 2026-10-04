@@ -199,7 +199,9 @@ FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since go
 | `FluxIntegratedPerLayout`, augmenter application named like its bundle's Kustomization | refused as a name used twice | same |
 | Two directory layouts resolving to one directory | refused by the writers | `checkLayoutTree` in `pkg/stack/layout/treecheck.go` |
 | Two single-file layouts (`AppFileSingle`) in one directory | accepted when their file names differ; refused when they resolve to the same file | `checkLayoutTree` |
-| Dotted names, names over 63 characters | accepted unchanged | none |
+| Dotted names | accepted unchanged | none |
+| A bundle's Kustomization name (its `KustomizationName`, or its name without one) over 63 characters | refused by the Flux workflow where it builds the Kustomization (go-kure/kure#978); accepted by `Bundle.Validate` and by the ArgoCD workflow | `checkKustomizationName` in `resource_generator.go` |
+| A Kustomization name over 63 characters that is not a bundle's: one derived for a layout, a `NamedDependsOn` entry | accepted unchanged | none |
 | A hand-built tree with the same Kustomization twice in one layout, or in layouts one kustomize build includes | refused by the writers, as for any object held twice | `checkResourceIdentities` (one layout) and `checkBuildIdentities` (one build), both called from `checkLayoutTree` |
 | A hand-built tree with the same Kustomization in layouts that separate builds apply | refused by the writers, in any tree: Kustomization namespace/name is unique across the tree (go-kure/kure#977) | `checkKustomizationNames` in `treecheck.go` |
 | An `UmbrellaChild` layout, or any other directory its parent does not list, that no Kustomization applies | refused by the writers when the root is marked `SetFluxBuild` (go-kure/kure#977); written, and listed by nobody, in an unmarked tree | `checkUnappliedLayouts` in `treecheck.go` |
