@@ -627,8 +627,9 @@ symbol name instead of by line.
    error.
 3. The fluxcd README says which layouts get a Kustomization under `FluxIntegratedPerLayout`
    (one per layout that renders bundles, one per bundle-less child layout that is neither an
-   umbrella child nor `AppFileSingle`), and that a layout
-   whose Kustomization name is taken is refused. It keeps today's names; the
+   umbrella child nor `AppFileSingle`), that a layout whose Kustomization name another generated
+   Kustomization uses is refused, and that one already in the tree under that name is kept when
+   it has the same host and `spec.path`. It keeps today's names; the
    naming from [go-kure/kure#973](https://github.com/go-kure/kure/issues/973) is restated there
    when that ships.
 4. The FileNaming doc: nothing was left to do,
