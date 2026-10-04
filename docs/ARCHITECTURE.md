@@ -680,7 +680,7 @@ Each of the three grouping axes (`NodeGrouping`, `BundleGrouping`, `ApplicationG
 independently, whether its level gets a directory. `GroupByName` gives every child node, bundle or
 application a directory inside its parent's; `GroupFlat` renders the level into the layout above it
 (its resources, child layouts and origins). Umbrella child bundles and augmenter applications always
-get a directory. For a node `platform` with bundle `web` holding apps `api` and `ui`:
+get a directory. For a child node `platform` with bundle `web` holding apps `api` and `ui`:
 
 ```
 Node=ByName, Bundle=ByName, App=ByName   Node=ByName, Bundle=Flat, App=Flat (default)
@@ -689,6 +689,10 @@ platform/                                 platform/
     ├── api/
     └── ui/
 ```
+
+The root node is the one exception: its directory renders no bundle, so with a flat
+`BundleGrouping` its bundle keeps a directory inside it, named after the bundle
+(go-kure/kure#979; "The root node's bundles" in `pkg/stack/layout/README.md`).
 
 ### GitOps Integration
 

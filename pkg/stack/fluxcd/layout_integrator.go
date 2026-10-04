@@ -73,6 +73,17 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 
 	rules = normalizeRulesPlacement(rules)
 
+	// A Kustomization is hosted outside the directory it applies: in the
+	// parent of that directory, or in the flux-system directory of the top
+	// of the tree. A top that renders a bundle has no parent, and its
+	// flux-system directory is inside it, so in every placement the
+	// Kustomization that applies it would be part of the build it applies.
+	// layout.WalkCluster returns no such tree: the root node's bundle has a
+	// directory below the root node's (go-kure/kure#979).
+	if bundles := ml.OriginBundles(); len(bundles) > 0 {
+		return errors.Errorf("layout %q renders bundle %q and is the top of the tree: its Flux Kustomization would be part of the build it applies; integrate the whole tree layout.WalkCluster returns", ml.FullRepoPath(), bundles[0].Name)
+	}
+
 	// The integration's placement is the tree's: the writers decide from
 	// each layout's own FluxPlacement whether a child is listed as a
 	// directory or through its CR, so a tree walked with another placement
@@ -298,7 +309,9 @@ type existingCR struct {
 }
 
 // sourceScope is the SourceRef a layout's subtree sources its layout CRs
-// from: that of the nearest layout (itself or an ancestor) rendering bundles.
+// from: that of the nearest layout (itself or an ancestor) rendering bundles,
+// the root node's layout counting as one through its bundles' directory
+// (unitSource).
 type sourceScope struct {
 	ref kustv1.CrossNamespaceSourceReference
 }
@@ -307,11 +320,13 @@ type sourceScope struct {
 // manifests in one walk over the layout tree.
 //
 // Each unit's CR is generated with spec.path = the directory of the layout
-// that renders its bundles, and hosted in the parent of that layout (the root
-// hosts its own), under both placements: a unit's directory is applied by its
-// own Kustomization only, so its CR cannot live inside it, and no parent lists
-// it (the writers skip a child that renders bundles). The unit's Source, if
-// its SourceRef has a URL, is hosted in the root (go-kure/kure#876).
+// that renders its bundles, and hosted in the parent of that layout, under
+// both placements: a unit's directory is applied by its own Kustomization
+// only, so its CR cannot live inside it, and no parent lists it (the writers
+// skip a child that renders bundles). Every unit has a parent:
+// IntegrateWithLayout refuses a tree whose top renders a bundle
+// (go-kure/kure#979). The unit's Source, if its SourceRef has a URL, is
+// hosted in the root (go-kure/kure#876).
 //
 // PerLayout also gives every child layout that is not an umbrella child, not
 // AppFileSingle and renders no bundle (application, augmenter and bundle-less
@@ -654,12 +669,18 @@ func buildScope(b *layout.ManifestLayout) []*layout.ManifestLayout {
 }
 
 // checkRootBuildKeepsHostedSources refuses a Kustomization this pass placed
-// or kept whose build holds the root node's layout — the root bundle's, whose
-// spec.path is the directory the Flux bootstrap applies — when one of its
-// patches applies to, or its postBuild substitution changes, a Source this
-// pass hosted there (go-kure/kure#908). The bootstrap applies that directory
-// with neither, so the two would apply the Source differently and keep
-// overwriting each other.
+// or kept whose build holds the root node's layout, the directory the Flux
+// bootstrap applies, when one of its patches applies to, or its postBuild
+// substitution changes, a Source this pass hosted there (go-kure/kure#908).
+// The bootstrap applies that directory with neither, so the two would apply
+// the Source differently and keep overwriting each other.
+//
+// On a walked tree no bundle's Kustomization has such a build: the root
+// node's layout renders no bundle (go-kure/kure#979). What is left is the
+// layout Kustomization of the root node's layout below a ClusterName wrapper
+// under FluxIntegratedPerLayout, which has patches or postBuild only when it
+// is the caller's own, kept; and a tree built by hand in which the root
+// node's layout renders a bundle below another layout.
 //
 // A patch with a target applies to the Source when the target selects it
 // (patchTargetMatcher); one without is a strategic-merge patch, which applies
@@ -676,7 +697,7 @@ func buildScope(b *layout.ManifestLayout) []*layout.ManifestLayout {
 // Only the Sources this pass placed are checked. When the root build already
 // held a copy the pass did not place (the caller's, an application's or an
 // earlier integration's), hostSourcesOncePerBuild kept that copy instead, and
-// what the root bundle's patches do to it is its owner's.
+// what a Kustomization's patches do to it is its owner's.
 func (p *integratedPlacement) checkRootBuildKeepsHostedSources(top *layout.ManifestLayout) error {
 	var hosted []client.Object
 	for _, obj := range p.root.Resources {
@@ -926,6 +947,8 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 		// The bundles l renders share one Kustomization, so one SourceRef:
 		// generateForUnit refuses them otherwise.
 		scope = sourceScope{ref: sourceRefOf(bundles[0])}
+	} else if ref, ok := unitSource(l); ok {
+		scope = sourceScope{ref: ref}
 	}
 
 	// One Kustomization per directory that renders bundles: the bundles a
@@ -936,7 +959,10 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 			return errors.ResourceValidationError("Bundle", bundles[0].Name, "flux-resources",
 				fmt.Sprintf("failed to generate Flux resources: %v", err), err)
 		}
-		if err := p.add(p.host(l), objs); err != nil {
+		// The CR is hosted by the parent of the layout that renders the
+		// bundles. Every unit has one: IntegrateWithLayout refuses a top
+		// that renders a bundle (go-kure/kure#979).
+		if err := p.add(p.ix.Parent(l), objs); err != nil {
 			return err
 		}
 	}
@@ -985,21 +1011,32 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 	return nil
 }
 
-// host returns the layout whose Resources receive the CR of bundle b, which
-// layout l renders.
-func (p *integratedPlacement) host(l *layout.ManifestLayout) *layout.ManifestLayout {
-	if parent := p.ix.Parent(l); parent != nil {
-		return parent
+// unitSource returns the SourceRef the root node's layout takes from the
+// bundles a flat BundleGrouping merges into its node, and whether it names a
+// source. The walker renders them one directory lower (the root node's layout
+// renders no bundle, go-kure/kure#979); the root node's layout and the layout
+// CRs below it that no other bundle encloses keep their source, as when the
+// bundles were rendered in the layout itself. Under BundleGrouping by name a
+// node's layout has no such directory, and no source of its own.
+func unitSource(l *layout.ManifestLayout) (kustv1.CrossNamespaceSourceReference, bool) {
+	unit := l.OriginUnit()
+	if unit == nil || len(unit.OriginBundles()) == 0 {
+		return kustv1.CrossNamespaceSourceReference{}, false
 	}
-	return l
+	ref := sourceRefOf(unit.OriginBundles()[0])
+	return ref, ref.Kind != "" && ref.Name != ""
 }
 
 // layoutSource returns the SourceRef of child's layout CR: the scope's (the
-// nearest bundle-rendering layout at or above the host), else the one
-// SourceRef the URL-less bundles below child share.
+// nearest bundle-rendering layout at or above the host), else the one of the
+// bundles merged into child's node (unitSource), else the one SourceRef the
+// URL-less bundles below child share.
 func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope sourceScope) (kustv1.CrossNamespaceSourceReference, error) {
 	if scope.ref.Kind != "" && scope.ref.Name != "" {
 		return scope.ref, nil
+	}
+	if ref, ok := unitSource(child); ok {
+		return ref, nil
 	}
 	// Deduplicated by effective value: an omitted namespace is the
 	// generator's DefaultNamespace, as it is for the Kustomization's own

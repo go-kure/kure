@@ -116,7 +116,14 @@ func TestWalkCluster_Origins_GroupByName(t *testing.T) {
 
 func TestWalkCluster_Origins_NodeOnly(t *testing.T) {
 	ml := walk(t, twoTier("platform", "web-bundle"), nodeOnly)
-	assertOrigin(t, layoutAt(t, ml, "platform"), []string{"platform"}, []string{"platform"})
+	// The root node's layout renders no bundle (go-kure/kure#979): its bundle
+	// has a directory under a flat bundle axis too. A child node's has not.
+	assertOrigin(t, layoutAt(t, ml, "platform"), []string{"platform"}, nil)
+	unit := layoutAt(t, ml, "platform/platform")
+	assertOrigin(t, unit, nil, []string{"platform"})
+	if unit.Mode != layout.KustomizationExplicit {
+		t.Errorf("root bundle layout Mode = %q, want %q", unit.Mode, layout.KustomizationExplicit)
+	}
 	assertOrigin(t, layoutAt(t, ml, "platform/web"), []string{"web"}, []string{"web-bundle"})
 }
 
@@ -130,9 +137,10 @@ func umbrellaCluster() *stack.Cluster {
 func TestWalkCluster_Origins_UmbrellaChildren(t *testing.T) {
 	t.Run("nodeOnly", func(t *testing.T) {
 		ml := walk(t, umbrellaCluster(), nodeOnly)
-		assertOrigin(t, layoutAt(t, ml, "platform"), []string{"platform"}, []string{"platform"})
-		assertOrigin(t, layoutAt(t, ml, "platform/svc"), nil, []string{"svc"})
-		assertOrigin(t, layoutAt(t, ml, "platform/svc/svc-db"), nil, []string{"svc-db"})
+		assertOrigin(t, layoutAt(t, ml, "platform"), []string{"platform"}, nil)
+		assertOrigin(t, layoutAt(t, ml, "platform/platform"), nil, []string{"platform"})
+		assertOrigin(t, layoutAt(t, ml, "platform/platform/svc"), nil, []string{"svc"})
+		assertOrigin(t, layoutAt(t, ml, "platform/platform/svc/svc-db"), nil, []string{"svc-db"})
 	})
 	t.Run("GroupByName", func(t *testing.T) {
 		ml := walk(t, umbrellaCluster(), groupByName)
@@ -148,10 +156,13 @@ func TestWalkCluster_Origins_NodeFlatMergesBundles(t *testing.T) {
 	web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", Applications: []*stack.Application{configMapApp("web")}}, Children: []*stack.Node{api}}
 	root := &stack.Node{Name: "platform", Bundle: &stack.Bundle{Name: "platform", Applications: []*stack.Application{configMapApp("core")}}, Children: []*stack.Node{web}}
 	ml := walk(t, &stack.Cluster{Name: "demo", Node: root}, nodeFlat)
-	if len(ml.Children) != 0 {
-		t.Fatalf("nodeFlat root has children %v, want all merged", collectRepoPaths(ml))
+	// Every node merges into the root node's layout; their bundles stay one
+	// unit, in one directory named after the first (go-kure/kure#979).
+	if got, want := collectRepoPaths(ml), []string{"platform", "platform/platform"}; !slices.Equal(got, want) {
+		t.Fatalf("nodeFlat layouts = %v, want %v", got, want)
 	}
-	assertOrigin(t, ml, []string{"platform", "web", "api"}, []string{"platform", "web", "api"})
+	assertOrigin(t, ml, []string{"platform", "web", "api"}, nil)
+	assertOrigin(t, ml.Children[0], nil, []string{"platform", "web", "api"})
 }
 
 func TestWalkCluster_NodeFlatReparentsChildLayouts(t *testing.T) {
@@ -164,15 +175,20 @@ func TestWalkCluster_NodeFlatReparentsChildLayouts(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			root := &stack.Node{Name: "platform", Bundle: &stack.Bundle{Name: "platform"}, Children: []*stack.Node{child}}
 			ml := walk(t, &stack.Cluster{Name: "demo", Node: root}, nodeFlat)
-			// The merged node's child layout moves under the absorbing root
-			// instead of being dropped, and web's node and bundle origins
-			// land on the root.
-			assertOrigin(t, ml, []string{"platform", "web"}, []string{"platform", "web"})
+			// The merged node's child layout moves under the absorbing unit
+			// instead of being dropped: web's node origin lands on the root,
+			// its bundle origin on the unit's directory.
+			assertOrigin(t, ml, []string{"platform", "web"}, nil)
 			if len(ml.Children) != 1 {
-				t.Fatalf("root has %d child layouts, want web's one child layout re-parented", len(ml.Children))
+				t.Fatalf("root has %d child layouts, want the unit's directory only", len(ml.Children))
 			}
-			if got, want := ml.Children[0].Namespace, ml.FullRepoPath(); got != want {
-				t.Errorf("re-parented layout Namespace = %q, want the absorbing root's directory %q", got, want)
+			unit := ml.Children[0]
+			assertOrigin(t, unit, nil, []string{"platform", "web"})
+			if len(unit.Children) != 1 {
+				t.Fatalf("unit has %d child layouts, want web's one child layout re-parented", len(unit.Children))
+			}
+			if got, want := unit.Children[0].Namespace, unit.FullRepoPath(); got != want {
+				t.Errorf("re-parented layout Namespace = %q, want the absorbing unit's directory %q", got, want)
 			}
 		})
 	}
@@ -183,7 +199,8 @@ func TestWalkClusterWithClusterName_Origins_UnnamedRoot(t *testing.T) {
 	t.Run("with bundle", func(t *testing.T) {
 		root := &stack.Node{Bundle: &stack.Bundle{Name: "root", Applications: []*stack.Application{configMapApp("core")}}, Children: []*stack.Node{web}}
 		ml := walk(t, &stack.Cluster{Name: "demo", Node: root}, withClusterName(nodeOnly, "prod"))
-		assertOrigin(t, layoutAt(t, ml, "prod"), []string{""}, []string{"root"})
+		assertOrigin(t, layoutAt(t, ml, "prod"), []string{""}, nil)
+		assertOrigin(t, layoutAt(t, ml, "prod/root"), nil, []string{"root"})
 		assertOrigin(t, layoutAt(t, ml, "prod/web"), []string{"web"}, []string{"web"})
 	})
 	t.Run("without bundle", func(t *testing.T) {
@@ -207,14 +224,11 @@ func TestWalkClusterWithClusterName_Origins_NamedRoot(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ml := walk(t, twoTier("platform", "web-bundle"), tc.rules)
-			// The root bundle follows BundleGrouping like any node's: flat, it
-			// is rendered by the root node layout; by name, by its own layout.
-			if tc.rules.BundleGrouping == layout.GroupByName {
-				assertOrigin(t, layoutAt(t, ml, tc.rootPath), []string{"platform"}, nil)
-				assertOrigin(t, layoutAt(t, ml, tc.rootPath+"/platform"), nil, []string{"platform"})
-			} else {
-				assertOrigin(t, layoutAt(t, ml, tc.rootPath), []string{"platform"}, []string{"platform"})
-			}
+			// The root bundle is rendered by its own layout under either
+			// bundle grouping: the root node's layout renders no bundle
+			// (go-kure/kure#979).
+			assertOrigin(t, layoutAt(t, ml, tc.rootPath), []string{"platform"}, nil)
+			assertOrigin(t, layoutAt(t, ml, tc.rootPath+"/platform"), nil, []string{"platform"})
 			if tc.wrapper != "" {
 				assertOrigin(t, layoutAt(t, ml, tc.wrapper), nil, nil)
 			}
@@ -234,7 +248,8 @@ func TestWalkClusterByPackage_Origins(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assertOrigin(t, layoutAt(t, pkgs["default"], "platform"), []string{"platform"}, []string{"platform"})
+		assertOrigin(t, layoutAt(t, pkgs["default"], "platform"), []string{"platform"}, nil)
+		assertOrigin(t, layoutAt(t, pkgs["default"], "platform/platform"), nil, []string{"platform"})
 		ociRoot := pkgs[oci.String()]
 		// The unnamed wrapper for the excluded root (at cluster/) carries nothing.
 		assertOrigin(t, ociRoot, nil, nil)
@@ -277,8 +292,8 @@ func explicitPathClusters() []struct {
 	}{
 		{"platform/web", &stack.Cluster{Name: "demo", Node: platformWeb}, groupByName, map[string]string{"web": "platform/web"}},
 		{"platform/platform", &stack.Cluster{Name: "demo", Node: platformPlatform}, groupByName, map[string]string{"platform": "platform/platform"}},
-		{"ClusterName prod nodeOnly", &stack.Cluster{Name: "demo", Node: prod}, withClusterName(nodeOnly, "prod"), map[string]string{"platform": "prod/platform", "apps-bundle": "prod/platform/apps"}},
-		{"unnamed root ClusterName dot", &stack.Cluster{Name: "demo", Node: unnamed}, withClusterName(nodeOnly, "."), map[string]string{"web": "."}},
+		{"ClusterName prod nodeOnly", &stack.Cluster{Name: "demo", Node: prod}, withClusterName(nodeOnly, "prod"), map[string]string{"platform": "prod/platform/platform", "apps-bundle": "prod/platform/apps"}},
+		{"unnamed root ClusterName dot", &stack.Cluster{Name: "demo", Node: unnamed}, withClusterName(nodeOnly, "."), map[string]string{"web": "web"}},
 	}
 }
 
@@ -390,29 +405,98 @@ func TestIndexOrigins_RejectsAppFileSingleOrigin(t *testing.T) {
 	assertIndexError(t, ml, c, "AppFileSingle")
 }
 
-func TestFlattenSingleTier_TransfersOrigins(t *testing.T) {
-	// The unnamed root carries its bundle (no applications, so no resources)
-	// and has exactly one terminal child: the collapse lifts the child into
-	// the cluster directory, and both bundles now live there.
-	web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", Applications: []*stack.Application{configMapApp("web")}}}
-	root := &stack.Node{Bundle: &stack.Bundle{Name: "root"}, Children: []*stack.Node{web}}
-	c := &stack.Cluster{Name: "demo", Node: root}
-	rules := withClusterName(nodeOnly, "prod")
-	rules.FlattenSingleTier = true
-	ml := walk(t, c, rules)
-	if len(ml.Children) != 0 {
-		t.Fatalf("expected the single tier collapsed, have %v", collectRepoPaths(ml))
+// TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory: with a flat
+// BundleGrouping the root node's bundle has a directory named after it inside
+// the root node's (go-kure/kure#979), which is where a child node of that name
+// is written too. Both walkers refuse the pair, with and without a
+// ClusterName; under BundleGrouping by name the walk is unchanged.
+func TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory(t *testing.T) {
+	const want = `node "web" and bundle "web" are both rendered to directory`
+	for name, rules := range map[string]layout.LayoutRules{
+		"no ClusterName":   nodeOnly,
+		"ClusterName prod": withClusterName(nodeOnly, "prod"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := layout.WalkCluster(twoTier("web", "web-bundle"), rules); err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("WalkCluster: got %v, want the refusal %q", err, want)
+			}
+			if _, err := layout.WalkClusterByPackage(twoTier("web", "web-bundle"), rules); err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("WalkClusterByPackage: got %v, want the refusal %q", err, want)
+			}
+		})
 	}
-	assertOrigin(t, ml, []string{"", "web"}, []string{"root", "web"})
-	ix, err := layout.IndexOrigins(ml, c)
-	if err != nil {
-		t.Fatalf("IndexOrigins: %v", err)
+
+	// The names differ: nothing is refused, and the two are siblings.
+	ml := walk(t, twoTier("platform", "web-bundle"), nodeOnly)
+	if got, want := collectRepoPaths(ml), []string{"platform", "platform/platform", "platform/web"}; !slices.Equal(got, want) {
+		t.Errorf("layouts = %v, want %v", got, want)
 	}
-	for _, b := range []*stack.Bundle{root.Bundle, web.Bundle} {
-		if p, _ := ix.KustomizationPath(b); p != "prod" {
-			t.Errorf("KustomizationPath(%s) = %q, want the surviving directory prod", b.Name, p)
+	// With every node merged into the root there is no child node directory.
+	ml = walk(t, twoTier("web", "web-bundle"), nodeFlat)
+	if got, want := collectRepoPaths(ml), []string{"platform", "platform/web"}; !slices.Equal(got, want) {
+		t.Errorf("NodeGrouping flat: layouts = %v, want %v", got, want)
+	}
+	// By name the walk never refused the pair and still does not.
+	if _, err := layout.WalkCluster(twoTier("web", "web-bundle"), groupByName); err != nil {
+		t.Errorf("BundleGrouping by name: %v", err)
+	}
+}
+
+// TestFlattenSingleTier_KeepsBundleDirectories: FlattenSingleTier never
+// collapses a directory that renders a bundle into the top of the tree, which
+// has no parent to host its Flux Kustomization (go-kure/kure#979). What it
+// still collapses is a single child node that has neither bundle nor children,
+// and that node's origin moves with it.
+func TestFlattenSingleTier_KeepsBundleDirectories(t *testing.T) {
+	flatten := func(r layout.LayoutRules) layout.LayoutRules {
+		r.FlattenSingleTier = true
+		return r
+	}
+	configMapBundle := func(name string) *stack.Bundle {
+		return &stack.Bundle{Name: name, Applications: []*stack.Application{configMapApp(name)}}
+	}
+	t.Run("unnamed root with bundle and one child node", func(t *testing.T) {
+		web := &stack.Node{Name: "web", Bundle: configMapBundle("web")}
+		root := &stack.Node{Bundle: &stack.Bundle{Name: "root"}, Children: []*stack.Node{web}}
+		c := &stack.Cluster{Name: "demo", Node: root}
+		ml := walk(t, c, flatten(withClusterName(nodeOnly, "prod")))
+		if got, want := collectRepoPaths(ml), []string{"prod", "prod/root", "prod/web"}; !slices.Equal(got, want) {
+			t.Fatalf("layouts = %v, want %v", got, want)
 		}
-	}
+		ix, err := layout.IndexOrigins(ml, c)
+		if err != nil {
+			t.Fatalf("IndexOrigins: %v", err)
+		}
+		for b, want := range map[*stack.Bundle]string{root.Bundle: "prod/root", web.Bundle: "prod/web"} {
+			if p, _ := ix.KustomizationPath(b); p != want {
+				t.Errorf("KustomizationPath(%s) = %q, want %q", b.Name, p, want)
+			}
+		}
+	})
+	t.Run("single child node rendering its bundle", func(t *testing.T) {
+		web := &stack.Node{Name: "web", Bundle: configMapBundle("web")}
+		root := &stack.Node{Name: "platform", Children: []*stack.Node{web}}
+		ml := walk(t, &stack.Cluster{Name: "demo", Node: root}, flatten(nodeOnly))
+		if got, want := collectRepoPaths(ml), []string{"platform", "platform/web"}; !slices.Equal(got, want) {
+			t.Fatalf("layouts = %v, want %v", got, want)
+		}
+		assertOrigin(t, layoutAt(t, ml, "platform/web"), []string{"web"}, []string{"web"})
+	})
+	t.Run("wrapper above a root node with a bundle", func(t *testing.T) {
+		root := &stack.Node{Name: "apps", Bundle: configMapBundle("web")}
+		ml := walk(t, &stack.Cluster{Name: "demo", Node: root}, flatten(withClusterName(nodeFlat, "prod")))
+		if got, want := collectRepoPaths(ml), []string{"prod", "prod/apps", "prod/apps/web"}; !slices.Equal(got, want) {
+			t.Fatalf("layouts = %v, want %v", got, want)
+		}
+	})
+	t.Run("single child node without bundle or children collapses", func(t *testing.T) {
+		root := &stack.Node{Name: "platform", Children: []*stack.Node{{Name: "empty"}}}
+		ml := walk(t, &stack.Cluster{Name: "demo", Node: root}, flatten(nodeOnly))
+		if got, want := collectRepoPaths(ml), []string{"platform"}; !slices.Equal(got, want) {
+			t.Fatalf("layouts = %v, want %v", got, want)
+		}
+		assertOrigin(t, ml, []string{"platform", "empty"}, nil)
+	})
 }
 
 func TestIndexOrigins_EdgeRefusals(t *testing.T) {
@@ -506,7 +590,7 @@ func TestIndexOrigins_Units(t *testing.T) {
 	for _, l := range ix.Units() {
 		units = append(units, l.FullRepoPath())
 	}
-	if want := []string{"r", "r/u"}; !slices.Equal(units, want) {
+	if want := []string{"r/rb", "r/rb/u"}; !slices.Equal(units, want) {
 		t.Errorf("Units = %v, want %v", units, want)
 	}
 	for b, want := range map[*stack.Bundle]string{rb: "rb", b1: "rb", b2: "rb", &copyOfB2: "rb", u: "u", {Name: "outside"}: "outside"} {

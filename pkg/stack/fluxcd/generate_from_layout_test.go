@@ -388,6 +388,25 @@ func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// No Kustomization is part of the build it applies (go-kure/kure#979): the
+	// file that holds it is not among the files a kustomize build of its
+	// spec.path takes in, or the Kustomization and whatever applies its host
+	// would both own that directory.
+	err = filepath.Walk(w.root, func(p string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || info.Name() == "kustomization.yaml" {
+			return err
+		}
+		for _, path := range fluxPaths(t, p) {
+			if buildFiles(t, filepath.Join(w.root, path))[p] {
+				rel, _ := filepath.Rel(w.root, p)
+				t.Errorf("%s: %s holds a Flux Kustomization with spec.path %q, and the build of that directory takes in the file", writer, rel, path)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, d := range dirs {
 		if info, err := os.Stat(filepath.Join(w.root, d)); err != nil || !info.IsDir() {
 			t.Errorf("%s: spec.path %q is not a written directory", writer, d)
@@ -402,6 +421,40 @@ func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string)
 	kuretest.AssertConsistentDir(t, w.root,
 		kuretest.Namespace("flux-system"),
 		kuretest.External("GitRepository", "flux-system", "flux-system"))
+}
+
+// buildFiles returns the manifest files a kustomize build of dir takes in: the
+// file entries of its kustomization.yaml and those of every directory it
+// lists, recursively.
+func buildFiles(t *testing.T, dir string) map[string]bool {
+	t.Helper()
+	files := map[string]bool{}
+	seen := map[string]bool{}
+	var visit func(dir string)
+	visit = func(dir string) {
+		kust := filepath.Join(dir, "kustomization.yaml")
+		if seen[kust] {
+			return
+		}
+		seen[kust] = true
+		if _, err := os.Stat(kust); err != nil {
+			return
+		}
+		for _, ref := range kustomizationRefs(t, kust) {
+			p := filepath.Join(dir, ref)
+			info, err := os.Stat(p)
+			if err != nil {
+				continue
+			}
+			if info.IsDir() {
+				visit(p)
+			} else {
+				files[p] = true
+			}
+		}
+	}
+	visit(dir)
+	return files
 }
 
 // holdsFluxSource reports whether a manifest file holds a Flux source
@@ -622,8 +675,10 @@ func TestGenerateFromLayout_Order(t *testing.T) {
 		t.Errorf("GenerateFromLayout order = %v, want %v", got, want)
 	}
 
-	// PerLayout host order: the host's own bundle, then the layout CRs of its
-	// children, then the bundle CRs of its children in tree order.
+	// PerLayout host order: the layout CRs of the host's children, then the
+	// bundle CRs of its children in tree order. The root node's layout hosts
+	// the CR of the directory its bundle renders into, and that directory the
+	// CRs of what is below it.
 	c = build()
 	rules := nodeOnly
 	rules.FluxPlacement = layout.FluxIntegratedPerLayout
@@ -631,8 +686,12 @@ func TestGenerateFromLayout_Order(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := crNames(ml.Resources), []string{"platform", "chart", "svc", "web"}; !slices.Equal(got, want) {
+	if got, want := crNames(ml.Resources), []string{"platform", "web"}; !slices.Equal(got, want) {
 		t.Errorf("PerLayout root CR order = %v, want %v", got, want)
+	}
+	unit := layoutAtPath(t, ml, "platform/platform")
+	if got, want := crNames(unit.Resources), []string{"chart", "svc"}; !slices.Equal(got, want) {
+		t.Errorf("PerLayout CR order in the root bundle's directory = %v, want %v", got, want)
 	}
 }
 
@@ -652,8 +711,9 @@ func TestGenerateFromCluster_DefaultRules(t *testing.T) {
 			got[k.Name] = k.Spec.Path
 		}
 	}
-	// The directories WalkCluster writes under the default rules.
-	want := map[string]string{"platform-bundle": "platform", "web-bundle": "platform/web"}
+	// The directories WalkCluster writes under the default rules: the root
+	// node's bundle has one of its own, beside the root's child nodes.
+	want := map[string]string{"platform-bundle": "platform/platform-bundle", "web-bundle": "platform/web"}
 	if !mapsEqual(got, want) {
 		t.Errorf("GenerateFromCluster paths = %v, want %v", got, want)
 	}
@@ -878,8 +938,16 @@ func TestIntegrateWithLayout_SameNameDifferentPathErrors(t *testing.T) {
 	})
 }
 
-func TestIntegrateWithLayout_FlattenSingleTier_PathIsPostCollapseDir(t *testing.T) {
-	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+// TestIntegrateWithLayout_FlattenSingleTier_KeepsTheBundleDirectory:
+// FlattenSingleTier does not collapse the directory a bundle renders into, so
+// the bundle's Kustomization builds that directory in every placement and is
+// never part of its own build (go-kure/kure#979).
+func TestIntegrateWithLayout_FlattenSingleTier_KeepsTheBundleDirectory(t *testing.T) {
+	for placement, want := range map[layout.FluxPlacement][]string{
+		layout.FluxSeparate:            {"bundle=arc-runners/apps/bundle"},
+		layout.FluxIntegratedPerLayout: {"arc-runners-apps-node=arc-runners/apps", "bundle=arc-runners/apps/bundle"},
+		layout.FluxIntegratedPerBundle: {"bundle=arc-runners/apps/bundle"},
+	} {
 		t.Run(string(placement), func(t *testing.T) {
 			c := &stack.Cluster{Name: "arc-runners", Node: &stack.Node{Name: "apps", Bundle: &stack.Bundle{
 				Name:         "bundle",
@@ -895,8 +963,8 @@ func TestIntegrateWithLayout_FlattenSingleTier_PathIsPostCollapseDir(t *testing.
 			for _, k := range kustomizations(ml) {
 				got = append(got, k.Name+"="+k.Spec.Path)
 			}
-			if !slices.Equal(got, []string{"bundle=arc-runners"}) {
-				t.Errorf("CRs %v, want bundle=arc-runners (the post-collapse directory)", got)
+			if !slices.Equal(got, want) {
+				t.Errorf("CRs %v, want %v (the bundle's directory is kept)", got, want)
 			}
 		})
 	}

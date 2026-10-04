@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -43,7 +44,9 @@ func rootAncestors(root *stack.Node) []string {
 // GroupFlat is rendered into the layout above it (its resources, its child
 // layouts and its origins), so no setting is ever silently ignored. Umbrella
 // child bundles and augmenter applications always get a directory, because
-// they carry their own Flux Kustomization or writer-owned files.
+// they carry their own Flux Kustomization or writer-owned files. So do the
+// bundles a flat BundleGrouping would render into the root node's layout (see
+// rootUnit).
 type grouping struct {
 	nodeFlat   bool
 	bundleFlat bool
@@ -55,6 +58,40 @@ type grouping struct {
 	// "" walks every node. A node outside the package adds no directory: its
 	// children are rendered where it would have been.
 	pkgKey string
+	// root is the walk's root node and what it rendered; nil in a walk that
+	// does not render the root node. One walk shares it.
+	root *rootUnit
+}
+
+// rootUnit keeps the root node's layout from rendering a bundle
+// (go-kure/kure#979). A layout that renders bundles is applied by its own Flux
+// Kustomization, which its parent hosts; the root node's layout can be the top
+// of the tree, which has no parent, so its Kustomization would be part of the
+// build it applies. With BundleGrouping flat, the bundles that would be
+// rendered into the root node's layout (the root's own, and under a flat
+// NodeGrouping every absorbed node's) are therefore rendered into one directory
+// inside it, named after the first of them. They stay one unit: one directory,
+// one Kustomization.
+type rootUnit struct {
+	node   *stack.Node
+	layout *ManifestLayout
+	unit   *ManifestLayout
+}
+
+// checkRootUnitName refuses a child node of the root that is named like the
+// directory of the root's bundles: both would be written to one directory.
+func (r *rootUnit) checkRootUnitName() error {
+	if r == nil || r.unit == nil {
+		return nil
+	}
+	for _, child := range r.layout.Children {
+		if child != r.unit && child.Name == r.unit.Name {
+			return errors.ResourceValidationError("Node", child.Name, "name",
+				fmt.Sprintf("node %q and bundle %q are both rendered to directory %q: the root node's bundle has a directory named after it, so no child node of the root may carry that name",
+					child.Name, r.unit.Name, r.unit.FullRepoPath()), nil)
+		}
+	}
+	return nil
 }
 
 // newGrouping resolves rules, with unset options taking their documented
@@ -122,11 +159,15 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 		rules.FluxPlacement = DefaultLayoutRules().FluxPlacement
 	}
 	g := newGrouping(rules)
+	g.root = &rootUnit{node: c.Node}
 
 	// For cluster-aware layout, we need to restructure the hierarchy
 	if rules.ClusterName != "" {
 		ml, err := walkClusterWithClusterName(c, rules, g)
 		if err != nil {
+			return nil, err
+		}
+		if err := g.root.checkRootUnitName(); err != nil {
 			return nil, err
 		}
 		return flattenSingleTier(ml, rules), nil
@@ -140,6 +181,9 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 	// at "cluster" (see rootAncestors).
 	ml, err := walkNode(c.Node, rootAncestors(c.Node), g, nil)
 	if err != nil {
+		return nil, err
+	}
+	if err := g.root.checkRootUnitName(); err != nil {
 		return nil, err
 	}
 
@@ -235,10 +279,16 @@ func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*Mani
 		rootPkg := resolvePackageRef(c.Node, nil)
 		var ml *ManifestLayout
 		if g.includes(rootPkg) {
-			// As in WalkCluster: a named root's parent is the tree root ".".
+			// As in WalkCluster: a named root's parent is the tree root ".",
+			// and the root node's layout renders no bundle (rootUnit), so a
+			// bundle's directory is the same in both walks.
+			g.root = &rootUnit{node: c.Node}
 			var err error
 			ml, err = walkNode(c.Node, rootAncestors(c.Node), g, nil)
 			if err != nil {
+				return nil, err
+			}
+			if err := g.root.checkRootUnitName(); err != nil {
 				return nil, err
 			}
 		} else {
@@ -281,6 +331,9 @@ func walkNode(n *stack.Node, ancestors []string, g grouping, pkg *schema.GroupVe
 // renderNodeContent renders node n's bundle and child nodes into into: n's own
 // layout, or the layout that absorbs n when NodeGrouping is flat.
 func renderNodeContent(n *stack.Node, into *ManifestLayout, g grouping, pkg *schema.GroupVersionKind) error {
+	if g.root != nil && n == g.root.node {
+		g.root.layout = into
+	}
 	if n.Bundle != nil {
 		if err := renderBundle(n.Bundle, into, g); err != nil {
 			return err
@@ -323,12 +376,27 @@ func renderChildren(children []*stack.Node, into *ManifestLayout, g grouping, pk
 
 // renderBundle renders bundle b into into. With BundleGrouping flat the
 // bundle's applications and umbrella children are rendered into into itself,
-// which then renders b; otherwise b gets its own directory inside into's.
+// which then renders b; otherwise b gets its own directory inside into's. The
+// root node's layout is the exception to the flat case: it renders no bundle,
+// so b goes into the one directory inside it that the bundles merged there
+// share (see rootUnit).
 func renderBundle(b *stack.Bundle, into *ManifestLayout, g grouping) error {
 	target := into
-	if g.bundleFlat {
+	switch {
+	case g.bundleFlat && g.root != nil && into == g.root.layout:
+		if g.root.unit == nil {
+			// Explicit, as a bundle directory below: it can host Flux CRs
+			// whose targets are directories inside it.
+			g.root.unit = g.newLayout(b.Name, into.FullRepoPath())
+			g.root.unit.Mode = KustomizationExplicit
+			into.Children = append(into.Children, g.root.unit)
+			into.origin.unit = g.root.unit
+		}
+		target = g.root.unit
+		target.origin.bundles = append(target.origin.bundles, b)
+	case g.bundleFlat:
 		into.origin.bundles = append(into.origin.bundles, b)
-	} else {
+	default:
 		// Explicit, not Recursive: a Flux CR hosted here (an umbrella
 		// child's, a PerLayout application's) targets a directory below
 		// this one, and the writers refuse a Recursive build that would

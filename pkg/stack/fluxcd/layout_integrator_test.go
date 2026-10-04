@@ -130,14 +130,14 @@ func TestLayoutIntegrator_RefusesInvalidRules(t *testing.T) {
 			if err != nil {
 				t.Fatalf("WalkCluster: %v", err)
 			}
-			before := len(ml.Resources)
+			resources, children := len(ml.Resources), len(ml.Children)
 			err = integrator.IntegrateWithLayout(ml, c, tc.rules)
 			if err == nil || !strings.Contains(err.Error(), tc.field) {
 				t.Fatalf("err = %v, want one naming %s", err, tc.field)
 			}
-			if len(ml.Resources) != before || len(ml.Children) != 0 {
-				t.Errorf("the refused call changed the tree: %d resources (was %d), %d children",
-					len(ml.Resources), before, len(ml.Children))
+			if len(ml.Resources) != resources || len(ml.Children) != children {
+				t.Errorf("the refused call changed the tree: %d resources (was %d), %d children (was %d)",
+					len(ml.Resources), resources, len(ml.Children), children)
 			}
 		})
 	}
@@ -352,8 +352,14 @@ func TestLayoutIntegrator_IntegrateWithNestedNodes(t *testing.T) {
 	// Both integrated placements host a bundle's CR in the parent layout
 	// (a directory is applied by its own Kustomization only, so the CR
 	// cannot live inside it): the root hosts its own and the child's, and
-	// the child the grandchild's.
-	want := [3][]string{{"root-bundle", "child-bundle"}, {"grandchild-bundle"}, nil}
+	// the child the grandchild's. The root's bundle has a directory of its
+	// own, which hosts nothing (go-kure/kure#979).
+	want := map[string][]string{
+		"root":                  {"root-bundle", "child-bundle"},
+		"root/root-bundle":      nil,
+		"root/child":            {"grandchild-bundle"},
+		"root/child/grandchild": nil,
+	}
 	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout} {
 		rules := layout.DefaultLayoutRules()
 		rules.FluxPlacement = placement
@@ -362,11 +368,9 @@ func TestLayoutIntegrator_IntegrateWithNestedNodes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: unexpected error: %v", placement, err)
 		}
-		childLayout := rootLayout.Children[0]
-		grandchildLayout := childLayout.Children[0]
-		for i, l := range []*layout.ManifestLayout{rootLayout, childLayout, grandchildLayout} {
-			if got := crNames(l.Resources); !slices.Equal(got, want[i]) {
-				t.Errorf("%s: %s hosts %v, want %v", placement, l.FullRepoPath(), got, want[i])
+		for dir, names := range want {
+			if got := crNames(layoutAtPath(t, rootLayout, dir).Resources); !slices.Equal(got, names) {
+				t.Errorf("%s: %s hosts %v, want %v", placement, dir, got, names)
 			}
 		}
 	}
@@ -1007,7 +1011,8 @@ func (redisAugmenter) AugmentLayout(*layout.ManifestLayout) error { return nil }
 // buildUmbrellaAugmenterTree walks helm-multi-tier: a platform node whose
 // umbrella bundle has the umbrella child platform-apps, which holds the
 // augmenter app redis, rendered as a sub-layout of platform-apps. root is the
-// walked root (the platform node layout).
+// walked root (the platform node layout), platformLayout the directory inside
+// it that renders the umbrella bundle.
 //
 // parentSR and childSR allow tests to use distinct SourceRefs to verify
 // correct SourceRef ownership. Pass testSR() for both in the common case.
@@ -1027,7 +1032,10 @@ func buildUmbrellaAugmenterTree(t *testing.T, placement layout.FluxPlacement, pa
 	}
 	cluster = &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: umbrella}}
 	root = mustWalk(t, cluster, layout.LayoutRules{FluxPlacement: placement})
-	platformLayout = root
+	platformLayout = root.OriginUnit()
+	if platformLayout == nil || len(platformLayout.Children) != 1 {
+		t.Fatalf("the root node's layout has no directory for its bundle with one child: %+v", root)
+	}
 	platformApps = platformLayout.Children[0]
 	redis = platformApps.Children[0]
 	return
@@ -1227,9 +1235,10 @@ func (hookGroupAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
 }
 
 // buildAugmenterTestTree walks a node "prod" whose bundle "apps" holds the
-// augmenter app "myapp": the node layout has one app layout, which has two
-// hook-group sub-layouts (pre-install and hooks with DependsOn). root is the
-// walked root, which is the node layout itself.
+// augmenter app "myapp": the root node's layout holds the bundle's directory
+// (go-kure/kure#979), which has one app layout, which has two hook-group
+// sub-layouts (pre-install and hooks with DependsOn). root is the walked root;
+// nodeLayout is the bundle's directory, the layout that holds the app layout.
 func buildAugmenterTestTree(t *testing.T, placement layout.FluxPlacement, sr *stack.SourceRef) (root, nodeLayout, app, preInstall, hooks *layout.ManifestLayout, cluster *stack.Cluster) {
 	t.Helper()
 	bundle := &stack.Bundle{Name: "apps", SourceRef: sr, Applications: []*stack.Application{
@@ -1237,7 +1246,7 @@ func buildAugmenterTestTree(t *testing.T, placement layout.FluxPlacement, sr *st
 	}}
 	cluster = &stack.Cluster{Name: "prod", Node: &stack.Node{Name: "prod", Bundle: bundle}}
 	root = mustWalk(t, cluster, layout.LayoutRules{FluxPlacement: placement})
-	nodeLayout = root
+	nodeLayout = root.Children[0]
 	app = nodeLayout.Children[0]
 	preInstall, hooks = app.Children[0], app.Children[1]
 	return

@@ -82,9 +82,11 @@ func TestGenerateFromCluster_UsesCallerRules(t *testing.T) {
 		rules layout.LayoutRules
 		want  map[string]string
 	}{
-		"default rules":               {root: "platform", rules: layout.DefaultLayoutRules(), want: map[string]string{"platform": "platform", "web": "platform/web"}},
-		"unnamed root, ClusterName .": {root: "", rules: withClusterName("."), want: map[string]string{"platform": ".", "web": "web"}},
-		"ClusterName clusters/prod":   {root: "platform", rules: withClusterName("clusters/prod"), want: map[string]string{"platform": "clusters/prod/platform", "web": "clusters/prod/platform/web"}},
+		// The root node's bundle "platform" has a directory of its own inside
+		// the root node's, beside the root's child node.
+		"default rules":               {root: "platform", rules: layout.DefaultLayoutRules(), want: map[string]string{"platform": "platform/platform", "web": "platform/web"}},
+		"unnamed root, ClusterName .": {root: "", rules: withClusterName("."), want: map[string]string{"platform": "platform", "web": "web"}},
+		"ClusterName clusters/prod":   {root: "platform", rules: withClusterName("clusters/prod"), want: map[string]string{"platform": "clusters/prod/platform/platform", "web": "clusters/prod/platform/web"}},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

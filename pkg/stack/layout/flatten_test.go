@@ -53,8 +53,10 @@ func TestFlatten_DisabledIsNoOp(t *testing.T) {
 	}
 }
 
+// TestFlatten_EnabledCollapsesSingleTier: a ClusterName directory whose one
+// child is a node that renders nothing of its own absorbs it.
 func TestFlatten_EnabledCollapsesSingleTier(t *testing.T) {
-	cluster := newFlattenTestCluster(t)
+	cluster := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "apps"}}
 	rules := LayoutRules{
 		ClusterName:         "arc-runners",
 		BundleGrouping:      GroupFlat,
@@ -68,8 +70,54 @@ func TestFlatten_EnabledCollapsesSingleTier(t *testing.T) {
 	if len(ml.Children) != 0 {
 		t.Errorf("expected no children after collapse, got %d", len(ml.Children))
 	}
-	if len(ml.Resources) != 1 {
-		t.Errorf("expected child resources lifted to root, got %d", len(ml.Resources))
+	if got := ml.OriginNodes(); len(got) != 1 || got[0] != cluster.Node {
+		t.Errorf("the absorbing layout renders nodes %v, want the absorbed node", got)
+	}
+}
+
+// TestFlatten_KeepsADirectoryThatRendersABundle: the root node's bundle has a
+// directory of its own, which only its Flux Kustomization applies, so the
+// tier above it is not collapsed into the top of the tree (go-kure/kure#979).
+func TestFlatten_KeepsADirectoryThatRendersABundle(t *testing.T) {
+	cluster := newFlattenTestCluster(t)
+	rules := LayoutRules{
+		ClusterName:         "arc-runners",
+		BundleGrouping:      GroupFlat,
+		ApplicationGrouping: GroupFlat,
+		FlattenSingleTier:   true,
+	}
+	ml, err := WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("WalkCluster: %v", err)
+	}
+	got := map[string]int{}
+	var walk func(l *ManifestLayout)
+	walk = func(l *ManifestLayout) {
+		got[l.FullRepoPath()] = len(l.Resources)
+		for _, child := range l.Children {
+			walk(child)
+		}
+	}
+	walk(ml)
+	want := map[string]int{"arc-runners": 0, "arc-runners/apps": 0, "arc-runners/apps/bundle": 1}
+	if len(got) != len(want) {
+		t.Fatalf("resources per directory = %v, want %v", got, want)
+	}
+	for dir, n := range want {
+		if got[dir] != n {
+			t.Errorf("resources per directory = %v, want %v", got, want)
+		}
+	}
+
+	// The check is on the candidate child itself, for a tree a caller built.
+	parent := &ManifestLayout{Namespace: "arc-runners", Children: []*ManifestLayout{{
+		Name:      "apps",
+		Namespace: "arc-runners",
+		origin:    origin{bundles: []*stack.Bundle{cluster.Node.Bundle}},
+	}}}
+	flattenSingleTier(parent, rules)
+	if len(parent.Children) != 1 {
+		t.Error("a child that renders a bundle was collapsed into its parent")
 	}
 }
 
@@ -216,20 +264,30 @@ func TestFlatten_NoCollapseWhenParentNamespaceHasSeparator(t *testing.T) {
 }
 
 func TestFlatten_PackageWalkIsNoOp(t *testing.T) {
-	cluster := newFlattenTestCluster(t)
+	cluster := func() *stack.Cluster {
+		return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "apps", Children: []*stack.Node{{Name: "web"}}}}
+	}
 	rules := LayoutRules{
 		BundleGrouping:      GroupFlat,
 		ApplicationGrouping: GroupFlat,
 		FlattenSingleTier:   true,
 	}
-	packages, err := WalkClusterByPackage(cluster, rules)
+	// The cluster collapses under WalkCluster: the root absorbs its one
+	// child, which renders nothing of its own.
+	collapsed, err := WalkCluster(cluster(), rules)
+	if err != nil {
+		t.Fatalf("WalkCluster: %v", err)
+	}
+	if len(collapsed.Children) != 0 || len(collapsed.OriginNodes()) != 2 {
+		t.Fatalf("WalkCluster did not collapse the single tier: %d children, %d nodes", len(collapsed.Children), len(collapsed.OriginNodes()))
+	}
+	// The package walk must keep its single tier.
+	packages, err := WalkClusterByPackage(cluster(), rules)
 	if err != nil {
 		t.Fatalf("WalkClusterByPackage: %v", err)
 	}
-	// The same cluster collapses under WalkCluster (TestFlatten_Enabled...):
-	// the package walk must keep its single tier.
 	ml := packages["default"]
-	if ml == nil || len(ml.Children) != 0 || len(ml.Resources) != 1 || ml.FullRepoPath() != "apps" {
+	if ml == nil || ml.FullRepoPath() != "apps" || len(ml.Children) != 1 || ml.Children[0].FullRepoPath() != "apps/web" {
 		t.Fatalf("package layout changed shape: %+v", ml)
 	}
 }

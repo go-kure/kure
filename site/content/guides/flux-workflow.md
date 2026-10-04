@@ -202,7 +202,7 @@ The [Layout Engine](/api-reference/layout) supports multiple grouping and file o
 | Option | Values | Effect |
 |--------|--------|--------|
 | NodeGrouping | `GroupByName`, `GroupFlat` | A directory per child node, or merge child nodes into their parent |
-| BundleGrouping | `GroupByName`, `GroupFlat` | A directory per bundle, or render bundles in their node's directory |
+| BundleGrouping | `GroupByName`, `GroupFlat` | A directory per bundle, or render bundles in their node's directory (the root node's bundle keeps a directory, see below) |
 | ApplicationGrouping | `GroupByName`, `GroupFlat` | A directory per app, or write apps into their bundle's directory |
 | FilePer | `FilePerResource`, `FilePerKind` | One file per resource or group by kind |
 | FluxPlacement | `FluxSeparate`, `FluxIntegratedPerLayout`, `FluxIntegratedPerBundle` | Separate dir; a Flux CR per layout node; or Flux CRs at bundle boundaries with application children as directories |
@@ -332,13 +332,15 @@ What changed, and what to do:
   any Source already in the tree with the identity of one the integration generates into
   `flux-system`, even an identical one. Under `FluxIntegratedPerBundle`, a caller's copy of a
   generated Source in a `ClusterName` wrapper above the root node is refused too: that build also
-  includes the root's copy, and kustomize refuses one object twice. When the root node renders a
-  bundle, its Kustomization builds the directory the bootstrap applies, so a patch of it that
+  includes the root's copy, and kustomize refuses one object twice. A Kustomization whose build
+  holds the root node's directory applies what the bootstrap applies, so a patch of it that
   applies to a Source the integration hosts there, or a postBuild substitution that changes one
   (with `substituteFrom` set, any `${...}` in the `SourceRef` URL reading a var the inline
   `substitute` does not set), is refused: the bootstrap
   applies that directory without either, and the two would keep overwriting each other's Source.
-  Narrow the patch target or move the patch or postBuild to a bundle below the root node.
+  Narrow the patch target or move the patch or postBuild to a bundle below the root node. Since
+  go-kure/kure#979 no bundle renders in the root node's directory, so on a walked tree this is
+  met only by a Kustomization of your own that the integration keeps (next sentence).
   A Kustomization already in the tree that the integration keeps in place of its own (same name
   and `spec.path`, in the layout that would host it) is held to the same refusals as a generated
   one, whether it is typed, unstructured or inside a `List`: two copies of a generated Source
@@ -403,6 +405,42 @@ field or from the bundle's name. The field is also the way out when a bundle's p
 Flux Kustomization named like the bundle: give the bundle another `KustomizationName` and the two
 no longer collide. See the
 [Flux Engine reference](/api-reference/flux-engine/#kustomization-names).
+
+### The root node's bundle has its own directory (breaking change in go-kure/kure#979)
+
+The root node's directory renders no bundle. With a flat `BundleGrouping` (the default) the root
+node's bundle used to render in the root node's directory, the one the bootstrap applies, and the
+Flux Kustomization that applied that directory was hosted inside it: it was part of the build it
+applied. The bundle now has a directory inside the root node's, named after the bundle
+(`platform/platform-bundle` for root node `platform` with bundle `platform-bundle`), and its
+Kustomization sits in the root node's directory, like the Kustomization of every child node's
+bundle. Bundles that a flat `NodeGrouping` merges into the root node share that directory, named
+after the first of them. With `BundleGrouping: GroupByName` nothing changes: the bundle already
+had its directory.
+
+What changed, and what to do:
+
+- **Paths move.** The root node's bundle's files, the `spec.path` of its Flux Kustomization and the
+  `source.path` of its ArgoCD Application are one directory lower. Golden files change, and so
+  does anything outside kure that names the old path. The bootstrap sync path is unchanged.
+- **On a deployed tree, expect a handover.** The bundle's objects used to be applied by the
+  bootstrap as well, as part of the root node's directory. They leave that build, so with prune
+  on, the objects can be deleted by the outer owner and re-created by the inner Kustomization.
+- **A child node named like that directory is refused.** A child node of the root node whose name
+  is the name of the root node's bundle's directory would render to the same path; the walk
+  refuses it, naming both. Rename one.
+- **`FlattenSingleTier` collapses no directory that renders a bundle.** A collapsed directory's
+  Kustomization would have no parent to sit in. On a walked tree the option now only collapses a
+  single child node that has neither a bundle nor child nodes; a tree that relied on it to put a
+  single-bundle application at the top keeps its directories.
+- **A tree whose top renders a bundle is not integrated.** `IntegrateWithLayout` refuses it in
+  every placement; integrate the whole tree `layout.WalkCluster` returns, not a subtree of it.
+
+The `SourceRef` of the root node's bundle is still the source of the Kustomizations of the root
+node's directory and of the bundle-less directories below it, as before. A parent bundle still
+cannot depend on a child node's bundle under the integrated placements, except the root node's
+bundle, whose directory no longer holds the child's Kustomization. See
+[The root node's bundles](/api-reference/layout/#the-root-nodes-bundles) for the rule.
 
 ## Umbrella Bundles — Readiness Aggregation
 

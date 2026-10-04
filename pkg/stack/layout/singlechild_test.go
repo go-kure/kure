@@ -920,21 +920,25 @@ func TestWriters_SingleExtraFileInChildDirectory(t *testing.T) {
 }
 
 // TestWriteManifest_WalkedSingleAppExtraFileInChildNodeDirectory: the same
-// shape from a walked tree. Under ArgoProfile the root bundle's application
-// monitoring is AppFileSingle and lands in the root's directory, and its
-// augmenter's extra file monitoring/dash.yaml lands in the directory of the
-// root's child node monitoring. The tree is written. (A configMapGenerator on
-// the application is refused: see
-// TestWriteManifest_RefuseWalkedSingleAppGenerators.)
+// shape from a walked tree. Under ArgoProfile the application monitoring of
+// node platform's bundle is AppFileSingle and lands in the node's directory,
+// and its augmenter's extra file monitoring/dash.yaml lands in the directory
+// of the node's child node monitoring. The tree is written. (A
+// configMapGenerator on the application is refused: see
+// TestWriteManifest_RefuseWalkedSingleAppGenerators.) The node is not the
+// root: the root node's bundle has a directory of its own, apart from the
+// root's child nodes.
 func TestWriteManifest_WalkedSingleAppExtraFileInChildNodeDirectory(t *testing.T) {
 	aug := &fakeAugmentingConfig{objs: []*client.Object{makeCM("mon")}, extraFileName: "monitoring/dash.yaml", noCMG: true}
 	child := &stack.Node{Name: "monitoring", Bundle: &stack.Bundle{Name: "monitoring", Applications: []*stack.Application{
 		stack.NewApplication("agent", "ns", &fakeConfig{objs: []*client.Object{makeCM("agent")}}),
 	}}}
-	root := &stack.Node{Name: "root", Bundle: &stack.Bundle{Name: "root", Applications: []*stack.Application{
+	platform := &stack.Node{Name: "platform", Bundle: &stack.Bundle{Name: "platform", Applications: []*stack.Application{
 		stack.NewApplication("monitoring", "ns", aug),
 	}}, Children: []*stack.Node{child}}
-	child.SetParent(root)
+	child.SetParent(platform)
+	root := &stack.Node{Name: "root", Children: []*stack.Node{platform}}
+	platform.SetParent(root)
 	ml, err := layout.WalkCluster(&stack.Cluster{Name: "demo", Node: root}, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("walk cluster: %v", err)

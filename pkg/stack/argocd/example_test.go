@@ -82,8 +82,9 @@ func Example() {
 	// Output:
 	// clusters/prod/apps/argocd/argocd-application-web.yaml
 	// clusters/prod/apps/argocd/kustomization.yaml
-	// clusters/prod/apps/cluster-configmap-web.yaml
 	// clusters/prod/apps/kustomization.yaml
+	// clusters/prod/apps/web/cluster-configmap-web.yaml
+	// clusters/prod/apps/web/kustomization.yaml
 }
 
 func ExampleEngine() {
@@ -111,7 +112,7 @@ func ExampleWorkflowEngine_GenerateFromCluster() {
 		path, _, _ := unstructured.NestedString(obj.(*unstructured.Unstructured).Object, "spec", "source", "path")
 		fmt.Println(obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), path)
 	}
-	// Output: Application web apps
+	// Output: Application web apps/web
 }
 
 func ExampleWorkflowEngine_CreateLayoutWithResources() {
@@ -132,5 +133,7 @@ func ExampleWorkflowEngine_CreateLayoutWithResources() {
 	for _, child := range ml.Children {
 		fmt.Println(child.FullRepoPath(), len(child.Resources))
 	}
-	// Output: apps/argocd 1
+	// Output:
+	// apps/web 1
+	// apps/argocd 1
 }

@@ -2,6 +2,7 @@ package fluxcd_test
 
 import (
 	"bytes"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -173,14 +174,13 @@ func TestKeptKustomization_ReconcileOrder(t *testing.T) {
 		b.SetParent(r)
 		return &stack.Cluster{Name: "demo", Node: r}
 	}
-	// rooted: r renders bundle a and holds b (bundle), b depending on a. a's
-	// Kustomization applies the root directory, which holds b's CR.
-	rooted := func() *stack.Cluster {
-		b := &stack.Node{Name: "b", Bundle: srBundle("b", cmApp("b-app"))}
-		r := &stack.Node{Name: "r", Bundle: srBundle("a", cmApp("a-app")), Children: []*stack.Node{b}}
-		b.Bundle.DependsOn = []*stack.Bundle{r.Bundle}
-		b.SetParent(r)
-		return &stack.Cluster{Name: "demo", Node: r}
+	// dependent: nested, with b depending on a. a's Kustomization applies a's
+	// directory, which holds b's CR.
+	dependent := func() *stack.Cluster {
+		c := nested()
+		a := c.Node.Children[0]
+		a.Children[0].Bundle.DependsOn = []*stack.Bundle{a.Bundle}
+		return c
 	}
 	for _, tc := range []struct {
 		name   string
@@ -204,7 +204,7 @@ func TestKeptKustomization_ReconcileOrder(t *testing.T) {
 		},
 		{
 			name:  "wait for a Kustomization that depends on it",
-			build: rooted,
+			build: dependent,
 			change: func(k *kustv1.Kustomization) {
 				k.Spec.Wait = true
 			},
@@ -227,13 +227,19 @@ func TestKeptKustomization_ReconcileOrder(t *testing.T) {
 	}
 }
 
-// TestKeptKustomization_RootBuildChangesHostedSource: a kept Kustomization of
-// the root bundle builds the directory the Flux bootstrap applies, where the
-// integration hosts a Source. A patch of it that selects the Source, or a
-// postBuild that substitutes into it, is refused in every form, as on a
-// generated one (go-kure/kure#908).
+// TestKeptKustomization_RootBuildChangesHostedSource: a kept Kustomization
+// that builds the directory the Flux bootstrap applies, where the integration
+// hosts a Source, is refused in every form when a patch of it selects the
+// Source or its postBuild substitutes into it (go-kure/kure#908). The one such
+// Kustomization is the layout Kustomization of the root node's layout, under
+// FluxIntegratedPerLayout below a ClusterName wrapper: the root bundle's
+// builds the bundle's own directory (go-kure/kure#979), and is accepted with
+// the same patch or postBuild in every form and placement.
 func TestKeptKustomization_RootBuildChangesHostedSource(t *testing.T) {
 	plain := func(_, _ *stack.Bundle) {}
+	wrapped := propertyGroupings["nodeOnly"]
+	wrapped.FluxPlacement = layout.FluxIntegratedPerLayout
+	wrapped.ClusterName = "prod"
 	for _, tc := range []struct {
 		name    string
 		build   func() *stack.Cluster
@@ -257,22 +263,29 @@ func TestKeptKustomization_RootBuildChangesHostedSource(t *testing.T) {
 			refused: "postBuild substitution changes it",
 		},
 	} {
-		for _, placement := range integratedPlacements {
-			for _, form := range keptForms {
-				t.Run(tc.name+"/"+string(placement)+"/"+form, func(t *testing.T) {
+		rootCR := rootLayoutCRName(t, tc.build, wrapped, "prod/platform")
+		for _, form := range keptForms {
+			t.Run(tc.name+"/root node's layout/"+form, func(t *testing.T) {
+				checkKeptTreeWrites(t, tc.build, wrapped, rootCR, form)
+
+				ml, c := keptIn(t, tc.build, wrapped, rootCR, form, tc.change, nil)
+				err := integrate(ml, c, wrapped)
+				if err == nil {
+					t.Fatalf("got no error, want a refusal naming %q", tc.refused)
+				}
+				for _, want := range []string{fmt.Sprintf("Flux Kustomization %q", rootCR), `GitRepository "shared"`, tc.refused} {
+					if !strings.Contains(err.Error(), want) {
+						t.Errorf("refusal %q does not name %q", err, want)
+					}
+				}
+			})
+			for _, placement := range integratedPlacements {
+				t.Run(tc.name+"/root bundle/"+string(placement)+"/"+form, func(t *testing.T) {
 					rules := propertyGroupings["nodeOnly"]
 					rules.FluxPlacement = placement
-					checkKeptTreeWrites(t, tc.build, rules, "platform", form)
-
 					ml, c := keptIn(t, tc.build, rules, "platform", form, tc.change, nil)
-					err := integrate(ml, c, rules)
-					if err == nil {
-						t.Fatalf("got no error, want a refusal naming %q", tc.refused)
-					}
-					for _, want := range []string{`Flux Kustomization "platform"`, `GitRepository "shared"`, tc.refused} {
-						if !strings.Contains(err.Error(), want) {
-							t.Errorf("refusal %q does not name %q", err, want)
-						}
+					if err := integrate(ml, c, rules); err != nil {
+						t.Fatalf("the root bundle's Kustomization builds its own directory, not the Source's: %v", err)
 					}
 				})
 			}

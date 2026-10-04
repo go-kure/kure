@@ -121,8 +121,11 @@ func axisCases() []axisCase {
 		{N, F, F, map[string][]string{"": none, "c": {"a1", "a2"}, "c/x": {"x"}, "c/u": {"ua"}}, "c", "c"},
 		{F, N, N, map[string][]string{"": none, "b": none, "b/a1": {"a1"}, "b/a2": {"a2"}, "b/x": {"x"}, "b/u": none, "b/u/ua": {"ua"}}, "", "b"},
 		{F, N, F, map[string][]string{"": none, "b": {"a1", "a2"}, "b/x": {"x"}, "b/u": {"ua"}}, "", "b"},
-		{F, F, N, map[string][]string{"": none, "a1": {"a1"}, "a2": {"a2"}, "x": {"x"}, "u": none, "u/ua": {"ua"}}, "", ""},
-		{F, F, F, map[string][]string{"": {"a1", "a2"}, "x": {"x"}, "u": {"ua"}}, "", ""},
+		// Flat nodes and flat bundles merge b into the root node's layout,
+		// which renders no bundle (go-kure/kure#979): the merged unit keeps
+		// one directory, named after its first bundle.
+		{F, F, N, map[string][]string{"": none, "b": none, "b/a1": {"a1"}, "b/a2": {"a2"}, "b/x": {"x"}, "b/u": none, "b/u/ua": {"ua"}}, "", "b"},
+		{F, F, F, map[string][]string{"": none, "b": {"a1", "a2"}, "b/x": {"x"}, "b/u": {"ua"}}, "", "b"},
 	}
 }
 
@@ -139,8 +142,9 @@ func join(prefix, rel string) string {
 // TestWalkCluster_GroupingAxes pins what each grouping axis does, for every
 // combination, in both walkers: an axis set to GroupByName gives its level a
 // directory, GroupFlat merges the level into the layout above it. Umbrella
-// children and augmenter applications always keep their own directory. Every
-// resource is written exactly once and origins land on the absorbing layout.
+// children and augmenter applications always keep their own directory, and so
+// does what would merge into the root node's layout. Every resource is written
+// exactly once and origins land on the absorbing layout.
 func TestWalkCluster_GroupingAxes(t *testing.T) {
 	type walker struct {
 		name   string
@@ -224,8 +228,10 @@ func TestWalkCluster_ClusterNameRootFollowsAxes(t *testing.T) {
 	}{
 		{"nested", N, N, N, map[string][]string{"prod": none, "prod/r": none, "prod/r/rb": none, "prod/r/rb/ra": {"ra"}, "prod/r/c": none, "prod/r/c/cb": none, "prod/r/c/cb/ca": {"ca"}}},
 		{"bundle_dirs", N, N, F, map[string][]string{"prod": none, "prod/r": none, "prod/r/rb": {"ra"}, "prod/r/c": none, "prod/r/c/cb": {"ca"}}},
-		{"node_only", N, F, F, map[string][]string{"prod": none, "prod/r": {"ra"}, "prod/r/c": {"ca"}}},
-		{"all_flat", F, F, F, map[string][]string{"prod": none, "prod/r": {"ca", "ra"}}},
+		// The root node's bundle has a directory under a flat bundle axis too
+		// (go-kure/kure#979); a child node's bundle merges into its node.
+		{"node_only", N, F, F, map[string][]string{"prod": none, "prod/r": none, "prod/r/rb": {"ra"}, "prod/r/c": {"ca"}}},
+		{"all_flat", F, F, F, map[string][]string{"prod": none, "prod/r": none, "prod/r/rb": {"ca", "ra"}}},
 		{"flat_nodes_bundle_dirs", F, N, F, map[string][]string{"prod": none, "prod/r": none, "prod/r/rb": {"ra"}, "prod/r/cb": {"ca"}}},
 	}
 	for _, tc := range tests {
@@ -319,7 +325,7 @@ func TestWalkCluster_FilePerKindHonouredWhenFlat(t *testing.T) {
 		dir               string // directory holding a1 and a2, below the root r
 	}{
 		{"node_only", N, F, F, "r/c"},
-		{"all_flat", F, F, F, "r"},
+		{"all_flat", F, F, F, "r/b"},
 		{"bundle_dirs", N, N, F, "r/c/b"},
 	}
 	for _, tc := range tests {
@@ -363,10 +369,11 @@ func TestWalkCluster_FilePerKindHonouredWhenFlat(t *testing.T) {
 	}
 }
 
-// TestWalkCluster_AbsorbThenFlatten pins that FlattenSingleTier still runs
-// after the grouping merge and carries an augmenter's ExtraFiles and
-// ConfigMapGenerators when it collapses the augmenter's directory.
-func TestWalkCluster_AbsorbThenFlatten(t *testing.T) {
+// TestWalkCluster_FlattenKeepsMergedUnitDirectory pins that FlattenSingleTier,
+// running after the grouping merge, leaves the merged unit its directory: the
+// top of the tree renders no bundle (go-kure/kure#979), so the sole augmenter
+// of an all-flat walk is no longer collapsed into it.
+func TestWalkCluster_FlattenKeepsMergedUnitDirectory(t *testing.T) {
 	c := &stack.Node{Name: "c", Bundle: &stack.Bundle{Name: "b", Applications: []*stack.Application{axisAugmenterApp("x")}}}
 	r := &stack.Node{Name: "r", Children: []*stack.Node{c}}
 	c.SetParent(r)
@@ -377,14 +384,16 @@ func TestWalkCluster_AbsorbThenFlatten(t *testing.T) {
 	if err != nil {
 		t.Fatalf("walk: %v", err)
 	}
-	if len(ml.Children) != 0 {
-		t.Fatalf("sole augmenter child not collapsed: %d children", len(ml.Children))
+	want := map[string][]string{"r": {}, "r/b": {}, "r/b/x": {"x"}}
+	if got := layoutResources(t, ml); !reflect.DeepEqual(got, want) {
+		t.Fatalf("layout tree = %v, want %v", got, want)
 	}
-	if len(ml.ExtraFiles) != 1 || len(ml.ConfigMapGenerators) != 1 {
-		t.Errorf("collapsed augmenter lost its files: ExtraFiles=%d ConfigMapGenerators=%d", len(ml.ExtraFiles), len(ml.ConfigMapGenerators))
+	if len(ml.ExtraFiles) != 0 || len(ml.ConfigMapGenerators) != 0 {
+		t.Errorf("the top took over the augmenter's files: ExtraFiles=%d ConfigMapGenerators=%d", len(ml.ExtraFiles), len(ml.ConfigMapGenerators))
 	}
-	if got := layoutResources(t, ml); !reflect.DeepEqual(got, map[string][]string{"r": {"x"}}) {
-		t.Errorf("layout tree = %v, want r:[x]", got)
+	_, bundles := originPaths(ml)
+	if got := bundles["b"]; got != "r/b" {
+		t.Errorf("bundle b origin at %q, want r/b", got)
 	}
 }
 

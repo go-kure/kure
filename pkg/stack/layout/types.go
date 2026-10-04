@@ -117,7 +117,10 @@ type LayoutRules struct {
 	NodeGrouping GroupingMode
 	// BundleGrouping says whether each bundle gets its own directory inside
 	// its node's (GroupByName) or is rendered in the node's directory
-	// (GroupFlat). Defaults to GroupFlat.
+	// (GroupFlat). The root node's directory renders no bundle: with GroupFlat
+	// the bundles that would render there share one directory inside it, named
+	// after the first of them, and a child node of the root with that name is
+	// refused. Defaults to GroupFlat.
 	BundleGrouping GroupingMode
 	// ApplicationGrouping says whether each application gets its own
 	// directory inside its bundle's (GroupByName) or writes its resources into
@@ -145,23 +148,22 @@ type LayoutRules struct {
 
 	// FlattenSingleTier collapses a vestigial intermediate directory layer
 	// produced by the walker when it adds no semantic value: a parent layout
-	// with exactly one named child whose own children are empty and which is
-	// not an UmbrellaChild, where the parent itself is a top-level layout
-	// (Namespace has no path separator) with no own Resources.
+	// with exactly one named child whose own children are empty, which is
+	// not an UmbrellaChild and which renders no bundle, where the parent
+	// itself is a top-level layout (Namespace has no path separator) with no
+	// own Resources.
 	//
-	// Typical case: flat single-bundle apps where the caller wraps the bundle
-	// in an extra Node (e.g. the caller's "apps" Node). Multi-tier apps with sub-
-	// Kustomizations are unaffected — the collapse rules require the
-	// intermediate to be terminal.
+	// A directory that renders a bundle is never collapsed: its Flux
+	// Kustomization is hosted by its parent, and the top of the tree has
+	// none. In a walked tree that leaves one case: a single child node that
+	// has neither a bundle nor child nodes.
 	//
 	// Only effective for WalkCluster (not WalkClusterByPackage, which uses
 	// synthetic unnamed wrappers to express package boundaries).
 	//
-	// The absorbing layout takes over the collapsed layout's origins (the
-	// nodes, bundles and application it rendered), so every Flux
-	// Kustomization and ArgoCD Application generated from the layout names
-	// the post-collapse directory. Nothing is rewritten afterwards: a Flux
-	// CR a caller adds to the walked tree keeps the spec.path it was given.
+	// The absorbing layout takes over the collapsed layout's origin nodes.
+	// Nothing is rewritten afterwards: a Flux CR a caller adds to the walked
+	// tree keeps the spec.path it was given.
 	FlattenSingleTier bool
 }
 

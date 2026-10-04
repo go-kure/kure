@@ -324,7 +324,11 @@ ml, err := layout.WalkCluster(cluster, rules)
 if err != nil {
     panic(err)
 }
+// The root node's layout renders no bundle: bundle "web" has the directory
+// inside it.
+unit := ml.OriginUnit()
 fmt.Println(ml.FullRepoPath(), len(ml.Resources))
+fmt.Println(unit.FullRepoPath(), len(unit.Resources))
 ```
 <!-- doc-example:end -->
 
