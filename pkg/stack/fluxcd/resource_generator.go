@@ -70,11 +70,11 @@ func NewResourceGenerator() *ResourceGenerator {
 // The walk renders every application and runs every LayoutAugmenter, so their
 // errors surface here.
 func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error) {
-	if c == nil || c.Node == nil {
-		return nil, nil
-	}
 	if rules.FluxPlacement == layout.FluxIntegratedPerLayout {
 		return nil, errors.Errorf("GenerateFromCluster does not support FluxPlacement %q: the Kustomizations that apply a per-layout tree's child directories exist only in a layout; use CreateLayoutWithResources with these rules", rules.FluxPlacement)
+	}
+	if c == nil || c.Node == nil {
+		return nil, nil
 	}
 	if err := stack.ValidateCluster(c); err != nil {
 		return nil, err
