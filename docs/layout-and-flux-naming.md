@@ -423,8 +423,9 @@ that tree.
   renamed.
 
 **Acceptance.** With `FileNamingKindName`, no file in `flux-system/` or in an augmenter layout is
-named `{namespace}-{kind}-{name}.yaml`, unless that layout, or a layout above it that an augmenter
-added, sets its own FileNaming.
+named `{namespace}-{kind}-{name}.yaml`, unless that layout, or a layout above it, was given
+another FileNaming. An augmenter can give one to the application's layout too, and the layouts
+below that leave theirs unset then take it.
 
 ### The writers validate a Flux-delivered tree ([go-kure/kure#977](https://github.com/go-kure/kure/issues/977))
 
