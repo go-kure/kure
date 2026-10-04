@@ -44,7 +44,13 @@ func deliveryAnnotations(d stack.DeliveryIntent) map[string]string {
 //
 // The annotations are set on the objects the layout holds, in place. undo
 // takes back exactly what this call added; on error it has already run.
-func applyDeliveryIntents(ml *layout.ManifestLayout) (undo func(), err error) {
+//
+// sources maps the identity (sourceKey) of every Flux Source among those
+// objects to the annotations its application's intent asks for. A Source the
+// integration derives with that identity is the same object, so it carries
+// them too (integratedPlacement.add).
+func applyDeliveryIntents(ml *layout.ManifestLayout) (sources map[string]map[string]string, undo func(), err error) {
+	sources = map[string]map[string]string{}
 	var undos []func()
 	undo = func() {
 		for _, u := range slices.Backward(undos) {
@@ -81,9 +87,20 @@ func applyDeliveryIntents(ml *layout.ManifestLayout) (undo func(), err error) {
 					if u != nil {
 						undos = append(undos, u)
 					}
+					if key, ok := sourceKey(item); ok {
+						sources[key], _ = merge(sources[key], want)
+					}
 				}
-				if err := verifyWritten(obj, want); err != nil {
+				written, err := verifyWritten(obj, want)
+				if err != nil {
 					return errors.Wrapf(err, "application %q", rec.Application.Name)
+				}
+				// A Source the Go value gave no access to, raw JSON for one,
+				// is the application's as well.
+				for _, built := range written {
+					if key, ok := sourceKey(&unstructured.Unstructured{Object: built}); ok {
+						sources[key], _ = merge(sources[key], want)
+					}
 				}
 			}
 			us, err := annotateGenerators(rec.Application, rec.Layout, want)
@@ -101,9 +118,9 @@ func applyDeliveryIntents(ml *layout.ManifestLayout) (undo func(), err error) {
 	}
 	if err := walk(ml); err != nil {
 		undo()
-		return nil, err
+		return nil, nil, err
 	}
-	return undo, nil
+	return sources, undo, nil
 }
 
 // annotateObject adds want to obj's annotations and returns how to take that
@@ -246,11 +263,13 @@ func builtObjects(r client.Object) ([]client.Object, error) {
 			// Not an array: kustomize refuses the file when it builds it.
 			return self, nil
 		}
-		// What the Go value gives access to. Whether that is all the
-		// written items is checked afterwards, on the written form
-		// (verifyWritten).
+		// What the Go value gives access to, read as the writers serialize
+		// it (typedListItems): an item held as raw JSON is not an object to
+		// annotate, whatever object is held beside it. Whether what was
+		// reached is all the written items is checked afterwards, on the
+		// written form (verifyWritten).
 		if meta.IsListType(r) {
-			extracted, err := meta.ExtractList(r)
+			extracted, err := typedListItems(r)
 			if err != nil {
 				return nil, err
 			}
@@ -330,23 +349,25 @@ func writtenObjects(m map[string]any) []map[string]any {
 // fails for a typed object whose written form holds something its Go value
 // gave no access to — a List that writes its items from a field apimachinery
 // does not take for them, say. An unstructured object is its own written
-// form, so there is nothing to check.
-func verifyWritten(r client.Object, want map[string]string) error {
+// form, so there is nothing to check. It returns the objects it checked: what
+// kustomize builds from a typed r.
+func verifyWritten(r client.Object, want map[string]string) ([]map[string]any, error) {
 	if _, ok := r.(*unstructured.Unstructured); ok {
-		return nil
+		return nil, nil
 	}
 	written, err := writtenForm(r)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	for _, built := range writtenObjects(written) {
-		have, _, _ := unstructured.NestedStringMap(built, "metadata", "annotations")
+	built := writtenObjects(written)
+	for _, b := range built {
+		have, _, _ := unstructured.NestedStringMap(b, "metadata", "annotations")
 		for _, key := range slices.Sorted(maps.Keys(want)) {
 			if have[key] != want[key] {
-				return errors.Errorf("%s is written with %s lacking annotation %s: %q; the integrator cannot reach that object to set it",
-					describeObject(r), describeObject(&unstructured.Unstructured{Object: built}), key, want[key])
+				return nil, errors.Errorf("%s is written with %s lacking annotation %s: %q; the integrator cannot reach that object to set it",
+					describeObject(r), describeObject(&unstructured.Unstructured{Object: b}), key, want[key])
 			}
 		}
 	}
-	return nil
+	return built, nil
 }

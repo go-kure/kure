@@ -567,13 +567,19 @@ and every grouping, on:
   (a typed object that leaves an empty one out included), and any other kind with an `items`
   field, is one object and carries the annotation itself. The written file decides: a typed
   object whose written form still holds an object without the annotation, because its Go value
-  gives no access to it, is refused;
+  gives no access to it, is refused. An item held as raw JSON (`runtime.RawExtension.Raw`) is
+  such an object: it is written as it is, so it has to carry the annotation already;
 - every object a `LayoutAugmenter` adds to the application's own layout or a child layout below it;
 - every `configMapGenerator` of those layouts, as the entry's `options.annotations`, because
   kustomize builds those ConfigMaps after kure has written the tree.
 
 An object's other annotations are kept. An application that sets no intent gets no annotation and
 its output does not change.
+
+An application may emit the Flux Source that a bundle's `SourceRef` also derives; under the
+integrated placements the two are one object, hosted once per build. With an intent on that
+application, the derived Source carries the same annotations, so every copy that is applied is
+the same.
 
 An object or generator that already carries one of these annotations with **another** value is
 refused, with an error naming the application, the object (kind, namespace/name) or generator, the

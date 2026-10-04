@@ -445,7 +445,11 @@ engine's annotations. The Flux workflow turns that intent into the Flux annotati
 - **Lists:** a `List` contributes what it holds, a `List` inside it included, never the envelope.
   What is a `List` is decided as kustomize decides on the written file: a kind ending in `List`
   that has an `items` field. A typed object whose written form still holds an object without the
-  annotation, because its Go value gives no access to it, is refused.
+  annotation, because its Go value gives no access to it, is refused; an item held as raw JSON is
+  read from that JSON, as the writers serialize it.
+- **Sources:** an application may emit the Source a bundle's `SourceRef` also derives; the
+  integrated placements take the two for one object. With an intent on that application the
+  derived Source carries the same annotations, so the two still compare equal.
 - **Refusal leaves no annotation behind:** the annotations are set in place, on the objects the
   layout holds, and the integrator records what it added. A refused integration, for a conflict or
   for any later reason, takes them back. After a successful one they stay on those objects.
