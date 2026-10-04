@@ -226,11 +226,12 @@ func TestOriginApplicationObjects_WalkClusterByPackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := 0
+	found, charts := 0, 0
 	for _, ml := range pkgs {
 		recs := applicationObjects(t, ml)
 		found += len(recs)
 		if chart, ok := recs["chart"]; ok {
+			charts++
 			if got, want := objectNames(chart.Objects), []string{"chart-cm", "chart-hook", "chart-post"}; !slices.Equal(got, want) {
 				t.Errorf("chart objects = %v, want %v", got, want)
 			}
@@ -238,5 +239,8 @@ func TestOriginApplicationObjects_WalkClusterByPackage(t *testing.T) {
 	}
 	if found != 2 {
 		t.Errorf("recorded applications %d, want 2", found)
+	}
+	if charts != 1 {
+		t.Errorf("chart is recorded in %d packages, want one", charts)
 	}
 }
