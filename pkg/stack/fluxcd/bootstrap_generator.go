@@ -272,9 +272,10 @@ func validateRootName(rootNode *stack.Node) error {
 // validateSyncRootName checks the root node's name for a FluxInstance. The
 // name is used only in sync.path, and generateFluxInstance builds a sync only
 // when config has a SourceURL: without one the name goes nowhere and is not
-// checked.
+// checked. A nil config builds no FluxInstance at all, so it is accepted here
+// and the caller need not test for it first.
 func validateSyncRootName(config *stack.BootstrapConfig, rootNode *stack.Node) error {
-	if config.SourceURL == "" {
+	if config == nil || config.SourceURL == "" {
 		return nil
 	}
 	return validateRootName(rootNode)
@@ -419,11 +420,11 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 // Returns (nil, nil) when config is nil. Unlike GenerateBootstrap, this method
 // does not check config.Enabled — the caller is responsible for that gate.
 func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) (*fluxv1.FluxInstance, error) {
-	if config == nil {
-		return nil, nil
-	}
 	if err := validateSyncRootName(config, rootNode); err != nil {
 		return nil, err
+	}
+	if config == nil {
+		return nil, nil
 	}
 	obj := bg.generateFluxInstance(config, rootNode)
 	fi, ok := obj.(*fluxv1.FluxInstance)

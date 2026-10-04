@@ -507,12 +507,6 @@ Generate Flux system bootstrap manifests. Two modes are available:
 
 When `FluxMode` is empty, it defaults to `"flux-operator"`.
 
-The root node's name becomes a segment of the path the bootstrap applies, so it is checked as a
-directory name wherever a path is built from it: always in `"gotk"` mode, and in
-`"flux-operator"` mode when `SourceURL` is set (without one the `FluxInstance` has no sync and the
-name is not used). A name holding `/`, `\` or a NUL byte, or `.` or `..`, is refused; no root node
-and an unnamed root are valid.
-
 The `"flux-operator"` bundle is vendored from one specific upstream flux-operator release
 (`FluxOperatorVersion`), so upgrading Kure can also change the CRDs it installs. A CRD that
 tightens validation rejects objects the previous release accepted — for example a
@@ -562,6 +556,12 @@ for _, obj := range objects {
 into the full reference the operator's `GitRepository` needs (`main` becomes `refs/heads/main`).
 A value that already starts with `refs/` — a tag such as `refs/tags/v1.0.0` — is passed through
 unchanged in `"flux-operator"` mode only; `"gotk"` mode always treats a Git `SourceRef` as a branch.
+
+The root node's name becomes a segment of the path the bootstrap applies, so it is checked as a
+directory name wherever a path is built from it: always in `"gotk"` mode, and in
+`"flux-operator"` mode when `SourceURL` is set (without one the `FluxInstance` has no sync and the
+name is not used). A name holding `/`, `\` or a NUL byte, or `.` or `..`, is refused; no root node
+and an unnamed root are valid.
 
 ### Bootstrap namespace
 
