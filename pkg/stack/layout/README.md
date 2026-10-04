@@ -227,6 +227,8 @@ the tree:
 - a layout that sets its own `FileNaming` keeps it, and the layouts below it inherit that one.
 
 A layout added to a tree by hand, outside a walker, is not touched: set its `FileNaming` yourself.
+A layout `FlattenSingleTier` absorbs into the root has no directory of its own any more: its files
+take the root's `FileNaming`, and its own only when the root's is unset.
 
 **Breaking change (go-kure/kure#976).** Before, the `flux-system/` directory and the layouts an
 augmenter added always used the default pattern unless the augmenter set `FileNaming` itself. With

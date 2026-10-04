@@ -34,7 +34,11 @@ where they do not hold yet, and Part 2 is what makes them hold.
 
 ## Part 1: current behaviour (v0.2.0-beta.15)
 
-Line references are to `v0.2.0-beta.15` and will drift as the code changes.
+Line references are to `v0.2.0-beta.15` and will drift as the code changes. One exception: the
+FileNaming rows and item (section 1.2, section 1.9 item 4) describe the code after
+[go-kure/kure#976](https://github.com/go-kure/kure/issues/976), and the line references into
+`walker.go`, `manifest.go`, `types.go` and `layout_integrator.go` below the lines that change
+touched are moved to match it.
 
 ### 1.1 The model
 
@@ -419,7 +423,8 @@ that tree.
   renamed.
 
 **Acceptance.** With `FileNamingKindName`, no file in `flux-system/` or in an augmenter layout is
-named `{namespace}-{kind}-{name}.yaml`, unless that layout sets its own FileNaming.
+named `{namespace}-{kind}-{name}.yaml`, unless that layout, or a layout above it that an augmenter
+added, sets its own FileNaming.
 
 ### The writers validate a Flux-delivered tree ([go-kure/kure#977](https://github.com/go-kure/kure/issues/977))
 
