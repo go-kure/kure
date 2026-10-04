@@ -75,6 +75,10 @@ func (bg *BootstrapGenerator) GenerateBootstrap(config *stack.BootstrapConfig, r
 		return nil, nil
 	}
 
+	if err := validateRootName(rootNode); err != nil {
+		return nil, err
+	}
+
 	mode := config.FluxMode
 	if mode == "" {
 		mode = DefaultFluxMode
@@ -273,6 +277,22 @@ func bootstrapDir(rootNode *stack.Node) string {
 	return rootName(rootNode)
 }
 
+// validateRootName checks the root node's name where it is about to become a
+// path segment: of the gotk bootstrap Kustomization's spec.path and of the
+// FluxInstance's sync.path. The bootstrap entry points take a node, not a
+// cluster, so stack.ValidateCluster has not checked it. No root node and an
+// unnamed root are valid: neither adds a segment.
+func validateRootName(rootNode *stack.Node) error {
+	name := rootName(rootNode)
+	if name == "" {
+		return nil
+	}
+	if err := stack.ValidateDirectoryName(name); err != nil {
+		return errors.ResourceValidationError("Node", name, "name", err.Error(), nil)
+	}
+	return nil
+}
+
 // sourceName returns the name a generated GitRepository or OCIRepository
 // carries: the root node's name when it has one, [DefaultSourceName] otherwise.
 // The bootstrap Kustomization's sourceRef must resolve through this same
@@ -421,6 +441,9 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) (*fluxv1.FluxInstance, error) {
 	if config == nil {
 		return nil, nil
+	}
+	if err := validateRootName(rootNode); err != nil {
+		return nil, err
 	}
 	obj, err := bg.generateFluxInstance(config, rootNode)
 	if err != nil {

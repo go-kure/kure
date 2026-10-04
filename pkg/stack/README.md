@@ -196,12 +196,17 @@ written. Nothing is shortened or rewritten: the caller chooses a valid name.
   refused on every platform, so a name such as `..\outside` cannot leave its
   directory where the backslash is a separator.
 
-The error names where the name sits: a bundle by its path from the bundle that
-was validated (`platform/platform-infra`), a node by its path from the root,
-and `ValidateCluster` adds the node a refused bundle is attached to
-(`bundle "web" at node "apps/web" failed validation`). Both functions are
-exported so that code deriving a name from these fields can check the result
-with the same rule.
+An error from either rule names where the name sits: a bundle by its path from
+the bundle that was validated (`platform/platform-infra`), a node by its path
+from the root, and `ValidateCluster` adds the node a refused bundle is attached
+to (`bundle "web" at node "apps/web" failed validation`). An umbrella child
+without a name is refused earlier, by the check on `Children`, which names its
+parent and the child's index. Both functions are exported so that code deriving
+a name from these fields can check the result with the same rule. Two Flux
+entry points take a bundle or a node that no cluster validation has seen and
+apply the rule themselves: the generator checks the Kustomization name of a
+bundle it is handed directly (`GenerateForBundle`), and the bootstrap generator
+checks the root node's name as a directory name.
 
 ### Application
 
