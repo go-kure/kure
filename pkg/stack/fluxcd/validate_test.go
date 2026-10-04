@@ -1,6 +1,7 @@
 package fluxcd
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/go-kure/kure/pkg/stack"
@@ -51,6 +52,21 @@ func TestValidateSourceRefsForFluxIntegrated_InvalidSourceRef(t *testing.T) {
 				t.Fatalf("sourceRef=%v: expected error, got nil", tc.ref)
 			}
 		})
+	}
+}
+
+// The gate runs for both integrated placements, so its message names both and
+// the bundle it refuses.
+func TestValidateSourceRefsForFluxIntegrated_MessageNamesBothPlacements(t *testing.T) {
+	c := &stack.Cluster{Node: &stack.Node{Name: "prod", Bundle: &stack.Bundle{Name: "apps"}}}
+	err := validateSourceRefsForFluxIntegrated(c)
+	if err == nil {
+		t.Fatal("expected error for a bundle without SourceRef, got nil")
+	}
+	for _, want := range []string{"FluxIntegratedPerLayout", "FluxIntegratedPerBundle", "apps"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err, want)
+		}
 	}
 }
 

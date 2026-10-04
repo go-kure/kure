@@ -46,9 +46,14 @@ type ManifestLayout struct {
 	// directory.
 	UmbrellaChild bool
 	// DependsOn lists sibling layout names whose Kustomization CRs must reconcile
-	// before this layout's CR. In FluxIntegratedPerLayout mode the layout integrator
-	// translates these into spec.dependsOn on the emitted Kustomization CR.
-	// Augmenters (LayoutAugmenter) set this field; the integrator reads it.
+	// before this layout's CR. Augmenters (LayoutAugmenter) set this field. The
+	// Flux layout integrator translates it into spec.dependsOn only on the
+	// Kustomization CR it generates for this layout itself, which it does only
+	// under FluxIntegratedPerLayout and only for a child layout that is not an
+	// umbrella child, is not AppFileSingle and renders no bundle. In every
+	// other case the field is dropped without an error: under
+	// FluxIntegratedPerBundle and FluxSeparate an augmenter's ordering
+	// produces nothing.
 	DependsOn []string
 	// origin records the stack objects this layout renders (see origin.go).
 	// Set only by the walkers and FlattenSingleTier; never serialised.
