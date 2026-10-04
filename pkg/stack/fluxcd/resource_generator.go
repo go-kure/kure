@@ -707,7 +707,13 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string,
 	}
 
 	// Add dependencies
-	for _, dep := range b.DependsOn {
+	for i, dep := range b.DependsOn {
+		// Bundle.Validate refuses a nil entry; GenerateForBundle is reached
+		// without it.
+		if dep == nil {
+			return nil, errors.ResourceValidationError("Bundle", b.GetPath(), "dependsOn",
+				fmt.Sprintf("dependency at index %d is nil", i), nil)
+		}
 		if checkNames {
 			if err := checkKustomizationName(dep); err != nil {
 				return nil, err
