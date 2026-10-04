@@ -218,7 +218,7 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 	// so both require every reachable bundle to have a valid SourceRef.
 	if rules.FluxPlacement == layout.FluxIntegratedPerLayout ||
 		rules.FluxPlacement == layout.FluxIntegratedPerBundle {
-		if err := validateSourceRefsForFluxIntegrated(c); err != nil {
+		if err := validateSourceRefsForFluxIntegrated(c, rules.FluxPlacement); err != nil {
 			return nil, err
 		}
 	}
@@ -1512,11 +1512,11 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 // SourceRef validation gate, and the walker all read from this normalized value
 // so they cannot disagree on what "unset" means.
 //
-// The default is read from layout.DefaultLayoutRules (pkg/stack/layout/types.go:154-163)
-// rather than named here, because that function is where the layout package
-// declares it and the walker resolves unset options from the same call
-// (pkg/stack/layout/walker.go:42-43). A constant in this package would be a
-// second copy of a value this package does not own.
+// The default is read from layout.DefaultLayoutRules rather than named here,
+// because that function is where the layout package declares it and
+// layout.WalkCluster resolves an unset placement from the same call. A
+// constant in this package would be a second copy of a value this package
+// does not own.
 func normalizeRulesPlacement(rules layout.LayoutRules) layout.LayoutRules {
 	if rules.FluxPlacement == layout.FluxUnset {
 		rules.FluxPlacement = layout.DefaultLayoutRules().FluxPlacement
