@@ -175,8 +175,8 @@ directly under the walked root (`layout_integrator.go:1384-1389`).
 | Input | Result | Source |
 |---|---|---|
 | Two bundles with the same name | refused wherever the origin index is built: the integrator under every placement, `GenerateFromLayout` and the ArgoCD workflow. `WalkCluster` and the writers alone do not check it. | `origin.go:122-123`; callers `layout_integrator.go:306`, `resource_generator.go:90`, `pkg/stack/argocd/argo.go:68` |
-| A payload Kustomization named like its bundle, in the namespace of the generated Kustomization (the generator's `DefaultNamespace`) | refused under every placement. The check compares namespace and name, so it does not refuse the same name in another namespace. | `layout_integrator.go:1009-1014`, `:1183-1188`, `:1328-1330`; `resource_generator.go:495-498` |
-| A Kustomization name used twice | refused by the integrator | `layout_integrator.go:1198-1204` |
+| A payload Kustomization named like its bundle, in the namespace of the generated Kustomization (the generator's `DefaultNamespace`) | refused under `FluxSeparate`. Under the two integrated placements it is refused unless it sits in the layout that hosts the generated Kustomization and has the same `spec.path`: that one is kept as it is, and none is generated for the bundle. A root bundle is its own host, so its payload can meet this. The check compares namespace and name, so it does not refuse the same name in another namespace. | `layout_integrator.go:938-943`, `:1009-1014`, `:1183-1188`, `:1328-1330`; `resource_generator.go:495-498` |
+| A Kustomization name generated twice in one integration | refused by the integrator. The key is the bare name: every generated Kustomization is in `DefaultNamespace`. | `layout_integrator.go:1198-1204` |
 | `FluxIntegratedPerLayout` with `ApplicationGrouping: GroupByName`, application named like its bundle (the common case) | refused as a name used twice | same |
 | `FluxIntegratedPerLayout`, augmenter application named like its bundle | refused as a name used twice | same |
 | Two directory layouts resolving to one directory | refused by the writers | `pkg/stack/layout/treecheck.go:63-69` |
