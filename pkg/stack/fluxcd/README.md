@@ -110,7 +110,7 @@ if err != nil {
 fmt.Println(objects[0].GetName(), objects[0].(*kustv1.Kustomization).Spec.Path)
 
 // For one bundle, at a path you supply
-objects, err = engine.ResourceGen.GenerateForBundle(bundle, "clusters/prod/apps")
+objects, err = engine.ResourceGen.GenerateForBundle(bundle, "clusters/prod/apps/web")
 if err != nil {
     panic(err)
 }
@@ -129,8 +129,9 @@ Each directory that renders bundles produces one Flux Kustomization resource (se
 `GenerateFromCluster` walks the cluster itself, so it renders every application and runs every
 `LayoutAugmenter`: their errors surface there. It walks with the `layout.LayoutRules` it is given,
 so its paths are the directories `WalkCluster` writes under those rules: pass the rules you write
-the tree with. Under `layout.DefaultLayoutRules()` that is the root node at `<root>` and its
-children at `<root>/<child>`, which is also what the bootstrap sync path `./<root>` expects; with
+the tree with. Under `layout.DefaultLayoutRules()` that is the root node at `<root>`, its bundle
+at `<root>/<bundle>` and its children at `<root>/<child>`, which is also what the bootstrap sync
+path `./<root>` expects; with
 `ClusterName: "."` and an unnamed root node it is the root of the tree, not `cluster`. The objects
 come back as a list and are placed nowhere, and the list is the same under `FluxSeparate` and
 `FluxIntegratedPerBundle`. Rules with `FluxIntegratedPerLayout` are refused: a tree written with
@@ -208,26 +209,39 @@ layout whose directory holds its resources. A bundle's Kustomization `spec.path`
 |---|---|---|---|
 | node `platform`, bundle `web` | `GroupByName` | `web` | `platform/web` |
 | node `platform`, bundle `platform` | `GroupByName` | `platform` | `platform/platform` |
-| node `platform` (bundle `platform`) with child node `apps` (bundle `apps-bundle`) | bundles and applications `GroupFlat`, `ClusterName: "prod"` | `platform`, `apps-bundle` | `prod/platform`, `prod/platform/apps` |
-| unnamed root node, bundle `web` | bundles and applications `GroupFlat`, `ClusterName: "."` | `web` | `.` |
+| root node `platform` (bundle `platform`) with child node `apps` (bundle `apps-bundle`) | bundles and applications `GroupFlat`, `ClusterName: "prod"` | `platform`, `apps-bundle` | `prod/platform/platform`, `prod/platform/apps` |
+| unnamed root node, bundle `web` | bundles and applications `GroupFlat`, `ClusterName: "."` | `web` | `web` |
 
 The path is emitted as `FullRepoPath()` returns it (no `./` prefix; Flux treats `x` and `./x`
 alike) and is relative to the root of what the writer wrote: the `WriteToDisk` / `WriteToTar`
 base, or `<basePath>/<ManifestsDir>` for `layout.WriteManifest`. Root the Flux source there.
 
+The root node's directory renders no bundle (go-kure/kure#979): with a flat `BundleGrouping` its
+bundle has a directory inside it, named after the bundle, as the last two rows show. Before, the
+bundle rendered in the root node's directory (`prod/platform` and `.` in those rows), and the
+Kustomization that applied that directory was hosted inside it. See "The root node's bundles" in
+the layout package README, also for the path move this is on a deployed tree.
+
 ### One Kustomization per directory
 
 A directory is what a Flux Kustomization applies, so kure emits exactly one per directory that
-renders bundles. When a `GroupFlat` axis (or `FlattenSingleTier`) merges several bundles into one
-directory, they share that Kustomization, named after the first of them (the absorbing node's own
-bundle when it has one), by its `KustomizationName` when it sets one. A reference to any of the
-merged bundles' Kustomization names resolves to the shared one.
+renders bundles. When a `GroupFlat` axis merges several bundles into one directory, they share that
+Kustomization, named after the first of them (the absorbing node's own bundle when it has one), by
+its `KustomizationName` when it sets one. A reference to any of the merged bundles' Kustomization
+names resolves to the shared one.
 
 Each such directory has **one owner**: it is applied by its own Kustomization and by nothing else.
 No parent `kustomization.yaml` lists a child directory that renders bundles, in any placement, so
 two Kustomizations never apply (and prune, and patch) the same objects. The child's CR is what
 applies it — in `flux-system` under `FluxSeparate`, in the parent directory under the integrated
 placements. Building a parent directory therefore does not include its child units.
+
+A Kustomization is never hosted inside the directory it applies. Every directory that renders
+bundles has a parent to host its CR: the top of the tree `layout.WalkCluster` returns renders none
+(go-kure/kure#979). `IntegrateWithLayout` refuses a tree whose top does render a bundle, in every
+placement: integrate the whole tree `layout.WalkCluster` returns. A subtree of a walked tree,
+integrated on its own, can be such a tree, and so can the `layout.WalkClusterByPackage` tree of a
+package the root node is not in, under a flat `NodeGrouping`.
 
 The bundles merged into one directory combine as follows:
 
@@ -250,7 +264,9 @@ cycle among these waits is refused, naming the chain. Kustomizations an applicat
 and objects in other namespaces, are outside this check. A merge can close one (a health
 check or dependency on a bundle merged into a unit that waits for it), and so can a parent node's
 bundle depending on a child node's bundle whose CR only the parent's directory holds (both
-integrated placements). ArgoCD
+integrated placements). The root node's bundle cannot close that one any more: its directory holds
+no CR, and the CRs in the root node's directory are created by whatever applies that directory
+(go-kure/kure#979). ArgoCD
 Applications get the unit rule but not this check: only a `DependsOn` cycle between units is
 refused there. Give bundles directories of their own (`NodeGrouping` or
 `BundleGrouping` `GroupByName`) when they need different settings.
@@ -259,7 +275,7 @@ refused there. Give bundles directories of their own (`NodeGrouping` or
 
 Flux applies a Kustomization's patches to **everything that Kustomization builds**, not to the
 bundle that declared them. While a bundle has a directory of its own that is the same thing. Once
-a `GroupFlat` axis or `FlattenSingleTier` puts several bundles in one directory, the shared
+a `GroupFlat` axis puts several bundles in one directory, the shared
 Kustomization builds all their objects, so a patch meant for one bundle would also change the
 others' — and a layout setting would silently change what a bundle's patch does. kure refuses
 that instead of generating it:
@@ -286,9 +302,8 @@ check does not see a generated ConfigMap that the shared directory itself builds
 `FlattenSingleTier` collapse (go-kure/kure#979).
 
 The generator computes no path, the integrator matches nothing by name, and `FlattenSingleTier`
-rewrites nothing afterwards: when it collapses a tier, the surviving layout takes over the
-collapsed layout's origins, so when both carried a bundle they share the surviving directory's one
-Kustomization. An umbrella
+rewrites nothing afterwards: it collapses no directory that renders a bundle
+(go-kure/kure#979), so it changes no Kustomization's path and merges no bundles. An umbrella
 child's path is its own directory, in every mode (an earlier `KustomizationRecursive` rule
 pointed it at the parent bundle's directory, whose kustomization excludes the child).
 
@@ -507,10 +522,15 @@ root node's layout**, whichever layouts hold the Kustomizations that use it (go-
 and not in a `ClusterName` wrapper above it. For a named root node under the default rules that is
 the directory the bootstrap sync path `./<root>` names (see [Kustomization paths](#kustomization-paths)
 for other rules), so the Source is in one build, the root's, and exists before any Kustomization
-that uses it. When the root node renders a bundle, its own Kustomization builds that same directory beside
-the bootstrap: both hold the same objects, so neither prunes what the other keeps, but the root
-bundle's patches and postBuild apply only in its own. A generated Kustomization whose build holds
-the root node's layout is therefore refused when one of its patches applies to a Source the
+that uses it. A Kustomization whose `spec.path` build holds that directory applies it beside the
+bootstrap: both hold the same objects, so neither prunes what the other keeps, but the
+Kustomization's patches and postBuild apply only in its own build. On a walked tree no bundle's
+Kustomization is one any more: the root node's directory renders no bundle (go-kure/kure#979;
+before, the root node's bundle rendered there, and its patches and postBuild met this check). What
+is left is the layout Kustomization of the root node's directory below a `ClusterName` wrapper
+under `FluxIntegratedPerLayout`, which carries patches or postBuild only when it is the caller's
+own, kept (below), and a tree built by hand. A Kustomization whose build holds
+the root node's layout is refused when one of its patches applies to a Source the
 integration hosts there — a target that selects it the way kustomize selects one, or a target-less
 strategic-merge patch whose body names its apiVersion, kind, name and effective namespace — or when
 its postBuild substitution changes one: Flux's own substitution, run offline with the inline
@@ -522,8 +542,8 @@ overwriting each other. The error names the Kustomization, the Source and the pa
 postBuild; narrow the patch target, move the patch or postBuild to a bundle below the root node, or
 drop the `${...}` from the `SourceRef` URL. A patch that selects a hosted Source but leaves it
 unchanged is refused too. A copy the integration did not add, anywhere in the root build (see
-below), is its owner's: the integration hosts none of its own then and does not check what the root
-bundle's patches do to it. A `sourceRef` names the object, not the layout holding it.
+below), is its owner's: the integration hosts none of its own then and does not check what a
+Kustomization's patches do to it. A `sourceRef` names the object, not the layout holding it.
 
 The root build also covers the child directories the root's `kustomization.yaml` lists and the
 `AppFileSingle` files written into them. When that build already holds a copy the integration did
@@ -775,7 +795,7 @@ README.
 Controls where Flux Kustomization resources are placed:
 
 - `FluxSeparate` - Flux resources collected in a separate `flux-system/` directory inside the root layout's own directory (where the root's `kustomization.yaml` references it); children referenced as directories, except those that render bundles, which their own CRs apply. `WriteToDisk` and `WriteToTar` name its files by `LayoutRules.FileNaming`, like the rest of the tree: `flux-system-kustomization-<name>.yaml` by default, `kustomization-<name>.yaml` with `FileNamingKindName` (go-kure/kure#976; before, always the default pattern). Rules passed to `IntegrateWithLayout` that leave `FileNaming` unset take the root layout's.
-- `FluxIntegratedPerLayout` - a Flux Kustomization CR for every layout that renders bundles (bundles a `GroupFlat` merge puts in one directory share one CR, named after the first) and for every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle (augmenter-added child layouts included), hosted in its parent layout (the walked root, which has no parent, hosts its own); the parent's `kustomization.yaml` lists those CR files as its own resources and references no child directory. Not literally every layout: a layout whose CR name another generated CR already uses, such as an augmenter application named like its bundle, is refused instead (see [Non-Bundle Child Layout CRs](#non-bundle-child-layout-crs)). A Kustomization already in the tree with that name, in the namespace of the generated CRs, is kept in place of a generated one when it sits in the layout that would host it and has the same `spec.path`, and is refused otherwise. Finest granularity.
+- `FluxIntegratedPerLayout` - a Flux Kustomization CR for every layout that renders bundles (bundles a `GroupFlat` merge puts in one directory share one CR, named after the first) and for every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle (augmenter-added child layouts included), hosted in its parent layout (the top of the tree `layout.WalkCluster` returns renders no bundle and gets no CR, go-kure/kure#979); the parent's `kustomization.yaml` lists those CR files as its own resources and references no child directory. Not literally every layout: a layout whose CR name another generated CR already uses, such as an augmenter application named like its bundle, is refused instead (see [Non-Bundle Child Layout CRs](#non-bundle-child-layout-crs)). A Kustomization already in the tree with that name, in the namespace of the generated CRs, is kept in place of a generated one when it sits in the layout that would host it and has the same `spec.path`, and is refused otherwise. Finest granularity.
 - `FluxIntegratedPerBundle` - Flux Kustomization CRs at **bundle boundaries only**, each hosted in its parent layout; a bundle's interior (application and augmenter-added child layouts) is a single kustomize build, with those children referenced as directories. A child that renders bundles is not referenced: its own CR applies it. Coarser: Flux reconciles per bundle, kustomize handles the interior.
 
 External augmenters may add child layouts that are not represented in the bundle model; integrated placement discovers those layouts and emits the required Flux resources.
@@ -833,14 +853,17 @@ node, with `spec.path` = the child's own directory:
   enclosing umbrella child's layout node.
 - **Integrated, `BundleGrouping: GroupFlat`**: there is no intermediate bundle
   layer, so umbrella children become direct sub-layouts of the node layout,
-  and their Flux CRs sit at the node layout.
+  and their Flux CRs sit at the node layout. The root node is the exception
+  (go-kure/kure#979): its bundle has a directory of its own inside the root
+  node's, and the umbrella children and their Flux CRs sit there.
 - **FluxSeparate**: the `flux-system` layout directory receives every bundle's
   Kustomization CR, umbrella descendants included, as a flat list.
 
 Under both integrated placements a node bundle's own CR is hosted by the
-**parent** of the layout that renders the bundle (the root layout hosts its
-own): that directory is applied by its own Kustomization only, so the CR that
-creates it cannot live inside it.
+**parent** of the layout that renders the bundle: that directory is applied by
+its own Kustomization only, so the CR that creates it cannot live inside it.
+The root node's bundle has a parent too, the root node's layout
+(go-kure/kure#979).
 
 ### On-disk shape
 

@@ -275,6 +275,9 @@ func TestWriters_FluxTreeRefusesUnappliedBundleLayout(t *testing.T) {
 			t.Fatal("platform/web renders no bundle: the case needs one")
 		}
 		ml.SetFluxBuild(true)
+		// The root node's bundle has a directory of its own, a unit like
+		// platform/web: marked here, so that platform/web is the one left.
+		layoutAt(t, ml, "platform/platform").SetFluxBuild(true)
 		return ml
 	}
 	for _, writer := range allWriters {

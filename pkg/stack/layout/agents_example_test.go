@@ -20,6 +20,12 @@ func Example_agentsLayout() {
 	if err != nil {
 		panic(err)
 	}
+	// The root node's layout renders no bundle: bundle "web" has the directory
+	// inside it.
+	unit := ml.OriginUnit()
 	fmt.Println(ml.FullRepoPath(), len(ml.Resources))
-	// Output: apps 2
+	fmt.Println(unit.FullRepoPath(), len(unit.Resources))
+	// Output:
+	// apps 0
+	// apps/web 2
 }

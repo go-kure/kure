@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -291,12 +293,17 @@ func TestWalkClusterFlatRoot(t *testing.T) {
 		t.Fatalf("nil layout returned")
 	}
 
-	// With flat root output, all child node resources are merged into root
-	if len(ml.Children) != 0 {
-		t.Fatalf("expected no children (flat root), got %d", len(ml.Children))
+	// With flat output every child node merges into the root node's layout.
+	// That layout renders no bundle (go-kure/kure#979): the merged bundles
+	// stay one unit, in one directory named after the first.
+	if got, want := collectRepoPaths(ml), []string{"root", "root/bundle1"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("layouts = %v, want %v", got, want)
 	}
-	if len(ml.Resources) != 2 {
-		t.Fatalf("expected 2 resources from both nodes, got %d", len(ml.Resources))
+	if len(ml.Resources) != 0 {
+		t.Fatalf("expected no resources in the root node's layout, got %d", len(ml.Resources))
+	}
+	if got := len(ml.Children[0].Resources); got != 2 {
+		t.Fatalf("expected 2 resources from both nodes in the unit's directory, got %d", got)
 	}
 }
 
@@ -330,12 +337,13 @@ func TestWalkClusterFlatRoot_DeepHierarchy(t *testing.T) {
 		t.Fatalf("nil layout returned")
 	}
 
-	// Deep hierarchy should be fully flattened
-	if len(ml.Children) != 0 {
-		t.Fatalf("expected no children (flat root), got %d", len(ml.Children))
+	// The deep hierarchy is fully flattened into the root node's layout; the
+	// grandchild's bundle keeps its own directory below it.
+	if got, want := collectRepoPaths(ml), []string{"root", "root/bundle"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("layouts = %v, want %v", got, want)
 	}
-	if len(ml.Resources) != 1 {
-		t.Fatalf("expected 1 resource from grandchild, got %d", len(ml.Resources))
+	if got := len(ml.Children[0].Resources); got != 1 {
+		t.Fatalf("expected 1 resource from grandchild, got %d", got)
 	}
 }
 
@@ -390,11 +398,12 @@ func TestWalkCluster_ClusterNameWithChildNodes(t *testing.T) {
 	}
 
 	// The child node layout must be nested under rootLayout, not under
-	// clusterLayout — this is what the fix enforces.
-	if len(rootLayout.Children) != 1 {
-		t.Fatalf("root layout should have 1 child (apps node), got %d", len(rootLayout.Children))
+	// clusterLayout — this is what the fix enforces. It sits next to the
+	// root bundle's own directory (go-kure/kure#979).
+	if got, want := collectRepoPaths(rootLayout), []string{"demo/flux-system", "demo/flux-system/root-bundle", "demo/flux-system/apps"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("root layout tree = %v, want %v", got, want)
 	}
-	appsLayout := rootLayout.Children[0]
+	appsLayout := rootLayout.Children[1]
 	if appsLayout.Name != "apps" {
 		t.Fatalf("expected apps layout name %q, got %q", "apps", appsLayout.Name)
 	}
@@ -1218,17 +1227,20 @@ func TestWalkCluster_ClusterName_UnnamedRoot_Augmenter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("walk cluster: %v", err)
 	}
-	if len(ml.Children) != 1 {
-		t.Fatalf("expected 1 per-app sub-layout under synthetic root, got %d", len(ml.Children))
+	// The per-app sub-layout sits under the root bundle's directory, which
+	// sits under the synthetic root (go-kure/kure#979).
+	if got, want := collectRepoPaths(ml), []string{".", "bundle", "bundle/a"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("layouts = %v, want %v", got, want)
 	}
+	appLayout := ml.Children[0].Children[0]
 	if cfg.called == nil {
 		t.Errorf("AugmentLayout was not called")
 	}
-	if cfg.called != ml.Children[0] {
+	if cfg.called != appLayout {
 		t.Errorf("AugmentLayout received the wrong layout")
 	}
-	if len(ml.Children[0].ExtraFiles) != 1 {
-		t.Errorf("ExtraFiles missing: %+v", ml.Children[0].ExtraFiles)
+	if len(appLayout.ExtraFiles) != 1 {
+		t.Errorf("ExtraFiles missing: %+v", appLayout.ExtraFiles)
 	}
 }
 
@@ -1236,8 +1248,8 @@ func TestWalkCluster_ClusterName_UnnamedRoot_Augmenter(t *testing.T) {
 // writer-level regression for the synthetic-root case via the
 // ManifestLayout.WriteToDisk method path (used by archive-producing runtimes
 // via WriteToTar and by the test harness via WriteToDisk). When all apps in
-// the unnamed root become augmenter-driven per-app sub-layouts, the
-// synthetic root has Children but zero local Resources; the writer must
+// the unnamed root become augmenter-driven per-app sub-layouts, the root
+// bundle's directory has Children but zero local Resources; the writer must
 // still emit a kustomization.yaml that references those children so
 // they aren't stranded on disk.
 func TestWalkCluster_ClusterName_UnnamedRoot_Augmenter_WriteToDisk(t *testing.T) {
@@ -1269,20 +1281,21 @@ func TestWalkCluster_ClusterName_UnnamedRoot_Augmenter_WriteToDisk(t *testing.T)
 		t.Fatalf("WriteToDisk: %v", err)
 	}
 
-	rootKust := filepath.Join(dir, "demo", "kustomization.yaml")
-	data, err := os.ReadFile(rootKust)
+	// The root bundle's directory is demo/bundle (go-kure/kure#979).
+	bundleKust := filepath.Join(dir, "demo", "bundle", "kustomization.yaml")
+	data, err := os.ReadFile(bundleKust)
 	if err != nil {
-		t.Fatalf("synthetic-root kustomization.yaml missing: %v", err)
+		t.Fatalf("root bundle kustomization.yaml missing: %v", err)
 	}
 	got := string(data)
 	for _, name := range []string{"a", "b"} {
-		if !strings.Contains(got, name) {
-			t.Errorf("synthetic-root kustomization.yaml does not reference child %q. got:\n%s", name, got)
+		if !strings.Contains(got, "- "+name+"\n") {
+			t.Errorf("root bundle kustomization.yaml does not reference child %q. got:\n%s", name, got)
 		}
 	}
 	// Each per-app sub-directory must exist on disk too.
 	for _, name := range []string{"a", "b"} {
-		appDir := filepath.Join(dir, "demo", name)
+		appDir := filepath.Join(dir, "demo", "bundle", name)
 		if _, err := os.Stat(appDir); err != nil {
 			t.Errorf("app dir for %q missing: %v", name, err)
 		}
@@ -1436,7 +1449,8 @@ func TestWalkCluster_ClusterName_UnnamedRoot_WithUmbrella(t *testing.T) {
 
 // TestWalkCluster_ClusterName_NamedRoot_WithUmbrella verifies that a named
 // root node with a bundle that has umbrella children produces umbrella child
-// sub-layouts nested under the root node layout.
+// sub-layouts nested under the root bundle's directory, below the root node
+// layout.
 func TestWalkCluster_ClusterName_NamedRoot_WithUmbrella(t *testing.T) {
 	childApp := makeUmbrellaApp("child-app", "cm-child")
 	childBundle := &stack.Bundle{
@@ -1466,26 +1480,27 @@ func TestWalkCluster_ClusterName_NamedRoot_WithUmbrella(t *testing.T) {
 	if rootML.Name != "flux-system" {
 		t.Fatalf("expected root layout name 'flux-system', got %q", rootML.Name)
 	}
-	// Umbrella child should be nested under root node layout
-	if len(rootML.Children) == 0 {
-		t.Fatalf("expected umbrella child layouts under root node layout, got 0")
+	// The root node layout renders no bundle (go-kure/kure#979): the umbrella
+	// has its own directory, and its child is nested under that.
+	if len(rootML.Children) != 1 || rootML.Children[0].Name != "platform" {
+		t.Fatalf("expected the umbrella's directory under root node layout, got %v", collectRepoPaths(rootML))
 	}
 	var found bool
-	for _, c := range rootML.Children {
+	for _, c := range rootML.Children[0].Children {
 		if c.UmbrellaChild && c.Name == "leaf" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("umbrella child 'leaf' not found under root node layout")
+		t.Errorf("umbrella child 'leaf' not found under the umbrella's directory: %v", collectRepoPaths(rootML))
 	}
 }
 
 // TestWalkCluster_ClusterName_NamedRoot_Augmenter verifies that an augmenter
 // app in a named root node bundle goes through the walkClusterWithClusterName
 // named-root branch and gets its own per-app sub-layout under the root
-// layout.
+// bundle's directory.
 func TestWalkCluster_ClusterName_NamedRoot_Augmenter(t *testing.T) {
 	cfg := &fakeAugmentingConfig{objs: []*client.Object{makeCM("a")}}
 	app := stack.NewApplication("a", "ns", cfg)
@@ -1504,10 +1519,10 @@ func TestWalkCluster_ClusterName_NamedRoot_Augmenter(t *testing.T) {
 		t.Fatalf("expected 1 child under clusterLayout, got %d", len(ml.Children))
 	}
 	rootML := ml.Children[0]
-	if len(rootML.Children) != 1 {
-		t.Fatalf("expected 1 per-app sub-layout under rootML, got %d", len(rootML.Children))
+	if got, want := collectRepoPaths(rootML), []string{"demo/root", "demo/root/bundle", "demo/root/bundle/a"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("root layout tree = %v, want %v", got, want)
 	}
-	appLayout := rootML.Children[0]
+	appLayout := rootML.Children[0].Children[0]
 	if cfg.called != appLayout {
 		t.Errorf("AugmentLayout was not called with the per-app layout")
 	}
@@ -1561,9 +1576,12 @@ func multiTierUmbrellaCluster(rootName string) *stack.Cluster {
 }
 
 // TestWalkCluster_ClusterNameEqualsNodeName_NoDoubleNest is the equal-root-name
-// regression guard: when ClusterName == root Node.Name the layout must collapse
-// to a single <name>/ level (not <name>/<name>/), the synthetic cluster wrapper
-// must be elided, and WriteToTar must not emit a duplicate kustomization.yaml.
+// regression guard: when ClusterName == root Node.Name the root node must have
+// a single <name>/ level (the synthetic cluster wrapper is elided, not nested
+// above it), and WriteToTar must not emit a duplicate kustomization.yaml. The
+// root bundle has its own directory below the root node's
+// (go-kure/kure#979); here it is named like the node, so <name>/<name>/ is
+// that bundle's directory and <name>/<name>/<name>/ would be the double nest.
 func TestWalkCluster_ClusterNameEqualsNodeName_NoDoubleNest(t *testing.T) {
 	cluster := multiTierUmbrellaCluster("platform")
 
@@ -1586,54 +1604,45 @@ func TestWalkCluster_ClusterNameEqualsNodeName_NoDoubleNest(t *testing.T) {
 		t.Errorf("expected root repo path %q, got %q", "platform", got)
 	}
 
-	// No layout in the tree may double-nest the app segment.
-	for _, p := range collectRepoPaths(ml) {
-		if p == "platform/platform" || strings.HasPrefix(p, "platform/platform/") {
-			t.Errorf("double-nested layout path %q (equal-root-name regression)", p)
-		}
+	// The root node's directory, the root bundle's directory below it, and
+	// the tier umbrella children below that: the wrapper adds no level.
+	wantPaths := []string{
+		"platform",
+		"platform/platform",
+		"platform/platform/platform-services",
+		"platform/platform/platform-apps",
+	}
+	if got := collectRepoPaths(ml); !reflect.DeepEqual(got, wantPaths) {
+		t.Errorf("layout paths = %v, want %v (equal-root-name regression)", got, wantPaths)
 	}
 
-	// Tier umbrella children live one level under the root.
-	want := map[string]string{
-		"platform-services": "platform/platform-services",
-		"platform-apps":     "platform/platform-apps",
-	}
-	for _, c := range ml.Children {
-		if exp, ok := want[c.Name]; ok {
-			if got := c.FullRepoPath(); got != exp {
-				t.Errorf("tier %q repo path = %q, want %q", c.Name, got, exp)
-			}
-			delete(want, c.Name)
-		}
-	}
-	for name := range want {
-		t.Errorf("missing tier umbrella child %q under root layout", name)
-	}
-
-	// WriteToTar must not duplicate platform/kustomization.yaml and must not
-	// emit any platform/platform/ path.
+	// WriteToTar must not duplicate a kustomization.yaml and must not emit
+	// any platform/platform/platform/ path.
 	var buf bytes.Buffer
 	if err := ml.WriteToTar(&buf); err != nil {
 		t.Fatalf("WriteToTar: %v", err)
 	}
 	names := collectTarNames(t, &buf)
-	rootKust, hasServicesDir := 0, false
+	rootKust, bundleKust, hasServicesDir := 0, 0, false
 	for _, n := range names {
-		if n == "platform/kustomization.yaml" {
+		switch n {
+		case "platform/kustomization.yaml":
 			rootKust++
+		case "platform/platform/kustomization.yaml":
+			bundleKust++
 		}
-		if strings.HasPrefix(n, "platform/platform-services/") {
+		if strings.HasPrefix(n, "platform/platform/platform-services/") {
 			hasServicesDir = true
 		}
-		if n == "platform/platform/" || strings.HasPrefix(n, "platform/platform/") {
+		if strings.HasPrefix(n, "platform/platform/platform/") {
 			t.Errorf("tar contains double-nested path %q (equal-root-name regression)", n)
 		}
 	}
-	if rootKust != 1 {
-		t.Errorf("expected exactly one platform/kustomization.yaml in tar, got %d (names: %v)", rootKust, names)
+	if rootKust != 1 || bundleKust != 1 {
+		t.Errorf("expected exactly one platform/kustomization.yaml and one platform/platform/kustomization.yaml in tar, got %d and %d (names: %v)", rootKust, bundleKust, names)
 	}
 	if !hasServicesDir {
-		t.Errorf("expected a file under platform/platform-services/ in tar (names: %v)", names)
+		t.Errorf("expected a file under platform/platform/platform-services/ in tar (names: %v)", names)
 	}
 }
 
@@ -1693,10 +1702,12 @@ func TestWalkCluster_ClusterNameEqualsNodeName_ChildNode(t *testing.T) {
 	}
 }
 
-// TestWalkCluster_ClusterNameDot_ProductionShape proves the fix does NOT alter
-// the production layout shape used by callers that set ClusterName=".": the
-// cluster wrapper is kept (root kustomization.yaml at the archive root), the
-// umbrella roots at platform/, and there is no platform/platform/.
+// TestWalkCluster_ClusterNameDot_ProductionShape pins the layout shape of
+// callers that set ClusterName=".": the cluster wrapper is kept (root
+// kustomization.yaml at the archive root), the root node is at platform/, and
+// the umbrella, the root node's bundle, at platform/platform/ with its tiers
+// below it. Before go-kure/kure#979 the umbrella was rendered into platform/
+// itself.
 func TestWalkCluster_ClusterNameDot_ProductionShape(t *testing.T) {
 	cluster := multiTierUmbrellaCluster("platform")
 
@@ -1719,23 +1730,32 @@ func TestWalkCluster_ClusterNameDot_ProductionShape(t *testing.T) {
 	if err := ml.WriteToTar(&buf); err != nil {
 		t.Fatalf("WriteToTar: %v", err)
 	}
+	wantPaths := []string{
+		".",
+		"platform",
+		"platform/platform",
+		"platform/platform/platform-services",
+		"platform/platform/platform-apps",
+	}
+	if got := collectRepoPaths(ml); !reflect.DeepEqual(got, wantPaths) {
+		t.Errorf("layout paths = %v, want %v", got, wantPaths)
+	}
 	names := collectTarNames(t, &buf)
-	hasRootKust, hasServicesDir := false, false
+	for _, want := range []string{
+		"kustomization.yaml",
+		"platform/kustomization.yaml",
+		"platform/platform/kustomization.yaml",
+		"platform/platform/configmap-cm-root.yaml",
+		"platform/platform/platform-services/configmap-cm-svc.yaml",
+		"platform/platform/platform-apps/configmap-cm-app.yaml",
+	} {
+		if !slices.Contains(names, want) {
+			t.Errorf("expected %s in tar (names: %v)", want, names)
+		}
+	}
 	for _, n := range names {
-		if n == "kustomization.yaml" {
-			hasRootKust = true
-		}
-		if strings.HasPrefix(n, "platform/platform-services/") {
-			hasServicesDir = true
-		}
-		if n == "platform/platform/" || strings.HasPrefix(n, "platform/platform/") {
+		if strings.HasPrefix(n, "platform/platform/platform/") {
 			t.Errorf("tar contains double-nested path %q", n)
 		}
-	}
-	if !hasRootKust {
-		t.Errorf("expected root kustomization.yaml in tar (names: %v)", names)
-	}
-	if !hasServicesDir {
-		t.Errorf("expected a file under platform/platform-services/ in tar (names: %v)", names)
 	}
 }

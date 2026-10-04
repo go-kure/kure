@@ -18,8 +18,9 @@ import (
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
-// allFlat merges every node, bundle and application into the root's
-// directory: the whole cluster is one reconciliation unit.
+// allFlat merges every node, bundle and application into one directory, the
+// one inside the root node's that is named after the first bundle: the whole
+// cluster is one reconciliation unit.
 var allFlat = layout.LayoutRules{
 	NodeGrouping: layout.GroupFlat, BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupFlat,
 	FluxPlacement: layout.FluxSeparate,
@@ -92,8 +93,8 @@ func TestGenerateFromLayout_OneKustomizationPerDirectory(t *testing.T) {
 		t.Fatalf("got %d Kustomizations, want one for the one written directory", len(kusts))
 	}
 	k := kusts[0]
-	if k.Name != "rb" || k.Spec.Path != "r" {
-		t.Errorf("Kustomization %s at %q, want rb at %q", k.Name, k.Spec.Path, "r")
+	if k.Name != "rb" || k.Spec.Path != "r/rb" {
+		t.Errorf("Kustomization %s at %q, want rb at %q", k.Name, k.Spec.Path, "r/rb")
 	}
 	if len(k.Spec.HealthChecks) != 2 {
 		t.Errorf("health checks = %v, want core and one, each once", k.Spec.HealthChecks)
@@ -429,23 +430,61 @@ func TestReconcileOrder_Scope(t *testing.T) {
 	})
 }
 
-// TestReconcileOrder_WaitOnRootReachableCR pins that with wait a Kustomization
-// waits for every CR it applies, even one the bootstrap also creates: a
-// (PerLayout, at the root) waits for b, whose CR it applies, and b depends on
-// a.
-func TestReconcileOrder_WaitOnRootReachableCR(t *testing.T) {
+// waitCycleBelowRoot is r -> a (bundle a, wait) -> b (bundle b, depending on
+// a): b's CR is in a's directory, which a's Kustomization applies.
+func waitCycleBelowRoot() *stack.Cluster {
 	yes := true
 	b := &stack.Node{Name: "b", Bundle: srBundle("b", cmApp("b-app"))}
-	root := &stack.Node{Name: "r", Bundle: srBundle("a", cmApp("a-app")), Children: []*stack.Node{b}}
-	root.Bundle.Wait = &yes
-	b.Bundle.DependsOn = []*stack.Bundle{root.Bundle}
-	b.SetParent(root)
-	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout} {
+	a := &stack.Node{Name: "a", Bundle: srBundle("a", cmApp("a-app")), Children: []*stack.Node{b}}
+	a.Bundle.Wait = &yes
+	b.Bundle.DependsOn = []*stack.Bundle{a.Bundle}
+	r := &stack.Node{Name: "r", Children: []*stack.Node{a}}
+	b.SetParent(a)
+	a.SetParent(r)
+	return &stack.Cluster{Name: "demo", Node: r}
+}
+
+// TestReconcileOrder_WaitOnAppliedCR pins that with wait a Kustomization
+// waits for every CR it applies: a waits for b, whose CR is in a's directory,
+// and b depends on a.
+func TestReconcileOrder_WaitOnAppliedCR(t *testing.T) {
+	for _, placement := range integratedPlacements {
 		rules := propertyGroupings["nodeOnly"]
 		rules.FluxPlacement = placement
-		_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(&stack.Cluster{Name: "demo", Node: root}, rules)
+		_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(waitCycleBelowRoot(), rules)
 		if err == nil || !strings.Contains(err.Error(), "never") {
 			t.Errorf("%s: got %v, want a reconcile-order refusal (a waits for b, b depends on a)", placement, err)
+		}
+	}
+}
+
+// TestReconcileOrder_RootBundleAppliesNoCR pins that the root node's bundle is
+// in no such cycle: its Kustomization builds the bundle's own directory, which
+// holds no CR, so it can wait while the bundle of a child node depends on it,
+// in every placement (go-kure/kure#979). Before, it built the root node's
+// directory, the CRs the bootstrap applies included.
+func TestReconcileOrder_RootBundleAppliesNoCR(t *testing.T) {
+	yes := true
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		b := &stack.Node{Name: "b", Bundle: srBundle("b", cmApp("b-app"))}
+		root := &stack.Node{Name: "r", Bundle: srBundle("a", cmApp("a-app")), Children: []*stack.Node{b}}
+		root.Bundle.Wait = &yes
+		b.Bundle.DependsOn = []*stack.Bundle{root.Bundle}
+		b.SetParent(root)
+		rules := propertyGroupings["nodeOnly"]
+		rules.FluxPlacement = placement
+		ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(&stack.Cluster{Name: "demo", Node: root}, rules)
+		if err != nil {
+			t.Errorf("%s: got %v, want the tree integrated (a applies no CR)", placement, err)
+			continue
+		}
+		for _, k := range kustomizations(ml) {
+			if k.Name == "a" && k.Spec.Path != "r/a" {
+				t.Errorf("%s: Kustomization a builds %q, want r/a", placement, k.Spec.Path)
+			}
+		}
+		if unit := layoutAtPath(t, ml, "r/a"); len(crNames(unit.Resources)) != 0 {
+			t.Errorf("%s: r/a holds the CRs %v, want none", placement, crNames(unit.Resources))
 		}
 	}
 }
@@ -465,6 +504,100 @@ func TestPerLayout_SharedSourceEffectiveNamespace(t *testing.T) {
 	rules.FluxPlacement = layout.FluxIntegratedPerLayout
 	if _, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(&stack.Cluster{Name: "demo", Node: root}, rules); err != nil {
 		t.Fatalf("equivalent SourceRefs below a bundle-less layout refused: %v", err)
+	}
+}
+
+// TestPerLayout_RootNodeLayoutKeepsTheRootBundlesSource: with a flat
+// BundleGrouping the root node's bundle renders one directory below the root
+// node's layout (go-kure/kure#979), and its SourceRef is still the source of
+// that layout's own Kustomization and of the layout Kustomizations below it
+// that no other bundle encloses. Under BundleGrouping by name the root node's
+// layout never rendered the bundle, has no source of its own, and the same
+// input is refused as before.
+func TestPerLayout_RootNodeLayoutKeepsTheRootBundlesSource(t *testing.T) {
+	build := func() *stack.Cluster {
+		ref := func(name string) *stack.SourceRef {
+			return &stack.SourceRef{Kind: "GitRepository", Name: name, Namespace: "flux-system"}
+		}
+		empty := &stack.Node{Name: "empty"}
+		web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", SourceRef: ref("web-src"), Applications: []*stack.Application{cmApp("web-app")}}}
+		root := &stack.Node{Name: "platform", Bundle: &stack.Bundle{Name: "platform", SourceRef: ref("root-src"), Applications: []*stack.Application{cmApp("core")}}, Children: []*stack.Node{empty, web}}
+		empty.SetParent(root)
+		web.SetParent(root)
+		return &stack.Cluster{Name: "demo", Node: root}
+	}
+	sources := func(ml *layout.ManifestLayout) map[string]string {
+		out := map[string]string{}
+		for _, k := range kustomizations(ml) {
+			out[k.Spec.Path] = k.Spec.SourceRef.Name
+		}
+		return out
+	}
+
+	for clusterName, want := range map[string]map[string]string{
+		// The bundle-less child node below the root node.
+		"": {"platform/platform": "root-src", "platform/empty": "root-src", "platform/web": "web-src"},
+		// The root node's own layout, below a ClusterName wrapper.
+		"prod": {"prod/platform": "root-src", "prod/platform/platform": "root-src", "prod/platform/empty": "root-src", "prod/platform/web": "web-src"},
+	} {
+		t.Run(fmt.Sprintf("flat/%q", clusterName), func(t *testing.T) {
+			rules := propertyGroupings["nodeOnly"]
+			rules.FluxPlacement = layout.FluxIntegratedPerLayout
+			rules.ClusterName = clusterName
+			if got := sources(integrated(t, build(), rules)); !reflect.DeepEqual(got, want) {
+				t.Errorf("sourceRef by spec.path = %v, want %v", got, want)
+			}
+		})
+	}
+
+	for clusterName, refusal := range map[string]string{
+		// Nothing below "empty" has a SourceRef.
+		"": `platform/empty" needs a Kustomization CR`,
+		// The root node's layout is asked first, and the two bundles below
+		// it name different sources.
+		"prod": `layout "prod/platform" has no enclosing bundle and the bundles below it have different SourceRefs`,
+	} {
+		t.Run(fmt.Sprintf("by name/%q", clusterName), func(t *testing.T) {
+			rules := propertyGroupings["GroupByName"]
+			rules.FluxPlacement = layout.FluxIntegratedPerLayout
+			rules.ClusterName = clusterName
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(build(), rules)
+			if err == nil || !strings.Contains(err.Error(), refusal) {
+				t.Errorf("got %v, want the no-source refusal %q", err, refusal)
+			}
+		})
+	}
+}
+
+// TestIntegrateWithLayout_RefusesATopThatRendersABundle: a Kustomization is
+// hosted outside the directory it applies, and the top of the tree has no
+// outside (its parent is missing, and its flux-system directory is inside
+// it). WalkCluster returns no tree whose top renders a bundle
+// (go-kure/kure#979); a subtree of one, integrated as a cluster of its own,
+// is refused in every placement and left as it was.
+func TestIntegrateWithLayout_RefusesATopThatRendersABundle(t *testing.T) {
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		t.Run(string(placement), func(t *testing.T) {
+			web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
+			root := &stack.Node{Name: "platform", Children: []*stack.Node{web}}
+			web.SetParent(root)
+			rules := propertyGroupings["nodeOnly"]
+			rules.FluxPlacement = placement
+			ml, err := layout.WalkCluster(&stack.Cluster{Name: "demo", Node: root}, rules)
+			if err != nil {
+				t.Fatalf("walk: %v", err)
+			}
+			sub := layoutAtPath(t, ml, "platform/web")
+			before := len(sub.Resources)
+
+			err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(sub, &stack.Cluster{Name: "web-only", Node: web}, rules)
+			if want := `layout "platform/web" renders bundle "web" and is the top of the tree`; err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("got %v, want the refusal %q", err, want)
+			}
+			if len(sub.Resources) != before || len(sub.Children) != 0 || len(kustomizations(sub)) != 0 {
+				t.Errorf("the refused tree was changed: %d resources, %d children", len(sub.Resources), len(sub.Children))
+			}
+		})
 	}
 }
 
@@ -493,7 +626,6 @@ func (c *cycleAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
 // refused when the same tree is integrated again: layout CRs an earlier call
 // placed are still part of what the check covers.
 func TestIntegrateWithLayout_RepeatedCycleRefusal(t *testing.T) {
-	yes := true
 	cases := map[string]func() (*stack.Cluster, layout.LayoutRules){
 		"PerLayout layout CRs": func() (*stack.Cluster, layout.LayoutRules) {
 			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform",
@@ -502,15 +634,10 @@ func TestIntegrateWithLayout_RepeatedCycleRefusal(t *testing.T) {
 			rules.FluxPlacement = layout.FluxIntegratedPerLayout
 			return c, rules
 		},
-		"Separate wait on the root": func() (*stack.Cluster, layout.LayoutRules) {
-			b := &stack.Node{Name: "b", Bundle: srBundle("b", cmApp("b-app"))}
-			root := &stack.Node{Name: "r", Bundle: srBundle("a", cmApp("a-app")), Children: []*stack.Node{b}}
-			root.Bundle.Wait = &yes
-			b.Bundle.DependsOn = []*stack.Bundle{root.Bundle}
-			b.SetParent(root)
+		"PerBundle wait on an applied CR": func() (*stack.Cluster, layout.LayoutRules) {
 			rules := propertyGroupings["nodeOnly"]
-			rules.FluxPlacement = layout.FluxSeparate
-			return &stack.Cluster{Name: "demo", Node: root}, rules
+			rules.FluxPlacement = layout.FluxIntegratedPerBundle
+			return waitCycleBelowRoot(), rules
 		},
 	}
 	for name, build := range cases {
@@ -939,20 +1066,28 @@ func TestGenerateFromLayout_PatchMustNotReachAnotherBundlesGeneratedConfigMap(t 
 }
 
 // TestGenerateFromLayout_PatchScopeAfterFlattenSingleTier: FlattenSingleTier
-// is the other way two bundles come to share a directory; the collapsed
-// bundle's objects stay attributed to it, so the same refusal applies.
+// does not make two bundles share a directory, as it collapses no directory
+// that renders a bundle (go-kure/kure#979). Each bundle keeps a Kustomization
+// of its own, and a broad patch of one reaches only its own objects.
 func TestGenerateFromLayout_PatchScopeAfterFlattenSingleTier(t *testing.T) {
 	c1 := &stack.Node{Name: "c1", Bundle: srBundle("b1", cmApp("one"))}
-	rb := srBundle("rb") // no own objects: FlattenSingleTier collapses only an empty parent
+	rb := srBundle("rb") // no own objects
 	rb.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap"}}}
-	r := &stack.Node{Bundle: rb, Children: []*stack.Node{c1}} // unnamed: the ClusterName directory renders rb
+	r := &stack.Node{Bundle: rb, Children: []*stack.Node{c1}} // unnamed: the ClusterName directory is the root node's
 	c1.SetParent(r)
 	rules := propertyGroupings["nodeOnly"]
 	rules.ClusterName = "prod"
 	rules.FlattenSingleTier = true
-	_, err := generateUnits(t, &stack.Cluster{Name: "demo", Node: r}, rules)
-	if err == nil || !strings.Contains(err.Error(), "one-cm") {
-		t.Fatalf("GenerateFromLayout: err = %v; want a refusal naming b1's one-cm", err)
+	kusts, err := generateUnits(t, &stack.Cluster{Name: "demo", Node: r}, rules)
+	if err != nil {
+		t.Fatalf("GenerateFromLayout: %v", err)
+	}
+	got := map[string]string{}
+	for _, k := range kusts {
+		got[k.Name] = k.Spec.Path
+	}
+	if want := map[string]string{"rb": "prod/rb", "b1": "prod/c1"}; !mapsEqual(got, want) {
+		t.Errorf("Kustomization paths = %v, want %v", got, want)
 	}
 }
 
@@ -1100,11 +1235,8 @@ func TestIntegrateWithLayout_PerLayoutPatchScopeCountsSingleFileApps(t *testing.
 	if err != nil {
 		t.Fatalf("walk: %v", err)
 	}
-	for _, child := range ml.Children {
-		if child.Name == "two" {
-			child.ApplicationFileMode = layout.AppFileSingle
-		}
-	}
+	// The merged bundles render into one directory inside the root node's.
+	layoutAtPath(t, ml, "r/rb/two").ApplicationFileMode = layout.AppFileSingle
 	err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
 	if err == nil || !strings.Contains(err.Error(), "two-cm") {
 		t.Fatalf("IntegrateWithLayout: err = %v; want a refusal naming b2's two-cm", err)

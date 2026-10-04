@@ -37,12 +37,8 @@ where they do not hold yet, and Part 2 is what makes them hold.
 Code is cited by symbol name, with the file that holds it, so a citation does not move when the
 code around it does. A file named without a directory is in `pkg/stack/layout` or
 `pkg/stack/fluxcd`. Where a change has shipped since `v0.2.0-beta.15`, Part 1 describes the code
-after it and names the issue: the cluster wrapper row, the FileNaming rows and item (section 1.2,
-section 1.9 item 4), the `GenerateFromCluster` and gotk bootstrap rows of section 1.4, the empty
-distribution and the gotk path (section 1.6), the last two rows of section 1.7, and section 1.9.
-The Part 2
-sections on go-kure/kure#974 and go-kure/kure#978, whose changes are open, keep their line
-references until those ship.
+after it, and the row or paragraph that describes it names the issue. A Part 2 section whose
+change has not shipped may still cite lines; it moves to symbol names when the change ships.
 
 ### 1.1 The model
 
@@ -64,7 +60,7 @@ Flux objects to that tree in one of three placements: `FluxSeparate` (the defaul
 | Layout directory | `FullRepoPath() = Namespace/Name` | `ManifestLayout.FullRepoPath` in `pkg/stack/layout/manifest.go` |
 | Cluster wrapper | `ClusterName "."`: none. `"prod"`: `prod/`. `""` with a named root: `<root>/`. `""` with an unnamed root: `cluster/`. A `ClusterName` with a `..` path segment is refused at the walk (go-kure/kure#979). | `WalkCluster` and `walkClusterWithClusterName` in `pkg/stack/layout/walker.go`; `LayoutRules.Validate` in `pkg/stack/layout/types.go` |
 | Node directory | node name, nested by tree (`NodeGrouping: GroupByName`, the default). `GroupFlat` merges descendant nodes' bundles into the first-level node's directory. | `walkNode`, `renderNodeContent` and `renderChildren` in `walker.go` |
-| Bundle directory | none by default: the bundle renders into its node's directory. `BundleGrouping: GroupByName` adds `<node>/<bundle name>`. | `renderBundle` in `walker.go` |
+| Bundle directory | none by default: the bundle renders into its node's directory. The root node is the exception (go-kure/kure#979): its layout renders no bundle, so the bundles the default would render there (its own, and under `NodeGrouping: GroupFlat` those of the nodes it absorbs) share one directory inside it, named after the first of them: `<root>/<first bundle name>`. A child node of the root with that name is refused. `BundleGrouping: GroupByName` adds `<node>/<bundle name>` for every bundle. | `renderBundle`, `rootUnit` and `rootUnit.checkRootUnitName` in `walker.go` |
 | Umbrella child directory | `<parent dir>/<child bundle name>`, marked `UmbrellaChild` | `renderUmbrellaChildren` in `walker.go` |
 | Application directory | none by default. `ApplicationGrouping: GroupByName` adds `<bundle dir>/<app name>`. Under the default flat grouping an application whose config is a `LayoutAugmenter` still gets its own directory, unless the config also implements `LayoutIntentAugmenter` and `WantsOwnLayout()` returns false; it is then merged like any other application. | `renderApps`, `wantsOwnLayout` and `isAugmenter` in `walker.go` |
 | Resource file | `WriteToDisk` and `WriteToTar` name by the layout's own FileNaming: default `{namespace}-{kind}-{name}.yaml` (empty namespace: `cluster`); `FileNamingKindName` gives `{kind}-{name}.yaml`. `WriteManifest` names every layout's files from its `Config` instead. | `DefaultManifestFileName` in `pkg/stack/layout/config.go`; `groupResourceFiles` and `manifestPlan` in `writerplan.go` |
@@ -73,9 +69,11 @@ Flux objects to that tree in one of three placements: `FluxSeparate` (the defaul
 
 `LayoutRules.FlattenSingleTier` (default false) collapses one layer, and only at the walked root:
 the root must have a namespace without `/`, exactly one child, no resources of its own, and that
-child must be a terminal, non-umbrella layout (`flattenSingleTier` and `canFlatten` in
-`pkg/stack/layout/flatten.go`, called from `WalkCluster`). It does not reach an application
-directory deeper in the tree.
+child must be a terminal, non-umbrella layout that renders no bundle (`flattenSingleTier` and
+`canFlatten` in `pkg/stack/layout/flatten.go`, called from `WalkCluster`). It does not reach an
+application directory deeper in the tree. The last condition is go-kure/kure#979: a directory that
+renders a bundle is applied by its own Kustomization, which the top of the tree cannot host. In a
+walked tree the one child left to collapse is a node without a bundle and without child nodes.
 
 ### 1.3 Flux Kustomizations: name, host and listing
 
@@ -98,7 +96,7 @@ directory deeper in the tree.
 | Placement | Bundle Kustomization hosted in | Extra Kustomizations | Host's `kustomization.yaml` lists |
 |---|---|---|---|
 | `FluxSeparate` | `flux-system/` directly under the walked root's directory | none | `flux-system/` lists the CR files; the root lists `flux-system` |
-| `FluxIntegratedPerBundle` | the parent of the bundle's directory; the walked root hosts its own (`integratedPlacement.host` in `layout_integrator.go`) | none | the CR files |
+| `FluxIntegratedPerBundle` | the parent of the bundle's directory (`integratedPlacement.place` in `layout_integrator.go`). The top of the tree `WalkCluster` returns renders no bundle, so every such directory has a parent; a tree whose top renders one is refused (go-kure/kure#979). | none | the CR files |
 | `FluxIntegratedPerLayout` | as `FluxIntegratedPerBundle` | one per bundle-less child layout (the per-layout branch of `integratedPlacement.place`) | the CR files only, never a child directory |
 
 Example. Unnamed root → groups `applications`, `backend` → one node per application, each with a
@@ -168,8 +166,8 @@ them.
   (`createSource` in `resource_generator.go`).
 - `FluxSeparate` puts it in `flux-system/`.
 - The integrated placements put it in the root node's layout (the Source branch of
-  `integratedPlacement.add` in `layout_integrator.go`). When the root node renders a bundle, that
-  layout is the bundle's own directory.
+  `integratedPlacement.add` in `layout_integrator.go`). That layout renders no bundle
+  (go-kure/kure#979), so a Source is not in the directory a bundle's own Kustomization applies.
 
 **The `flux-system` directory.** Its name is a constant, and under `FluxSeparate` it is placed
 directly under the walked root (`addSeparateFluxToLayout` in `layout_integrator.go`).
@@ -193,7 +191,7 @@ FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since go
 |---|---|---|
 | Two bundles with the same name | refused wherever the origin index is built: the integrator under every placement, `GenerateFromLayout` and the ArgoCD workflow. `WalkCluster` and the writers alone do not check it. | `IndexOrigins` in `origin.go`; callers `addIntegratedFluxToLayout`, `ResourceGenerator.GenerateFromLayout` and `WorkflowEngine.generateFromLayout` in `pkg/stack/argocd/argo.go` |
 | Two bundles whose Kustomizations would get one name, whether it comes from `KustomizationName` or from `Name` (go-kure/kure#971) | refused in the same places; the error names both bundles by their paths. `GenerateForBundle` builds no index and sees one bundle: it refuses a `DependsOn` bundle, an umbrella child or a `NamedDependsOn` entry with that bundle's own Kustomization name, a health check on that Kustomization unless `Wait` is true, and two children with one name. | `IndexOrigins` in `origin.go`; `checkOwnUnitName`, called from `ResourceGenerator.GenerateForBundle`, in `resource_generator.go` |
-| A payload Kustomization named like the one generated for its bundle (the bundle's name, unless the bundle sets `KustomizationName`: go-kure/kure#971), in the namespace of the generated Kustomization (the generator's `DefaultNamespace`) | refused under `FluxSeparate`. Under the two integrated placements it is refused unless it sits in the layout that hosts the generated Kustomization and has the same `spec.path`: that one is kept as it is, and none is generated for the bundle. A bundle rendered in the walked root layout is its own host, so its payload can meet this. The check compares namespace and name, so it does not refuse the same name in another namespace. | `integratedPlacement.host`, `integratedPlacement.add`, `crKey` and `addSeparateFluxToLayout` in `layout_integrator.go`; `kustomizationForBundle` |
+| A payload Kustomization named like the one generated for its bundle (the bundle's name, unless the bundle sets `KustomizationName`: go-kure/kure#971), in the namespace of the generated Kustomization (the generator's `DefaultNamespace`) | refused under `FluxSeparate`. Under the two integrated placements it is refused unless it sits in the layout that hosts the generated Kustomization and has the same `spec.path`: that one is kept as it is, and none is generated for the bundle. The host is the parent of the bundle's directory, never that directory itself (go-kure/kure#979), so a bundle's own payload cannot meet this. The check compares namespace and name, so it does not refuse the same name in another namespace. | `integratedPlacement.place`, `integratedPlacement.add`, `crKey` and `addSeparateFluxToLayout` in `layout_integrator.go`; `kustomizationForBundle` |
 | A Kustomization name generated twice in one integration | refused by the integrator. The key is the bare name: every generated Kustomization is in `DefaultNamespace`. | `integratedPlacement.claim` in `layout_integrator.go`; `kustomizationForBundle` and `createKustomizationForLayout` |
 | `FluxIntegratedPerLayout` with `ApplicationGrouping: GroupByName`, application named like its bundle's Kustomization (the common case: a bundle without `KustomizationName` and an application with the bundle's name) | refused as a name used twice | same |
 | `FluxIntegratedPerLayout`, augmenter application named like its bundle's Kustomization | refused as a name used twice | same |
@@ -647,24 +645,72 @@ rejects it.
 
 ### Behaviour bugs ([go-kure/kure#979](https://github.com/go-kure/kure/issues/979))
 
-The items carry the ticket's numbers. Items 3, 4, 6, 8 and 10 have shipped; items 1, 2, 5, 7 and
-9 are targets.
+The items carry the ticket's numbers. Each says whether it has shipped or is a target.
 
-1. **A root bundle's Kustomization applies its own directory.** Target.
-   - Current: when the walked root renders a bundle (`ClusterName ""` with a named root, or after a
-     `FlattenSingleTier` collapse), the root hosts its own Kustomization, and its
-     `kustomization.yaml` lists it (`integratedPlacement.host`). `FluxSeparate` does the same
-     through `<root>/flux-system/`. The bootstrap applies the root, which then applies itself:
-     two owners of one directory.
-   - Expected: every directory has exactly one owner. Decided: the root node's layout never
-     renders a bundle; the root node's bundle gets a directory of its own below it.
+1. **A root bundle's Kustomization applies its own directory.** Shipped.
+   - Before: when the walked root rendered a bundle (`ClusterName ""` with a named root, or after
+     a `FlattenSingleTier` collapse), the root hosted its own Kustomization, and its
+     `kustomization.yaml` listed it. `FluxSeparate` did the same through `<root>/flux-system/`.
+     The bootstrap applied the root, which then applied itself: two owners of one directory.
+   - Now: the root node's layout renders no bundle. With `BundleGrouping: GroupFlat` the bundles
+     that would render there (the root node's own, and under `NodeGrouping: GroupFlat` those of
+     every node it absorbs) are rendered into one directory inside it, named after the first of
+     them: `<root>/<first bundle name>` (`renderBundle` and `rootUnit` in `walker.go`).
+     `ManifestLayout.OriginUnit` (`origin.go`) returns that directory's layout. They stay one
+     unit: one directory, one Kustomization, named as before. `BundleGrouping: GroupByName`
+     already gave each bundle a directory and is unchanged. Both walkers do this, so a bundle's
+     directory is the same in `WalkCluster` and `WalkClusterByPackage`.
+   - A child node of the root named like that directory is refused by the walk, naming the node,
+     the bundle and the directory (`rootUnit.checkRootUnitName` in `walker.go`).
+   - Every Kustomization is hosted in the parent of the directory it applies
+     (`integratedPlacement.place` in `layout_integrator.go`), or in `flux-system/` under
+     `FluxSeparate`. `LayoutIntegrator.IntegrateWithLayout` refuses a tree whose top renders a
+     bundle, in every placement. `WalkCluster` returns no such tree. A subtree of a walked tree
+     can be one, and so can the `WalkClusterByPackage` tree of a package the root node is not
+     in: its unnamed wrapper is not the root node's layout, and under `NodeGrouping: GroupFlat`
+     it still renders the bundles merged into it. The walk of that wrapper is unchanged.
+   - `FlattenSingleTier` no longer collapses a child that renders a bundle (`canFlatten` in
+     `flatten.go`): the collapse would put the bundle back into the top of the tree. Section 1.2
+     says what it still collapses.
+   - Kept: the `SourceRef` of the root node's own bundle is still the source of the root node's
+     layout and of the layout Kustomizations below it that no other bundle encloses
+     (`unitSource`, used by `integratedPlacement.place` and `integratedPlacement.layoutSource`),
+     although the bundle now renders one directory lower. Under `BundleGrouping: GroupByName`
+     the root node's layout never had a source of its own, and such a tree is refused as before.
+     Accepting it would be a change of its own.
+   - Breaking: the path of the root node's bundles moves one directory down, from `<root>` to
+     `<root>/<first bundle name>`: the files, the Kustomization's `spec.path` and the ArgoCD
+     Application's `source.path`. `FlattenSingleTier` leaves a directory it used to collapse.
+     On a deployed tree with `prune` on, the objects can be deleted by the outer owner and
+     re-created by the inner Kustomization.
+   - Tests: `TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory` and
+     `TestFlattenSingleTier_KeepsBundleDirectories` in `pkg/stack/layout/origin_test.go`;
+     `TestFlatten_KeepsADirectoryThatRendersABundle` in `pkg/stack/layout/flatten_test.go`;
+     `TestReconcileOrder_RootBundleAppliesNoCR`,
+     `TestPerLayout_RootNodeLayoutKeepsTheRootBundlesSource` and
+     `TestIntegrateWithLayout_RefusesATopThatRendersABundle` in
+     `pkg/stack/fluxcd/units_test.go`; `TestGenerateFromCluster_UsesCallerRules` in
+     `pkg/stack/argocd/generate_from_cluster_rules_test.go` for `source.path`.
 2. **An integrated Source is hosted inside the directory it delivers.** Target.
-   - Current: when the root node renders a bundle, the Source lands in that bundle's directory
-     (`integratedPlacement.add`), so the Kustomization that needs the Source is the one that
-     would apply it.
+   - Before item 1: when the root node rendered a bundle, the Source landed in that bundle's
+     directory (`integratedPlacement.add`), so the Kustomization that needed the Source was the
+     one that applied it.
+   - Current: the Source is hosted in the root node's layout, which since item 1 renders no
+     bundle, so no bundle's Kustomization applies the directory that holds its Source. Nothing
+     renders a tree and asserts that yet.
+   - Two checks can no longer be met by a root bundle on a walked tree and stay in place.
+     `integratedPlacement.checkRootBuildKeepsHostedSources` still words its remedy for one
+     ("move the patch to a bundle below the root node"), but no bundle's patches or postBuild
+     reach the root node's layout any more. It still guards a Kustomization the integration
+     keeps in place of its own when that one builds the root node's layout: the layout
+     Kustomization of the root node's layout under `FluxIntegratedPerLayout` below a
+     `ClusterName` wrapper. The reconcile-order check (`checkPlacedReconcileOrder`) refused a
+     root bundle that waits while a child's bundle depends on it; the root bundle's directory
+     now holds no Kustomization, so that cycle is gone. The check still refuses it below the
+     root, and for a kept Kustomization.
    - Expected: a Source is hosted in a build that is applied before any Kustomization that
-     references it, never inside a directory delivered through it. Decided: the Source stays in
-     the root node's layout, which after item 1 renders no bundle.
+     references it, never inside a directory delivered through it, with a render test of that
+     invariant and refusals worded for what they still guard.
 3. **`GenerateFromCluster` takes the caller's layout rules.** Shipped.
    - Before: it took no rules and walked with `DefaultLayoutRules()`, so its paths disagreed with
      a layout written with rules that place directories differently (a `ClusterName`, a flat
@@ -703,13 +749,15 @@ The items carry the ticket's numbers. Items 3, 4, 6, 8 and 10 have shipped; item
    - Current: `checkPatchScope` in `resource_generator.go` counts only the objects held in the
      unit's `Resources` and in those of its `AppFileSingle` application children. A ConfigMap
      that a `configMapGenerator` builds is not among them, so it
-     is skipped, also when the unit's own directory builds it. With every grouping flat and
-     `FlattenSingleTier: true`, a bundle whose one augmenter application adds a generator
-     collapses into the shared directory; another merged bundle's patch that targets that
-     ConfigMap is accepted, although the shared Kustomization builds the ConfigMap and applies
-     the patch to it. Without the collapse the result is right.
+     is skipped, also when the unit's own directory builds it. Before item 1, with every
+     grouping flat and `FlattenSingleTier: true`, a bundle whose one augmenter application adds
+     a generator collapsed into the shared directory; another merged bundle's patch that
+     targeted that ConfigMap was accepted, although the shared Kustomization built the ConfigMap
+     and applied the patch to it. Since item 1 `FlattenSingleTier` collapses no directory that
+     renders a bundle, so that input no longer reaches the gap; whether another one does is
+     part of this item.
    - Expected: the check sees every object the unit's directory builds, generated ConfigMaps
-     included, and a paired collapsed and not-collapsed test pins it.
+     included, with a test that pins it.
 6. **A kept Kustomization is checked in whatever form it has.** Shipped.
    - Under the two integrated placements, the checks that look at a layout's Flux Kustomizations
      read both the Kustomizations the integration generates and the ones it keeps in place of

@@ -146,14 +146,15 @@ metadata, which an item of a typed List can be, is refused: its namespace and na
 
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)
-- **BundleGrouping**: whether each bundle gets a directory inside its node's (`GroupByName`) or renders in the node's directory (`GroupFlat`, default)
+- **BundleGrouping**: whether each bundle gets a directory inside its node's (`GroupByName`) or renders in the node's directory (`GroupFlat`, default; the root node's bundles get one directory inside the root's, see [The root node's bundles](#the-root-nodes-bundles))
 - **ApplicationGrouping**: whether each application gets a directory inside its bundle's (`GroupByName`) or writes into the bundle's directory (`GroupFlat`, default)
 
 The three axes are independent and apply the same way to the root node (also under a
-`ClusterName`), to umbrella children and in `WalkClusterByPackage`. A level set to `GroupFlat` is
-rendered into the layout above it: its resources, its child layouts and its origins. Umbrella child
-bundles and augmenter applications always keep their own directory, because each carries its own
-Flux Kustomization or writer-owned files. `FilePer` is honoured on every layout. The writers refuse
+`ClusterName`), to umbrella children and in `WalkClusterByPackage`, with the one exception below.
+A level set to `GroupFlat` is rendered into the layout above it: its resources, its child layouts
+and its origins. Umbrella child bundles and augmenter applications always keep their own directory,
+because each carries its own Flux Kustomization or writer-owned files. `FilePer` is honoured on
+every layout. The writers refuse
 a merge that makes two layouts claim one directory, and a directory that would hold two objects
 with the same group, kind, namespace and name (kustomize cannot build it); objects that merely
 share a file name are written into one multi-document file, as `FilePerKind` intends.
@@ -182,6 +183,42 @@ valid. Two things are refused, each with an error naming the field and the value
 
 The rules are checked whatever the cluster is: a nil cluster with invalid rules returns the rules
 error, not a nil layout.
+
+#### The root node's bundles
+
+The root node's directory renders no bundle (go-kure/kure#979). A directory that renders bundles
+is applied by its own Flux Kustomization, which its parent directory hosts; the root node's
+directory can be the top of the tree, which has no parent, so its Kustomization would be part of
+the build it applies.
+
+With `BundleGrouping: GroupFlat` the bundles that would render in the root node's directory (the
+root node's own, and under `NodeGrouping: GroupFlat` those of every node it absorbs) are therefore
+rendered into one directory inside it, named after the first of them:
+
+| Root node | Bundle | `BundleGrouping` | Bundle directory |
+|---|---|---|---|
+| `platform` | `platform` | `GroupFlat` | `platform/platform` |
+| `platform` | `core` | `GroupFlat` | `platform/core` |
+| `platform`, child node `web` absorbed (`NodeGrouping: GroupFlat`) | `core`, `web` | `GroupFlat` | `platform/core` for both |
+| unnamed, `ClusterName: "."` | `core` | `GroupFlat` | `core` |
+| `platform` | `core` | `GroupByName` | `platform/core`, as for every node |
+
+They stay one unit: one directory and one Flux Kustomization or ArgoCD Application, named after
+the first bundle. `ManifestLayout.OriginUnit()` on the root node's layout returns that directory's
+layout. Every other node is unchanged: its bundle renders in the node's directory. Both walkers do
+this. The unnamed wrapper `WalkClusterByPackage` builds for a package the root node is not in is
+not the root node's directory and is unchanged: under `NodeGrouping: GroupFlat` it renders the
+bundles merged into it, and the Flux integration refuses such a tree (its top renders a bundle).
+
+A child node of the root that carries the name of that directory is refused by the walk, since
+both would be written to one place; the error names the node, the bundle and the directory. Rename
+one of them, or set `BundleGrouping: GroupByName`.
+
+**Breaking change (go-kure/kure#979).** Before, the root node's bundles rendered in the root
+node's directory. Their files, the Flux Kustomization's `spec.path` and the ArgoCD Application's
+`source.path` move one directory down, from `<root>` to `<root>/<first bundle name>`. On a
+deployed tree with `prune` on, the objects can be deleted by the outer owner and re-created by the
+inner Kustomization.
 
 ### 3. Two Main Walker Functions
 - **WalkCluster()**: Standard hierarchical layout (Node → Bundle → App structure)
@@ -224,9 +261,15 @@ git-packages/
 ```
 clusters/
   cluster-name/
-    all-manifests-together.yaml
-    kustomization.yaml
+    root-node/
+      kustomization.yaml
+      first-bundle/
+        all-manifests-together.yaml
+        kustomization.yaml
 ```
+
+The root node's directory renders no bundle, so the merged bundles share one directory inside it
+(see [The root node's bundles](#the-root-nodes-bundles)).
 
 ## GitOps Tool Compatibility
 
@@ -403,21 +446,22 @@ files by name. An augmenter that needs the old names sets `FileNamingDefault` on
   single-segment `Namespace`) with no resource file, no bundle and no `AppFileSingle` child that
   writes a file. A `KustomizationRecursive` root, `AppFileSingle` or not, is refused as
   Recursive. Each is refused before anything is written when it carries `ConfigMapGenerators`,
-  which were silently dropped before. Under `WalkCluster` with `FlattenSingleTier`,
-  `WriteToDisk` and `WriteToTar` now refuse an augmenter app that is the only one, emits no
-  objects and sets its layout `AppFileSingle`: flattening moves it and its generators onto the
-  root. `WriteManifest` already refuses that root, since it renders a node or bundle and cannot
-  be written as `AppFileSingle`. Give such a root a resource, or put the
-  generators on a layout that writes a `kustomization.yaml`.
+  which were silently dropped before. `FlattenSingleTier` no longer builds such a root: it
+  moved a lone augmenter application and its generators onto the root, and since
+  go-kure/kure#979 it collapses no directory that renders a bundle. Give such a root a resource,
+  or put the generators on a layout that writes a `kustomization.yaml`.
 
 ### Layout origins
 
 Every layout the walkers build records what it renders: `OriginNodes()`, `OriginBundles()` and
 `OriginApplication()`. A node layout renders its node (plus its bundle when `BundleGrouping` is
 `GroupFlat`); a GroupByName bundle layout and an umbrella-child layout render their bundle; a
-per-app layout its application. A level merged by a `GroupFlat` axis, and a `FlattenSingleTier`
-collapse, move the absorbed nodes and bundles into the absorbing layout's origins; a merged
-application has no origin of its own. Hand-built layouts have none.
+per-app layout its application. The root node's layout renders its node and no bundle: with
+`BundleGrouping: GroupFlat` its bundles are rendered by the directory `OriginUnit()` returns (see
+[The root node's bundles](#the-root-nodes-bundles)); on every other layout `OriginUnit()` is nil.
+A level merged by a `GroupFlat` axis moves the absorbed nodes and bundles into the absorbing
+layout's origins, and a `FlattenSingleTier` collapse the absorbed node; a merged application has
+no origin of its own. Hand-built layouts have none.
 `OriginBundleObjects(b)` returns the objects bundle `b`'s applications render in that directory
 or its per-app directories (plus a stand-in for each ConfigMap a `configMapGenerator` makes in an
 augmenter application's layout or a layout below it: its kind and name, and the annotations the
@@ -559,7 +603,7 @@ Without a `ClusterName` the root node sits at `{rootName}` and every child node 
 
 ### Flatten Single Tier (opt-in)
 
-`LayoutRules.FlattenSingleTier` collapses one vestigial intermediate directory layer when the wrapping Node adds no semantic value. Typical case: a flat single-bundle app whose caller wraps the Bundle in an extra `apps` Node, producing `cluster-name/apps/manifests.yaml` where the `apps/` layer is redundant. Enabling the flag yields `cluster-name/manifests.yaml` directly.
+`LayoutRules.FlattenSingleTier` collapses one vestigial intermediate directory layer at the top of the tree when it adds no semantic value.
 
 Conservative collapse preconditions — ALL must hold:
 
@@ -569,10 +613,13 @@ Conservative collapse preconditions — ALL must hold:
 - Parent has no own `Resources`.
 - The single child is not an `UmbrellaChild`.
 - The single child has no `Children` of its own (terminal layer).
+- The single child renders no bundle (go-kure/kure#979).
 
-Multi-tier apps with sub-Kustomizations are unaffected: the precondition that the child be terminal preserves them. Empty containers (`only-Children`) are also unaffected: the precondition requiring the parent to have no own resources doesn't apply to them.
+A directory that renders a bundle is applied by its own Flux Kustomization, which its parent hosts. Collapsing it into the top of the tree, which has no parent, would make that Kustomization part of the build it applies, so it is left where it is.
 
-The absorbing layout takes over the collapsed layout's origins (see [Layout origins](#layout-origins)), so the Flux Kustomization and ArgoCD Application generated from the tree name the surviving directory; when parent and child each carried a bundle, the two share that directory's one Kustomization (see the fluxcd README, "One Kustomization per directory"). Nothing is rewritten after generation: a Flux CR a caller adds to the walked tree keeps the `spec.path` it was given.
+What it still collapses in a walked tree is a single child node that has neither a bundle nor child nodes: a `ClusterName` directory over such a root node, or a root node over one such child. The absorbing layout takes over the collapsed layout's origin node (see [Layout origins](#layout-origins)). A hand-built tree, which carries no origins, collapses as before. Nothing is rewritten after generation: a Flux CR a caller adds to the walked tree keeps the `spec.path` it was given.
+
+**Breaking change (go-kure/kure#979).** Before, a single child that rendered a bundle was collapsed too: a root node `apps` with one bundle under `ClusterName: cluster-name` was written to `cluster-name/`. It is now written to `cluster-name/apps/<bundle>/` with or without the flag (see [The root node's bundles](#the-root-nodes-bundles)).
 
 Scoped to `WalkCluster`. `WalkClusterByPackage` is unaffected — its synthetic unnamed wrappers express package boundaries that the flatten helper would otherwise erroneously collapse.
 

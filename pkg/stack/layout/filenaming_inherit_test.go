@@ -46,7 +46,8 @@ func (a namingAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
 }
 
 // walkNamingAugmenter walks a one-node cluster whose bundle holds one
-// application configured with aug, and returns the tree's root.
+// application configured with aug, and returns the tree's root. The root
+// node's bundle has a directory of its own, platform/platform.
 func walkNamingAugmenter(t *testing.T, rules layout.FileNamingMode, aug namingAugmenter) *layout.ManifestLayout {
 	t.Helper()
 	bundle := &stack.Bundle{Name: "platform", Applications: []*stack.Application{stack.NewApplication("chart", "default", aug)}}
@@ -94,8 +95,8 @@ func TestWalkCluster_AugmenterLayoutsInheritFileNaming(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := fileNamingByPath(walkNamingAugmenter(t, tc.rules, tc.aug), map[string]layout.FileNamingMode{})
 			for i, dir := range []string{
-				"platform/chart", "platform/chart/hooks", "platform/chart/hooks/post",
-				"platform/chart/own", "platform/chart/own/own-sub",
+				"platform/platform/chart", "platform/platform/chart/hooks", "platform/platform/chart/hooks/post",
+				"platform/platform/chart/own", "platform/platform/chart/own/own-sub",
 			} {
 				naming, ok := got[dir]
 				if !ok {
@@ -114,11 +115,11 @@ func TestWalkCluster_AugmenterLayoutsInheritFileNaming(t *testing.T) {
 // pattern, except below a layout that set its own.
 func TestWriters_AugmenterLayoutsUseInheritedFileNaming(t *testing.T) {
 	want := []string{
-		"platform/chart/configmap-chart.yaml",
-		"platform/chart/hooks/configmap-hooks.yaml",
-		"platform/chart/hooks/post/configmap-post.yaml",
-		"platform/chart/own/default-configmap-own.yaml",
-		"platform/chart/own/own-sub/default-configmap-own-sub.yaml",
+		"platform/platform/chart/configmap-chart.yaml",
+		"platform/platform/chart/hooks/configmap-hooks.yaml",
+		"platform/platform/chart/hooks/post/configmap-post.yaml",
+		"platform/platform/chart/own/default-configmap-own.yaml",
+		"platform/platform/chart/own/own-sub/default-configmap-own-sub.yaml",
 	}
 	walk := func() *layout.ManifestLayout {
 		return walkNamingAugmenter(t, layout.FileNamingKindName, namingAugmenter{ownNaming: layout.FileNamingDefault})

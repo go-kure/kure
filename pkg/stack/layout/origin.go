@@ -20,6 +20,10 @@ type origin struct {
 	nodes []*stack.Node
 	// bundles whose resources live in this directory, in emission order.
 	bundles []*stack.Bundle
+	// unit is the directory inside this one that renders the bundles a flat
+	// BundleGrouping merges here: set on the root node's layout only, which
+	// renders no bundle itself (go-kure/kure#979).
+	unit *ManifestLayout
 	// app is the application of a per-app layout.
 	app *stack.Application
 	// objects are the objects each of bundles renders, per-app directories
@@ -123,6 +127,13 @@ func (ml *ManifestLayout) OriginNodes() []*stack.Node { return ml.origin.nodes }
 // OriginBundles returns the bundles whose resources this layout's directory
 // holds. Nil for a hand-built layout.
 func (ml *ManifestLayout) OriginBundles() []*stack.Bundle { return ml.origin.bundles }
+
+// OriginUnit returns the child layout that renders the bundles a flat
+// BundleGrouping merges into this layout's node: the root node's layout
+// renders no bundle, so they have one directory inside it (go-kure/kure#979).
+// Nil for every other layout, and under BundleGrouping by name, where each
+// bundle has a directory of its own.
+func (ml *ManifestLayout) OriginUnit() *ManifestLayout { return ml.origin.unit }
 
 // OriginBundleObjects returns the objects bundle b's applications render in
 // this layout's directory or its per-app directories. Nil when b is not one

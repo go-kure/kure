@@ -149,7 +149,7 @@ func TestWriteManifest_RefuseWalkedSingleAppGenerators(t *testing.T) {
 		t.Fatalf("walk cluster: %v", err)
 	}
 	err = writeRefused(t, "WriteManifest", layout.DefaultConfigForProfile(layout.ArgoProfile), ml)
-	want := `layout "root/monitoring" is AppFileSingle, which writes no kustomization.yaml, so its ConfigMapGenerators have nowhere to go`
+	want := `layout "root/root/monitoring" is AppFileSingle, which writes no kustomization.yaml, so its ConfigMapGenerators have nowhere to go`
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("WriteManifest: err = %v, want it to contain %q", err, want)
 	}

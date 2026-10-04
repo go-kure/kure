@@ -119,15 +119,47 @@ func TestRecursive_NestedTargetsRefusedInEveryPlacement(t *testing.T) {
 // TestRecursive_RootBuildRefused: the root directory is built too (the Flux
 // bootstrap applies it), so a Recursive root over a generated target is
 // refused even when every other layout is Explicit and the target writes its
-// own kustomization.yaml.
+// own kustomization.yaml. Without a ClusterName wrapper the root is the root
+// node's layout, and the directories of its bundle and of its child node are
+// targets directly below it, in every placement.
 func TestRecursive_RootBuildRefused(t *testing.T) {
 	for _, placement := range placements {
 		t.Run(string(placement), func(t *testing.T) {
-			ml := integrated(t, recursiveCluster(), recursiveRules("nodeOnly", placement))
+			rules := propertyGroupings["nodeOnly"]
+			rules.FluxPlacement = placement
+			ml := integrated(t, recursiveCluster(), rules)
 			ml.Mode = layout.KustomizationRecursive
 			for writer, err := range writeErrs(t, ml) {
 				if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("the Flux build of KustomizationRecursive layout %q would include layout", ml.FullRepoPath())) {
 					t.Errorf("%s: got %v, want the root build refused", writer, err)
+				}
+			}
+		})
+	}
+}
+
+// TestRecursive_WrapperRootOverTheRootNode: under a ClusterName wrapper the
+// targets are below the root node's layout, which renders no bundle and is a
+// target only under FluxIntegratedPerLayout (its layout Kustomization). A
+// Recursive wrapper is refused there; in the other placements the root node's
+// kustomization.yaml stands between the wrapper and every target, so Flux adds
+// that directory as a whole, as the Explicit wrapper lists it, and the tree is
+// written (go-kure/kure#979).
+func TestRecursive_WrapperRootOverTheRootNode(t *testing.T) {
+	for _, placement := range placements {
+		t.Run(string(placement), func(t *testing.T) {
+			ml := integrated(t, recursiveCluster(), recursiveRules("nodeOnly", placement))
+			if node := layoutAtPath(t, ml, "prod/platform"); len(node.OriginBundles()) != 0 {
+				t.Fatalf("the root node's layout renders %d bundles, want none", len(node.OriginBundles()))
+			}
+			ml.Mode = layout.KustomizationRecursive
+			for writer, err := range writeErrs(t, ml) {
+				refused := err != nil && strings.Contains(err.Error(), fmt.Sprintf("the Flux build of KustomizationRecursive layout %q would include layout %q", ml.FullRepoPath(), "prod/platform"))
+				switch {
+				case placement == layout.FluxIntegratedPerLayout && !refused:
+					t.Errorf("%s: got %v, want the wrapper's build over the root node's layout refused", writer, err)
+				case placement != layout.FluxIntegratedPerLayout && err != nil:
+					t.Errorf("%s: got %v, want the tree written", writer, err)
 				}
 			}
 		})

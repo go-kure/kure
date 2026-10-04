@@ -112,15 +112,15 @@ func ExampleResourceGenerator_GenerateFromLayout() {
 	fmt.Println(objects[0].GetName(), objects[0].(*kustv1.Kustomization).Spec.Path)
 
 	// For one bundle, at a path you supply
-	objects, err = engine.ResourceGen.GenerateForBundle(bundle, "clusters/prod/apps")
+	objects, err = engine.ResourceGen.GenerateForBundle(bundle, "clusters/prod/apps/web")
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println(objects[0].GetName(), objects[0].(*kustv1.Kustomization).Spec.Path)
 	// Output:
-	// web apps
-	// web apps
-	// web clusters/prod/apps
+	// web apps/web
+	// web apps/web
+	// web clusters/prod/apps/web
 }
 
 func ExampleResourceGenerator_GenerateForBundle() {
@@ -161,10 +161,11 @@ func ExampleWorkflowEngine_CreateLayoutWithResources() {
 	}
 	printFiles(out)
 	// Output:
-	// clusters/apps/cluster-configmap-web.yaml
 	// clusters/apps/flux-system/flux-system-kustomization-web.yaml
 	// clusters/apps/flux-system/kustomization.yaml
 	// clusters/apps/kustomization.yaml
+	// clusters/apps/web/cluster-configmap-web.yaml
+	// clusters/apps/web/kustomization.yaml
 }
 
 func ExampleWorkflowEngine_GenerateBootstrap() {

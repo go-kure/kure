@@ -5,8 +5,7 @@ import (
 )
 
 // flattenSingleTier collapses one vestigial intermediate layout layer when
-// safe. The absorbing layout takes over the collapsed child's origins, so the
-// Flux and ArgoCD paths derived from it are the surviving directory; nothing
+// safe. The absorbing layout takes over the collapsed child's origins; nothing
 // is rewritten afterwards. Returns root unchanged when preconditions fail.
 //
 // Preconditions for collapse — ALL must hold:
@@ -16,14 +15,17 @@ import (
 //   - The parent has no own Resources.
 //   - The single child is not an UmbrellaChild.
 //   - The single child has no Children of its own.
+//   - The single child renders no bundle (go-kure/kure#979): the top of the
+//     tree has no parent to host the Flux Kustomization of a directory that
+//     renders bundles, so collapsing one into it would make that
+//     Kustomization part of the build it applies.
 //
 // On collapse:
 //   - parent.Resources = child.Resources, parent.Children = nil.
 //   - parent.ExtraFiles += child.ExtraFiles, parent.ConfigMapGenerators += child.ConfigMapGenerators.
 //   - Inherit child's Mode / FilePer / ApplicationFileMode / FileNaming if
 //     the parent has them as their unset sentinel value.
-//   - Append the child's origin nodes and bundles to the parent's, and take
-//     its application.
+//   - Append the child's origin nodes to the parent's.
 func flattenSingleTier(root *ManifestLayout, rules LayoutRules) *ManifestLayout {
 	if root == nil || !rules.FlattenSingleTier {
 		return root
@@ -51,33 +53,10 @@ func flattenSingleTier(root *ManifestLayout, rules LayoutRules) *ManifestLayout 
 	if root.FileNaming == FileNamingUnset && child.FileNaming != FileNamingUnset {
 		root.FileNaming = child.FileNaming
 	}
-	// The absorbed layout's resources now live in root's directory, so root
-	// renders what it rendered: when both carry bundles, both bundles' paths
-	// are this surviving directory.
+	// The absorbed layout's files now live in root's directory, so root
+	// renders the nodes it rendered. It renders no bundle (canFlatten), and
+	// so no application either: applications are rendered below a bundle.
 	root.origin.nodes = append(root.origin.nodes, child.origin.nodes...)
-	root.origin.bundles = append(root.origin.bundles, child.origin.bundles...)
-	for b, objs := range child.origin.objects {
-		root.origin.addObjects(b, objs)
-	}
-	if child.origin.app != nil {
-		root.origin.app = child.origin.app
-	}
-	// The absorbed layout's application records are root's now, and a record
-	// whose own layout was the absorbed one names root: that is where the
-	// application's resources and generators live. The same goes for the
-	// stand-ins of the generators root took over.
-	root.origin.apps = append(root.origin.apps, child.origin.apps...)
-	for i := range root.origin.apps {
-		rec := &root.origin.apps[i]
-		if rec.Layout == child {
-			rec.Layout = root
-		}
-		for j := range rec.generated {
-			if rec.generated[j].layout == child {
-				rec.generated[j].layout = root
-			}
-		}
-	}
 
 	return root
 }
@@ -107,5 +86,5 @@ func canFlatten(parent *ManifestLayout) bool {
 	if len(child.Children) > 0 {
 		return false
 	}
-	return true
+	return !child.rendersBundle()
 }

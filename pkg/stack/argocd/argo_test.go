@@ -368,13 +368,17 @@ func TestCreateLayoutWithResources_Success(t *testing.T) {
 		t.Errorf("expected layout name 'test-node', got %s", ml.Name)
 	}
 
-	// Should have one child for argocd directory
-	if len(ml.Children) != 1 {
-		t.Errorf("expected 1 child, got %d", len(ml.Children))
+	// Two children: the directory of the root node's bundle, then the argocd
+	// directory
+	if len(ml.Children) != 2 {
+		t.Errorf("expected 2 children, got %d", len(ml.Children))
 		return
 	}
+	if ml.Children[0].Name != "test-bundle" || ml.OriginUnit() != ml.Children[0] {
+		t.Errorf("expected the bundle's directory 'test-bundle' first, got %s", ml.Children[0].Name)
+	}
 
-	argoCDLayout := ml.Children[0]
+	argoCDLayout := ml.Children[1]
 	if argoCDLayout.Name != "argocd" {
 		t.Errorf("expected child name 'argocd', got %s", argoCDLayout.Name)
 	}
@@ -601,7 +605,8 @@ func TestGenerateFromCluster_ApplicationPathIsLayoutDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{"platform-bundle": "platform", "web-bundle": "platform/web", "web-db": "platform/web/web-db"}
+	// The root node's bundle has a directory of its own, beside its child nodes.
+	want := map[string]string{"platform-bundle": "platform/platform-bundle", "web-bundle": "platform/web", "web-db": "platform/web/web-db"}
 	if got := appPaths(t, objs); !pathsEqual(got, want) {
 		t.Errorf("Application paths = %v, want %v", got, want)
 	}

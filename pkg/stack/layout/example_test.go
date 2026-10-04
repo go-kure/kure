@@ -97,7 +97,8 @@ func ExampleWalkCluster() {
 	}
 	printFiles(out)
 	// Output:
-	// out/manifests/clusters/apps/cluster-configmap-api.yaml
-	// out/manifests/clusters/apps/cluster-configmap-ui.yaml
 	// out/manifests/clusters/apps/kustomization.yaml
+	// out/manifests/clusters/apps/web/cluster-configmap-api.yaml
+	// out/manifests/clusters/apps/web/cluster-configmap-ui.yaml
+	// out/manifests/clusters/apps/web/kustomization.yaml
 }
