@@ -29,20 +29,30 @@ var builtinModules = map[string]bool{
 // builtinClusterScoped are the registered built-in kinds that carry no
 // namespace. Every other built-in is namespaced.
 //
-// Sixteen entries replace the 128-entry hand-seeded pair of sets: the CRD
-// modules that make up the rest are read from their own markers.
+// Twenty-four entries stand where the 128-entry hand-seeded pair of sets used
+// to: the CRD modules that make up the rest are read from their own markers.
+// Registering a built-in group version that defines a cluster-scoped kind adds
+// its entry here, in the same change.
 var builtinClusterScoped = set(
 	"/ComponentStatus",
 	"/Namespace",
 	"/Node",
 	"/PersistentVolume",
 	"/RangeAllocation",
+	"admissionregistration.k8s.io/MutatingAdmissionPolicy",
+	"admissionregistration.k8s.io/MutatingAdmissionPolicyBinding",
+	"admissionregistration.k8s.io/MutatingWebhookConfiguration",
+	"admissionregistration.k8s.io/ValidatingAdmissionPolicy",
+	"admissionregistration.k8s.io/ValidatingAdmissionPolicyBinding",
+	"admissionregistration.k8s.io/ValidatingWebhookConfiguration",
 	"apiextensions.k8s.io/CustomResourceDefinition",
 	"networking.k8s.io/IPAddress",
 	"networking.k8s.io/IngressClass",
 	"networking.k8s.io/ServiceCIDR",
+	"node.k8s.io/RuntimeClass",
 	"rbac.authorization.k8s.io/ClusterRole",
 	"rbac.authorization.k8s.io/ClusterRoleBinding",
+	"scheduling.k8s.io/PriorityClass",
 	"storage.k8s.io/CSIDriver",
 	"storage.k8s.io/CSINode",
 	"storage.k8s.io/StorageClass",

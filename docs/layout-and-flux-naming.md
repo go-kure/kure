@@ -12,7 +12,7 @@ live-cluster upgrade effects are not a constraint.
 
 - **kure** generates YAML objects from Go APIs: base Kubernetes objects with their full spec, the
   layout of those objects in directories, and the Flux objects that deliver them. Covering every
-  base kind is its responsibility; the kinds without a constructor today are listed under
+  base kind is its responsibility; the four kinds still without a constructor are listed under
   [go-kure/kure#981](https://github.com/go-kure/kure/issues/981).
 - **An application-level consumer** turns one application into kure's model
   (`Cluster`, `Node`, `Bundle`, `Application`). It is delivery-agnostic: it puts no Flux
@@ -537,21 +537,39 @@ The fluxcd README claims tied to the behaviour bugs change with
 **Target.** kure supports every base object with its full spec. Each kind below gets a generated
 `Create<Kind>` from its registered scheme (`mise run builders:generate`).
 
-**Design outline.**
+**Shipped: the kinds `k8s.io/api` provides.** Ten kinds have a generated constructor that sets
+identity only, are covered by the whole-object identity test and appear in the generated kind
+tables:
 
-| Kinds | Upstream API | New dependency |
+| Kinds | Group version | Scope |
 |---|---|---|
-| `PriorityClass` (scheduling/v1), `EndpointSlice` (discovery/v1), `Lease` (coordination/v1), `RuntimeClass` (node/v1) | `k8s.io/api` | no |
-| `MutatingWebhookConfiguration`, `ValidatingWebhookConfiguration`, `ValidatingAdmissionPolicy`, `ValidatingAdmissionPolicyBinding`, `MutatingAdmissionPolicy`, `MutatingAdmissionPolicyBinding` (admissionregistration/v1; registering the group version brings all six) | `k8s.io/api` | no |
-| `APIService` | `k8s.io/kube-aggregator` | yes |
-| `VerticalPodAutoscaler` | `k8s.io/autoscaler/vertical-pod-autoscaler` | yes; not an upstream core API |
-| `ImageRepository`, `ImagePolicy` | `github.com/fluxcd/image-reflector-controller/api` | yes; kure has only image-automation-controller today |
+| `PriorityClass` | scheduling.k8s.io/v1 | cluster |
+| `EndpointSlice` | discovery.k8s.io/v1 | namespaced |
+| `Lease` | coordination.k8s.io/v1 | namespaced |
+| `RuntimeClass` | node.k8s.io/v1 | cluster |
+| `MutatingWebhookConfiguration`, `ValidatingWebhookConfiguration`, `ValidatingAdmissionPolicy`, `ValidatingAdmissionPolicyBinding`, `MutatingAdmissionPolicy`, `MutatingAdmissionPolicyBinding` | admissionregistration.k8s.io/v1 | cluster |
 
-The ticket decides each new dependency.
+**Breaking.** Parsing changes for these ten kinds. A strict parse used to refuse them and a parse
+with `AllowUnstructured` returned `*unstructured.Unstructured`; both now return the `k8s.io/api`
+type. A `<Kind>List` document of one of them, which `AllowUnstructured` used to flatten into its
+items, is now refused in both modes, as a list of any registered kind is. `pkg/manifest` answers
+their scope from the generated table; `PriorityClass` and the two webhook configurations left its
+residual list.
 
-**Acceptance.** Every kind above that the `k8s.io/api` version in use provides has a constructor
-that sets identity only, covered by the whole-object identity test, and appears in the generated
-kind tables. The family README and every guide mapped to the family are updated in the same
-change, as the repository requires for a new kind (`AGENTS.md:220-222`). For `APIService`,
-`VerticalPodAutoscaler`, `ImageRepository` and `ImagePolicy` the ticket decides per kind; a kind
-that is added meets the same criteria, and a kind that is not is listed with its reason.
+**Still open: the kinds that need a new module dependency.** The ticket decides each one; a kind
+that is added meets the same criteria.
+
+| Kinds | Go type lives in | Why not yet |
+|---|---|---|
+| `APIService` | `k8s.io/kube-aggregator` | a new dependency for one kind |
+| `VerticalPodAutoscaler` | `k8s.io/autoscaler/vertical-pod-autoscaler` | a new dependency; not an upstream core API |
+| `ImageRepository`, `ImagePolicy` | `github.com/fluxcd/image-reflector-controller/api` | a new dependency; kure has only image-automation-controller today |
+
+The same list, with what a caller does in the meantime, is in `pkg/kubernetes/README.md` under
+"Base kinds covered".
+
+**Tests.** The identity test (`pkg/kubernetes/identity_test.go`) compares each constructor's whole
+object, and the generated `pkg/kubernetes/zz_generated_create_test.go` calls each wrapper by name.
+`pkg/kubernetes/scheme_test.go` asserts each kind's registration.
+`pkg/io/runtime_base_kinds_test.go` parses each kind in both modes and keeps `APIService` as the
+control that is still refused.

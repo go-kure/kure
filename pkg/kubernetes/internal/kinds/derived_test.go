@@ -14,9 +14,9 @@ import (
 // and against the frozen fixture, which is what the hand-seeded scope table
 // used to answer for.
 const (
-	wantKinds      = 128
-	wantCluster    = 33
-	wantNamespaced = 95
+	wantKinds      = 138
+	wantCluster    = 41
+	wantNamespaced = 97
 )
 
 func TestBaselineCounts(t *testing.T) {
@@ -46,7 +46,7 @@ func TestBaselineCounts(t *testing.T) {
 
 // Registered fills each Kind's scope from the resolution. A dropped or mis-keyed
 // fill-in step would leave the zero value, Namespaced=false, for every kind —
-// and the zero value is the right answer for 33 of the 128, so it neither
+// and the zero value is the right answer for 41 of the 138, so it neither
 // crashes nor looks obviously wrong.
 func TestRegisteredScopesComeFromTheResolution(t *testing.T) {
 	all, types := loadRegistered(t)

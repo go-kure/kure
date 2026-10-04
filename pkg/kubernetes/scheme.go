@@ -21,13 +21,18 @@ import (
 	sourceWatcherv1beta1 "github.com/fluxcd/source-watcher/api/v2/v1beta1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
+	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	netv1 "k8s.io/api/networking/v1"
+	nodev1 "k8s.io/api/node/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	storv1 "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -74,6 +79,11 @@ func registerAllSchemes() error {
 		policyv1.AddToScheme,
 		netv1.AddToScheme,
 		storv1.AddToScheme,
+		schedulingv1.AddToScheme,
+		discoveryv1.AddToScheme,
+		coordinationv1.AddToScheme,
+		nodev1.AddToScheme,
+		admissionregistrationv1.AddToScheme,
 		apiextensionsv1.AddToScheme,
 		cmacme.AddToScheme,
 		certv1.AddToScheme,

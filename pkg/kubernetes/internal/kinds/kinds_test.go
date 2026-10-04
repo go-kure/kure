@@ -88,6 +88,16 @@ func TestRegistered_KnownKindsAndScopes(t *testing.T) {
 		{"volsync.backube/ReplicationSource", "volsync", true},
 		{"autoscaling/HorizontalPodAutoscaler", "", true},
 		{"policy/PodDisruptionBudget", "", true},
+		{"scheduling.k8s.io/PriorityClass", "", false},
+		{"discovery.k8s.io/EndpointSlice", "", true},
+		{"coordination.k8s.io/Lease", "", true},
+		{"node.k8s.io/RuntimeClass", "", false},
+		{"admissionregistration.k8s.io/MutatingWebhookConfiguration", "", false},
+		{"admissionregistration.k8s.io/ValidatingWebhookConfiguration", "", false},
+		{"admissionregistration.k8s.io/ValidatingAdmissionPolicy", "", false},
+		{"admissionregistration.k8s.io/ValidatingAdmissionPolicyBinding", "", false},
+		{"admissionregistration.k8s.io/MutatingAdmissionPolicy", "", false},
+		{"admissionregistration.k8s.io/MutatingAdmissionPolicyBinding", "", false},
 	}
 	for _, c := range cases {
 		k, ok := byKey[c.key]

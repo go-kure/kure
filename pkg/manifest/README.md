@@ -57,10 +57,11 @@ this order:
    (`autoscaling/v1` where the scheme has `autoscaling/v2`) is still answered,
    because a resource has one scope across all its versions.
 3. A short residual list covers the cluster-scoped kinds kure does **not** register
-   and so cannot derive: `PriorityClass`, `APIService` and the two webhook
-   configurations. These are built-ins too. It only shrinks — registering one of
-   them moves it to the derived table, and a test fires so the entry is removed
-   rather than left as a second, competing answer.
+   and so cannot derive. One entry is left: `APIService`, a built-in too.
+   `PriorityClass` and the two webhook configurations were on it until kure
+   registered them; step 2 answers for them now. The list only shrinks —
+   registering a kind moves it to the derived table, and a test fires so the entry
+   is removed rather than left as a second, competing answer.
 4. A **custom resource** takes its scope from the caller-supplied map of CRD scopes
    (the `spec.scope` of CRDs known in the same context) when that map defines it —
    including for a kind kure registers. The CRD in scope names the scope the target

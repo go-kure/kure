@@ -51,19 +51,16 @@ func ObjectGroupKind(o client.Object) schema.GroupKind {
 // clusterScopedUnregisteredKinds lists the cluster-scoped kinds this package
 // must recognise that the generated table cannot answer for, because kure's
 // scheme does not register them and so nothing derives their scope from an
-// upstream source. Without them an APIService or a PriorityClass would come
-// back ScopeUnknown, and a caller failing closed would demand a
-// metadata.namespace on an object that must not carry one.
+// upstream source. Without them an APIService would come back ScopeUnknown,
+// and a caller failing closed would demand a metadata.namespace on an object
+// that must not carry one.
 //
 // This set only shrinks. Every entry is a kind kure has no builders for;
 // registering one moves its scope to the derived table, and
 // TestClusterScopedUnregisteredKindsAreNotInTheGeneratedTable fires so the
 // entry is removed rather than left behind as a second, competing answer.
 var clusterScopedUnregisteredKinds = map[string]bool{
-	"scheduling.k8s.io/PriorityClass":                             true,
-	"apiregistration.k8s.io/APIService":                           true,
-	"admissionregistration.k8s.io/ValidatingWebhookConfiguration": true,
-	"admissionregistration.k8s.io/MutatingWebhookConfiguration":   true,
+	"apiregistration.k8s.io/APIService": true,
 }
 
 // IsNamespacedBuiltinKind reports whether a (group-aware) apiVersion+kind is a
