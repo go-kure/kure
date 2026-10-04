@@ -117,6 +117,30 @@ lists it, or a sibling that parent lists), and so are
 two generators named `x` in one layout or in two layouts of one build. A ConfigMap `x` in another
 namespace, or a generator `x` in a child its parent does not list, is written.
 
+In a tree Flux delivers, the writers refuse a directory that is written and that nothing applies
+(go-kure/kure#977). A tree is one Flux delivers when its root is marked with `SetFluxBuild`: the
+fluxcd integrator marks the root of every tree it generated a Kustomization for, and a caller that
+places Flux Kustomizations itself marks its tree the same way. In such a tree every child its
+parent's `kustomization.yaml` does not list (the children named above: an umbrella child, one that
+renders bundles, a directory child of a `FluxIntegratedPerLayout` parent, and under `WriteToDisk`
+and `WriteToTar` a directory child of another package) is applied only by a Flux Kustomization
+whose `spec.path` names its directory, so it must be marked as well. An unmarked one is refused,
+naming the layout and its parent. A child of another package is not exempt: those two writers
+write its directory into the tree and nothing in the tree lists it. An `AppFileSingle` child
+without resources writes no file and is not checked. A tree whose root is not marked, an Argo CD
+tree included, is not checked.
+
+The writers also refuse two Flux Kustomizations with one namespace and name anywhere in a tree,
+marked or not (go-kure/kure#977). The checks above refuse one object held twice in what one
+kustomize build takes in; two Kustomizations in directories that are applied separately pass
+those, yet they are one object in the cluster, where each apply replaces what the other wrote. A
+Kustomization is matched by the group `kustomize.toolkit.fluxcd.io` and its kind, at any version,
+and an omitted namespace counts as `default`. The error names both layouts. A Kustomization inside
+a List counts, where a List is what kustomize opens as one: an object whose kind ends in `List`
+and that has an `items` field, opened again when an item is itself such a List. A kind that does
+not end in `List` is one object, whatever fields it has, and so is a List kind without `items`; a
+List whose `items` is null holds nothing.
+
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)
 - **BundleGrouping**: whether each bundle gets a directory inside its node's (`GroupByName`) or renders in the node's directory (`GroupFlat`, default)
@@ -252,7 +276,9 @@ files by name. An augmenter that needs the old names sets `FileNamingDefault` on
   A Flux Kustomization kure generated builds a directory when `SetFluxBuild` marks it: the fluxcd
   integrator marks each generated `spec.path` layout, and the root, which the Flux bootstrap
   applies. Nothing else marks: a caller placing Flux Kustomizations from `GenerateFromLayout` or its
-  own code calls `SetFluxBuild` on their `spec.path` layouts to get these checks.
+  own code calls `SetFluxBuild` on the root and on their `spec.path` layouts to get these checks.
+  Once the root is marked, every directory its parent does not list must be marked too (see
+  "Layout paths" above): an unmarked one is a directory nothing applies.
 
   A marked Recursive directory that holds no file is refused (go-kure/kure#904): no resource file,
   extra file, `AppFileSingle` child file, file of a layout below it or `kustomization.yaml` a
@@ -416,9 +442,11 @@ children included; anything under it, or a file on the way to it) or the `<name>
 `AppFileSingle` child with resources, or another extra file (listed twice); nor may it use any of those files as
 a directory (`kustomization.yaml/x`), or be a file where one of them needs a directory. A child's
 output directory is the one its writer uses (for `WriteManifest`, after applying the `Config`
-defaults). All names are compared case-insensitively, as on default macOS volumes. When a layout
-has extra files, a `..` segment in its `Namespace` or `Name`, in a direct child's `Namespace` or
-`Name`, or in a generated file name refuses the tree before any file is written; a
+defaults). All names are compared case-insensitively, as on default macOS volumes. A `..` segment
+in the `Namespace` or `Name` of any layout of the tree refuses it before any file is written,
+whether or not the layout has extra files (go-kure/kure#977): an augmenter can rename its layout
+after the walk, and the final value is what the writers join into a path. When a layout has extra
+files, a `..` segment in a generated file name refuses the tree as well. A
 rooted name (`/x`) is not refused, since every writer joins it under its base. Previously such an
 extra file silently replaced the generated one on disk, or shadowed it as a later tar entry, while
 `kustomization.yaml` still listed the path.

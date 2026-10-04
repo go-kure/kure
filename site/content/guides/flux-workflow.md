@@ -255,6 +255,17 @@ What changed, and what to do:
   or applications that render nothing), every writer would leave it empty, and a Git tree drops
   an empty directory, so the Flux Kustomization would name a path that is not committed. Give the
   layout a resource, or write it `KustomizationExplicit`, which writes it `resources: []`.
+- **Directories nothing applies are refused.** In a tree with generated Flux Kustomizations, a
+  directory its parent's `kustomization.yaml` does not list is applied only by a Kustomization
+  whose `spec.path` names it. The integrator marks every directory its Kustomizations build, so a
+  tree it built passes. A tree changed afterwards, or one you place Kustomizations in yourself, is
+  refused where such a directory is not marked with `SetFluxBuild`: its files would be committed
+  and never applied.
+- **Kustomization names are unique in a tree.** Two Flux Kustomizations with one namespace and
+  name are refused wherever they sit, also in directories that are applied separately and inside
+  a `List`: they are one object in the cluster.
+- **No `..` in a layout's name or namespace.** Every writer refuses a layout whose `Name` or
+  `Namespace` has a `..` path segment, with or without extra files.
 
 See the [Layout Engine reference](/api-reference/layout/) for the full rule.
 

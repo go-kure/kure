@@ -339,36 +339,47 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	if err := checkPlacedReconcileOrder(ml, p.generated); err != nil {
 		return err
 	}
-	markFluxBuilds(ml, p.generated)
-	return nil
+	return markFluxBuilds(ml, p.generated)
 }
 
 // markFluxBuilds marks, with SetFluxBuild, the directory each Kustomization
 // this integration generated builds (generated: their namespace/name keys),
 // and the root when it generated any: the Flux bootstrap applies the root. The
 // writers check a KustomizationRecursive directory so marked against what
-// Flux builds from it. A Kustomization a caller or an application placed marks
-// nothing.
-func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) {
+// Flux builds from it. A Kustomization the integration kept in place of one of
+// its own (add) has that key and marks its directory in whatever form it has:
+// typed, unstructured or inside a List (go-kure/kure#977). Any other
+// Kustomization a caller or an application placed marks nothing.
+func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) error {
 	layoutAt := map[string]*layout.ManifestLayout{}
 	var paths []string
-	var walk func(l *layout.ManifestLayout)
-	walk = func(l *layout.ManifestLayout) {
+	var walk func(l *layout.ManifestLayout) error
+	walk = func(l *layout.ManifestLayout) error {
 		layoutAt[path.Clean(l.FullRepoPath())] = l
-		for _, obj := range l.Resources {
-			if k, ok := obj.(*kustv1.Kustomization); ok && generated[crKey(k.Namespace, k.Name)] {
-				paths = append(paths, k.Spec.Path)
+		objs, err := resourceItems(l)
+		if err != nil {
+			return err
+		}
+		for _, obj := range objs {
+			if p, ok := fluxKustomizationPath(obj); ok && generated[crKey(obj.GetNamespace(), obj.GetName())] {
+				paths = append(paths, p)
 			}
 		}
 		for _, c := range l.Children {
-			if c != nil {
-				walk(c)
+			if c == nil {
+				continue
+			}
+			if err := walk(c); err != nil {
+				return err
 			}
 		}
+		return nil
 	}
-	walk(root)
+	if err := walk(root); err != nil {
+		return err
+	}
 	if len(paths) == 0 {
-		return
+		return nil
 	}
 	root.SetFluxBuild(true)
 	for _, p := range paths {
@@ -376,6 +387,7 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) {
 			l.SetFluxBuild(true)
 		}
 	}
+	return nil
 }
 
 // checkPlacedReconcileOrder runs checkReconcileOrder over the Kustomizations
@@ -1114,37 +1126,60 @@ func indexExistingSources(ml, skip *layout.ManifestLayout) (map[string][]hostedO
 	return out, walk(ml)
 }
 
-// resourceItems returns l's resources with every List replaced by its items:
-// a List is an envelope, and kustomize builds the items.
+// resourceItems returns l's resources as kustomize builds them, the rule the
+// layout package's pre-write check reads them by (go-kure/kure#977): a List is
+// an envelope, and kustomize builds its items. A List is an object whose kind
+// ends in "List" and that has items; a List among the items is opened as
+// well, and one whose items are null holds nothing. Any other object is
+// returned as itself, whatever fields it has: a kind that does not end in
+// "List", a List kind without an items field, and one whose items are not a
+// list.
 func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 	var out []client.Object
+	queue := make([]client.Object, 0, len(l.Resources))
 	for _, r := range l.Resources {
-		if r == nil {
+		if r != nil {
+			queue = append(queue, r)
+		}
+	}
+	for len(queue) > 0 {
+		obj := queue[0]
+		queue = queue[1:]
+		if !strings.HasSuffix(obj.GetObjectKind().GroupVersionKind().Kind, "List") {
+			out = append(out, obj)
 			continue
 		}
-		if u, ok := r.(*unstructured.Unstructured); ok && u.IsList() {
-			list, err := u.ToList()
-			if err != nil {
-				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-			}
-			for i := range list.Items {
-				out = append(out, &list.Items[i])
-			}
-			continue
-		}
-		if meta.IsListType(r) {
-			items, err := meta.ExtractList(r)
-			if err != nil {
-				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-			}
-			for _, item := range items {
-				if obj, ok := item.(client.Object); ok {
-					out = append(out, obj)
+		if u, ok := obj.(*unstructured.Unstructured); ok {
+			raw, has := u.Object["items"]
+			switch {
+			case has && raw == nil:
+				// A List that holds nothing.
+			case !u.IsList():
+				out = append(out, obj)
+			default:
+				list, err := u.ToList()
+				if err != nil {
+					return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+				}
+				for i := range list.Items {
+					queue = append(queue, &list.Items[i])
 				}
 			}
 			continue
 		}
-		out = append(out, r)
+		if !meta.IsListType(obj) {
+			out = append(out, obj)
+			continue
+		}
+		items, err := meta.ExtractList(obj)
+		if err != nil {
+			return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+		}
+		for _, item := range items {
+			if o, ok := item.(client.Object); ok {
+				queue = append(queue, o)
+			}
+		}
 	}
 	return out, nil
 }
@@ -1364,8 +1399,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 			if err := checkPlacedReconcileOrder(ml, generated); err != nil {
 				return err
 			}
-			markFluxBuilds(ml, generated)
-			return nil
+			return markFluxBuilds(ml, generated)
 		}
 		return errors.Errorf("layout %q already has a %s child with other Flux resources; integrate a freshly walked layout", ml.FullRepoPath(), DefaultFluxDirName)
 	}
@@ -1407,7 +1441,10 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		ml.Children = ml.Children[:len(ml.Children)-1]
 		return err
 	}
-	markFluxBuilds(ml, generated)
+	if err := markFluxBuilds(ml, generated); err != nil {
+		ml.Children = ml.Children[:len(ml.Children)-1]
+		return err
+	}
 	return nil
 }
 
