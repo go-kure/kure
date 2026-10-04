@@ -213,7 +213,36 @@ func (a *Bundle) Validate() error {
 		}
 	}
 	visited := make(map[*Bundle]bool)
-	return a.validateChildren(visited)
+	if err := a.validateChildren(visited); err != nil {
+		return err
+	}
+	return a.validateNames(a.Name, make(map[*Bundle]bool))
+}
+
+// validateNames checks the name of the bundle and of every umbrella
+// descendant against both rules a bundle name has to meet: it is the name of
+// the bundle's Flux Kustomization and, under layout.GroupByName, of its
+// directory. path is the bundle's path from the bundle Validate was called on,
+// so the error names the bundle and not only its last segment. It runs after
+// validateChildren, which has already refused a nil child and a cycle; seen
+// keeps a bundle reachable twice from being reported twice.
+func (a *Bundle) validateNames(path string, seen map[*Bundle]bool) error {
+	if seen[a] {
+		return nil
+	}
+	seen[a] = true
+	if err := ValidateDirectoryName(a.Name); err != nil {
+		return errors.ResourceValidationError("Bundle", path, "name", err.Error(), nil)
+	}
+	if err := ValidateKustomizationName(a.Name); err != nil {
+		return errors.ResourceValidationError("Bundle", path, "name", err.Error(), nil)
+	}
+	for _, c := range a.Children {
+		if err := c.validateNames(path+"/"+c.Name, seen); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // validateChildren performs recursive umbrella-children validation: cycle
