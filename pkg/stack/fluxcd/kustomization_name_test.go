@@ -320,6 +320,34 @@ func TestKustomizationName_GenerateForBundleRefusesItsOwnName(t *testing.T) {
 			},
 			want: []string{`"shop"`, `"shop/shop-api"`, `"apps-shop"`},
 		},
+		{
+			name: "NamedDependsOn entry with the bundle's KustomizationName",
+			build: func() *stack.Bundle {
+				web := srBundle("web")
+				web.KustomizationName = "shared"
+				web.NamedDependsOn = []string{"db", "shared"}
+				return web
+			},
+			want: []string{`"web"`, `"shared"`, "NamedDependsOn"},
+		},
+		{
+			name: "NamedDependsOn entry with the bundle's Name, no KustomizationName",
+			build: func() *stack.Bundle {
+				web := srBundle("web")
+				web.NamedDependsOn = []string{"web"}
+				return web
+			},
+			want: []string{`"web"`, "NamedDependsOn"},
+		},
+		{
+			name: "the bundle itself in DependsOn",
+			build: func() *stack.Bundle {
+				web := srBundle("web")
+				web.DependsOn = []*stack.Bundle{web}
+				return web
+			},
+			want: []string{`"web"`, "DependsOn"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
