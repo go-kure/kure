@@ -244,7 +244,9 @@ what the text said and what it says now.
    comments now say that building a Kustomization from a group is the caller's.
 6. **`ManifestLayout.DependsOn`.** It was documented as becoming `spec.dependsOn` in
    `FluxIntegratedPerLayout` mode. Left unsaid then and stated now: that holds only for a layout
-   that gets its own Kustomization, and every other case drops the field without an error.
+   that gets its own Kustomization, and every other case drops the field without an error. It
+   also said the entries are sibling layout names; they are Kustomization names, copied
+   verbatim, which differ from the layout's name for a node layout.
 
 ## Part 2: target behaviour
 
@@ -596,16 +598,18 @@ symbol name instead of by line.
    `FluxIntegratedPerLayout mode requires a SourceRef with Kind and Name` or
    `FluxIntegratedPerBundle mode requires …`. This is the one change to output: the text of an
    error.
-3. The fluxcd README says which layouts get a Kustomization under `FluxIntegratedPerLayout`,
-   and that a layout whose Kustomization name is taken is refused. It keeps today's names; the
+3. The fluxcd README says which layouts get a Kustomization under `FluxIntegratedPerLayout`
+   (one per layout that renders bundles, one per bundle-less child layout), and that a layout
+   whose Kustomization name is taken is refused. It keeps today's names; the
    naming from [go-kure/kure#973](https://github.com/go-kure/kure/issues/973) is restated there
    when that ships.
 4. The FileNaming doc: nothing was left to do,
    [go-kure/kure#976](https://github.com/go-kure/kure/issues/976) made it true and updated it.
 5. The helm README and the example it is generated from say that kure does not convert a
    `HookGroup`, and that a consumer builds a Kustomization per group itself.
-6. The `ManifestLayout.DependsOn` comment states which layouts it applies to and that it is
-   dropped elsewhere without an error.
+6. The `ManifestLayout.DependsOn` comment, the layout README and the Flux workflow guide state
+   which layouts it applies to, that it is dropped elsewhere without an error, and that its
+   entries are Kustomization names copied verbatim.
 
 The fluxcd README claims tied to the behaviour bugs change with
 [go-kure/kure#979](https://github.com/go-kure/kure/issues/979).

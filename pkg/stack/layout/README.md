@@ -531,7 +531,7 @@ Augmenters are responsible for ensuring uniqueness. The recommended convention i
 
 #### DependsOn
 
-Set `ManifestLayout.DependsOn` to a list of sibling layout names. In `FluxIntegratedPerLayout` mode the layout integrator translates these into `spec.dependsOn` entries on the child's `Kustomization` CR, enabling ordered reconciliation between hook groups (e.g. pre-install → hooks → post-install).
+Set `ManifestLayout.DependsOn` to the names of the `Kustomization` CRs that must reconcile first. In `FluxIntegratedPerLayout` mode the layout integrator copies them verbatim into `spec.dependsOn` on the child's own CR, enabling ordered reconciliation between hook groups (e.g. pre-install → hooks → post-install). A hook-group or application layout's CR is named after the layout, so a sibling's layout name is its CR name; the CR of a node layout that renders no bundle is named `<path with "/" replaced by "-">-node`. The field applies only to a child layout that gets a CR of its own (not an umbrella child, not `AppFileSingle`, rendering no bundle); in every other case, and under the other placements, it is dropped without an error.
 
 ### ClusterName-Aware Layouts
 
