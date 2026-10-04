@@ -28,9 +28,9 @@ import (
 ```
 
 Every other Go block on this page is the body of an `Example` function in
-`pkg/stack/fluxcd`, which `go test` runs: the bootstrap and sync-name blocks are shared with the
-[Flux Engine reference](/api-reference/flux-engine) and live in its `example_test.go`, the others
-in `flux_workflow_example_test.go`. Besides the imports above they use `os`, `kustv1`
+`pkg/stack/fluxcd`, which `go test` runs: the Kustomization-name, bootstrap and sync-name blocks
+are shared with the [Flux Engine reference](/api-reference/flux-engine) and live in its
+`example_test.go`, the others in `flux_workflow_example_test.go`. Besides the imports above they use `os`, `kustv1`
 (`github.com/fluxcd/kustomize-controller/api/v1`), and `fmt` for the lines that print what the
 example built. The test file declares what the examples take as given: `certManagerConfig`,
 `frontendConfig` and `apiConfig`, which each emit a Deployment and a Service named after their
@@ -364,6 +364,40 @@ What changed, and what to do:
   units.
 - **FlattenSingleTier** no longer rewrites Flux CRs a caller added to the tree; generated CRs
   already name the surviving directory.
+
+### Kustomization names
+
+A bundle's Kustomization is named after the bundle. Set `Bundle.KustomizationName` to give it
+another name without renaming the bundle or moving its directory:
+
+<!-- doc-example: pkg/stack/fluxcd ExampleResourceGenerator_GenerateForBundle -->
+```go
+// The bundles keep their names and directories; their Kustomizations
+// get the names set here.
+db := &stack.Bundle{Name: "db", KustomizationName: "apps-db"}
+shop := &stack.Bundle{Name: "shop", KustomizationName: "apps-shop", DependsOn: []*stack.Bundle{db}}
+
+objects, err := fluxcd.NewResourceGenerator().GenerateForBundle(shop, "clusters/prod/shop")
+if err != nil {
+    panic(err)
+}
+kust := objects[0].(*kustv1.Kustomization)
+fmt.Println(kust.Name, kust.Spec.Path, kust.Spec.DependsOn[0].Name)
+```
+<!-- doc-example:end -->
+
+It prints `apps-shop clusters/prod/shop apps-db`: the Kustomization and its `dependsOn` entry carry
+the names set on the bundles, and `spec.path` is the directory, which did not move. Everything
+that refers to a bundle's Kustomization follows the name in effect (`Bundle.UnitName()`):
+`dependsOn` entries, an umbrella's health checks, and the name a merged directory takes from its
+first bundle. A `NamedDependsOn` entry names a Kustomization, so it reaches a bundle that sets the
+field by that value, not by the bundle's name.
+
+Two bundles whose Kustomizations would get one name are refused, whether the name comes from the
+field or from the bundle's name. The field is also the way out when a bundle's payload contains a
+Flux Kustomization named like the bundle: give the bundle another `KustomizationName` and the two
+no longer collide. See the
+[Flux Engine reference](/api-reference/flux-engine/#kustomization-names).
 
 ## Umbrella Bundles — Readiness Aggregation
 

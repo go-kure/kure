@@ -100,6 +100,34 @@ func TestIndexOrigins_KustomizationName_MergedUnit(t *testing.T) {
 	}
 }
 
+// TestIndexOrigins_KustomizationNameOfAnotherBundlesName: a bundle may take as
+// KustomizationName the Name of a bundle that has a KustomizationName of its
+// own: no two Kustomizations share a name. A reference to that name then
+// reaches the bundle whose Kustomization has it, not the bundle called so.
+func TestIndexOrigins_KustomizationNameOfAnotherBundlesName(t *testing.T) {
+	db := &stack.Bundle{Name: "db", KustomizationName: "db-cr", Applications: []*stack.Application{configMapApp("db")}}
+	worker := &stack.Bundle{Name: "worker", KustomizationName: "db", Applications: []*stack.Application{configMapApp("worker")}}
+	dbn := &stack.Node{Name: "dbn", Bundle: db}
+	workern := &stack.Node{Name: "workern", Bundle: worker}
+	r := &stack.Node{Name: "r", Children: []*stack.Node{dbn, workern}}
+	dbn.SetParent(r)
+	workern.SetParent(r)
+	c := &stack.Cluster{Name: "demo", Node: r}
+	ix, err := layout.IndexOrigins(walk(t, c, nodeOnly), c)
+	if err != nil {
+		t.Fatalf("IndexOrigins: %v", err)
+	}
+	if got := ix.UnitName(db); got != "db-cr" {
+		t.Errorf("UnitName(db) = %q, want db-cr", got)
+	}
+	if got := ix.UnitName(worker); got != "db" {
+		t.Errorf("UnitName(worker) = %q, want db", got)
+	}
+	if got := ix.UnitName(&stack.Bundle{Name: "db"}); got != "db-cr" {
+		t.Errorf("UnitName(a bundle named db) = %q, want db-cr: a bundle is found by its Name", got)
+	}
+}
+
 // TestIndexOrigins_RejectsDuplicateKustomizationName: two bundles whose
 // Kustomizations would get one name are refused, and the error names both
 // bundles by their paths and the name they share.
