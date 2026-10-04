@@ -822,8 +822,9 @@ what stated it. Commit the generated files; `./scripts/gen-builders.sh check` fa
 If the generator reports that it cannot determine a kind's scope, that is the intended failure: add
 the `+kubebuilder:resource` marker upstream, or ship the `CustomResourceDefinition` in the module.
 Do not default it. The built-in table is not a third option here: `builtinClusterScoped`
-(`pkg/kubernetes/internal/kinds/scope.go`) is consulted only for the two modules in
-`builtinModules` — `k8s.io/api` and `k8s.io/apiextensions-apiserver`, whose types carry no markers
+(`pkg/kubernetes/internal/kinds/scope.go`) is consulted only for the three modules in
+`builtinModules` — `k8s.io/api`, `k8s.io/apiextensions-apiserver` and `k8s.io/kube-aggregator`,
+whose types carry no markers
 because the API server defines their scope — so an entry added there for a CRD family's kind is
 never read, and the same error comes back. That table is only the right place when the kind you are
 adding is itself a Kubernetes built-in.
@@ -843,6 +844,19 @@ change. Check each kind's scope against the `+genclient:nonNamespaced` tag on it
   of the table;
 - drop the kind from `clusterScopedUnregisteredKinds` in `pkg/manifest` if it was listed there — a
   test fails until you do.
+
+A built-in whose Go type lives in another `k8s.io` module (`APIService`, in
+`k8s.io/kube-aggregator`) needs four more, because nothing about that module is known yet:
+
+- add the module to `builtinModules`, so `builtinClusterScoped` is consulted for it and the kind is
+  recorded as a built-in;
+- add its import-path prefix to `packageRoutes` (`pkg/kubernetes/internal/kinds/kinds.go`) with an
+  empty family, which routes the constructor to `pkg/kubernetes`; the generator stops with "no kure
+  package routes import path" until it is there;
+- add the module to the table in `internal/kuretest/sources.go` as an uncovered built-in;
+  `TestEveryKindHasOneSource` fails on a module that is not in the table;
+- pin it in the `replace` block of `go.mod` at the release of the other `k8s.io` modules, and
+  import its API package only.
 
 #### 3. Add sugar only in one of the three admitted classes
 

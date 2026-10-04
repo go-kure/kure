@@ -6,7 +6,7 @@
 Generated from the modules this build pins. Every row names the module and
 version it was read from, so a table entry is always traceable to a pin.
 
-## Kinds (140)
+## Kinds (141)
 
 `Scope from` is what stated the scope: the kind's own `+kubebuilder:resource`
 marker, the `CustomResourceDefinition` its module ships, or the built-in table
@@ -41,6 +41,7 @@ for the kinds whose scope the API server defines.
 | `admissionregistration.k8s.io/v1` | `ValidatingAdmissionPolicyBinding` | Cluster | `builtin` | `ValidatingAdmissionPolicyBinding` | `k8s.io/api@v0.37.1` |
 | `admissionregistration.k8s.io/v1` | `ValidatingWebhookConfiguration` | Cluster | `builtin` | `ValidatingWebhookConfiguration` | `k8s.io/api@v0.37.1` |
 | `apiextensions.k8s.io/v1` | `CustomResourceDefinition` | Cluster | `builtin` | `CustomResourceDefinition` | `k8s.io/apiextensions-apiserver@v0.37.1` |
+| `apiregistration.k8s.io/v1` | `APIService` | Cluster | `builtin` | `APIService` | `k8s.io/kube-aggregator@v0.37.1` |
 | `apps/v1` | `ControllerRevision` | Namespaced | `builtin` | `ControllerRevision` | `k8s.io/api@v0.37.1` |
 | `apps/v1` | `DaemonSet` | Namespaced | `builtin` | `DaemonSet` | `k8s.io/api@v0.37.1` |
 | `apps/v1` | `Deployment` | Namespaced | `builtin` | `Deployment` | `k8s.io/api@v0.37.1` |

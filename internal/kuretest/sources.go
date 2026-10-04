@@ -56,9 +56,10 @@ var modules = map[string]source{
 	"github.com/fluxcd/notification-controller/api":     {Bundle: true},
 	"github.com/fluxcd/source-controller/api":           {Bundle: true},
 	"github.com/fluxcd/source-watcher/api/v2":           {Bundle: true},
-	"k8s.io/api":                     {Uncovered: builtin},
-	"k8s.io/apiextensions-apiserver": {Uncovered: builtin},
-	"github.com/external-secrets/external-secrets/apis":                      {Uncovered: "the API module ships no definitions; they are generated into the operator's deploy tree"},
+	"k8s.io/api":                                        {Uncovered: builtin},
+	"k8s.io/apiextensions-apiserver":                    {Uncovered: builtin},
+	"k8s.io/kube-aggregator":                            {Uncovered: builtin},
+	"github.com/external-secrets/external-secrets/apis": {Uncovered: "the API module ships no definitions; they are generated into the operator's deploy tree"},
 	"github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring": {Uncovered: "the API module ships no definitions; they are generated into the operator's bundle"},
 }
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	reflectorv1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	coordinationv1 "k8s.io/api/coordination/v1"
@@ -15,6 +16,7 @@ import (
 	nodev1 "k8s.io/api/node/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	errors2 "github.com/go-kure/kure/pkg/errors"
@@ -63,6 +65,10 @@ func TestParseYAML_TypedListsAreFlattened(t *testing.T) {
 		{"admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicyBinding", &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}},
 		{"admissionregistration.k8s.io/v1", "MutatingAdmissionPolicy", &admissionregistrationv1.MutatingAdmissionPolicy{}},
 		{"admissionregistration.k8s.io/v1", "MutatingAdmissionPolicyBinding", &admissionregistrationv1.MutatingAdmissionPolicyBinding{}},
+		// The kinds registered from a module other than k8s.io/api.
+		{"image.toolkit.fluxcd.io/v1", "ImageRepository", &reflectorv1.ImageRepository{}},
+		{"image.toolkit.fluxcd.io/v1", "ImagePolicy", &reflectorv1.ImagePolicy{}},
+		{"apiregistration.k8s.io/v1", "APIService", &apiregistrationv1.APIService{}},
 	}
 	for _, c := range cases {
 		doc := fmt.Sprintf(`apiVersion: %[1]s

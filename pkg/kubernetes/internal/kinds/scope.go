@@ -24,12 +24,13 @@ import (
 var builtinModules = map[string]bool{
 	"k8s.io/api":                     true,
 	"k8s.io/apiextensions-apiserver": true,
+	"k8s.io/kube-aggregator":         true,
 }
 
 // builtinClusterScoped are the registered built-in kinds that carry no
 // namespace. Every other built-in is namespaced.
 //
-// Twenty-four entries stand where the 128-entry hand-seeded pair of sets used
+// Twenty-five entries stand where the 128-entry hand-seeded pair of sets used
 // to: the CRD modules that make up the rest are read from their own markers.
 // Registering a built-in group version that defines a cluster-scoped kind adds
 // its entry here, in the same change.
@@ -46,6 +47,7 @@ var builtinClusterScoped = set(
 	"admissionregistration.k8s.io/ValidatingAdmissionPolicyBinding",
 	"admissionregistration.k8s.io/ValidatingWebhookConfiguration",
 	"apiextensions.k8s.io/CustomResourceDefinition",
+	"apiregistration.k8s.io/APIService",
 	"networking.k8s.io/IPAddress",
 	"networking.k8s.io/IngressClass",
 	"networking.k8s.io/ServiceCIDR",

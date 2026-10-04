@@ -12,6 +12,8 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	nodev1 "k8s.io/api/node/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	errors2 "github.com/go-kure/kure/pkg/errors"
@@ -42,6 +44,9 @@ func TestParseYAML_BaseKindsAreTyped(t *testing.T) {
 		// module, changed the same way.
 		{"image.toolkit.fluxcd.io/v1", "ImageRepository", &reflectorv1.ImageRepository{}},
 		{"image.toolkit.fluxcd.io/v1", "ImagePolicy", &reflectorv1.ImagePolicy{}},
+		// APIService, registered from k8s.io/kube-aggregator, as well. It was
+		// the refused control below until then.
+		{"apiregistration.k8s.io/v1", "APIService", &apiregistrationv1.APIService{}},
 	}
 	for _, c := range cases {
 		doc := fmt.Sprintf("apiVersion: %s\nkind: %s\nmetadata:\n  name: sample\n", c.apiVersion, c.kind)
@@ -73,12 +78,14 @@ func TestParseYAML_BaseKindsAreTyped(t *testing.T) {
 // with a list of these kinds is asserted in runtime_lists_test.go, next to the
 // control that was registered all along.
 
-// APIService is a base kind kure does not register, because its Go type lives in
-// a module kure does not depend on. It is the control for the test above: a
-// strict parse still refuses it, so "typed" there is a statement about the
-// registered kinds and not about every built-in.
-func TestParseYAML_UnregisteredBaseKindIsStillRefused(t *testing.T) {
-	doc := "apiVersion: apiregistration.k8s.io/v1\nkind: APIService\nmetadata:\n  name: v1.example.com\n"
+// VerticalPodAutoscaler is a kind kure does not register: it is out of scope,
+// for the reasons pkg/kubernetes/README.md gives under "Base kinds covered". It
+// is the control for the test above: a strict parse still refuses it, so
+// "typed" there is a statement about the registered kinds and not about every
+// kind a cluster serves. What stays available is asserted with it: a parse with
+// AllowUnstructured returns the object untyped.
+func TestParseYAML_UnregisteredKindIsStillRefused(t *testing.T) {
+	doc := "apiVersion: autoscaling.k8s.io/v1\nkind: VerticalPodAutoscaler\nmetadata:\n  name: sample\n  namespace: default\n"
 	_, err := ParseYAML([]byte(doc))
 	if err == nil {
 		t.Fatal("a strict parse must refuse a kind the scheme does not register")
@@ -86,5 +93,19 @@ func TestParseYAML_UnregisteredBaseKindIsStillRefused(t *testing.T) {
 	var parseErrs *errors2.ParseErrors
 	if !errors.As(err, &parseErrs) {
 		t.Fatalf("error is %T, want *errors.ParseErrors: %v", err, err)
+	}
+
+	objs, err := ParseYAMLWithOptions([]byte(doc), ParseOptions{AllowUnstructured: true})
+	if err != nil {
+		t.Fatalf("parse with AllowUnstructured: %v", err)
+	}
+	if len(objs) != 1 {
+		t.Fatalf("got %d objects, want 1", len(objs))
+	}
+	if _, ok := objs[0].(*unstructured.Unstructured); !ok {
+		t.Errorf("parsed as %T, want *unstructured.Unstructured", objs[0])
+	}
+	if got := objs[0].GetObjectKind().GroupVersionKind().Kind; got != "VerticalPodAutoscaler" {
+		t.Errorf("kind = %q, want VerticalPodAutoscaler", got)
 	}
 }

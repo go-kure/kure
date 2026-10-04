@@ -18,8 +18,14 @@ import (
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
+
+// CreateAPIService returns a cluster-scoped apiregistration.k8s.io/v1 APIService carrying TypeMeta and identity only.
+func CreateAPIService(name string) *apiregistrationv1.APIService {
+	return Create[apiregistrationv1.APIService](name, "")
+}
 
 // CreateBackendTLSPolicy returns a gateway.networking.k8s.io/v1 BackendTLSPolicy carrying TypeMeta and identity only.
 func CreateBackendTLSPolicy(name, namespace string) *gatewayapiv1.BackendTLSPolicy {

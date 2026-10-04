@@ -98,6 +98,7 @@ func TestRegistered_KnownKindsAndScopes(t *testing.T) {
 		{"admissionregistration.k8s.io/ValidatingAdmissionPolicyBinding", "", false},
 		{"admissionregistration.k8s.io/MutatingAdmissionPolicy", "", false},
 		{"admissionregistration.k8s.io/MutatingAdmissionPolicyBinding", "", false},
+		{"apiregistration.k8s.io/APIService", "", false},
 		{"image.toolkit.fluxcd.io/ImageRepository", "fluxcd", true},
 		{"image.toolkit.fluxcd.io/ImagePolicy", "fluxcd", true},
 		{"image.toolkit.fluxcd.io/ImageUpdateAutomation", "fluxcd", true},

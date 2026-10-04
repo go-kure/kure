@@ -25,6 +25,7 @@ replace (
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.37.1
 	k8s.io/client-go => k8s.io/client-go v0.37.1
 	k8s.io/component-base => k8s.io/component-base v0.37.1
+	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.37.1
 )
 
 require (
@@ -63,6 +64,7 @@ require (
 	k8s.io/apimachinery v0.37.1
 	k8s.io/apiserver v0.37.1
 	k8s.io/cli-runtime v0.37.1
+	k8s.io/kube-aggregator v0.37.1
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 	sigs.k8s.io/controller-runtime v0.25.2
 	sigs.k8s.io/gateway-api v1.6.2

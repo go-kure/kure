@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 )
 
 func TestSchemeInitialization(t *testing.T) {
@@ -200,6 +201,8 @@ func TestScheme_RegisteredTypes(t *testing.T) {
 		// version image-automation-controller registers ImageUpdateAutomation in.
 		{&reflectorv1.ImageRepository{}, reflectorv1.GroupVersion.WithKind("ImageRepository")},
 		{&reflectorv1.ImagePolicy{}, reflectorv1.GroupVersion.WithKind("ImagePolicy")},
+		// APIService is a built-in whose Go type lives in k8s.io/kube-aggregator.
+		{&apiregistrationv1.APIService{}, apiregistrationv1.SchemeGroupVersion.WithKind("APIService")},
 	}
 
 	for _, c := range baseKinds {

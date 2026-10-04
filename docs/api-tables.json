@@ -299,6 +299,17 @@
       "scopeSource": "builtin"
     },
     {
+      "group": "apiregistration.k8s.io",
+      "version": "v1",
+      "kind": "APIService",
+      "goType": "APIService",
+      "importPath": "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1",
+      "module": "k8s.io/kube-aggregator",
+      "moduleVersion": "v0.37.1",
+      "namespaced": false,
+      "scopeSource": "builtin"
+    },
+    {
       "group": "apps",
       "version": "v1",
       "kind": "ControllerRevision",
