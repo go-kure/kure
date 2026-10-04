@@ -175,8 +175,10 @@ func TestOriginApplicationObjects_HandBuiltLayoutHasNone(t *testing.T) {
 
 // TestOriginApplicationObjects_FlattenSingleTier: the option collapses no
 // directory that renders a bundle (go-kure/kure#979), so the records stay on
-// the layout that renders the bundle and name the layouts they named. Each
-// shape below collapsed before that change.
+// the layout that renders the bundle and name the layouts they named. Before
+// that change the child node's bundle layout and the plain application's
+// layout collapsed into the root; the augmenter application's layout was kept
+// then too, by the child layouts its augmenter adds.
 func TestOriginApplicationObjects_FlattenSingleTier(t *testing.T) {
 	t.Run("child node's bundle layout", func(t *testing.T) {
 		web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", Applications: []*stack.Application{configMapApp("frontend")}}}
