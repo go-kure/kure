@@ -325,11 +325,16 @@ and describes what the code does now.
   go-kure/kure#978 adds that check.
 
 **Breaking.** With the field unset, every object and path generated for a model that was valid is
-unchanged. `GenerateForBundle` used to return a Kustomization that depends on or waits for itself
-for a bundle that depends on another bundle with the same `Name`, lists itself in `DependsOn`,
-names itself in `NamedDependsOn`, or (unless `Wait` is true) has a health check on its own
-Kustomization; each is an error now, with or without the field. A bundle that lists itself in
-`Children` is an error as well, where the call did not return before.
+unchanged. `GenerateForBundle` does not call `Bundle.Validate`, and it used to return a
+Kustomization that depends on or waits for itself for a bundle that depends on another bundle
+whose Kustomization gets the same name, lists itself in `DependsOn`, names its own Kustomization
+in `NamedDependsOn`, or (unless `Wait` is true) has a health check on its own Kustomization. For
+an umbrella with a child whose Kustomization gets the umbrella's name, or two children whose
+Kustomizations get one name, it returned a health check on itself or the same check twice. Each
+is an error now, the two about children also when `Wait` is true. With the field unset the name
+compared is `Name`, so these inputs are refused without the field as well; a bundle that sets
+another `KustomizationName` may depend on a bundle with its own `Name`. A bundle that lists
+itself in `Children` is an error too, where the call did not return before.
 
 **Tests.** `pkg/stack/fluxcd/kustomization_name_test.go` covers the name, `dependsOn` and umbrella
 health checks under the three placements, the payload Kustomization, the duplicate name and the
