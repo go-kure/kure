@@ -512,8 +512,14 @@ func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]c
 // RetryInterval leaves the field unset; a non-empty value that does not parse
 // is an error, never a silent fallback. Bundle.Validate reports the same
 // error earlier; checking here as well covers callers that generate without
-// validating first.
+// validating first. The same holds for the bundle's name, which becomes the
+// Kustomization's: it is checked with stack.ValidateKustomizationName. path is
+// the caller's, so no directory rule applies to the name here.
 func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string) (client.Object, error) {
+	if err := stack.ValidateKustomizationName(b.Name); err != nil {
+		return nil, errors.ResourceValidationError("Bundle", b.Name, "name", err.Error(), nil)
+	}
+
 	interval := g.DefaultInterval
 	if b.Interval != "" {
 		d, err := parseBundleDuration(b, "interval", b.Interval)

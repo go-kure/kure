@@ -726,6 +726,14 @@ or when its last segment is the root's name). A walk without one writes an unnam
 `cluster`, not to the root of the source. The table under
 [Kustomization paths](#kustomization-paths) has examples.
 
+### Root node name
+
+The root node's name is a path segment of the gotk bootstrap Kustomization's `spec.path` and of
+the `FluxInstance`'s `spec.sync.path`. `GenerateBootstrap` and `GenerateFluxInstance` take a
+node, not a cluster, so they check that name themselves with `stack.ValidateDirectoryName`: a
+name holding `/` or `\`, or `.` or `..`, is refused. No root node and an unnamed root are valid;
+neither adds a segment.
+
 ### Sync name
 
 `BootstrapConfig.SyncName` becomes the `FluxInstance`'s `spec.sync.name`: the name flux-operator
@@ -842,6 +850,13 @@ check on `b`'s own Kustomization stays accepted when `b.Wait` is true, and is
 written as given: Flux ignores `spec.healthChecks` under `spec.wait`, so
 nothing waits for itself. `GenerateFromLayout` and `GenerateFromCluster` drop
 a bundle's dependency or health check on itself instead.
+
+A bundle's name is its Kustomization's name, so the generator refuses one that
+`stack.ValidateKustomizationName` refuses: not a DNS-1123 subdomain, or longer
+than 63 characters. `GenerateFromCluster` gets that from `stack.ValidateCluster`.
+The name is checked again wherever a Kustomization is built from a bundle,
+which is what covers `GenerateForBundle`: it takes a bundle no validation has
+seen.
 
 ### Placement in layouts
 

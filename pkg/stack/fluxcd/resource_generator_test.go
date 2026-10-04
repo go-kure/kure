@@ -1,6 +1,7 @@
 package fluxcd_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -152,6 +153,47 @@ func TestGenerateForBundle_Nil(t *testing.T) {
 	}
 	if objs != nil {
 		t.Fatalf("expected nil objects, got %d", len(objs))
+	}
+}
+
+// TestGenerateForBundle_RefusesInvalidName: GenerateForBundle takes a bundle
+// that no ValidateCluster or Bundle.Validate call has seen, so the generator
+// checks the Kustomization name itself. The path is the caller's, so the
+// directory rule does not apply here.
+func TestGenerateForBundle_RefusesInvalidName(t *testing.T) {
+	gen := fluxstack.NewResourceGenerator()
+	long := strings.Repeat("a", stack.KustomizationNameMaxLength+1)
+	tests := []struct {
+		name    string
+		bundle  string
+		wantErr string // substring of the error; "" means generated
+	}{
+		{"dotted subdomain", "my.app", ""},
+		{"at the limit", strings.Repeat("a", stack.KustomizationNameMaxLength), ""},
+		{"over the limit", long, "at most 63 characters"},
+		{"uppercase", "Y-infra", "RFC 1123 subdomain"},
+		{"slash", "apps/web", "RFC 1123 subdomain"},
+		{"empty", "", "RFC 1123 subdomain"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			objs, err := gen.GenerateForBundle(&stack.Bundle{Name: tt.bundle}, "clusters/prod/web")
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("GenerateForBundle() = %v, want nil", err)
+				}
+				if got := objs[0].GetName(); got != tt.bundle {
+					t.Fatalf("Kustomization name = %q, want %q", got, tt.bundle)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("GenerateForBundle() generated %d objects, want an error", len(objs))
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) || !strings.Contains(err.Error(), "'"+tt.bundle+"'") {
+				t.Fatalf("GenerateForBundle() = %v, want it to name the bundle and contain %q", err, tt.wantErr)
+			}
+		})
 	}
 }
 
