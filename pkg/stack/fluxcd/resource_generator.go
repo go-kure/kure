@@ -462,7 +462,9 @@ func objectName(obj client.Object) string {
 // Umbrella Children are not recursed. The generator computes no path: take
 // it from the layout that renders b (layout.OriginIndex.KustomizationPath).
 // A DependsOn bundle, a child, a NamedDependsOn entry or a health check with
-// b's own Kustomization name is an error: the Kustomization would refer to itself.
+// b's own Kustomization name is an error: the Kustomization would refer to
+// itself. So are two children with one Kustomization name. The health check
+// is accepted when b.Wait is true, where Flux ignores spec.healthChecks.
 func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]client.Object, error) {
 	if b == nil {
 		return nil, nil
@@ -746,17 +748,18 @@ func (g *ResourceGenerator) GetVersion() string {
 }
 
 // checkOwnUnitName refuses a DependsOn bundle or an umbrella child that would
-// get b's own Kustomization name (Bundle.UnitName), and b itself or that
-// name among its own dependencies or, as a Flux Kustomization in the
-// generator's namespace, its health checks. The cluster and layout entry points have
+// get b's own Kustomization name (Bundle.UnitName), two children that would
+// get one name, and b itself or its name among its own dependencies or, as a
+// Flux Kustomization in the generator's namespace and unless b.Wait is true,
+// its health checks. The cluster and layout entry points have
 // layout.IndexOrigins refuse two rendered bundles with one name and drop a
 // unit's reference to itself; GenerateForBundle has no index, and without
 // this check it would emit a Kustomization that depends on or waits for itself.
 func (g *ResourceGenerator) checkOwnUnitName(b *stack.Bundle) error {
-	refuse := func(field string, other *stack.Bundle) error {
+	refuse := func(field string, first, second *stack.Bundle) error {
 		return errors.ResourceValidationError("Bundle", b.Name, field,
 			fmt.Sprintf("bundles %q and %q would both get a Flux Kustomization named %q: that name, the bundle's KustomizationName or else its Name, must be unique",
-				b.GetPath(), other.GetPath(), b.UnitName()), nil)
+				first.GetPath(), second.GetPath(), first.UnitName()), nil)
 	}
 	own := func(field, list string) error {
 		return errors.ResourceValidationError("Bundle", b.Name, field,
@@ -768,7 +771,7 @@ func (g *ResourceGenerator) checkOwnUnitName(b *stack.Bundle) error {
 			return own("dependsOn", "DependsOn")
 		}
 		if dep != nil && dep.UnitName() == b.UnitName() {
-			return refuse("dependsOn", dep)
+			return refuse("dependsOn", b, dep)
 		}
 	}
 	for _, name := range b.NamedDependsOn {
@@ -777,7 +780,10 @@ func (g *ResourceGenerator) checkOwnUnitName(b *stack.Bundle) error {
 		}
 	}
 	for _, hc := range b.HealthChecks {
-		if hc.Kind == "Kustomization" && strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") &&
+		// With spec.wait true Flux ignores spec.healthChecks: the check
+		// is inert and is written as given.
+		if !waitValue(b.Wait) &&
+			hc.Kind == "Kustomization" && strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") &&
 			effectiveNS(hc.Namespace, g.DefaultNamespace) == effectiveNS(g.DefaultNamespace, "") &&
 			hc.Name == b.UnitName() {
 			return errors.ResourceValidationError("Bundle", b.Name, "healthChecks",
@@ -788,10 +794,18 @@ func (g *ResourceGenerator) checkOwnUnitName(b *stack.Bundle) error {
 	if len(b.Children) > 0 {
 		b.InitializeUmbrella()
 	}
+	children := make(map[string]*stack.Bundle, len(b.Children))
 	for _, child := range b.Children {
-		if child != nil && child != b && child.UnitName() == b.UnitName() {
-			return refuse("children", child)
+		if child == nil || child == b {
+			continue
 		}
+		if child.UnitName() == b.UnitName() {
+			return refuse("children", b, child)
+		}
+		if first, ok := children[child.UnitName()]; ok && first != child {
+			return refuse("children", first, child)
+		}
+		children[child.UnitName()] = child
 	}
 	return nil
 }

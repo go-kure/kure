@@ -223,7 +223,9 @@ func (a *Bundle) Validate() error {
 // NamedDependsOn, and a child's NamedDependsOn against its parent. With a
 // KustomizationName set, a NamedDependsOn entry equal to the bundle's Name
 // therefore names another Kustomization, and one equal to its
-// KustomizationName names the bundle's own.
+// KustomizationName names the bundle's own. A child against the bundle's
+// DependsOn is compared on both: a DependsOn bundle is resolved by its Name,
+// so one with a child's Name is that child whatever KustomizationName it has.
 func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 	if visited[a] {
 		return errors.ResourceValidationError("Bundle", a.Name, "children",
@@ -234,9 +236,11 @@ func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 		return err
 	}
 	depNames := make(map[string]bool, len(a.DependsOn))
+	depBundleNames := make(map[string]bool, len(a.DependsOn))
 	for _, dep := range a.DependsOn {
 		if dep != nil {
 			depNames[dep.UnitName()] = true
+			depBundleNames[dep.Name] = true
 		}
 	}
 	// Validate NamedDependsOn: empty names, duplicates, cross-field duplicates.
@@ -279,7 +283,7 @@ func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 				fmt.Sprintf("duplicate child name %q", c.Name), nil)
 		}
 		childNames[c.Name] = true
-		if depNames[c.UnitName()] {
+		if depBundleNames[c.Name] || depNames[c.UnitName()] {
 			return errors.ResourceValidationError("Bundle", a.Name, "children",
 				fmt.Sprintf("child %q also appears in dependsOn", c.Name), nil)
 		}

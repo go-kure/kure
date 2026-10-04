@@ -58,10 +58,13 @@ func TestBundleValidate_KustomizationNameReferences(t *testing.T) {
 			wantErr: `child "infra" has parent "platform" in namedDependsOn`,
 		},
 		{
-			name: "child and dependency with one bundle name and two Kustomization names",
+			// A bundle is identified by its Name: the origin index resolves a
+			// DependsOn bundle by it, so this dependency is the child.
+			name: "child and dependency with one bundle name and two Kustomization names are one bundle",
 			bundle: &Bundle{Name: "platform",
 				DependsOn: []*Bundle{{Name: "db", KustomizationName: "db-external"}},
 				Children:  []*Bundle{db()}},
+			wantErr: `child "db" also appears in dependsOn`,
 		},
 		{
 			name: "child whose Kustomization name is a dependency's",

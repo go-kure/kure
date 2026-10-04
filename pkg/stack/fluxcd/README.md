@@ -733,8 +733,12 @@ bundle or a child that would get `b`'s own Kustomization name
 (`KustomizationName`, or `Name` without it), `b` itself in `DependsOn`, that
 name in `NamedDependsOn`, or a health check on `b`'s own Kustomization, is an
 error, since the Kustomization would otherwise depend on itself or wait for
-itself. `GenerateFromLayout` and `GenerateFromCluster` drop a bundle's
-dependency or health check on itself instead.
+itself. Two children that would get one Kustomization name are an error as
+well: the umbrella would health-check one Kustomization twice. The health
+check on `b`'s own Kustomization stays accepted when `b.Wait` is true, and is
+written as given: Flux ignores `spec.healthChecks` under `spec.wait`, so
+nothing waits for itself. `GenerateFromLayout` and `GenerateFromCluster` drop
+a bundle's dependency or health check on itself instead.
 
 ### Placement in layouts
 
