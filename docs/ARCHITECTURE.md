@@ -442,13 +442,17 @@ a `layout.LayoutRules` value and delegates to its `ResourceGen`, whose errors it
 
 <!-- doc-example:excerpt an illustrative method body for a hypothetical engine, not the current source -->
 ```go
-func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error) {
+func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster, rules stack.LayoutRulesProvider) ([]client.Object, error) {
     if c == nil {
         return nil, errors.ResourceValidationError("Cluster", "", "cluster", 
                                                    "cluster cannot be nil", nil)
     }
+    layoutRules, ok := rules.(layout.LayoutRules)
+    if !ok {
+        return nil, errors.New("rules must be of type layout.LayoutRules")
+    }
     
-    resources, err := we.ResourceGen.GenerateFromCluster(c, rules)
+    resources, err := we.ResourceGen.GenerateFromCluster(c, layoutRules)
     if err != nil {
         return nil, errors.Wrapf(err, "failed to generate resources for cluster %s", c.Name)
     }

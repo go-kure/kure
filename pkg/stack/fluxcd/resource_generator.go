@@ -57,10 +57,12 @@ func NewResourceGenerator() *ResourceGenerator {
 // The spec.path values are therefore the directories WalkCluster writes under
 // rules, so rules must be the ones the caller writes the tree with: with
 // layout.DefaultLayoutRules, the root node at <root> and its children at
-// <root>/<child>. The objects are returned as a list and placed nowhere, so
-// rules.FluxPlacement changes nothing here; CreateLayoutWithResources places
-// them in the layout it walks. The walk renders every application and runs
-// every LayoutAugmenter, so their errors surface here.
+// <root>/<child>. The objects are returned as a list and placed nowhere:
+// rules.FluxPlacement moves no path and no object here
+// (CreateLayoutWithResources places them in the layout it walks), but it
+// still decides how far a bundle's patches may reach (checkPatchScope). The
+// walk renders every application and runs every LayoutAugmenter, so their
+// errors surface here.
 func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error) {
 	if c == nil || c.Node == nil {
 		return nil, nil
