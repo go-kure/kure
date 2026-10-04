@@ -549,9 +549,9 @@ for _, obj := range objects {
 
 ### The directory the bootstrap applies
 
-Both modes point Flux at the same directory for the same root node (go-kure/kure#979): the root
-node's directory as a walk without a `ClusterName` writes it, which is the root node's name,
-relative to the root of the source. Each mode spells it the way its field requires:
+Both modes point Flux at the same directory for the same root node (go-kure/kure#979): the one
+named after the root node, relative to the root of the source, which is where a walk without a
+`ClusterName` writes a named root node. Each mode spells it the way its field requires:
 
 | Root node | `"gotk"`: bootstrap Kustomization `spec.path` | `"flux-operator"`: `FluxInstance` `spec.sync.path` |
 |---|---|---|
@@ -564,10 +564,10 @@ relative to the root of the source. Each mode spells it the way its field requir
 `"gotk"` mode used to write `manifests/<root>`, a prefix none of the layout writers produces; a
 consumer that depends on such a prefix sets `spec.path` on the returned Kustomization.
 
-The bootstrap is given the root node, not the layout rules. A tree walked with a `ClusterName`,
-or one whose root node is unnamed, can have its root in another directory (the table under
-[Kustomization paths](#kustomization-paths) has examples); the bootstrap path does not follow
-that.
+The bootstrap is given the root node, not the layout rules, and its path does not follow them. A
+tree walked with a `ClusterName` has its root under the cluster directory, and a walk of an
+unnamed root node writes it to `cluster`, not to the root of the source (the table under
+[Kustomization paths](#kustomization-paths) has examples).
 
 ### Sync name
 

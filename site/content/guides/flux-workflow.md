@@ -526,13 +526,15 @@ Generate Flux system bootstrap manifests. Two modes are available:
 
 When `FluxMode` is empty, it defaults to `"flux-operator"`.
 
-Both modes point Flux at the same directory: the root node's directory, named after the root
-node, relative to the root of the source. `"gotk"` mode writes it as the bootstrap Kustomization's
-`spec.path` (`prod`, or `.` when the root node has no name); `"flux-operator"` mode writes it as
-the `FluxInstance`'s `sync.path` (`./prod`, or `./`). `"gotk"` mode used to write
-`manifests/<root>`: if your tree sits under such a prefix, set `spec.path` on the returned
-Kustomization yourself. The bootstrap does not know your layout rules, so a tree walked with a
-`ClusterName` may have its root elsewhere.
+Both modes point Flux at the same directory: the one named after the root node, relative to the
+root of the source, which is where a walk without a `ClusterName` writes a named root node.
+`"gotk"` mode writes it as the bootstrap Kustomization's `spec.path` (`prod`, or `.` when the root
+node has no name); `"flux-operator"` mode writes it as the `FluxInstance`'s `sync.path` (`./prod`,
+or `./`). `"gotk"` mode used to write `manifests/<root>`: if your tree sits under such a prefix,
+set `spec.path` on the returned Kustomization yourself. The bootstrap does not know your layout
+rules, so two trees have their root elsewhere: one walked with a `ClusterName` (the root sits
+under the cluster directory), and one whose root node is unnamed (the walk writes it to `cluster`,
+while the bootstrap names the root of the source).
 
 `"flux-operator"` mode needs both `FluxVersion` and `Registry`: they become the `FluxInstance`'s
 distribution version and registry, and Kure has no default for either. If one is empty,
