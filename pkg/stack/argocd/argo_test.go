@@ -830,7 +830,7 @@ func TestArgoWorkflow_LongBundleName(t *testing.T) {
 			t.Fatalf("ValidateCluster() with %d-character bundle names = %v, want nil", n, err)
 		}
 
-		objs, err := Engine().GenerateFromCluster(build())
+		objs, err := Engine().GenerateFromCluster(build(), layout.DefaultLayoutRules())
 		if err != nil {
 			t.Fatalf("GenerateFromCluster() with %d-character bundle names = %v, want nil", n, err)
 		}
