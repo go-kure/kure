@@ -135,8 +135,13 @@ type LayoutRules struct {
 	// FluxPlacement determines how Flux Kustomizations are placed.
 	// Defaults to FluxSeparate.
 	FluxPlacement FluxPlacement
-	// FileNaming controls the file naming pattern for manifest files.
-	// Defaults to FileNamingDefault ({namespace}-{kind}-{name}.yaml).
+	// FileNaming is the naming pattern of the manifest files WriteToDisk and
+	// WriteToTar write, for every layout of the tree: those the walkers
+	// create, the layouts an augmenter adds and leaves unset (each takes its
+	// parent's) and the flux-system directory of FluxSeparate. A layout that
+	// sets its own FileNaming keeps it. WriteManifest names files from its
+	// Config instead. Defaults to FileNamingDefault
+	// ({namespace}-{kind}-{name}.yaml).
 	FileNaming FileNamingMode
 
 	// FlattenSingleTier collapses a vestigial intermediate directory layer
