@@ -934,8 +934,8 @@ func TestGotkBootstrapAcceptsANilRootNode(t *testing.T) {
 	if kust == nil {
 		t.Fatal("bootstrap emitted no Kustomization")
 	}
-	if got, want := kust.Spec.Path, fluxstack.DefaultBootstrapPathRoot; got != want {
-		t.Errorf("spec.path = %q, want %q — a nameless root must not add a path segment", got, want)
+	if got, want := kust.Spec.Path, "."; got != want {
+		t.Errorf("spec.path = %q, want %q (the root of the source) — a nameless root must not add a path segment", got, want)
 	}
 	if got, want := kust.Spec.SourceRef.Name, fluxstack.DefaultSourceName; got != want {
 		t.Errorf("sourceRef.name = %q, want DefaultSourceName (%q)", got, want)
