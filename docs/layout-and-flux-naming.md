@@ -50,7 +50,7 @@ references until those ship.
 |---|---|---|
 | `stack.Node` | `Name`, `Children`, `Bundle` (one per node), `PackageRef`. No dependency, Kustomization or directory field. | `Node` in `pkg/stack/cluster.go` |
 | `stack.Bundle` | `Name`, `KustomizationName` (go-kure/kure#971; `v0.2.0-beta.15` had no field for the Kustomization's name), `DependsOn []*Bundle`, `NamedDependsOn`, `Children` (umbrella), `SourceRef`, `Interval`, `Prune`, `Wait`, `Timeout`, `RetryInterval`, `Force`, `Suspend`, `HealthChecks`, `Patches`, `PostBuild`, `Labels`, `Annotations`. No field for the Kustomization's namespace or directory. | `Bundle` in `pkg/stack/bundle.go` |
-| `stack.Application` | `Name`, `Namespace`, `Config`. No delivery or dependency field. | `Application` in `pkg/stack/application.go` |
+| `stack.Application` | `Name`, `Namespace`, `Config`. No dependency field. No delivery field in `v0.2.0-beta.15`; `Delivery` was added after it ([go-kure/kure#974](https://github.com/go-kure/kure/issues/974)) and decides no name or placement. | `Application` in `pkg/stack/application.go` |
 
 `layout.WalkCluster` turns the model into a `ManifestLayout` tree. `fluxcd.LayoutIntegrator` adds
 Flux objects to that tree in one of three placements: `FluxSeparate` (the default),
@@ -221,8 +221,10 @@ FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since go
    to a `dependsOn` is on the layout, not the model: set `DependsOn` (Kustomization names, as
    strings) on the walked group layout before `IntegrateWithLayout`, which copies it
    (the per-layout branch of `integratedPlacement.place`, `createKustomizationForLayout`).
-5. **Engine annotations per application.** There is no field for prune protection or force replace,
-   so a consumer writes Flux annotations onto objects itself.
+5. **Engine annotations per application.** In `v0.2.0-beta.15` there is no field for prune
+   protection or force replace, so a consumer writes Flux annotations onto objects itself. No
+   longer so: `Application.Delivery` carries the intent
+   ([go-kure/kure#974](https://github.com/go-kure/kure/issues/974), below).
 
 What a consumer can do today:
 - **Ordering inside an application** is expressible, as umbrella children with `DependsOn`.
@@ -425,39 +427,45 @@ Kustomization (for example `00-infra` for the Kustomization `shop-infra`).
 
 ### Delivery intent on applications ([go-kure/kure#974](https://github.com/go-kure/kure/issues/974))
 
-**Target.** An application can ask for prune protection or force replace without writing a
-delivery engine's annotations. The Flux workflow turns that intent into the Flux annotations.
+**Shipped.** An application asks for prune protection or force replace without writing a delivery
+engine's annotations. The Flux workflow turns that intent into the Flux annotations.
 
-**Design outline.**
+**What it does.**
 
-- **New field:** `stack.Application` gains an engine-neutral intent, `Delivery DeliveryIntent`,
-  with `PruneProtection` and `ForceReplace` booleans.
-- **Per-application attribution:** today objects are attributed per bundle, not per application:
-  `origin.objects` is keyed by bundle (`origin.go:17-29`), and only an application with its own
-  layout is recorded. The walker therefore records each application's objects (it has both in
-  `renderApps`, `walker.go:386-422`). The layout package stays engine-neutral.
+- **Field:** `stack.Application.Delivery` is an engine-neutral `DeliveryIntent` with
+  `PruneProtection` and `ForceReplace` booleans. Without an intent the output is unchanged.
+- **Per-application attribution:** the walker records each application's objects after its layout
+  augmenter ran, the child layouts the augmenter appended included
+  (`ManifestLayout.OriginApplicationObjects`). The layout package stays engine-neutral and applies
+  nothing.
 - **The Flux mapping:** `fluxcd.LayoutIntegrator` sets `kustomize.toolkit.fluxcd.io/prune: disabled`
-  and `kustomize.toolkit.fluxcd.io/force: enabled` on those objects.
-- **Refusal leaves no annotation behind:** a refused integration restores the objects. The
-  existing restore does not do that by itself: `saveLayouts` (`layout_integrator.go:111-138`)
-  clones the slices but keeps the same object pointers, so an annotation set in place would
-  survive. The integrator therefore snapshots the annotations it changes, or annotates copies.
-- **Conflicts:** an object that already carries the annotation with another value is refused.
-- **Generated ConfigMaps:** a ConfigMap built by a `configMapGenerator` has no object to annotate.
-  Its spec is a name and a file list (`manifest.go:84-87`), and the walker holds only a stand-in
-  for it (`walker.go:416-418`). The ticket decides between writing the generator's
-  `options.annotations` in `kustomization.yaml` and documenting the exception.
-- **ArgoCD:** its mapping is out of scope. Until it exists, the ArgoCD workflow refuses a set
-  intent instead of dropping it.
+  and `kustomize.toolkit.fluxcd.io/force: enabled` on those objects, under every placement
+  (`applyDeliveryIntents` in `delivery.go`). Only the integrator applies the intent: a layout
+  written without `IntegrateWithLayout` or `CreateLayoutWithResources` carries none.
+- **Lists:** a `List` contributes what it holds, a `List` inside it included, never the envelope.
+  What is a `List` is decided as kustomize decides on the written file: a kind ending in `List`
+  that has an `items` field. A typed object whose written form still holds an object without the
+  annotation, because its Go value gives no access to it, is refused.
+- **Refusal leaves no annotation behind:** the annotations are set in place, on the objects the
+  layout holds, and the integrator records what it added. A refused integration, for a conflict or
+  for any later reason, takes them back. After a successful one they stay on those objects.
+- **Conflicts:** an object or generator that already carries the annotation with another value is
+  refused, naming the application and the object.
+- **Generated ConfigMaps (decided in the ticket):** covered. `ConfigMapGeneratorSpec.Annotations`
+  is written as the generator's `options.annotations` in `kustomization.yaml`. Consequence: kustomize
+  names a generated ConfigMap after its content, so under prune protection each content change
+  leaves the previous one in the cluster.
+- **Patches:** in a directory several bundles share, the patch-scope check sees a generated
+  ConfigMap with the annotations its generator sets, the intent's included, and for the generators
+  of the application's whole layout subtree. A bundle's own patch is applied by Flux after the
+  build and can still change or remove a delivery annotation; kure does not read patch bodies.
+- **ArgoCD (decided in the ticket):** its mapping is out of scope. Until it exists, every ArgoCD
+  entry point refuses a set intent, naming the application, instead of dropping it.
 
-**Acceptance.**
-- Every object of an application with prune protection carries the prune annotation under every
-  Flux placement and grouping, and no other application's objects do.
-- The same holds for force replace.
-- A conflicting existing annotation is refused.
-- After a refused integration no object carries an annotation the integrator added, with a test
-  for that failure path.
-- A generated ConfigMap behaves as the ticket decides, with a test for it.
+**Tests.** `pkg/stack/fluxcd/delivery_intent_test.go` covers both flags under every placement and
+grouping, on disk and in tar, the objects of an augmenter's child layout, a generated ConfigMap,
+the conflict refusals, the rollback after a later refusal, and the unchanged output without an
+intent. `pkg/stack/argocd/delivery_intent_test.go` covers the ArgoCD refusal.
 
 ### Bootstrap refuses an empty distribution ([go-kure/kure#975](https://github.com/go-kure/kure/issues/975))
 
