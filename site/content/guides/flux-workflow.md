@@ -307,7 +307,9 @@ What changed, and what to do:
   paths named directories the tree did not have. It now takes the rules as a second argument, on
   `stack.Workflow` and on both engines, and each path is a directory a walk with those rules
   writes. Pass the rules you write the tree with; `layout.DefaultLayoutRules()` keeps the paths it
-  returned before. The Flux engine refuses rules with `FluxIntegratedPerLayout`: that tree's child
+  returned before that change (the root node's bundle's path has moved since, in
+  go-kure/kure#979: see "The root node's bundle has its own directory" below). The Flux engine
+  refuses rules with `FluxIntegratedPerLayout`: that tree's child
   directories are applied by Kustomizations only `CreateLayoutWithResources` places, so use that
   entry point for the placement. Rules the walk refuses are an error from both engines, whatever
   the cluster is: an absent or empty cluster returns nothing only with valid rules.
@@ -413,8 +415,9 @@ node's bundle used to render in the root node's directory, the one the bootstrap
 Flux Kustomization that applied that directory was hosted inside it: it was part of the build it
 applied. The bundle now has a directory inside the root node's, named after the bundle
 (`platform/platform-bundle` for root node `platform` with bundle `platform-bundle`), and its
-Kustomization sits in the root node's directory, like the Kustomization of every child node's
-bundle. Bundles that a flat `NodeGrouping` merges into the root node share that directory, named
+Kustomization sits where the Kustomization of every child node's bundle sits: in the root node's
+directory under the integrated placements, in the `flux-system/` directory at the top of the tree
+under `FluxSeparate`. Bundles that a flat `NodeGrouping` merges into the root node share that directory, named
 after the first of them. With `BundleGrouping: GroupByName` nothing changes: the bundle already
 had its directory.
 
