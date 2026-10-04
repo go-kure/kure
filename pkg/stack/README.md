@@ -150,6 +150,37 @@ configurations (e.g., shared ownership, children that are also node bundles).
 It also rejects a `Node` tree containing a cycle, naming the node where the
 cycle closes.
 
+**Names:** a bundle name and a node name are checked when the model is
+validated, so a name that could never be applied is refused before anything is
+written. Nothing is shortened or rewritten: the caller chooses a valid name.
+
+| Name | Rule | Checked by |
+|---|---|---|
+| Bundle, including every umbrella child | a Flux Kustomization name and a directory name | `Bundle.Validate` |
+| Node | a directory name; an unnamed root is allowed, it has no directory of its own | `ValidateCluster` |
+| Application | a directory name, only where the layout rules give the application a directory | `layout.WalkCluster` |
+
+- **Kustomization name** (`ValidateKustomizationName`): a DNS-1123 subdomain
+  of at most `KustomizationNameMaxLength` (63) characters. `my.app` is valid;
+  `My-App` is not. The limit is 63 and not the 253 of an object name because
+  Flux writes the Kustomization's name into a label value on every object it
+  applies. Read in kustomize-controller v1.9.5, the version this module pins:
+  the reconciler hands the name to the apply manager as the owner of the
+  objects (`internal/controller/kustomization_controller.go:462`), and the
+  manager sets it as the value of the `kustomize.toolkit.fluxcd.io/name` label
+  (`github.com/fluxcd/pkg/ssa` v0.76.2, `manager.go:66-78`).
+- **Directory name** (`ValidateDirectoryName`): one path segment. It is not
+  empty, not `.` or `..`, and holds neither `/` nor `\`. The backslash is
+  refused on every platform, so a name such as `..\outside` cannot leave its
+  directory where the backslash is a separator.
+
+The error names where the name sits: a bundle by its path from the bundle that
+was validated (`platform/platform-infra`), a node by its path from the root,
+and `ValidateCluster` adds the node a refused bundle is attached to
+(`bundle "web" at node "apps/web" failed validation`). Both functions are
+exported so that code deriving a name from these fields can check the result
+with the same rule.
+
 ### Application
 
 An individual Kubernetes workload. Applications use the `ApplicationConfig` interface to generate their resources.

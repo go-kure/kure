@@ -174,8 +174,8 @@ func TestGenerateFromCluster_WithChildren(t *testing.T) {
 	childBundle1 := &stack.Bundle{Name: "child1"}
 	childBundle2 := &stack.Bundle{Name: "child2"}
 
-	child1 := &stack.Node{Bundle: childBundle1}
-	child2 := &stack.Node{Bundle: childBundle2}
+	child1 := &stack.Node{Name: "child1", Bundle: childBundle1}
+	child2 := &stack.Node{Name: "child2", Bundle: childBundle2}
 
 	parentBundle := &stack.Bundle{Name: "parent"}
 	parent := &stack.Node{

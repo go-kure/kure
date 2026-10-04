@@ -1246,14 +1246,22 @@ guesses a name it was handed cannot be composed with a caller that generates nam
 | Layer | What it checks | Where |
 |---|---|---|
 | Constructors | Nothing. An unregistered type panics — a programming error, not input | `pkg/kubernetes/create.go` |
-| Domain model | Bundle rules: name present, no nil application, no cycle or duplicate name among umbrella `Bundle.Children`, and no bundle owned by two umbrellas or by both an umbrella and a `Node`; no cycle in the `Node` tree | `stack.ValidateCluster`, `Bundle.Validate` |
+| Domain model | Bundle rules: name present and usable as a Flux Kustomization name and as a directory name, no nil application, no cycle or duplicate name among umbrella `Bundle.Children`, and no bundle owned by two umbrellas or by both an umbrella and a `Node`; no cycle in the `Node` tree, and every node name usable as a directory name | `stack.ValidateCluster`, `Bundle.Validate` |
 | Explicit validators | Opt-in checks a caller runs when it wants them | `kubernetes.ValidatePodSpecPSA`, `gvk.ValidateGVK`, `io.ValidateOutputFormat` |
 | The cluster | Schema, admission, CRD structural rules | apply time |
 
-The domain-model row is about bundles, plus one shape rule for nodes. `ValidateCluster` walks
-`Node.Children` once to find the attached bundles and to scan for a `PackageRef`, and rejects a
-`Node` graph containing a cycle, naming the node where it closes. It checks nothing else about the
-nodes themselves: a node name may be empty, a `ParentPath` may resolve to nothing, and a node
+The domain-model row is about bundles, plus one shape rule and one name rule for nodes.
+`ValidateCluster` walks `Node.Children` once to find the attached bundles and to scan for a
+`PackageRef`, and rejects a `Node` graph containing a cycle, naming the node where it closes. The
+same walk checks every node name, because a node name becomes a directory: it must be one path
+segment (not empty, not `.` or `..`, no `/` or `\`), and only the root may be unnamed, since it has
+no directory of its own. A bundle name is checked as a directory name too, and as a Flux
+Kustomization name: a DNS-1123 subdomain of at most 63 characters, the limit of the label value
+Flux writes the name into. A refused name is reported with its node or bundle path and is never
+shortened; `pkg/stack/README.md` has the rules in full. An application name is not part of this
+layer: whether it becomes a directory depends on the layout rules, so the layout walk checks it.
+`ValidateCluster` checks nothing else about the nodes themselves: a `ParentPath` may resolve to
+nothing, and a node
 reachable from two parents is not rejected, although it is not a supported shape either. A caller
 that builds a `Node` tree by hand is responsible for that part of its shape. The check runs where
 `ValidateCluster` does; generation from an already walked layout (`GenerateFromLayout`,

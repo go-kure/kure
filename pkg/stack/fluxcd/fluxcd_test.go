@@ -618,17 +618,17 @@ func TestEndToEndUmbrellaFromCluster_Integrated(t *testing.T) {
 		SourceRef: testSR(),
 		Children: []*stack.Bundle{
 			{
-				Name:         "Y-infra",
+				Name:         "y-infra",
 				SourceRef:    testSR(),
 				Applications: []*stack.Application{fakeUmbrellaApp("infra-app", "cm-infra")},
 			},
 			{
-				Name:         "Y-services",
+				Name:         "y-services",
 				SourceRef:    testSR(),
 				Applications: []*stack.Application{fakeUmbrellaApp("services-app", "cm-services")},
 			},
 			{
-				Name:         "Y-apps",
+				Name:         "y-apps",
 				SourceRef:    testSR(),
 				Applications: []*stack.Application{fakeUmbrellaApp("apps-app", "cm-apps")},
 			},
@@ -687,7 +687,7 @@ func TestEndToEndUmbrellaFromCluster_Integrated(t *testing.T) {
 			kustsByName[k.Name] = k
 		}
 	}
-	for _, want := range []string{"Y-infra", "Y-services", "Y-apps"} {
+	for _, want := range []string{"y-infra", "y-services", "y-apps"} {
 		if kustsByName[want] == nil {
 			t.Errorf("missing Flux Kustomization %q at node layout", want)
 		}
@@ -713,7 +713,7 @@ func TestEndToEndUmbrellaFromCluster_Integrated(t *testing.T) {
 	for _, hc := range platform.Spec.HealthChecks {
 		hcNames[hc.Name] = true
 	}
-	for _, want := range []string{"Y-infra", "Y-services", "Y-apps"} {
+	for _, want := range []string{"y-infra", "y-services", "y-apps"} {
 		if !hcNames[want] {
 			t.Errorf("platform HealthChecks missing %q, got %v", want, hcNames)
 		}
@@ -732,7 +732,7 @@ func TestEndToEndUmbrellaFromCluster_Integrated(t *testing.T) {
 	if !ok {
 		t.Fatalf("no demo/apps/kustomization.yaml found, files: %v", fileNamesFromFluxcd(files))
 	}
-	for _, child := range []string{"Y-infra", "Y-services", "Y-apps"} {
+	for _, child := range []string{"y-infra", "y-services", "y-apps"} {
 		want := "flux-system-kustomization-" + child + ".yaml"
 		if !bytes.Contains(parentKust, []byte(want)) {
 			t.Errorf("parent kustomization.yaml missing reference to %s:\n%s", want, parentKust)
@@ -741,7 +741,7 @@ func TestEndToEndUmbrellaFromCluster_Integrated(t *testing.T) {
 
 	// Each umbrella child subdir should contain its own workload + its own
 	// kustomization.yaml, and must NOT contain any flux-system-kustomization-*.
-	for _, child := range []string{"Y-infra", "Y-services", "Y-apps"} {
+	for _, child := range []string{"y-infra", "y-services", "y-apps"} {
 		childPrefix := ""
 		for name := range files {
 			if strings.HasSuffix(name, "/"+child+"/kustomization.yaml") {
@@ -777,11 +777,11 @@ func TestEndToEndUmbrellaFromCluster_Separate(t *testing.T) {
 		Name: "platform",
 		Children: []*stack.Bundle{
 			{
-				Name:         "Y-infra",
+				Name:         "y-infra",
 				Applications: []*stack.Application{fakeUmbrellaApp("infra-app", "cm-infra")},
 			},
 			{
-				Name:         "Y-services",
+				Name:         "y-services",
 				Applications: []*stack.Application{fakeUmbrellaApp("services-app", "cm-services")},
 			},
 		},
@@ -828,7 +828,7 @@ func TestEndToEndUmbrellaFromCluster_Separate(t *testing.T) {
 			kustNames[k.Name] = true
 		}
 	}
-	for _, want := range []string{"platform", "Y-infra", "Y-services"} {
+	for _, want := range []string{"platform", "y-infra", "y-services"} {
 		if !kustNames[want] {
 			t.Errorf("flux-system missing Kustomization %q, got %v", want, kustNames)
 		}

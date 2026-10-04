@@ -16,7 +16,9 @@ import (
 //  0. The Node tree has no cycle: a Node reached again from one of its own
 //     descendants is rejected, naming the node where the cycle closes.
 //  1. Every Node bundle passes Bundle.Validate (which recursively validates
-//     umbrella Children subtrees including cycle detection).
+//     umbrella Children subtrees including cycle detection and the name of
+//     each bundle), and every node name passes ValidateDirectoryName. A root
+//     node without a name is the one exception: it has no directory.
 //  2. Disjointness: a bundle pointer appearing inside any umbrella Children
 //     subtree must NOT also be attached as the Bundle of any stack.Node.
 //  3. No umbrella child pointer is shared by two distinct umbrella parents.
@@ -37,12 +39,19 @@ func ValidateCluster(c *Cluster) error {
 	// reachable from two parents is visited once rather than misreported as a
 	// cycle. Every later walk of the Node tree may then iterate nodeOrder
 	// instead of recursing again.
+	//
+	// The same walk checks every node name, because a node name becomes a
+	// directory. The path it reports is the one walked from the root, joined
+	// here rather than read from Node.ParentPath, which a hand-built tree may
+	// not have set. The root is exempt when it is unnamed: it has no directory
+	// of its own.
 	nodeBundles := make(map[*Bundle]*Node)
+	nodePaths := make(map[*Node]string)
 	onPath := make(map[*Node]bool)
 	done := make(map[*Node]bool)
 	var nodeOrder []*Node
-	var walkNodes func(*Node) error
-	walkNodes = func(n *Node) error {
+	var walkNodes func(n *Node, path string, root bool) error
+	walkNodes = func(n *Node, path string, root bool) error {
 		if n == nil || done[n] {
 			return nil
 		}
@@ -51,11 +60,25 @@ func ValidateCluster(c *Cluster) error {
 				fmt.Sprintf("node cycle detected at %q", n.Name), nil)
 		}
 		onPath[n] = true
+		if !root || n.Name != "" {
+			if err := ValidateDirectoryName(n.Name); err != nil {
+				return errors.ResourceValidationError("Cluster", c.Name, "nodes",
+					fmt.Sprintf("node %q: %v", path, err), nil)
+			}
+		}
+		nodePaths[n] = path
 		if n.Bundle != nil {
 			nodeBundles[n.Bundle] = n
 		}
 		for _, ch := range n.Children {
-			if err := walkNodes(ch); err != nil {
+			if ch == nil {
+				continue
+			}
+			chPath := ch.Name
+			if path != "" {
+				chPath = path + "/" + ch.Name
+			}
+			if err := walkNodes(ch, chPath, false); err != nil {
 				return err
 			}
 		}
@@ -64,15 +87,15 @@ func ValidateCluster(c *Cluster) error {
 		nodeOrder = append(nodeOrder, n)
 		return nil
 	}
-	if err := walkNodes(c.Node); err != nil {
+	if err := walkNodes(c.Node, c.Node.Name, true); err != nil {
 		return err
 	}
 
 	// 1. Validate every Node bundle. Bundle.Validate recursively walks the
-	//    umbrella Children subtree.
-	for b := range nodeBundles {
+	//    umbrella Children subtree, and checks the name of each bundle in it.
+	for b, n := range nodeBundles {
 		if err := b.Validate(); err != nil {
-			return errors.Wrapf(err, "bundle %q failed validation", b.Name)
+			return errors.Wrapf(err, "bundle %q at node %q failed validation", b.Name, nodePaths[n])
 		}
 	}
 

@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -381,8 +382,9 @@ func renderUmbrellaChildren(children []*stack.Bundle, parent *ManifestLayout, g 
 // of its own; an augmenter application that wants its own layout still gets
 // one, so its extra files and generators do not collide with its siblings'.
 // Otherwise every application gets its own directory inside target's, and a
-// LayoutAugmenter is invoked on it. It returns every object the applications
-// emitted, wherever they were written.
+// LayoutAugmenter is invoked on it. An application that gets a directory has
+// its name checked with stack.ValidateDirectoryName first. It returns every
+// object the applications emitted, wherever they were written.
 func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) ([]client.Object, error) {
 	var all []client.Object
 	for _, app := range apps {
@@ -404,6 +406,13 @@ func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) (
 		if g.appFlat && !isAugmenter(app) {
 			target.Resources = append(target.Resources, objs...)
 			continue
+		}
+		// Only here does the application's name become a directory, so only
+		// here is it checked: stack.ValidateCluster takes no layout rules
+		// and cannot know.
+		if err := stack.ValidateDirectoryName(app.Name); err != nil {
+			return nil, errors.ResourceValidationError("Application", app.Name, "name",
+				fmt.Sprintf("it names a directory in %q: %v", target.FullRepoPath(), err), nil)
 		}
 		appLayout := g.newLayout(app.Name, target.FullRepoPath())
 		appLayout.Resources = objs

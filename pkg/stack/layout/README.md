@@ -130,6 +130,14 @@ Flux Kustomization or writer-owned files. `FilePer` is honoured on every layout.
 a merge that makes two layouts claim one directory, and a directory that would hold two objects
 with the same group, kind, namespace and name (kustomize cannot build it); objects that merely
 share a file name are written into one multi-document file, as `FilePerKind` intends.
+
+A name that becomes a directory must be one path segment (`stack.ValidateDirectoryName`): not
+empty, not `.` or `..`, and without `/` or `\`. Bundle and node names are checked by
+`stack.ValidateCluster`, which every walk runs first. An application name is checked by the walk
+itself, and only where the rules give the application a directory: under `GroupByName`, or for an
+augmenter application that takes its own layout under either grouping. An application written
+into its bundle's directory keeps any name. The error names the application and the directory it
+would have been created in.
 - **FilePer**: How resources are written (FilePerResource vs FilePerKind)
 - **FluxPlacement**: Where/at what granularity Flux Kustomizations go — `FluxSeparate`, `FluxIntegratedPerLayout` (a CR per layout node), or `FluxIntegratedPerBundle` (CRs at bundle boundaries; application children included as directories)
 - **FileNaming**: Resource file naming pattern (see [File Naming Modes](#file-naming-modes))

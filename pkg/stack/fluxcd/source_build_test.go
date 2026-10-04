@@ -60,11 +60,11 @@ func issue873Tree() *stack.Cluster {
 	return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Children: []*stack.Node{api, group}}}
 }
 
-// siblingTree: platform -> [groupA -> webA, groupB -> webB]. The two hosts are
+// siblingTree: platform -> [groupA -> web-a, groupB -> web-b]. The two hosts are
 // siblings, and platform's build includes both.
 func siblingTree() *stack.Cluster {
-	groupA := &stack.Node{Name: "groupA", Children: []*stack.Node{{Name: "webA", Bundle: sharedBundle("webA")}}}
-	groupB := &stack.Node{Name: "groupB", Children: []*stack.Node{{Name: "webB", Bundle: sharedBundle("webB")}}}
+	groupA := &stack.Node{Name: "groupA", Children: []*stack.Node{{Name: "web-a", Bundle: sharedBundle("web-a")}}}
+	groupB := &stack.Node{Name: "groupB", Children: []*stack.Node{{Name: "web-b", Bundle: sharedBundle("web-b")}}}
 	return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Children: []*stack.Node{groupA, groupB}}}
 }
 
