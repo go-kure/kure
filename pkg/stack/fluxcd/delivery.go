@@ -192,20 +192,30 @@ func describeObject(obj client.Object) string {
 	return fmt.Sprintf("%s %q", kind, name)
 }
 
-// builtObjects returns the objects kustomize builds from r: r itself, or the
-// objects a List holds, a List among them opened the same way. As kustomize
-// decides it, an unstructured object is a List when its kind ends in "List"
-// (one without items holds nothing); any other kind is one object, whatever
-// fields it has. A typed object is a List when it is a list type. The items
+// builtObjects returns the objects kustomize builds from r once it is written:
+// r itself, or the objects a List holds, a List among them opened the same
+// way. A List is what kustomize takes for one (its resource factory's
+// inlineAnyEmbeddedLists): a kind ending in "List" that has an items field.
+// Any other kind is one object, whatever fields it has, and so is a kind
+// ending in "List" without items; items set to null hold nothing. The items
 // are the List's own, so a change to one is a change to the List.
 func builtObjects(r client.Object) ([]client.Object, error) {
+	self := []client.Object{r}
+	if !strings.HasSuffix(r.GetObjectKind().GroupVersionKind().Kind, "List") {
+		return self, nil
+	}
 	var items []client.Object
 	if u, ok := r.(*unstructured.Unstructured); ok {
-		if !strings.HasSuffix(u.GetKind(), "List") {
-			return []client.Object{r}, nil
+		held, ok := u.Object["items"]
+		if !ok {
+			return self, nil
+		}
+		if held == nil {
+			return nil, nil
 		}
 		if !u.IsList() {
-			return nil, nil
+			// Not an array: kustomize refuses the file when it builds it.
+			return self, nil
 		}
 		list, err := u.ToList()
 		if err != nil {
@@ -216,7 +226,7 @@ func builtObjects(r client.Object) ([]client.Object, error) {
 		}
 	} else {
 		if !meta.IsListType(r) {
-			return []client.Object{r}, nil
+			return self, nil
 		}
 		extracted, err := meta.ExtractList(r)
 		if err != nil {
