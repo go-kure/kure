@@ -1,6 +1,7 @@
 package fluxcd
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
@@ -197,8 +198,11 @@ func describeObject(obj client.Object) string {
 // way. A List is what kustomize takes for one (its resource factory's
 // inlineAnyEmbeddedLists): a kind ending in "List" that has an items field.
 // Any other kind is one object, whatever fields it has, and so is a kind
-// ending in "List" without items; items set to null hold nothing. The items
-// are the List's own, so a change to one is a change to the List.
+// ending in "List" without items; items set to null hold nothing. For a typed
+// object the field is read from its written form, so one left out when empty
+// counts as absent. The items are the List's own, so a change to one is a
+// change to the List; a typed List whose written items cannot be reached that
+// way is refused.
 func builtObjects(r client.Object) ([]client.Object, error) {
 	self := []client.Object{r}
 	if !strings.HasSuffix(r.GetObjectKind().GroupVersionKind().Kind, "List") {
@@ -225,17 +229,38 @@ func builtObjects(r client.Object) ([]client.Object, error) {
 			items = append(items, &list.Items[i])
 		}
 	} else {
-		if !meta.IsListType(r) {
-			return self, nil
-		}
-		extracted, err := meta.ExtractList(r)
+		held, ok, err := writtenItems(r)
 		if err != nil {
 			return nil, err
 		}
+		if !ok {
+			return self, nil
+		}
+		if held == nil {
+			return nil, nil
+		}
+		written, ok := held.([]any)
+		if !ok {
+			// Not an array: kustomize refuses the file when it builds it.
+			return self, nil
+		}
+		unreachable := errors.Errorf("%s is written as a List, but its items cannot be reached to annotate them", describeObject(r))
+		if !meta.IsListType(r) {
+			return nil, unreachable
+		}
+		extracted, err := meta.ExtractList(r)
+		if err != nil {
+			return nil, errors.Wrap(err, unreachable.Error())
+		}
+		if len(extracted) != len(written) {
+			return nil, unreachable
+		}
 		for _, item := range extracted {
-			if obj, ok := item.(client.Object); ok {
-				items = append(items, obj)
+			obj, ok := item.(client.Object)
+			if !ok {
+				return nil, unreachable
 			}
+			items = append(items, obj)
 		}
 	}
 	var out []client.Object
@@ -247,4 +272,20 @@ func builtObjects(r client.Object) ([]client.Object, error) {
 		out = append(out, built...)
 	}
 	return out, nil
+}
+
+// writtenItems returns the items field of a typed object as it is written
+// (the writers marshal an object to JSON first), and whether the written form
+// has one: an items field left out when empty is not there for kustomize.
+func writtenItems(r client.Object) (items any, present bool, err error) {
+	data, err := json.Marshal(r)
+	if err != nil {
+		return nil, false, errors.Wrapf(err, "marshal %s", describeObject(r))
+	}
+	var written map[string]any
+	if err := json.Unmarshal(data, &written); err != nil {
+		return nil, false, errors.Wrapf(err, "read %s as written", describeObject(r))
+	}
+	items, present = written["items"]
+	return items, present, nil
 }

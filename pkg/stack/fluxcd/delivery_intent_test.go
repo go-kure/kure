@@ -536,6 +536,64 @@ func (l *typedConfigMapItems) DeepCopyObject() runtime.Object {
 	return &c
 }
 
+// typedOptionalItems is typedConfigMapItems with an items field that is left out of
+// the written file when it is empty.
+type typedOptionalItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Items             []corev1.ConfigMap `json:"items,omitempty"`
+}
+
+func (l *typedOptionalItems) DeepCopyObject() runtime.Object {
+	c := *l
+	c.Items = slices.Clone(l.Items)
+	return &c
+}
+
+// typedHiddenItems writes an items array from a field apimachinery does not
+// take for a list's items.
+type typedHiddenItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Entries           []corev1.ConfigMap `json:"items"`
+}
+
+func (l *typedHiddenItems) DeepCopyObject() runtime.Object {
+	c := *l
+	c.Entries = slices.Clone(l.Entries)
+	return &c
+}
+
+// TestDeliveryIntent_UnreachableListItemsRefused: a typed object that is
+// written as a List, but whose items the integrator cannot reach to annotate
+// them, is refused rather than built without the annotation.
+func TestDeliveryIntent_UnreachableListItemsRefused(t *testing.T) {
+	var obj client.Object = &typedHiddenItems{
+		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMapList"},
+		Entries: []corev1.ConfigMap{{
+			TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+			ObjectMeta: metav1.ObjectMeta{Name: "hidden", Namespace: "default"},
+		}},
+	}
+	app := stack.NewApplication("listed", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+	app.Delivery = stack.DeliveryIntent{PruneProtection: true}
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app)}}
+	rules := recursiveRules("nodeOnly", layout.FluxSeparate)
+	ml, err := layout.WalkCluster(c, rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+	if err == nil {
+		t.Fatal("a List whose items cannot be annotated was accepted")
+	}
+	for _, want := range []string{`application "listed"`, "ConfigMapList", "cannot be reached"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err, want)
+		}
+	}
+}
+
 // TestDeliveryIntent_ListIsDecidedByKind: what is a List is what kustomize
 // takes for one when it builds the written file — a kind ending in "List"
 // that has an items field — for typed and unstructured objects alike. A kind
@@ -563,6 +621,13 @@ func TestDeliveryIntent_ListIsDecidedByKind(t *testing.T) {
 				"metadata":   map[string]any{"name": "shopping", "namespace": "default"},
 				"spec":       map[string]any{"buy": "milk"},
 			}},
+			self: "ShoppingList",
+		},
+		"typed kind ending in List whose items are left out": {
+			obj: &typedOptionalItems{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "ShoppingList"},
+				ObjectMeta: metav1.ObjectMeta{Name: "shopping", Namespace: "default"},
+			},
 			self: "ShoppingList",
 		},
 		"typed list": {
