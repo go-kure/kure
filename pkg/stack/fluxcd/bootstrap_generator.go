@@ -256,9 +256,9 @@ func rootName(rootNode *stack.Node) string {
 // absent root node.
 //
 // The bootstrap is given the root node, not the layout rules, so the directory
-// does not follow them: a walk with a ClusterName puts the root under the
-// cluster directory, and a walk of an unnamed root puts it at "cluster", not
-// at the root of the source.
+// does not follow them, and the walked root can be somewhere else: a walk with
+// a ClusterName puts the root in or under the cluster directory, and a walk
+// without one puts an unnamed root at "cluster", not at the root of the source.
 //
 // Each mode spells that one directory its own way. The gotk bootstrap
 // Kustomization's spec.path is the directory itself with no "./" prefix, and
