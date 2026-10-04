@@ -84,13 +84,15 @@ the placement Step 3 uses, does not enforce one, and without it the Kustomizatio
 `flux-system/` carry an empty `sourceRef`, which Flux's CRD rejects.
 
 Names are checked when the cluster is validated, which the layout walk of Step 3 does before it
-renders anything. A bundle name becomes the name of its Flux Kustomization, so it must be a
-DNS-1123 subdomain of at most 63 characters: lower-case letters, digits, `-` and `.`, starting and
-ending with a letter or digit (`my.app` is valid, `My-App` and a 64-character name are not). The limit is 63 because Flux writes the name into a label value on every object it
-applies. A node name must be one path segment: not empty, not `.` or `..`, and without `/`, `\` or
-a NUL byte; only the root node may be unnamed. A refused name is reported with its node or bundle
-path, and Kure never shortens one. See the [Stack reference](/api-reference/stack/) for the rules
-in full.
+renders anything. A bundle name must be a DNS-1123 subdomain: lower-case letters, digits, `-` and
+`.`, starting and ending with a letter or digit (`my.app` is valid, `My-App` is not). A node name
+must be one path segment: not empty, not `.` or `..`, and without `/`, `\` or a NUL byte; only the
+root node may be unnamed. In the Flux workflow a bundle name also becomes the name of its Flux
+Kustomization, so it must be at most 63 characters: Flux writes the name into a label value on
+every object it applies. That limit is Flux's, so cluster validation does not apply it; the Flux
+generator refuses a longer name when it builds the Kustomization, which is still before anything
+is written. A refused name is reported with its node or bundle path, and Kure never shortens one.
+See the [Stack reference](/api-reference/stack/) for the rules in full.
 
 The fluent builder (`stack.NewClusterBuilder`) builds a single path from the root, not a tree
 like this one: `WithNode` sets the root node, so a second call replaces it; a second `WithBundle`

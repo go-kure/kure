@@ -512,12 +512,20 @@ func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]c
 // RetryInterval leaves the field unset; a non-empty value that does not parse
 // is an error, never a silent fallback. Bundle.Validate reports the same
 // error earlier; checking here as well covers callers that generate without
-// validating first. The same holds for the bundle's name, which becomes the
-// Kustomization's: it is checked with stack.ValidateKustomizationName. path is
-// the caller's, so no directory rule applies to the name here.
+// validating first.
+//
+// The bundle's name becomes the Kustomization's and is checked here with
+// stack.ValidateKustomizationName. This is the only place the 63-character
+// limit is checked: it is Flux's, so Bundle.Validate and stack.ValidateCluster
+// accept a longer name, which another engine can deliver. Every Kustomization
+// built from a bundle is built here, umbrella children included, before
+// anything is written. The error names the bundle by its path
+// (Bundle.GetPath), which for an umbrella child of a walked cluster holds its
+// umbrella's. path is the caller's, so no directory rule applies to the name
+// here.
 func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string) (client.Object, error) {
 	if err := stack.ValidateKustomizationName(b.Name); err != nil {
-		return nil, errors.ResourceValidationError("Bundle", b.Name, "name", err.Error(), nil)
+		return nil, errors.ResourceValidationError("Bundle", b.GetPath(), "name", err.Error(), nil)
 	}
 
 	interval := g.DefaultInterval
