@@ -585,7 +585,8 @@ rejects it.
    - Expected: both modes point at the same directory for the same root.
 5. **Under `FluxIntegratedPerLayout` the patch-scope check does not see a generated ConfigMap.**
    - Current: `checkPatchScope` in `resource_generator.go` counts only the objects held in the
-     unit's `Resources`. A ConfigMap that a `configMapGenerator` builds is not among them, so it
+     unit's `Resources` and in those of its `AppFileSingle` application children. A ConfigMap
+     that a `configMapGenerator` builds is not among them, so it
      is skipped, also when the unit's own directory builds it. With every grouping flat and
      `FlattenSingleTier: true`, a bundle whose one augmenter application adds a generator
      collapses into the shared directory; another merged bundle's patch that targets that
