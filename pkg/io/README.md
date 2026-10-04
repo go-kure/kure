@@ -54,12 +54,25 @@ their `k8s.io/api` types in both modes; a caller that matched them as
 `VerticalPodAutoscaler` are not registered and still need `AllowUnstructured`. The
 full list is the [generated table](/api-reference/api-tables/).
 
-A list document follows the same split. With `AllowUnstructured`, a `<Kind>List` of
-a kind that is not registered is flattened into its items. A `<Kind>List` of a
-registered kind decodes to the typed list, which is not a single object, and is
-refused in both modes: a `DeploymentList` always was, and a `PriorityClassList` or a
-`LeaseList` is from the moment its kind is registered. Write one document per item
-instead.
+A list document is flattened into its items; the list itself is never returned.
+The items come back in the list's order and take the list's place in a
+multi-document stream, and an empty list yields nothing.
+
+- A `<Kind>List` of a registered kind (`DeploymentList`, `PriorityClassList`) yields
+  typed items in both modes. An item may leave `apiVersion` and `kind` out, as the
+  API server's own list responses do; an item that states them must state the kind
+  the list holds.
+- A generic `v1` `List` is read item by item, each as a document of its own: a
+  registered kind comes back typed, an unregistered one follows `AllowUnstructured`,
+  and a list inside the list is flattened where it stands. A list may sit inside
+  eight Lists; one nested deeper is refused.
+- A `<Kind>List` of a kind that is not registered is refused by a strict parse and
+  flattened into unstructured items with `AllowUnstructured`.
+
+Each item is decoded by itself, in both list shapes. An item that cannot be decoded,
+a `null` among them, is reported with its position (`item 1 of List`,
+`item 1 of DeploymentList`), and the items beside it are still returned, as the
+documents of a stream are. Only the items are read: the list's own `metadata` is not.
 
 The fallback in use:
 

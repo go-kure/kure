@@ -601,10 +601,18 @@ tables:
 
 **Breaking.** Parsing changes for these ten kinds. A strict parse used to refuse them and a parse
 with `AllowUnstructured` returned `*unstructured.Unstructured`; both now return the `k8s.io/api`
-type. A `<Kind>List` document of one of them, which `AllowUnstructured` used to flatten into its
-items, is now refused in both modes, as a list of any registered kind is. `pkg/manifest` answers
-their scope from the generated table; `PriorityClass` and the two webhook configurations left its
-residual list.
+type. `pkg/manifest` answers their scope from the generated table; `PriorityClass` and the two
+webhook configurations left its residual list.
+
+**Breaking: list documents.** `pkg/io` flattens a list of a registered kind into its items, in both
+modes: a typed `<Kind>List` (`DeploymentList`, `PriorityClassList`) and the generic `v1` `List`. The
+items are typed, keep the list's order and take the list's place in a multi-document stream; an
+empty list yields nothing; an item of a generic `List` whose kind is not registered follows
+`AllowUnstructured`. Each item is decoded by itself: one that does not decode, a `null` among them,
+is an error naming its position and the items beside it are still returned. A list may sit inside
+eight generic Lists; one nested deeper is refused. Both shapes used to be refused with "does not implement client.Object", so a
+caller that relied on that refusal, for instance to reject list documents in its input, now gets
+the objects and has to check for lists itself before parsing.
 
 **Still open: the kinds that need a new module dependency.** The ticket decides each one; a kind
 that is added meets the same criteria.
@@ -622,4 +630,6 @@ The same list, with what a caller does in the meantime, is in `pkg/kubernetes/RE
 object, and the generated `pkg/kubernetes/zz_generated_create_test.go` calls each wrapper by name.
 `pkg/kubernetes/scheme_test.go` asserts each kind's registration.
 `pkg/io/runtime_base_kinds_test.go` parses each kind in both modes and keeps `APIService` as the
-control that is still refused.
+control that is still refused. `pkg/io/runtime_lists_test.go` covers list documents in both modes:
+a typed list of each kind, an empty list, a generic `List` with mixed items, and the order of a
+multi-document stream.

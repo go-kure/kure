@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -39,16 +38,9 @@ func TestParseYAML_BaseKindsAreTyped(t *testing.T) {
 		{"admissionregistration.k8s.io/v1", "MutatingAdmissionPolicy", &admissionregistrationv1.MutatingAdmissionPolicy{}},
 		{"admissionregistration.k8s.io/v1", "MutatingAdmissionPolicyBinding", &admissionregistrationv1.MutatingAdmissionPolicyBinding{}},
 	}
-	modes := []struct {
-		name string
-		opts ParseOptions
-	}{
-		{"strict", ParseOptions{}},
-		{"allow-unstructured", ParseOptions{AllowUnstructured: true}},
-	}
 	for _, c := range cases {
 		doc := fmt.Sprintf("apiVersion: %s\nkind: %s\nmetadata:\n  name: sample\n", c.apiVersion, c.kind)
-		for _, m := range modes {
+		for _, m := range parseModes {
 			t.Run(c.kind+"/"+m.name, func(t *testing.T) {
 				objs, err := ParseYAMLWithOptions([]byte(doc), m.opts)
 				if err != nil {
@@ -72,58 +64,9 @@ func TestParseYAML_BaseKindsAreTyped(t *testing.T) {
 	}
 }
 
-// Registering a kind registers its list type with it, and a typed list is not a
-// client.Object: the parser refuses it in both modes. Before these kinds were
-// registered, AllowUnstructured flattened such a list into its items, so this is
-// the second thing the registration changed for a caller. DeploymentList is the
-// control: it was registered all along and is refused the same way, which is
-// what makes this the rule for registered kinds and not a defect of the ten.
-func TestParseYAML_BaseKindListsAreRefusedLikeEveryRegisteredList(t *testing.T) {
-	cases := []struct {
-		apiVersion string
-		kind       string
-	}{
-		{"apps/v1", "Deployment"},
-		{"scheduling.k8s.io/v1", "PriorityClass"},
-		{"discovery.k8s.io/v1", "EndpointSlice"},
-		{"coordination.k8s.io/v1", "Lease"},
-		{"node.k8s.io/v1", "RuntimeClass"},
-		{"admissionregistration.k8s.io/v1", "MutatingWebhookConfiguration"},
-		{"admissionregistration.k8s.io/v1", "ValidatingWebhookConfiguration"},
-		{"admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy"},
-		{"admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicyBinding"},
-		{"admissionregistration.k8s.io/v1", "MutatingAdmissionPolicy"},
-		{"admissionregistration.k8s.io/v1", "MutatingAdmissionPolicyBinding"},
-	}
-	modes := []struct {
-		name string
-		opts ParseOptions
-	}{
-		{"strict", ParseOptions{}},
-		{"allow-unstructured", ParseOptions{AllowUnstructured: true}},
-	}
-	for _, c := range cases {
-		doc := fmt.Sprintf("apiVersion: %[1]s\nkind: %[2]sList\nitems:\n- apiVersion: %[1]s\n  kind: %[2]s\n  metadata:\n    name: sample\n", c.apiVersion, c.kind)
-		for _, m := range modes {
-			t.Run(c.kind+"List/"+m.name, func(t *testing.T) {
-				objs, err := ParseYAMLWithOptions([]byte(doc), m.opts)
-				if err == nil {
-					t.Fatalf("a typed list must be refused, got %d objects", len(objs))
-				}
-				var parseErrs *errors2.ParseErrors
-				if !errors.As(err, &parseErrs) {
-					t.Fatalf("error is %T, want *errors.ParseErrors: %v", err, err)
-				}
-				if len(objs) != 0 {
-					t.Errorf("got %d objects from a refused list, want 0", len(objs))
-				}
-				if want := "List does not implement client.Object"; !strings.Contains(err.Error(), want) {
-					t.Errorf("error %q does not say the list is not an object (%q)", err, want)
-				}
-			})
-		}
-	}
-}
+// Registering a kind registers its list type with it. What the parser does
+// with a list of these kinds is asserted in runtime_lists_test.go, next to the
+// control that was registered all along.
 
 // APIService is a base kind kure does not register, because its Go type lives in
 // a module kure does not depend on. It is the control for the test above: a

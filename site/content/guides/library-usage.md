@@ -67,9 +67,10 @@ A kind with a wrapper is also a kind `io.ParseYAML` returns as its upstream Go
 type. That changes what a parse returns when kure starts registering a kind: a
 `PriorityClass` that a strict parse used to refuse, and that a parse with
 `AllowUnstructured` returned as `*unstructured.Unstructured`, now comes back as
-`*schedulingv1.PriorityClass`. A `PriorityClassList` document goes the other way:
-`AllowUnstructured` used to flatten it into its items, and it is now refused like
-every list of a registered kind, so write one document per item.
+`*schedulingv1.PriorityClass`. A list document follows its items: a
+`PriorityClassList`, a `DeploymentList` or a generic `List` is flattened into its
+items, typed where the kind is registered, in the list's order and in the list's
+place in the stream. The [IO reference](/api-reference/io) states the rules.
 
 Kure adds a helper only for one of a few write shapes: appending one item to a
 list, inserting one key into a map, setting a pointer field, or composing a
