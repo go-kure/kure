@@ -1482,7 +1482,8 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	// named after the node: either of them named like the Flux directory
 	// would share it with the Flux resources, which the writers refuse only
 	// when the tree is written. The directories are compared as the writers
-	// compare them (SameDirectory): cleaned, and without regard to case.
+	// compare them (SameDirectory): resolved under the output directory,
+	// cleaned, and without regard to case.
 	fluxPlace := &layout.ManifestLayout{Name: DefaultFluxDirName, Namespace: ml.FullRepoPath()}
 	for _, child := range ml.Children {
 		if !child.SameDirectory(fluxPlace) {

@@ -285,8 +285,8 @@ func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterf
 		// one named after the node: either of them named like the
 		// Applications' directory would share it with them, which the
 		// writers refuse only when the tree is written. The directories are
-		// compared as the writers compare them (SameDirectory): cleaned, and
-		// without regard to case.
+		// compared as the writers compare them (SameDirectory): resolved
+		// under the output directory, cleaned, and without regard to case.
 		argoPlace := &layout.ManifestLayout{Name: argoDirName, Namespace: ml.FullRepoPath()}
 		for _, child := range ml.Children {
 			if !child.SameDirectory(argoPlace) {

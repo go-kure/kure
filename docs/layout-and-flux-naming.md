@@ -667,10 +667,11 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
    - A child node of the root named like that directory is refused by the walk, naming the node,
      the bundle and the directory (`rootUnit.checkRootUnitName` in `walker.go`). The two
      directories are compared as the writers compare them (`ManifestLayout.SameDirectory` in
-     `manifest.go`: the cleaned path, without regard to case), so a name that differs only in
-     case, or one that resolves to the same directory (`/web`, `./web`), is refused too. The
-     engines' refusals below compare the same way. `BundleGrouping: GroupByName` is no way around it: the walk does not check there, and
-     the writers refuse the tree.
+     `manifest.go`: the path resolved under the output directory and cleaned, without regard to
+     case), so a name that differs only in case, or one that resolves to the same directory
+     (`/web`, `./web`, or the same path under a rooted `ClusterName`), is refused too. The
+     engines' refusals below compare the same way. `BundleGrouping: GroupByName` is no way
+     around it: the walk does not check there, and the writers refuse the tree.
    - The engines' own directory at the top of the tree must be free. Under `FluxSeparate` a root
      node's bundle (or a child node) rendered to `<top>/flux-system` is refused by
      `addSeparateFluxToLayout` in `layout_integrator.go`, and one rendered to `<top>/argocd` by
