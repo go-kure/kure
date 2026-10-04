@@ -566,6 +566,61 @@ func (l *typedHiddenItems) DeepCopyObject() runtime.Object {
 	return &c
 }
 
+// typedSplitItems has the shape of a list for apimachinery, but writes its
+// items from another field.
+type typedSplitItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Items             []corev1.ConfigMap `json:"-"`
+	Entries           []corev1.ConfigMap `json:"items"`
+}
+
+func (l *typedSplitItems) DeepCopyObject() runtime.Object {
+	c := *l
+	c.Items = slices.Clone(l.Items)
+	c.Entries = slices.Clone(l.Entries)
+	return &c
+}
+
+// TestDeliveryIntent_WrittenWithoutAnnotationRefused: what counts is the
+// written file. A typed object whose written form still holds an object
+// without the annotation, after the integrator set it on everything it could
+// reach, is refused, and what was set is taken back.
+func TestDeliveryIntent_WrittenWithoutAnnotationRefused(t *testing.T) {
+	cm := func(name string) corev1.ConfigMap {
+		return corev1.ConfigMap{
+			TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+		}
+	}
+	list := &typedSplitItems{
+		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMapList"},
+		Items:    []corev1.ConfigMap{cm("reached")},
+		Entries:  []corev1.ConfigMap{cm("written")},
+	}
+	var obj client.Object = list
+	app := stack.NewApplication("listed", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+	app.Delivery = stack.DeliveryIntent{PruneProtection: true}
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app)}}
+	rules := recursiveRules("nodeOnly", layout.FluxSeparate)
+	ml, err := layout.WalkCluster(c, rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+	if err == nil {
+		t.Fatal("a List written with an item that lacks the annotation was accepted")
+	}
+	for _, want := range []string{`application "listed"`, "ConfigMapList", `ConfigMap "default/written"`, stack.AnnotationFluxPruneKey} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err, want)
+		}
+	}
+	if got := list.Items[0].GetAnnotations(); len(got) != 0 {
+		t.Errorf("the refusal left annotations %v on the object it had reached", got)
+	}
+}
+
 // TestDeliveryIntent_UnreachableListItemsRefused: a typed object that is
 // written as a List, but whose items the integrator cannot reach to annotate
 // them, is refused rather than built without the annotation.
@@ -589,7 +644,7 @@ func TestDeliveryIntent_UnreachableListItemsRefused(t *testing.T) {
 	if err == nil {
 		t.Fatal("a List whose items cannot be annotated was accepted")
 	}
-	for _, want := range []string{`application "listed"`, "ConfigMapList", "cannot be reached"} {
+	for _, want := range []string{`application "listed"`, "ConfigMapList", `ConfigMap "default/hidden"`, "cannot reach"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not contain %q", err, want)
 		}

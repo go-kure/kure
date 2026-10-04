@@ -483,8 +483,9 @@ and every grouping, on:
   included, and never the envelope. As in kustomize, an object is a `List` when its kind ends in
   `List` and it has an `items` field in the written file; a kind ending in `List` without `items`
   (a typed object that leaves an empty one out included), and any other kind with an `items`
-  field, is one object and carries the annotation itself. A typed object written as a `List`
-  whose items the integrator cannot reach is refused;
+  field, is one object and carries the annotation itself. The written file decides: a typed
+  object whose written form still holds an object without the annotation, because its Go value
+  gives no access to it, is refused;
 - every object a `LayoutAugmenter` adds to the application's own layout or a child layout below it;
 - every `configMapGenerator` of those layouts, as the entry's `options.annotations`, because
   kustomize builds those ConfigMaps after kure has written the tree.
