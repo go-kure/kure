@@ -564,10 +564,12 @@ named after the root node, relative to the root of the source, which is where a 
 `"gotk"` mode used to write `manifests/<root>`, a prefix none of the layout writers produces; a
 consumer that depends on such a prefix sets `spec.path` on the returned Kustomization.
 
-The bootstrap is given the root node, not the layout rules, and its path does not follow them. A
-tree walked with a `ClusterName` has its root under the cluster directory, and a walk of an
-unnamed root node writes it to `cluster`, not to the root of the source (the table under
-[Kustomization paths](#kustomization-paths) has examples).
+The bootstrap is given the root node, not the layout rules, and its path does not follow them, so
+the walked root can be somewhere else. A walk with a `ClusterName` writes the root in or under
+the cluster directory (`<ClusterName>/<root>`; the cluster directory itself for an unnamed root,
+or when its last segment is the root's name). A walk without one writes an unnamed root node to
+`cluster`, not to the root of the source. The table under
+[Kustomization paths](#kustomization-paths) has examples.
 
 ### Sync name
 

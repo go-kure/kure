@@ -532,9 +532,9 @@ root of the source, which is where a walk without a `ClusterName` writes a named
 node has no name); `"flux-operator"` mode writes it as the `FluxInstance`'s `sync.path` (`./prod`,
 or `./`). `"gotk"` mode used to write `manifests/<root>`: if your tree sits under such a prefix,
 set `spec.path` on the returned Kustomization yourself. The bootstrap does not know your layout
-rules, so two trees have their root elsewhere: one walked with a `ClusterName` (the root sits
-under the cluster directory), and one whose root node is unnamed (the walk writes it to `cluster`,
-while the bootstrap names the root of the source).
+rules, so the walked root can be somewhere else in two cases: a walk with a `ClusterName` writes
+the root in or under the cluster directory, and a walk without one writes an unnamed root node to
+`cluster`, while the bootstrap names the root of the source.
 
 `"flux-operator"` mode needs both `FluxVersion` and `Registry`: they become the `FluxInstance`'s
 distribution version and registry, and Kure has no default for either. If one is empty,
