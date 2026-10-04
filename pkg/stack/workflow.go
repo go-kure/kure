@@ -7,9 +7,9 @@ import (
 )
 
 // LayoutRulesProvider is the interface for layout configuration passed to
-// CreateLayoutWithResources. The concrete implementation is layout.LayoutRules
-// from pkg/stack/layout. Defined here to avoid an import cycle between
-// pkg/stack and pkg/stack/layout.
+// GenerateFromCluster and CreateLayoutWithResources. The concrete
+// implementation is layout.LayoutRules from pkg/stack/layout. Defined here to
+// avoid an import cycle between pkg/stack and pkg/stack/layout.
 type LayoutRulesProvider interface {
 	Validate() error
 }
@@ -29,7 +29,10 @@ type ManifestLayoutResult interface {
 type Workflow interface {
 	// GenerateFromCluster creates GitOps resources from a cluster definition.
 	// This is the primary entry point for resource generation.
-	GenerateFromCluster(*Cluster) ([]client.Object, error)
+	// Every path in the resources is a directory a walk with the rules
+	// writes, so the rules must be the ones the tree is written with.
+	// The rules parameter must be a layout.LayoutRules value.
+	GenerateFromCluster(*Cluster, LayoutRulesProvider) ([]client.Object, error)
 
 	// CreateLayoutWithResources creates a new manifest layout that includes
 	// both the application manifests and the GitOps resources needed to

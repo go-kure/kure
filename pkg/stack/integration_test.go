@@ -92,7 +92,7 @@ func TestFullPipelineFlux(t *testing.T) {
 	}
 
 	// Generate resources from cluster
-	resources, err := workflow.GenerateFromCluster(cluster)
+	resources, err := workflow.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("GenerateFromCluster failed: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestFullPipelineArgoCD(t *testing.T) {
 	}
 
 	// Generate resources from cluster
-	resources, err := workflow.GenerateFromCluster(cluster)
+	resources, err := workflow.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("GenerateFromCluster failed: %v", err)
 	}
@@ -348,7 +348,7 @@ func TestMultiNodeClusterGeneration(t *testing.T) {
 		t.Fatalf("failed to create workflow: %v", err)
 	}
 
-	resources, err := workflow.GenerateFromCluster(cluster)
+	resources, err := workflow.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("GenerateFromCluster failed: %v", err)
 	}
@@ -430,7 +430,7 @@ func TestWorkflowSwitching(t *testing.T) {
 				}
 			}
 
-			resources, err := workflow.GenerateFromCluster(cluster)
+			resources, err := workflow.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 			if err != nil {
 				t.Fatalf("GenerateFromCluster failed for %s: %v", provider, err)
 			}

@@ -41,8 +41,9 @@ cluster := exampleCluster()
 // to the layout call, not on the engine — see Layout Integration below.
 engine := fluxcd.Engine()
 
-// Generate all Flux resources for a cluster (paths of a default-rules walk)
-objects, err := engine.GenerateFromCluster(cluster)
+// Generate all Flux resources for a cluster: each spec.path is a directory
+// a walk with the rules you pass writes
+objects, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 if err != nil {
     panic(err)
 }
@@ -90,8 +91,8 @@ engine := fluxcd.Engine()
 rules := layout.DefaultLayoutRules()
 bundle := cluster.Node.Bundle
 
-// From an entire cluster: walks it with layout.DefaultLayoutRules()
-objects, err := engine.GenerateFromCluster(cluster)
+// From an entire cluster: walks it with the rules you write the tree with
+objects, err := engine.GenerateFromCluster(cluster, rules)
 if err != nil {
     panic(err)
 }
@@ -125,11 +126,15 @@ Each directory that renders bundles produces one Flux Kustomization resource (se
 - Interval and pruning configuration
 
 `GenerateFromCluster` walks the cluster itself, so it renders every application and runs every
-`LayoutAugmenter`: their errors surface there. Its paths are the directories `WalkCluster` writes
-under the default rules — the root node at `<root>`, its children at `<root>/<child>` — which is
-also what the bootstrap sync path `./<root>` expects. A caller that writes the layout with other
-rules generates from that layout instead: `CreateLayoutWithResources`, or `GenerateFromLayout` on
-its own `WalkCluster` result.
+`LayoutAugmenter`: their errors surface there. It walks with the `layout.LayoutRules` it is given,
+so its paths are the directories `WalkCluster` writes under those rules: pass the rules you write
+the tree with. Under `layout.DefaultLayoutRules()` that is the root node at `<root>` and its
+children at `<root>/<child>`, which is also what the bootstrap sync path `./<root>` expects; with
+`ClusterName: "."` and an unnamed root node it is the root of the tree, not `cluster`. The objects
+come back as a list and are placed nowhere, so `FluxPlacement` changes nothing in this call. On
+`WorkflowEngine` (the `stack.Workflow` interface) the rules arrive as a
+`stack.LayoutRulesProvider` and must be a `layout.LayoutRules` value: anything else, `nil`
+included, is refused, never replaced by the defaults.
 
 ## Kustomization paths
 

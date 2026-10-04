@@ -39,10 +39,16 @@ func NewWorkflowEngine() *WorkflowEngine {
 // ResourceGenerator interface implementation
 
 // GenerateFromCluster creates Flux resources from a cluster definition, with
-// the spec.path values of a default-rules walk (see
-// ResourceGenerator.GenerateFromCluster).
-func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
-	return we.ResourceGen.GenerateFromCluster(c)
+// the spec.path values of a walk with rules (see
+// ResourceGenerator.GenerateFromCluster). rules must be a layout.LayoutRules
+// value: anything else, nil included, is refused rather than replaced by
+// defaults.
+func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster, rules stack.LayoutRulesProvider) ([]client.Object, error) {
+	layoutRules, ok := rules.(layout.LayoutRules)
+	if !ok {
+		return nil, errors.New("rules must be of type layout.LayoutRules")
+	}
+	return we.ResourceGen.GenerateFromCluster(c, layoutRules)
 }
 
 // LayoutIntegrator interface implementation
