@@ -102,8 +102,13 @@ func (g grouping) newLayout(name, dir string) *ManifestLayout {
 
 // WalkCluster traverses a stack.Cluster and builds a ManifestLayout tree that
 // mirrors the node, bundle and application hierarchy. Each grouping axis of
-// rules decides whether its level gets a directory (see grouping).
+// rules decides whether its level gets a directory (see grouping). The rules
+// are validated first, as given (LayoutRules.Validate); unset values then take
+// their defaults.
 func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
+	if err := rules.Validate(); err != nil {
+		return nil, err
+	}
 	if c == nil || c.Node == nil {
 		return nil, nil
 	}
@@ -200,7 +205,12 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, g grouping)
 // and values are the corresponding ManifestLayout trees. Nodes without PackageRef inherit
 // from their parent, with nil representing the default package. The grouping
 // axes apply as in WalkCluster; the package trees carry no Flux placement.
+// The rules are validated first, as in WalkCluster, including the options
+// this walk does not use.
 func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*ManifestLayout, error) {
+	if err := rules.Validate(); err != nil {
+		return nil, err
+	}
 	if c == nil || c.Node == nil {
 		return nil, nil
 	}

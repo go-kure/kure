@@ -643,6 +643,37 @@ func TestCreateLayoutWithResources_UsesWalkedRules(t *testing.T) {
 	}
 }
 
+// TestCreateLayoutWithResources_RefusesInvalidRules: the engine does not check
+// the rules on its own; the walk's validation refuses an unknown option value
+// and a ClusterName no writer would write, and no layout is returned
+// (go-kure/kure#979).
+func TestCreateLayoutWithResources_RefusesInvalidRules(t *testing.T) {
+	cases := map[string]struct {
+		rules layout.LayoutRules
+		field string
+	}{
+		"node grouping":        {layout.LayoutRules{NodeGrouping: "nested"}, "NodeGrouping"},
+		"bundle grouping":      {layout.LayoutRules{BundleGrouping: "nested"}, "BundleGrouping"},
+		"application grouping": {layout.LayoutRules{ApplicationGrouping: "nested"}, "ApplicationGrouping"},
+		"application file":     {layout.LayoutRules{ApplicationFileMode: "bundle"}, "ApplicationFileMode"},
+		"file per":             {layout.LayoutRules{FilePer: "namespace"}, "FilePer"},
+		"flux placement":       {layout.LayoutRules{FluxPlacement: "inline"}, "FluxPlacement"},
+		"file naming":          {layout.LayoutRules{FileNaming: "name-kind"}, "FileNaming"},
+		"cluster name":         {layout.LayoutRules{ClusterName: "../prod"}, "ClusterName"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			result, err := Engine().CreateLayoutWithResources(argoTestCluster(), tc.rules)
+			if err == nil || !strings.Contains(err.Error(), tc.field) {
+				t.Fatalf("err = %v, want one naming %s", err, tc.field)
+			}
+			if result != nil {
+				t.Error("a layout was returned with the error")
+			}
+		})
+	}
+}
+
 // TestCreateLayoutWithResources_UmbrellaTreeWrites: an ArgoCD tree is not one
 // Flux delivers, so nothing in it is marked with SetFluxBuild, and the
 // writers' check for a directory no Flux Kustomization builds

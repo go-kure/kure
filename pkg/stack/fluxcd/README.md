@@ -724,6 +724,14 @@ configurations — such as a bundle referenced both by a `Node` and by another
 bundle's `Children`, shared umbrella ownership, or multi-package umbrellas —
 fail fast with a validation error rather than producing malformed output.
 
+The layout rules are validated by the walk (`layout.LayoutRules.Validate`, see the layout
+package's "LayoutRules Configuration"): `CreateLayoutWithResources` does not check them on its
+own, and an unknown option value or a `ClusterName` with a `..` path segment fails there with an
+error naming the field, also when the cluster is nil. `IntegrateWithLayout` is handed a tree it did not walk and reads the
+placement and the file naming from the rules, so it runs the same check first, before it looks at
+the tree; it has no placement check of its own. An unknown placement is reported like any other
+unknown rule value, naming the field `FluxPlacement`.
+
 `CreateLayoutWithResources` additionally calls `validateSourceRefsForFluxIntegrated`
 for **both inline placements** (`FluxIntegratedPerLayout` and
 `FluxIntegratedPerBundle`) — both emit bundle/node CRs that carry a `spec.sourceRef`.

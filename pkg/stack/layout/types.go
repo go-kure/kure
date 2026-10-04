@@ -3,6 +3,9 @@
 package layout
 
 import (
+	"path/filepath"
+	"strings"
+
 	"github.com/go-kure/kure/pkg/errors"
 )
 
@@ -179,7 +182,11 @@ func DefaultLayoutRules() LayoutRules {
 	}
 }
 
-// Validate ensures the LayoutRules contain known option values.
+// Validate ensures the LayoutRules contain known option values and a
+// ClusterName the writers can write: one without a ".." path segment. An unset
+// value is valid; it takes its documented default. WalkCluster and
+// WalkClusterByPackage validate the rules they are given before they build
+// anything, so no caller has to (go-kure/kure#979).
 func (lr LayoutRules) Validate() error {
 	validGrouping := func(g GroupingMode) bool {
 		switch g {
@@ -226,6 +233,18 @@ func (lr LayoutRules) Validate() error {
 		// valid
 	default:
 		return errors.NewValidationError("FileNaming", string(lr.FileNaming), "LayoutRules", []string{string(FileNamingDefault), string(FileNamingKindName)})
+	}
+
+	// The cluster directory is the Namespace of the walked tree's top layout,
+	// and every writer refuses a layout whose directory has a ".." segment
+	// (checkLayoutIdentity). A name the walk would clean to one without it
+	// ("x/../prod") is refused as well: one rule, whatever the tree.
+	for _, seg := range strings.Split(filepath.ToSlash(lr.ClusterName), "/") {
+		if seg == ".." {
+			err := errors.NewValidationError("ClusterName", lr.ClusterName, "LayoutRules", nil)
+			err.Message += `: it must not contain a ".." path segment`
+			return err
+		}
 	}
 
 	return nil
