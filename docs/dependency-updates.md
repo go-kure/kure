@@ -380,6 +380,7 @@ All `github.com/fluxcd/*` packages must be upgraded together. Flux releases coor
 - `notification-controller/api`
 - `source-controller/api`
 - `image-automation-controller/api`
+- `image-reflector-controller/api`
 - `pkg/apis/meta`, `pkg/apis/kustomize`
 
 Renovate enforces this with the `fluxcd` group in the shared

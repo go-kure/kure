@@ -862,6 +862,28 @@
     {
       "group": "image.toolkit.fluxcd.io",
       "version": "v1",
+      "kind": "ImagePolicy",
+      "goType": "ImagePolicy",
+      "importPath": "github.com/fluxcd/image-reflector-controller/api/v1",
+      "module": "github.com/fluxcd/image-reflector-controller/api",
+      "moduleVersion": "v1.2.5",
+      "namespaced": true,
+      "scopeSource": "marker"
+    },
+    {
+      "group": "image.toolkit.fluxcd.io",
+      "version": "v1",
+      "kind": "ImageRepository",
+      "goType": "ImageRepository",
+      "importPath": "github.com/fluxcd/image-reflector-controller/api/v1",
+      "module": "github.com/fluxcd/image-reflector-controller/api",
+      "moduleVersion": "v1.2.5",
+      "namespaced": true,
+      "scopeSource": "marker"
+    },
+    {
+      "group": "image.toolkit.fluxcd.io",
+      "version": "v1",
       "kind": "ImageUpdateAutomation",
       "goType": "ImageUpdateAutomation",
       "importPath": "github.com/fluxcd/image-automation-controller/api/v1",

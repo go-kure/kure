@@ -25,6 +25,8 @@ func TestGeneratedConstructors(t *testing.T) {
 		{"HelmChart", true, CreateHelmChart("name", "ns")},
 		{"HelmRelease", true, CreateHelmRelease("name", "ns")},
 		{"HelmRepository", true, CreateHelmRepository("name", "ns")},
+		{"ImagePolicy", true, CreateImagePolicy("name", "ns")},
+		{"ImageRepository", true, CreateImageRepository("name", "ns")},
 		{"ImageUpdateAutomation", true, CreateImageUpdateAutomation("name", "ns")},
 		{"Kustomization", true, CreateKustomization("name", "ns")},
 		{"OCIRepository", true, CreateOCIRepository("name", "ns")},

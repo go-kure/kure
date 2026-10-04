@@ -91,7 +91,13 @@ A base kind has a wrapper when kure registers the group version that defines it.
 `k8s.io/apiextensions-apiserver`. Registering a group version brings every kind it
 defines; the [generated table](/api-reference/api-tables/) lists each one with its scope.
 
-Four kinds that are often asked for have no wrapper, each because its Go type lives in
+The Flux image kinds are covered with the other Flux kinds, in `pkg/kubernetes/fluxcd`:
+`ImageRepository` and `ImagePolicy` come from
+`github.com/fluxcd/image-reflector-controller/api`, `ImageUpdateAutomation` from
+`github.com/fluxcd/image-automation-controller/api`, all three in
+`image.toolkit.fluxcd.io/v1`.
+
+Two kinds that are often asked for have no wrapper, each because its Go type lives in
 a module kure does not depend on. Adding one means adding that module to `go.mod`, which
 is a separate decision per kind:
 
@@ -99,7 +105,6 @@ is a separate decision per kind:
 |---|---|---|
 | `APIService` (`apiregistration.k8s.io/v1`) | `k8s.io/kube-aggregator` | `pkg/manifest` knows it as cluster-scoped; parse it with `AllowUnstructured` |
 | `VerticalPodAutoscaler` (`autoscaling.k8s.io/v1`) | `k8s.io/autoscaler/vertical-pod-autoscaler`, not part of the Kubernetes API | parse it with `AllowUnstructured`; supply its `CustomResourceDefinition` for the scope |
-| `ImageRepository`, `ImagePolicy` (`image.toolkit.fluxcd.io`) | `github.com/fluxcd/image-reflector-controller/api`; kure depends on `image-automation-controller` only | same as above |
 
 Sub-types that are not `client.Object` (`Container`, `PodSpec`,
 `ResourceRequirements`, an `IngressRule`, a PVC used as a template) get no generated
@@ -440,7 +445,7 @@ builds applies as written — and that is where most of the markers are.
 Against the current pins, the walk finds 128 maturity-carrying construction-side
 fields, of which 43 require a feature gate (42 in `k8s.io/api`, one in
 `k8s.io/apiextensions-apiserver`); 25 are documented alpha, 14 beta and 66
-deprecated, the remaining 23 are gated without a documented stability claim, and 93
+deprecated, the remaining 23 are gated without a documented stability claim, and 95
 distinct status types are skipped. No CRD module kure pins uses `+featureGate` at
 all. These numbers move with the pins and are not asserted by any test; the pins
 themselves are not restated here — every generated row carries the module and
@@ -490,7 +495,7 @@ where it asks about built-ins specifically. The cluster-scoped half of
 the old table survives as a frozen fixture in the `internal/kinds` tests, dated to
 the pins it was taken at. That is deliberate: the derivation fails silently by
 construction — an absent, unread or detached marker resolves to `Namespaced`, which
-is also the right answer for 97 of the 138 kinds — so without a literal to compare
+is also the right answer for 99 of the 140 kinds — so without a literal to compare
 against, a regression in the comment reattachment below would turn cluster-scoped
 kinds namespaced with nothing going red. A pin bump that legitimately re-scopes a kind
 is an edit to that fixture, made with the upstream change named in the commit message.

@@ -51,6 +51,7 @@ var modules = map[string]source{
 	"sigs.k8s.io/gateway-api":                           {Dir: "config/crd/standard"},
 	"github.com/fluxcd/helm-controller/api":             {Bundle: true},
 	"github.com/fluxcd/image-automation-controller/api": {Bundle: true},
+	"github.com/fluxcd/image-reflector-controller/api":  {Bundle: true},
 	"github.com/fluxcd/kustomize-controller/api":        {Bundle: true},
 	"github.com/fluxcd/notification-controller/api":     {Bundle: true},
 	"github.com/fluxcd/source-controller/api":           {Bundle: true},
