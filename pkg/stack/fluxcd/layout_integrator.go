@@ -1195,7 +1195,7 @@ func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 			}
 			continue
 		}
-		items, err := meta.ExtractList(obj)
+		items, err := typedListItems(obj)
 		if err != nil {
 			return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
 		}
@@ -1502,4 +1502,32 @@ func normalizeRulesPlacement(rules layout.LayoutRules) layout.LayoutRules {
 		rules.FluxPlacement = layout.DefaultLayoutRules().FluxPlacement
 	}
 	return rules
+}
+
+// typedListItems returns the items of a typed List as the writers serialize
+// them, the rule the layout package's pre-write check reads them by
+// (resourceItems). An item held as a runtime.RawExtension is serialized from
+// its raw JSON when it has any and from its object otherwise
+// (RawExtension.MarshalJSON), so it is read in that order: meta.ExtractList
+// reads the object first, and would name an object the written file does not
+// hold when the two differ. The raw JSON is returned as a runtime.Unknown.
+func typedListItems(list runtime.Object) ([]runtime.Object, error) {
+	ptr, err := meta.GetItemsPtr(list)
+	if err != nil {
+		return nil, err
+	}
+	raws, ok := ptr.(*[]runtime.RawExtension)
+	if !ok {
+		return meta.ExtractList(list)
+	}
+	items := make([]runtime.Object, 0, len(*raws))
+	for _, item := range *raws {
+		switch {
+		case item.Raw != nil:
+			items = append(items, &runtime.Unknown{Raw: item.Raw})
+		case item.Object != nil:
+			items = append(items, item.Object)
+		}
+	}
+	return items, nil
 }

@@ -298,7 +298,7 @@ func listItems(obj runtime.Object) (items []runtime.Object, isList bool, err err
 	if !meta.IsListType(obj) {
 		return nil, false, nil
 	}
-	extracted, err := meta.ExtractList(obj)
+	extracted, err := typedListItems(obj)
 	if err != nil {
 		return nil, false, err
 	}
@@ -706,4 +706,31 @@ func eachIdentity(l *ManifestLayout, key identityKey, fn func(id string) error) 
 		}
 	}
 	return nil
+}
+
+// typedListItems returns the items of a typed List as the writers serialize
+// them, for listItems. An item held as a runtime.RawExtension is serialized
+// from its raw JSON when it has any and from its object otherwise
+// (RawExtension.MarshalJSON), so it is read in that order: meta.ExtractList
+// reads the object first, and would name an object the written file does not
+// hold when the two differ. The raw JSON is returned as a runtime.Unknown.
+func typedListItems(list runtime.Object) ([]runtime.Object, error) {
+	ptr, err := meta.GetItemsPtr(list)
+	if err != nil {
+		return nil, err
+	}
+	raws, ok := ptr.(*[]runtime.RawExtension)
+	if !ok {
+		return meta.ExtractList(list)
+	}
+	items := make([]runtime.Object, 0, len(*raws))
+	for _, item := range *raws {
+		switch {
+		case item.Raw != nil:
+			items = append(items, &runtime.Unknown{Raw: item.Raw})
+		case item.Object != nil:
+			items = append(items, item.Object)
+		}
+	}
+	return items, nil
 }

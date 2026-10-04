@@ -1324,6 +1324,29 @@ func TestIntegrateWithLayout_OpensListsAsKustomizeDoes(t *testing.T) {
 			},
 			collides: true,
 		},
+		// An item that carries both raw JSON and an object is serialized from
+		// the raw JSON, so that is the object the layout holds.
+		"a typed List holding a raw Kustomization beside another object": {
+			emitted: func(t *testing.T) client.Object {
+				raw, err := webKs(t).MarshalJSON()
+				if err != nil {
+					t.Fatalf("MarshalJSON: %v", err)
+				}
+				return rawListOf(runtime.RawExtension{Raw: raw, Object: fluxKustomization("other", "platform")})
+			},
+			collides: true,
+		},
+		"a typed List holding another raw Kustomization beside the object": {
+			emitted: func(t *testing.T) client.Object {
+				other := webKs(t)
+				other.SetName("other")
+				raw, err := other.MarshalJSON()
+				if err != nil {
+					t.Fatalf("MarshalJSON: %v", err)
+				}
+				return rawListOf(runtime.RawExtension{Raw: raw, Object: webKs(t)})
+			},
+		},
 		"a typed List with an empty item": {
 			emitted: func(t *testing.T) client.Object { return rawListOf(runtime.RawExtension{}) },
 		},

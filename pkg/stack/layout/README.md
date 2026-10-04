@@ -140,7 +140,8 @@ a List counts, where a List is what kustomize opens as one: an object whose kind
 and that has an `items` field, opened again when an item is itself such a List. A kind that does
 not end in `List` is one object, whatever fields it has, and so is a List kind without `items`; a
 List whose `items` is null holds nothing. An item a typed List holds as raw JSON
-(`runtime.RawExtension`) is read as the object it encodes. A Flux Kustomization without object
+(`runtime.RawExtension`) is read as the object it encodes, also when the item carries an object
+beside the raw JSON: the raw JSON is what is written. A Flux Kustomization without object
 metadata, which an item of a typed List can be, is refused: its namespace and name cannot be read.
 
 ### 2. LayoutRules Configuration

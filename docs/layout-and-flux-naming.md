@@ -482,7 +482,8 @@ and a List among the items is opened as well (`inlineAnyEmbeddedLists` in kustom
 `api/resource/factory.go`). A kind that does not end in `List` is one object whatever fields it
 has, as is a List kind without `items`; null `items` hold nothing. A typed List can hold an item
 as raw JSON (`runtime.RawExtension`), which the writers serialize as the object it encodes: it is
-read as that object, and an empty item holds nothing. The integrator's
+read as that object, and an empty item holds nothing. An item that carries both raw JSON and an
+object is written from the raw JSON, so the raw JSON is what is read. The integrator's
 `resourceItems` (`layout_integrator.go:1138`) follows the same rule, so the integrator and the
 writers agree on which Kustomizations and Sources a tree holds. An item of a typed List need not
 carry object metadata (`metav1.List` has none): the integrator opens such a List too, and reads
