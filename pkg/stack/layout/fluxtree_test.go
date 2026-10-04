@@ -108,6 +108,39 @@ func rawListOf(name string, items ...runtime.RawExtension) *rawItems {
 	return l
 }
 
+// rawItemSlice is a named slice type of raw items, as a hand-written list type
+// can declare its Items field.
+type rawItemSlice []runtime.RawExtension
+
+// namedRawItems is a typed List whose Items field has a named slice type.
+type namedRawItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             rawItemSlice `json:"items"`
+}
+
+func (l *namedRawItems) DeepCopyObject() runtime.Object {
+	c := *l
+	c.Items = slices.Clone(l.Items)
+	return &c
+}
+
+// pointerRawItems is a typed List whose Items field is a pointer to the slice.
+type pointerRawItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             *[]runtime.RawExtension `json:"items"`
+}
+
+func (l *pointerRawItems) DeepCopyObject() runtime.Object {
+	c := *l
+	if l.Items != nil {
+		items := slices.Clone(*l.Items)
+		c.Items = &items
+	}
+	return &c
+}
+
 // rawJSON is obj as the raw JSON item of a typed List.
 func rawJSON(t *testing.T, obj *unstructured.Unstructured) runtime.RawExtension {
 	t.Helper()
@@ -499,6 +532,40 @@ func TestWriters_TypedListRawItems(t *testing.T) {
 				item := rawJSON(t, fluxKs("kustomize.toolkit.fluxcd.io/v1", "flux-system", "cart"))
 				item.Object = shopKs()
 				writtenFiles(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), nested(item)))
+			})
+			// The same holds whatever the Go type of the List's Items field:
+			// a named slice type, or a pointer to the slice.
+			t.Run("raw Kustomization beside an object, named slice type/"+name, func(t *testing.T) {
+				item := rawJSON(t, shopKs())
+				item.Object = fluxKs("kustomize.toolkit.fluxcd.io/v1", "flux-system", "cart")
+				inner := &namedRawItems{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "List"}, Items: rawItemSlice{item}}
+				inner.Name, inner.Namespace = "inner", "default"
+				err := writeRefused(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), rawListOf("outer", runtime.RawExtension{Object: inner})))
+				want := `layouts "p" and "p/c" both hold the Flux Kustomization flux-system/shop`
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Fatalf("err = %v, want it to contain %q", err, want)
+				}
+			})
+			t.Run("raw Kustomization beside an object, pointer to the slice/"+name, func(t *testing.T) {
+				item := rawJSON(t, shopKs())
+				item.Object = fluxKs("kustomize.toolkit.fluxcd.io/v1", "flux-system", "cart")
+				inner := &pointerRawItems{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "List"}, Items: &[]runtime.RawExtension{item}}
+				inner.Name, inner.Namespace = "inner", "default"
+				err := writeRefused(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), rawListOf("outer", runtime.RawExtension{Object: inner})))
+				want := `layouts "p" and "p/c" both hold the Flux Kustomization flux-system/shop`
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Fatalf("err = %v, want it to contain %q", err, want)
+				}
+			})
+			// A nil pointer to the slice cannot be read as a list of items:
+			// it is refused with a read error.
+			t.Run("nil pointer to the slice/"+name, func(t *testing.T) {
+				inner := &pointerRawItems{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "List"}}
+				inner.Name, inner.Namespace = "inner", "default"
+				err := writeRefused(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), rawListOf("outer", runtime.RawExtension{Object: inner})))
+				if err == nil || !strings.Contains(err.Error(), "read list items") {
+					t.Fatalf("err = %v, want a list read error", err)
+				}
 			})
 			t.Run("empty item/"+name, func(t *testing.T) {
 				writtenFiles(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), nested(runtime.RawExtension{})))
