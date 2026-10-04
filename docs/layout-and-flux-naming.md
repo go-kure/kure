@@ -346,7 +346,9 @@ entry points without an integrator. `pkg/stack/layout/origin_unitname_test.go` c
 by `pkg/stack/validate_copy_test.go`, `pkg/stack/layout/origin_copy_test.go` and
 `dependency_copy_test.go` in `pkg/stack/fluxcd` and `pkg/stack/argocd`. `unset_output_test.go` in
 `pkg/stack/fluxcd` and `pkg/stack/argocd` compares what a cluster without the field produces,
-byte for byte, with output stored from the code before the field existed.
+byte for byte, with output stored from the code before the field existed (one tree, the all-flat
+`merged.txt`, was rewritten since for the path move of go-kure/kure#979 item 1, with no object
+name changed).
 
 ### Directory name separate from the Kustomization name ([go-kure/kure#972](https://github.com/go-kure/kure/issues/972))
 
