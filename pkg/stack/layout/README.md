@@ -424,6 +424,10 @@ the bundles' `DependsOn` / `NamedDependsOn` to units, dropping dependencies insi
 `IndexOrigins` refuses a cycle in those dependencies; waits a workflow adds on top (Flux health
 checks, creation order) are checked by that workflow.
 Bundles are resolved by `Name`, which is unique, so a copy of a bundle resolves like the original.
+A `DependsOn` copy that leaves `KustomizationName` empty or sets the rendered bundle's is that
+bundle. `IndexOrigins` refuses one that sets another name, naming both, and one that stands for a
+bundle whose Kustomization name is also in the dependant's `NamedDependsOn` (one dependency in both
+lists), in the words `stack.ValidateCluster` uses.
 
 `NodeGrouping: GroupFlat` (as in the `CentralizedControlPlane` preset) moves a merged node's
 umbrella children and augmenter layouts under the absorbing node, where they keep their own

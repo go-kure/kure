@@ -88,6 +88,21 @@ without renaming the bundle or moving its directory; `UnitName()` returns the na
 Under the ArgoCD workflow the same value names the Application. A `NamedDependsOn` entry names
 such a resource, so it reaches a bundle that sets `KustomizationName` by that value.
 
+A `DependsOn` entry need not be the cluster's own bundle: another `Bundle` value with the same
+`Name` is a copy of it, and a cluster resolves it by `Name` to that bundle, so the dependency is on
+that bundle's Kustomization. Leave `KustomizationName` empty on a copy, or set the bundle's.
+`ValidateCluster` refuses, before it validates the bundles one by one:
+
+- a copy that sets another `KustomizationName` than the bundle it stands for, naming both;
+- a copy of a bundle whose Kustomization name is also in the dependant's `NamedDependsOn`: one
+  dependency in both lists.
+
+`Bundle.Validate` sees one bundle and no cluster, so it compares a `DependsOn` entry with
+`NamedDependsOn` on the name that entry carries itself. One valid input is refused for that reason:
+a name-only copy of a bundle that sets `KustomizationName`, beside a `NamedDependsOn` entry equal
+to the bundle's `Name` (which then means another Kustomization), is reported as one dependency in
+both lists. Set the bundle's `KustomizationName` on the copy to say which one is meant.
+
 `NewBundle` validates the bundle it builds; fields set afterwards are checked by
 `Bundle.Validate`:
 
