@@ -38,8 +38,8 @@ func intentCluster(intent stack.DeliveryIntent) *stack.Cluster {
 
 // TestDeliveryIntent_Refused: the ArgoCD workflow has no mapping for a
 // delivery intent, so CreateLayoutWithResources and IntegrateWithLayout refuse
-// a set one under every grouping, naming the application, rather than
-// rendering its objects as if nothing was asked.
+// a set one under the default, flat and by-name rule sets, naming the
+// application, rather than rendering its objects as if nothing was asked.
 func TestDeliveryIntent_Refused(t *testing.T) {
 	intents := map[string]stack.DeliveryIntent{
 		"prune": {PruneProtection: true},
