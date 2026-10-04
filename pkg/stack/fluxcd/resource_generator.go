@@ -749,12 +749,14 @@ func (g *ResourceGenerator) GetVersion() string {
 
 // checkOwnUnitName refuses a DependsOn bundle or an umbrella child that would
 // get b's own Kustomization name (Bundle.UnitName), two children that would
-// get one name, and b itself or its name among its own dependencies or, as a
-// Flux Kustomization in the generator's namespace and unless b.Wait is true,
-// its health checks. The cluster and layout entry points have
-// layout.IndexOrigins refuse two rendered bundles with one name and drop a
-// unit's reference to itself; GenerateForBundle has no index, and without
-// this check it would emit a Kustomization that depends on or waits for itself.
+// get one name, b itself among its Children, and b itself or its name among
+// its own dependencies or, as a Flux Kustomization in the generator's
+// namespace and unless b.Wait is true, its health checks. A longer cycle of
+// Children is Bundle.Validate's to refuse. The cluster and layout entry
+// points have layout.IndexOrigins refuse two rendered bundles with one name
+// and drop a unit's reference to itself; GenerateForBundle has no index, and
+// without this check it would emit a Kustomization that depends on or waits
+// for itself.
 func (g *ResourceGenerator) checkOwnUnitName(b *stack.Bundle) error {
 	refuse := func(field string, first, second *stack.Bundle) error {
 		return errors.ResourceValidationError("Bundle", b.Name, field,
@@ -791,12 +793,18 @@ func (g *ResourceGenerator) checkOwnUnitName(b *stack.Bundle) error {
 					b.GetPath(), b.UnitName()), nil)
 		}
 	}
+	// Before InitializeUmbrella, which follows Children and would not
+	// return from a bundle that is its own child.
+	if slices.Contains(b.Children, b) {
+		return errors.ResourceValidationError("Bundle", b.Name, "children",
+			fmt.Sprintf("bundle %q lists itself in Children: an umbrella cannot be its own child", b.Name), nil)
+	}
 	if len(b.Children) > 0 {
 		b.InitializeUmbrella()
 	}
 	children := make(map[string]*stack.Bundle, len(b.Children))
 	for _, child := range b.Children {
-		if child == nil || child == b {
+		if child == nil {
 			continue
 		}
 		if child.UnitName() == b.UnitName() {

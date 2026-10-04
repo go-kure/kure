@@ -153,10 +153,10 @@ From `kustomizationForBundle` (`resource_generator.go`):
 | `HealthChecks`, `Patches`, `PostBuild` | same | omitted |
 | `DependsOn`, `NamedDependsOn` | `spec.dependsOn[].name` | omitted |
 
-Under the integrator, dependencies and health checks that name a bundle are mapped to the
-Kustomization of the directory that renders it, and a reference to its own directory is dropped
-(`generateForUnit`). Bundles that share a directory must agree on every reconcile setting
-(`mergeIntoUnit` in `resource_generator.go`).
+Under the integrator, dependencies and health checks that name a bundle's Kustomization are mapped
+to the Kustomization of the directory that renders the bundle, and a reference to its own
+directory is dropped (`generateForUnit`). Bundles that share a directory must agree on every
+reconcile setting (`mergeIntoUnit` in `resource_generator.go`).
 
 The umbrella health checks exist only in generator output: `pkg/stack` exports nothing that returns
 them.
@@ -192,7 +192,7 @@ FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since go
 | Input | Result | Source |
 |---|---|---|
 | Two bundles with the same name | refused wherever the origin index is built: the integrator under every placement, `GenerateFromLayout` and the ArgoCD workflow. `WalkCluster` and the writers alone do not check it. | `IndexOrigins` in `origin.go`; callers `addIntegratedFluxToLayout`, `ResourceGenerator.GenerateFromLayout` and `WorkflowEngine.generateFromLayout` in `pkg/stack/argocd/argo.go` |
-| Two bundles whose Kustomizations would get one name, whether it comes from `KustomizationName` or from `Name` (go-kure/kure#971) | refused in the same places; the error names both bundles by their paths. `GenerateForBundle` builds no index and sees one bundle: it refuses a `DependsOn` bundle, an umbrella child, a `NamedDependsOn` entry or a health check with that bundle's own Kustomization name, and two children with one. | `IndexOrigins` in `origin.go`; `checkOwnUnitName`, called from `ResourceGenerator.GenerateForBundle`, in `resource_generator.go` |
+| Two bundles whose Kustomizations would get one name, whether it comes from `KustomizationName` or from `Name` (go-kure/kure#971) | refused in the same places; the error names both bundles by their paths. `GenerateForBundle` builds no index and sees one bundle: it refuses a `DependsOn` bundle, an umbrella child or a `NamedDependsOn` entry with that bundle's own Kustomization name, a health check on that Kustomization unless `Wait` is true, and two children with one name. | `IndexOrigins` in `origin.go`; `checkOwnUnitName`, called from `ResourceGenerator.GenerateForBundle`, in `resource_generator.go` |
 | A payload Kustomization named like the one generated for its bundle (the bundle's name, unless the bundle sets `KustomizationName`: go-kure/kure#971), in the namespace of the generated Kustomization (the generator's `DefaultNamespace`) | refused under `FluxSeparate`. Under the two integrated placements it is refused unless it sits in the layout that hosts the generated Kustomization and has the same `spec.path`: that one is kept as it is, and none is generated for the bundle. A bundle rendered in the walked root layout is its own host, so its payload can meet this. The check compares namespace and name, so it does not refuse the same name in another namespace. | `integratedPlacement.host`, `integratedPlacement.add`, `crKey` and `addSeparateFluxToLayout` in `layout_integrator.go`; `kustomizationForBundle` |
 | A Kustomization name generated twice in one integration | refused by the integrator. The key is the bare name: every generated Kustomization is in `DefaultNamespace`. | `integratedPlacement.claim` in `layout_integrator.go`; `kustomizationForBundle` and `createKustomizationForLayout` |
 | `FluxIntegratedPerLayout` with `ApplicationGrouping: GroupByName`, application named like its bundle's Kustomization (the common case: a bundle without `KustomizationName` and an application with the bundle's name) | refused as a name used twice | same |
@@ -295,10 +295,13 @@ and describes what the code does now.
 - **Uniqueness:** two bundles whose Kustomizations would get one name are refused wherever the
   origin index is built, and the error names both bundles by their paths (`IndexOrigins`).
   `Bundle.Name` stays unique as well, because a copied bundle is resolved by its `Name`.
-  `GenerateForBundle` builds no index: it refuses a `DependsOn` bundle, an umbrella child, a
-  `NamedDependsOn` entry or a health check with the bundle's own Kustomization name, and two
-  children with one (`checkOwnUnitName` in `resource_generator.go`); the entry points that build
-  the index drop a unit's reference to itself instead.
+  `GenerateForBundle` builds no index: it refuses a `DependsOn` bundle, an umbrella child or a
+  `NamedDependsOn` entry with the bundle's own Kustomization name, the bundle itself in
+  `DependsOn` or `Children`, and two children with one name (`checkOwnUnitName` in
+  `resource_generator.go`). A health check on the bundle's own Kustomization is refused too,
+  unless `Wait` is true: Flux ignores `spec.healthChecks` under `spec.wait`, so that check is
+  written as given. The entry points that build the index drop a unit's reference to itself
+  instead.
 - **Validation:** `Bundle.Validate` compares the names in effect wherever it compares against a
   Kustomization reference: a `DependsOn` bundle against a `NamedDependsOn` entry, a child against
   both lists, and a child that names its parent in `NamedDependsOn` (`validateChildren` in
@@ -321,7 +324,12 @@ and describes what the code does now.
 - **Not checked yet:** the value is not held to the rules for a Kubernetes object name;
   go-kure/kure#978 adds that check.
 
-**Breaking.** None when the field is unset: every generated object and path is unchanged.
+**Breaking.** With the field unset, every object and path generated for a model that was valid is
+unchanged. `GenerateForBundle` used to return a Kustomization that depends on or waits for itself
+for a bundle that depends on another bundle with the same `Name`, lists itself in `DependsOn`,
+names itself in `NamedDependsOn`, or (unless `Wait` is true) has a health check on its own
+Kustomization; each is an error now, with or without the field. A bundle that lists itself in
+`Children` is an error as well, where the call did not return before.
 
 **Tests.** `pkg/stack/fluxcd/kustomization_name_test.go` covers the name, `dependsOn` and umbrella
 health checks under the three placements, the payload Kustomization, the duplicate name and the
