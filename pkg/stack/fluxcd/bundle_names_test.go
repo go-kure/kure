@@ -54,16 +54,16 @@ func TestFluxWorkflow_BundleNameOverLimit(t *testing.T) {
 	}
 	entryPoints := []struct {
 		name string
-		run  func(c *stack.Cluster) (any, error)
+		run  func(t *testing.T, c *stack.Cluster) (any, error)
 	}{
-		{"GenerateFromCluster", func(c *stack.Cluster) (any, error) {
+		{"GenerateFromCluster", func(_ *testing.T, c *stack.Cluster) (any, error) {
 			objs, err := fluxstack.NewResourceGenerator().GenerateFromCluster(c, layout.DefaultLayoutRules())
 			if objs == nil {
 				return nil, err
 			}
 			return objs, err
 		}},
-		{"GenerateFromLayout", func(c *stack.Cluster) (any, error) {
+		{"GenerateFromLayout", func(t *testing.T, c *stack.Cluster) (any, error) {
 			ml, err := layout.WalkCluster(c, layout.DefaultLayoutRules())
 			if err != nil {
 				t.Fatalf("WalkCluster refused a name only Flux limits: %v", err)
@@ -78,8 +78,8 @@ func TestFluxWorkflow_BundleNameOverLimit(t *testing.T) {
 	for _, p := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout} {
 		entryPoints = append(entryPoints, struct {
 			name string
-			run  func(c *stack.Cluster) (any, error)
-		}{"CreateLayoutWithResources " + string(p), func(c *stack.Cluster) (any, error) {
+			run  func(t *testing.T, c *stack.Cluster) (any, error)
+		}{"CreateLayoutWithResources " + string(p), func(_ *testing.T, c *stack.Cluster) (any, error) {
 			ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, layout.LayoutRules{
 				BundleGrouping:      layout.GroupFlat,
 				ApplicationGrouping: layout.GroupFlat,
@@ -99,7 +99,7 @@ func TestFluxWorkflow_BundleNameOverLimit(t *testing.T) {
 				if err := stack.ValidateCluster(c); err != nil {
 					t.Fatalf("ValidateCluster() = %v, want nil: the limit is not the model's", err)
 				}
-				got, err := ep.run(c)
+				got, err := ep.run(t, c)
 				if err == nil {
 					t.Fatal("generated without an error, want the over-limit refusal")
 				}
