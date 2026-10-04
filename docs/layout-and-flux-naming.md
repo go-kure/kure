@@ -327,7 +327,8 @@ and describes what the code does now.
   go-kure/kure#978 adds that check.
 
 **Breaking.** With the field unset, every object and path generated for a model that was valid is
-unchanged. `GenerateForBundle` does not call `Bundle.Validate`, and it used to return a
+unchanged by that change (item 1 of go-kure/kure#979 has since moved the root node's bundle's
+directory, see its section). `GenerateForBundle` does not call `Bundle.Validate`, and it used to return a
 Kustomization that depends on or waits for itself for a bundle that depends on another bundle
 whose Kustomization gets the same name, lists itself in `DependsOn`, names its own Kustomization
 in `NamedDependsOn`, or (unless `Wait` is true) has a health check on its own Kustomization. For
