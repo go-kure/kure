@@ -204,7 +204,9 @@ The intent covers every object the application emits, the objects a layout augme
 application's own directory, and the ConfigMaps built from that directory's `configMapGenerator`
 entries. Each workflow engine maps it to its own mechanism: the Flux workflow writes per-object
 annotations (see [Flux Engine](/api-reference/flux-engine/)); the ArgoCD workflow has no mapping
-yet and refuses an application that sets one. `Bundle.Prune` and `Bundle.Force` stay the
+yet and refuses an application that sets one. The Flux `GenerateFromCluster` refuses one too: it
+returns Kustomizations and Sources and none of the application's objects, so use
+`CreateLayoutWithResources`. `Bundle.Prune` and `Bundle.Force` stay the
 bundle-wide switches on the generated Flux Kustomization and are independent of this field.
 
 ### ApplicationConfig Interface

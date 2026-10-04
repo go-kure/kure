@@ -56,9 +56,10 @@ func NewResourceGenerator() *ResourceGenerator {
 // It refuses, in this order: FluxIntegratedPerLayout rules (below), whatever
 // the cluster; invalid rules with an absent or empty cluster, which otherwise
 // yields nothing; a cluster stack.ValidateCluster refuses (umbrella cycles,
-// disjointness violations, etc.), before the walk; and rules the walk refuses
-// (layout.LayoutRules.Validate), reported like every other walk error. Invalid
-// rules are therefore an error whatever the cluster is.
+// disjointness violations, etc.), before the walk; rules the walk refuses
+// (layout.LayoutRules.Validate), reported like every other walk error; and,
+// after the walk, a cluster in which an application sets a delivery intent
+// (below). Invalid rules are therefore an error whatever the cluster is.
 //
 // The spec.path values are the directories WalkCluster writes under rules, so
 // rules must be the ones the caller writes the tree with: with
@@ -72,6 +73,13 @@ func NewResourceGenerator() *ResourceGenerator {
 // children (application, augmenter and bundle-less node directories) exist
 // only where the integrator places them, so this list would leave them applied
 // by nothing: use CreateLayoutWithResources with those rules.
+//
+// A set delivery intent (stack.Application.Delivery) is refused, naming the
+// application. The intent is annotations on the application's objects, which
+// the integrator sets on a layout; this call discards the layout it walks and
+// returns none of those objects, so the intent would be dropped without a
+// word: use CreateLayoutWithResources. GenerateFromLayout does not refuse it:
+// its caller holds the layout and may have integrated it.
 //
 // The walk renders every application and runs every LayoutAugmenter, so their
 // errors surface here.
@@ -91,6 +99,9 @@ func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.L
 	if err != nil {
 		return nil, errors.ResourceValidationError("Cluster", c.Name, "layout",
 			fmt.Sprintf("failed to walk the cluster with the given layout rules: %v", err), err)
+	}
+	if err := refuseDeliveryIntent(ml); err != nil {
+		return nil, err
 	}
 	return g.GenerateFromLayout(ml, c)
 }
