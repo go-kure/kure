@@ -778,6 +778,10 @@ a `spec.path`, so the name is always checked. A `FluxInstance` gets a `spec.sync
 `BootstrapConfig.SourceURL` is set: without one, flux-operator mode and `GenerateFluxInstance` do
 not use the root name and do not check it.
 
+In `gotk` mode a named root is also an object name: the generated `GitRepository` or
+`OCIRepository` and the bootstrap Kustomization's `sourceRef` carry it. There the name must be a
+DNS-1123 subdomain as well, with or without a `SourceURL`; `Prod` and `prod_root` are refused.
+
 ## Configuration
 
 ### Kustomization Mode
@@ -930,7 +934,7 @@ Flux does not double-apply the child's resources.
 
 ## Non-Bundle Child Layout CRs
 
-In `FluxIntegratedPerLayout` mode every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle gets a `Kustomization` CR in its parent's `Resources`, with `spec.path` set to `child.FullRepoPath()`. (A child that renders a bundle already has that bundle's CR there.) This covers:
+In `FluxIntegratedPerLayout` mode every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle gets a `Kustomization` CR in its parent's `Resources`, with `spec.path` set to `child.FullRepoPath()`. (A child that renders a bundle already has that bundle's CR there.) The CR's name is checked with `stack.ValidateKustomizationName` where the CR is created: a layout whose name gives one that is not a DNS-1123 subdomain of at most 63 characters is refused with the layout's path. This covers:
 
 - **Application layouts** — per-app layouts (`ApplicationGrouping: GroupByName`, or augmenter apps, which keep a directory under `GroupFlat`). The CR is named after the layout.
 - **Augmenter sub-layouts** — hook-group child layouts added by a `LayoutAugmenter` are children of an app layout. `spec.dependsOn` is populated from `ManifestLayout.DependsOn`, enabling ordered reconciliation between hook groups.

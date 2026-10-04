@@ -10,6 +10,7 @@ import (
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/errors"
@@ -90,6 +91,9 @@ func (bg *BootstrapGenerator) GenerateBootstrap(config *stack.BootstrapConfig, r
 		// The bootstrap Kustomization's spec.path is built from the root
 		// name with or without a SourceURL.
 		if err := validateRootName(rootNode); err != nil {
+			return nil, err
+		}
+		if err := validateRootSourceName(rootNode); err != nil {
 			return nil, err
 		}
 		return bg.generateGotkBootstrap(config, rootNode)
@@ -306,6 +310,23 @@ func validateRootName(rootNode *stack.Node) error {
 	}
 	if err := stack.ValidateDirectoryName(name); err != nil {
 		return errors.ResourceValidationError("Node", name, "name", err.Error(), nil)
+	}
+	return nil
+}
+
+// validateRootSourceName checks the root node's name where it becomes an
+// object name. In gotk mode a named root names the generated GitRepository or
+// OCIRepository and the bootstrap Kustomization's sourceRef (sourceName), so
+// the name has to be a DNS-1123 subdomain. No root node and an unnamed root
+// take [DefaultSourceName].
+func validateRootSourceName(rootNode *stack.Node) error {
+	name := rootName(rootNode)
+	if name == "" {
+		return nil
+	}
+	if problems := validation.IsDNS1123Subdomain(name); len(problems) > 0 {
+		return errors.ResourceValidationError("Node", name, "name",
+			fmt.Sprintf("%q is not a valid name for the bootstrap source: %s", name, strings.Join(problems, "; ")), nil)
 	}
 	return nil
 }

@@ -973,6 +973,9 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 				continue
 			}
 			name := layoutCRName(child)
+			if err := stack.ValidateKustomizationName(name); err != nil {
+				return errors.ResourceValidationError("ManifestLayout", child.FullRepoPath(), "name", err.Error(), nil)
+			}
 			// The CR applies child's directory, so child must be written as
 			// one: pinned here, a writer's Config-wide AppFileSingle cannot
 			// turn it into a file in its parent (the layout's own mode wins).
