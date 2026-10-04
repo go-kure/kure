@@ -10,9 +10,11 @@ live-cluster upgrade effects are not a constraint.
 
 ## Roles
 
-- **kure** generates YAML objects from Go APIs: every base Kubernetes object with its full spec,
-  the layout of those objects in directories, and the Flux objects that deliver them.
-- **An application-level consumer** (for example launcher) turns one application into kure's model
+- **kure** generates YAML objects from Go APIs: base Kubernetes objects with their full spec, the
+  layout of those objects in directories, and the Flux objects that deliver them. Covering every
+  base kind is its responsibility; the kinds without a constructor today are listed under
+  [#981](https://github.com/go-kure/kure/issues/981).
+- **An application-level consumer** turns one application into kure's model
   (`Cluster`, `Node`, `Bundle`, `Application`). It is delivery-agnostic: it puts no Flux
   Kustomizations, health checks, reconciliation settings or Flux annotations on top of an
   application. What a delivery engine needs to know (ordering, prune protection, force replace)
@@ -21,9 +23,14 @@ live-cluster upgrade effects are not a constraint.
   Flux Kustomizations within and between applications.
 
 A consumer never renames, moves or deletes what kure produced. If it has to, kure lacks a parameter
-or has a bug, and the fix belongs in kure. Every generated name has a default and an override.
-Two objects of the same kind in the same namespace never share a name; objects of different kinds
-may.
+or has a bug, and the fix belongs in kure.
+
+Two rules follow from that. They are the target, not today's behaviour: sections 1.7 and 1.8 show
+where they do not hold yet, and Part 2 is what makes them hold.
+
+- Every generated name has a default and an override.
+- Two objects of the same kind in the same namespace never share a name; objects of different
+  kinds may.
 
 ## Part 1: current behaviour (v0.2.0-beta.15)
 
@@ -338,8 +345,11 @@ delivery engine's annotations. The Flux workflow turns that intent into the Flux
   layout is recorded. The walker therefore records each application's objects (it has both in
   `renderApps`, `walker.go:386-421`). The layout package stays engine-neutral.
 - **The Flux mapping:** `fluxcd.LayoutIntegrator` sets `kustomize.toolkit.fluxcd.io/prune: disabled`
-  and `kustomize.toolkit.fluxcd.io/force: enabled` on those objects. A refused integration restores
-  them, as it restores the rest of the tree.
+  and `kustomize.toolkit.fluxcd.io/force: enabled` on those objects.
+- **Refusal leaves no annotation behind:** a refused integration restores the objects. The
+  existing restore does not do that by itself: `saveLayouts` (`layout_integrator.go:110-137`)
+  clones the slices but keeps the same object pointers, so an annotation set in place would
+  survive. The integrator therefore snapshots the annotations it changes, or annotates copies.
 - **Conflicts:** an object that already carries the annotation with another value is refused.
 - **Generated ConfigMaps:** a ConfigMap built by a `configMapGenerator` has no object to annotate.
   Its spec is a name and a file list (`manifest.go:80-83`), and the walker holds only a stand-in
@@ -353,6 +363,8 @@ delivery engine's annotations. The Flux workflow turns that intent into the Flux
   Flux placement and grouping, and no other application's objects do.
 - The same holds for force replace.
 - A conflicting existing annotation is refused.
+- After a refused integration no object carries an annotation the integrator added, with a test
+  for that failure path.
 - A generated ConfigMap behaves as the ticket decides, with a test for it.
 
 ### Bootstrap refuses an empty distribution ([#975](https://github.com/go-kure/kure/issues/975))
@@ -428,7 +440,10 @@ rejects it.
   exists because Flux labels the objects it applies with the Kustomization's name, and a label
   value is limited to 63 characters; the ticket verifies this against kustomize-controller.
 - **Names that become directories** (node names, bundle and `DirName`, application names under
-  `ApplicationGrouping: GroupByName`) must be non-empty, contain no `/`, and not be `.` or `..`.
+  `ApplicationGrouping: GroupByName`) must be non-empty, contain neither `/` nor `\`, and not be
+  `.` or `..`. Both separators are refused because `FullRepoPath` joins the name with
+  `filepath.Join` (`manifest.go:101-107`), which treats `\` as a separator on Windows: a name such
+  as `..\outside` would otherwise leave the layout directory.
   The unnamed root is exempt: an empty root name is valid and never becomes a directory name
   (section 1.2, cluster wrapper; `walker.go:28-39`, `pkg/stack/layout/parentpath_test.go:436-446`).
 - **Where:** bundle and node names are validated in `Bundle.Validate` (`bundle.go:174-270`) and
@@ -440,8 +455,8 @@ rejects it.
 - **Existing fixtures** with a name the rules refuse are renamed in the same change
   (`pkg/stack/fluxcd/fluxcd_test.go:621-631` uses `Y-infra`, `Y-services` and `Y-apps`).
 
-**Acceptance.** A 64-character Kustomization name, a name with `/`, and an upper-case name are each
-refused, naming the path. Dotted names and an unnamed root stay accepted.
+**Acceptance.** A 64-character Kustomization name, an upper-case name, and a directory name with
+`/` or with `\` are each refused, naming the path. Dotted names and an unnamed root stay accepted.
 
 ### Behaviour bugs ([#979](https://github.com/go-kure/kure/issues/979))
 
@@ -507,6 +522,7 @@ The ticket decides each new dependency.
 
 **Acceptance.** Every kind above that the `k8s.io/api` version in use provides has a constructor
 that sets identity only, covered by the whole-object identity test, and appears in the generated
-kind tables. For `APIService`, `VerticalPodAutoscaler`, `ImageRepository` and `ImagePolicy` the
-ticket decides per kind; a kind that is added meets the same criteria, and a kind that is not is
-listed with its reason.
+kind tables. The family README and every guide mapped to the family are updated in the same
+change, as the repository requires for a new kind (`AGENTS.md:220-222`). For `APIService`,
+`VerticalPodAutoscaler`, `ImageRepository` and `ImagePolicy` the ticket decides per kind; a kind
+that is added meets the same criteria, and a kind that is not is listed with its reason.
