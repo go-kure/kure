@@ -321,12 +321,16 @@ func TestKeptKustomization_SourceTwiceInItsBuild(t *testing.T) {
 
 // TestKeptKustomization_UnreadableIsRefused: a kept Kustomization that cannot
 // be read in typed form is an error naming the layout that holds it and the
-// object, in place of a Kustomization the checks leave out.
+// object, in place of a Kustomization the checks leave out. The refusal comes
+// after the integration placed b's Kustomization, and leaves the caller's tree
+// as it was.
 func TestKeptKustomization_UnreadableIsRefused(t *testing.T) {
 	build := func() *stack.Cluster {
 		a := &stack.Node{Name: "a", Bundle: srBundle("a", cmApp("a-app"))}
-		r := &stack.Node{Name: "r", Children: []*stack.Node{a}}
+		b := &stack.Node{Name: "b", Bundle: srBundle("b", cmApp("b-app"))}
+		r := &stack.Node{Name: "r", Children: []*stack.Node{a, b}}
 		a.SetParent(r)
+		b.SetParent(r)
 		return &stack.Cluster{Name: "demo", Node: r}
 	}
 	mangle := func(content map[string]any) {
