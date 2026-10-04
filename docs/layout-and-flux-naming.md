@@ -201,7 +201,8 @@ FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since go
 | Two single-file layouts (`AppFileSingle`) in one directory | accepted when their file names differ; refused when they resolve to the same file | `checkLayoutTree` |
 | Dotted names | accepted unchanged | none |
 | A bundle's Kustomization name (its `KustomizationName`, or its name without one) over 63 characters | refused by the Flux workflow where it builds the Kustomization (go-kure/kure#978); accepted by `Bundle.Validate` and by the ArgoCD workflow | `checkKustomizationName` in `resource_generator.go` |
-| A Kustomization name over 63 characters that is not a bundle's: one derived for a layout, a `NamedDependsOn` entry | accepted unchanged | none |
+| A Kustomization name derived for a layout under `FluxIntegratedPerLayout` (an application directory's name, a bundle-less node's `<path>-node`) that is over 63 characters or not a DNS-1123 subdomain | refused by the integrator where it creates that Kustomization (go-kure/kure#978) | `stack.ValidateKustomizationName`, called in `layout_integrator.go` |
+| A `NamedDependsOn` entry over 63 characters | accepted unchanged | none |
 | A hand-built tree with the same Kustomization twice in one layout, or in layouts one kustomize build includes | refused by the writers, as for any object held twice | `checkResourceIdentities` (one layout) and `checkBuildIdentities` (one build), both called from `checkLayoutTree` |
 | A hand-built tree with the same Kustomization in layouts that separate builds apply | refused by the writers, in any tree: Kustomization namespace/name is unique across the tree (go-kure/kure#977) | `checkKustomizationNames` in `treecheck.go` |
 | An `UmbrellaChild` layout, or any other directory its parent does not list, that no Kustomization applies | refused by the writers when the root is marked `SetFluxBuild` (go-kure/kure#977); written, and listed by nobody, in an unmarked tree | `checkUnappliedLayouts` in `treecheck.go` |
@@ -689,8 +690,17 @@ generates. kure shortens and rewrites nothing; the caller chooses a valid name.
   `bootstrap_generator.go`): always in gotk mode (the bootstrap Kustomization's `spec.path`), and
   in flux-operator mode and `GenerateFluxInstance` only when a sync is built, that is when
   `SourceURL` is set (the FluxInstance's `sync.path`). Without a sync the root name is not read.
-- **Not covered here:** a name kure derives is checked where it is derived
-  ([go-kure/kure#973](https://github.com/go-kure/kure/issues/973)); a layout name changed after
+  In gotk mode a named root also names the generated `GitRepository` or `OCIRepository` and the
+  bootstrap Kustomization's `sourceRef`, so there it must be a DNS-1123 subdomain as well
+  (`validateRootSourceName`), with or without a `SourceURL`.
+- **Per-layout Kustomizations.** Under `FluxIntegratedPerLayout` a directory that renders no
+  bundle gets a Kustomization named after its layout: an application directory's name, or
+  `<path>-node` for a bundle-less node. The integrator checks that name with
+  `stack.ValidateKustomizationName` where it creates the Kustomization, and refuses with the
+  layout's path. The check is on the result, whatever derived it.
+- **Not covered here:** how kure derives a Kustomization name, and the check of the names that
+  change adds, are
+  [go-kure/kure#973](https://github.com/go-kure/kure/issues/973)'s; a layout name changed after
   the walk is contained by the writers' check
   ([go-kure/kure#977](https://github.com/go-kure/kure/issues/977)). Names of payload objects are
   out of scope.
@@ -699,17 +709,18 @@ generates. kure shortens and rewrites nothing; the caller chooses a valid name.
 `KustomizationName` that is not a DNS-1123 subdomain (an upper-case letter, an underscore); a
 bundle or node name that is not one path segment; an unnamed node below the root; an application
 name that is not one path segment where the application gets a directory; in the Flux workflow, a
-Kustomization name over 63 characters; a root node name that is not one path segment where the
-bootstrap builds a path from it. None of these could be applied or written safely. Existing
-fixtures with such names are renamed in the same change: the upper-case bundles `Y-infra`,
+Kustomization name over 63 characters, and under `FluxIntegratedPerLayout` a layout whose name
+cannot name its Kustomization; a root node name that is not one path segment where the bootstrap
+builds a path from it, or in gotk mode not a DNS-1123 subdomain. None of these could be applied or
+written safely. Existing fixtures with such names are renamed in the same change: the upper-case bundles `Y-infra`,
 `Y-services` and `Y-apps` in `pkg/stack/fluxcd/fluxcd_test.go` become lower-case, `webA` and `webB`
 become `web-a` and `web-b`, and two unnamed child nodes in an ArgoCD test get names.
 
 **Tests.** `pkg/stack/names_test.go` holds the rule tables and the model's checks, the
 `KustomizationName` value included. `bundle_names_test.go` in `pkg/stack/fluxcd` covers the
 63-character limit at every entry point: a bundle and an umbrella descendant, the name in effect,
-a merged bundle's name, and a reference outside the cluster. `bootstrap_names_test.go` covers the
-root name, `pkg/stack/layout/names_test.go` and `flatten_test.go` the application names, and
+a merged bundle's name, a reference outside the cluster, and the per-layout Kustomization names.
+`bootstrap_names_test.go` covers the root name under both rules, `pkg/stack/layout/names_test.go` and `flatten_test.go` the application names, and
 `pkg/stack/argocd` (`argo_test.go`, `kustomization_name_test.go`) the names over 63 characters
 that the ArgoCD workflow renders.
 

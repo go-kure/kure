@@ -782,7 +782,9 @@ The root node's name becomes a segment of the path the bootstrap applies, so it 
 directory name wherever a path is built from it: always in `"gotk"` mode, and in
 `"flux-operator"` mode when `SourceURL` is set (without one the `FluxInstance` has no sync and the
 name is not used). A name holding `/`, `\` or a NUL byte, or `.` or `..`, is refused; no root node
-and an unnamed root are valid.
+and an unnamed root are valid. In `"gotk"` mode a named root also names the generated source and
+the bootstrap Kustomization's `sourceRef`, so there it must be a DNS-1123 subdomain as well:
+`Prod` and `prod_root` are refused.
 
 ### Bootstrap namespace
 

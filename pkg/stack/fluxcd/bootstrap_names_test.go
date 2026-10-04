@@ -153,3 +153,50 @@ func TestBootstrap_RootNodeName_NilConfig(t *testing.T) {
 		}
 	}
 }
+
+// TestBootstrap_RootNodeName_SourceName: in gotk mode a named root also names
+// the generated GitRepository or OCIRepository and the bootstrap
+// Kustomization's sourceRef, so it has to be a DNS-1123 subdomain as well as
+// a directory name. It is refused with or without a SourceURL: the sourceRef
+// is written either way. Flux-operator mode uses the name only in sync.path
+// and keeps accepting it.
+func TestBootstrap_RootNodeName_SourceName(t *testing.T) {
+	config := func(mode, url string) *stack.BootstrapConfig {
+		return &stack.BootstrapConfig{
+			Enabled:     true,
+			FluxMode:    mode,
+			FluxVersion: "v2.4.0",
+			Registry:    "registry.example.com",
+			SourceURL:   url,
+			SourceRef:   "main",
+			SourceKind:  "GitRepository",
+		}
+	}
+	const url = "https://github.com/example/fleet.git"
+	for _, name := range []string{"Prod", "prod_root"} {
+		root := &stack.Node{Name: name}
+		for _, u := range []string{url, ""} {
+			objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.ModeGotk, u), root)
+			if err == nil {
+				t.Fatalf("gotk mode, root %q, SourceURL %q: generated, want the name refused", name, u)
+			}
+			if objs != nil {
+				t.Errorf("gotk mode, root %q: got %d objects next to the error", name, len(objs))
+			}
+			for _, want := range []string{"'" + name + "'", "not a valid name for the bootstrap source"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("gotk mode, root %q: got %v, want it to contain %q", name, err, want)
+				}
+			}
+		}
+
+		objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.DefaultFluxMode, url), root)
+		if err != nil || len(objs) == 0 {
+			t.Fatalf("flux-operator mode, root %q: got %d objects, %v; want the bootstrap", name, len(objs), err)
+		}
+		fi, err := fluxstack.NewBootstrapGenerator().GenerateFluxInstance(config(fluxstack.DefaultFluxMode, url), root)
+		if err != nil || fi == nil || fi.Spec.Sync == nil || path.Base(fi.Spec.Sync.Path) != name {
+			t.Fatalf("GenerateFluxInstance, root %q: got %+v, %v; want a sync path ending in the name", name, fi, err)
+		}
+	}
+}
