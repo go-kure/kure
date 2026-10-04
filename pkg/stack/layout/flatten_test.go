@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -338,5 +339,51 @@ func TestRenderUmbrellaChildren_NilChild(t *testing.T) {
 	results := parent.Children
 	if len(results) != 1 {
 		t.Errorf("expected 1 result (nil child skipped), got %d", len(results))
+	}
+}
+
+// TestCheckApplicationDirs: an application's name is checked on the layout
+// that is its own directory, and nowhere else. The layout that absorbs such a
+// directory (flattenSingleTier) is the parent's directory and keeps the
+// parent's name, so the application's name is no longer checked there. The
+// last case holds whichever way the flatten decides: the name is refused
+// exactly when the application's layout is still in the tree.
+func TestCheckApplicationDirs(t *testing.T) {
+	app := stack.NewApplication("a/b", "ns", &flattenFakeConfig{})
+	tree := func() *ManifestLayout {
+		child := &ManifestLayout{Name: app.Name, Namespace: "root"}
+		child.origin = origin{app: app, appDir: true}
+		return &ManifestLayout{Name: "root", Namespace: ".", Children: []*ManifestLayout{child}}
+	}
+
+	if err := checkApplicationDirs(nil); err != nil {
+		t.Errorf("nil tree: %v", err)
+	}
+
+	err := checkApplicationDirs(tree())
+	if err == nil {
+		t.Fatal("an application directory named a/b was accepted")
+	}
+	for _, want := range []string{`'a/b'`, `it names a directory in "root"`, "path separator"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %s", err, want)
+		}
+	}
+
+	// A layout that carries the application without being its directory.
+	absorbed := &ManifestLayout{Name: "root", Namespace: "."}
+	absorbed.origin = origin{app: app}
+	if err := checkApplicationDirs(absorbed); err != nil {
+		t.Errorf("a layout that only carries the application: %v", err)
+	}
+
+	flat := flattenSingleTier(tree(), LayoutRules{FlattenSingleTier: true})
+	kept := len(flat.Children) == 1
+	err = checkApplicationDirs(flat)
+	if kept && err == nil {
+		t.Error("after the flatten the application's directory is still in the tree, and a/b was accepted")
+	}
+	if !kept && err != nil {
+		t.Errorf("after the flatten the application has no directory of its own, and its name was refused: %v", err)
 	}
 }

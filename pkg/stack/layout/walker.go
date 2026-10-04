@@ -125,7 +125,7 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 		if err != nil {
 			return nil, err
 		}
-		return flattenSingleTier(ml, rules), nil
+		return checkedLayout(flattenSingleTier(ml, rules))
 	}
 
 	// Traditional layout without cluster name. The root node's parent is the
@@ -139,7 +139,42 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 		return nil, err
 	}
 
-	return flattenSingleTier(ml, rules), nil
+	return checkedLayout(flattenSingleTier(ml, rules))
+}
+
+// checkedLayout returns the finished tree ml, or the error of
+// checkApplicationDirs on it.
+func checkedLayout(ml *ManifestLayout) (*ManifestLayout, error) {
+	if err := checkApplicationDirs(ml); err != nil {
+		return nil, err
+	}
+	return ml, nil
+}
+
+// checkApplicationDirs checks, with stack.ValidateDirectoryName, the name of
+// every application that has a directory of its own in the finished tree ml.
+// stack.ValidateCluster takes no layout rules and cannot know which
+// applications get one, so the check is the walker's. It runs on the tree the
+// walk returns, after FlattenSingleTier: an application whose layout was
+// absorbed into its parent's directory names no directory, and its name is
+// not checked, as when it is written flat.
+func checkApplicationDirs(ml *ManifestLayout) error {
+	if ml == nil {
+		return nil
+	}
+	if ml.origin.appDir {
+		app := ml.origin.app
+		if err := stack.ValidateDirectoryName(app.Name); err != nil {
+			return errors.ResourceValidationError("Application", app.Name, "name",
+				fmt.Sprintf("it names a directory in %q: %v", ml.Namespace, err), nil)
+		}
+	}
+	for _, child := range ml.Children {
+		if err := checkApplicationDirs(child); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // walkClusterWithClusterName creates a cluster-aware layout where the cluster
@@ -245,6 +280,9 @@ func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*Mani
 			if len(ml.Children) == 0 && len(ml.Resources) == 0 && len(ml.origin.nodes) == 0 {
 				ml = nil
 			}
+		}
+		if err := checkApplicationDirs(ml); err != nil {
+			return nil, err
 		}
 		if ml != nil {
 			layouts[pkgKey] = ml
@@ -382,9 +420,9 @@ func renderUmbrellaChildren(children []*stack.Bundle, parent *ManifestLayout, g 
 // of its own; an augmenter application that wants its own layout still gets
 // one, so its extra files and generators do not collide with its siblings'.
 // Otherwise every application gets its own directory inside target's, and a
-// LayoutAugmenter is invoked on it. An application that gets a directory has
-// its name checked with stack.ValidateDirectoryName first. It returns every
-// object the applications emitted, wherever they were written.
+// LayoutAugmenter is invoked on it. The name of an application that gets a
+// directory is checked once the tree is complete (checkApplicationDirs). It
+// returns every object the applications emitted, wherever they were written.
 func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) ([]client.Object, error) {
 	var all []client.Object
 	for _, app := range apps {
@@ -407,17 +445,13 @@ func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) (
 			target.Resources = append(target.Resources, objs...)
 			continue
 		}
-		// Only here does the application's name become a directory, so only
-		// here is it checked: stack.ValidateCluster takes no layout rules
-		// and cannot know.
-		if err := stack.ValidateDirectoryName(app.Name); err != nil {
-			return nil, errors.ResourceValidationError("Application", app.Name, "name",
-				fmt.Sprintf("it names a directory in %q: %v", target.FullRepoPath(), err), nil)
-		}
+		// Only here does the application's name become a directory. Whether
+		// it stays one is known when the tree is complete, so the name is
+		// checked there (checkApplicationDirs).
 		appLayout := g.newLayout(app.Name, target.FullRepoPath())
 		appLayout.Resources = objs
 		appLayout.Mode = KustomizationExplicit
-		appLayout.origin = origin{app: app}
+		appLayout.origin = origin{app: app, appDir: true}
 		if err := augmentAppLayout(app, appLayout); err != nil {
 			return nil, err
 		}
