@@ -306,7 +306,9 @@ What changed, and what to do:
   paths named directories the tree did not have. It now takes the rules as a second argument, on
   `stack.Workflow` and on both engines, and each path is a directory a walk with those rules
   writes. Pass the rules you write the tree with; `layout.DefaultLayoutRules()` keeps the paths it
-  returned before.
+  returned before. The Flux engine refuses rules with `FluxIntegratedPerLayout`: that tree's child
+  directories are applied by Kustomizations only `CreateLayoutWithResources` places, so use that
+  entry point for the placement.
 - **Integrate walked layouts only.** `IntegrateWithLayout` refuses a layout `layout.WalkCluster`
   did not build from the same cluster — build the tree with `WalkCluster` instead of by hand.
 - **PerLayout hosts.** Under `FluxIntegratedPerLayout` a node bundle's CR now sits in the parent of

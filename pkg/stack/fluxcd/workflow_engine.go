@@ -42,7 +42,8 @@ func NewWorkflowEngine() *WorkflowEngine {
 // the spec.path values of a walk with rules (see
 // ResourceGenerator.GenerateFromCluster). rules must be a layout.LayoutRules
 // value: anything else, nil included, is refused rather than replaced by
-// defaults.
+// defaults. Rules with FluxIntegratedPerLayout are refused as well: use
+// CreateLayoutWithResources for that placement.
 func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster, rules stack.LayoutRulesProvider) ([]client.Object, error) {
 	layoutRules, ok := rules.(layout.LayoutRules)
 	if !ok {

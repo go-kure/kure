@@ -287,7 +287,10 @@ for _, obj := range objects {
 `GenerateFromCluster` walks the cluster with the layout rules you pass: every Flux
 Kustomization `spec.path` and ArgoCD Application `source.path` is a directory that walk writes,
 so pass the rules you write the tree with (`layout.DefaultLayoutRules()` for the defaults). The
-rules must be a `layout.LayoutRules` value; anything else, `nil` included, is refused.
+rules must be a `layout.LayoutRules` value; anything else, `nil` included, is refused. Neither
+engine returns a list for rules with `FluxIntegratedPerLayout` (the Flux Kustomizations that
+apply that tree's child directories exist only in a layout): use `CreateLayoutWithResources`
+with the Flux engine for that placement.
 `CreateLayoutWithResources` takes the same rules and also returns the layout it walked, with
 the resources placed in it.
 
