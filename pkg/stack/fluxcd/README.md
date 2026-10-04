@@ -183,6 +183,16 @@ reference. A bundle that lists the bundle `db` in `DependsOn` and the name `db` 
 `NamedDependsOn` is valid when `db` sets `KustomizationName: "db-cr"`: the two are different
 Kustomizations. The entry `db-cr` is then the duplicate.
 
+A `DependsOn` entry that is a copy of a bundle of the cluster (another `Bundle` value with its
+`Name`) is that bundle: `spec.dependsOn` gets the bundle's Kustomization name whether the copy
+carries that `KustomizationName` or none. Every entry point that takes a cluster or a walked
+layout refuses a copy that sets another `KustomizationName`, naming both, and a copy of a bundle
+whose Kustomization name is also in `NamedDependsOn`. `GenerateForBundle` has no cluster to resolve
+a copy against and writes the name the entry carries. One valid input is refused: a name-only
+copy of a bundle that sets `KustomizationName`, beside a `NamedDependsOn` entry equal to the
+bundle's `Name`; set the bundle's `KustomizationName` on the copy (see the
+[stack](/api-reference/stack/)).
+
 ## Kustomization paths
 
 The layout tree is the only authority on directories. Every walked layout records which stack

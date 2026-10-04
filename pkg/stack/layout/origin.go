@@ -95,6 +95,14 @@ type OriginIndex struct {
 //     naming both bundles by their paths;
 //   - a layout rendering a node or bundle in AppFileSingle mode: it is
 //     written into its Namespace, not into its own directory;
+//   - a DependsOn bundle that is a copy of a rendered bundle (another bundle
+//     with its Name, which UnitName resolves to it) and sets a
+//     KustomizationName other than the rendered bundle's, naming both. A copy
+//     that leaves the field empty is the rendered bundle;
+//   - such a copy of a bundle whose Kustomization name is also in the
+//     dependant's NamedDependsOn: one dependency in both lists, which
+//     Bundle.Validate cannot see through the copy. stack.ValidateCluster
+//     refuses both in the same words (see checkDependencyCopies);
 //   - a dependency cycle between reconciliation units (see Units).
 func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) {
 	if root == nil || c == nil || c.Node == nil {
@@ -158,10 +166,47 @@ func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) 
 	if err := ix.checkCoverage(c); err != nil {
 		return nil, err
 	}
+	if err := ix.checkDependencyCopies(); err != nil {
+		return nil, err
+	}
 	if err := ix.checkUnitCycles(); err != nil {
 		return nil, err
 	}
 	return ix, nil
+}
+
+// checkDependencyCopies refuses a DependsOn bundle that is a copy of a
+// rendered bundle and contradicts it. UnitName resolves a bundle by its Name,
+// so the copy stands for the rendered bundle and the dependency is on that
+// bundle's Kustomization, whatever the copy says: a copy that sets another
+// KustomizationName names a Kustomization the dependency does not reach, and a
+// copy of a bundle whose Kustomization name is also in the dependant's
+// NamedDependsOn is one dependency in both lists. A copy that leaves
+// KustomizationName empty says nothing and is accepted.
+//
+// stack.ValidateCluster refuses both first, in these words, on every path
+// that walks the cluster; this is the check for a tree walked earlier.
+func (ix *OriginIndex) checkDependencyCopies() error {
+	for _, b := range ix.bundles {
+		for _, dep := range b.DependsOn {
+			if dep == nil {
+				continue
+			}
+			of := ix.byName[dep.Name]
+			if of == nil || of == dep {
+				continue
+			}
+			if dep.KustomizationName != "" && dep.KustomizationName != of.KustomizationName {
+				return errors.Errorf("bundle %q depends on a copy of bundle %q with KustomizationName %q, but that bundle has KustomizationName %q: a DependsOn bundle is resolved by its Name, so a copy leaves KustomizationName empty or sets the bundle's",
+					b.GetPath(), of.GetPath(), dep.KustomizationName, of.KustomizationName)
+			}
+			if slices.Contains(b.NamedDependsOn, of.UnitName()) {
+				return errors.Errorf("bundle %q: dependency %q appears in both DependsOn and NamedDependsOn: its DependsOn bundle %q is resolved by its Name to the bundle whose Kustomization has that name",
+					b.GetPath(), of.UnitName(), dep.Name)
+			}
+		}
+	}
+	return nil
 }
 
 // Units returns the layouts that render bundles, in layout pre-order. Each is
@@ -174,8 +219,9 @@ func (ix *OriginIndex) Units() []*ManifestLayout { return ix.units }
 // the name in effect (Bundle.UnitName) of the first bundle the layout
 // rendering b renders. b is resolved by its Name, which IndexOrigins proves
 // unique, so a copy of a rendered bundle (the fluent builder copies bundles)
-// resolves like the original. A bundle outside the index keeps its own name
-// in effect.
+// resolves like the original, whatever KustomizationName the copy carries
+// (IndexOrigins refuses a DependsOn copy that sets another one than the
+// rendered bundle's). A bundle outside the index keeps its own name in effect.
 func (ix *OriginIndex) UnitName(b *stack.Bundle) string {
 	if rendered := ix.byName[b.Name]; rendered != nil {
 		return ix.unitOf(rendered)

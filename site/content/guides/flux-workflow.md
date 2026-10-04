@@ -393,6 +393,11 @@ that refers to a bundle's Kustomization follows the name in effect (`Bundle.Unit
 first bundle. A `NamedDependsOn` entry names a Kustomization, so it reaches a bundle that sets the
 field by that value, not by the bundle's name.
 
+A `DependsOn` entry that is a copy of a bundle of the cluster (another `Bundle` value with the same
+`Name`) is that bundle, and the dependency is on its Kustomization. Leave `KustomizationName` empty
+on the copy or set the bundle's: a copy that sets another name is refused, and so is a copy of a
+bundle whose Kustomization name is also in `NamedDependsOn`.
+
 Two bundles whose Kustomizations would get one name are refused, whether the name comes from the
 field or from the bundle's name. The field is also the way out when a bundle's payload contains a
 Flux Kustomization named like the bundle: give the bundle another `KustomizationName` and the two
