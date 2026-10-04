@@ -187,6 +187,9 @@ func checkUntouched(t *testing.T, ml *layout.ManifestLayout) {
 			t.Errorf("%s %q has an annotations field: %v", o.GetKind(), o.GetName(), o.GetAnnotations())
 		}
 	}
+	if len(gens) == 0 {
+		t.Error("no generator in the tree")
+	}
 	for _, g := range gens {
 		if g.Annotations != nil {
 			t.Errorf("generator %q has annotations %v", g.Name, g.Annotations)
@@ -205,6 +208,7 @@ func TestDeliveryIntent_UnsetChangesNothing(t *testing.T) {
 				ml := integrated(t, deliveryCluster(stack.DeliveryIntent{}), recursiveRules(grouping, placement))
 				checkUntouched(t, ml)
 				for writer, w := range writeAll(t, ml) {
+					files := 0
 					err := filepath.WalkDir(w.root, func(p string, d os.DirEntry, err error) error {
 						if err != nil || d.IsDir() {
 							return err
@@ -213,6 +217,7 @@ func TestDeliveryIntent_UnsetChangesNothing(t *testing.T) {
 						if err != nil {
 							return err
 						}
+						files++
 						for _, s := range []string{"options:", "annotations:", pruneKey, forceKey} {
 							if strings.Contains(string(data), s) {
 								t.Errorf("%s: %s contains %q", writer, p, s)
@@ -222,6 +227,9 @@ func TestDeliveryIntent_UnsetChangesNothing(t *testing.T) {
 					})
 					if err != nil {
 						t.Fatal(err)
+					}
+					if files == 0 {
+						t.Errorf("%s: no file written", writer)
 					}
 				}
 			})
@@ -312,6 +320,9 @@ func checkRestored(t *testing.T, ml *layout.ManifestLayout, keep string, keepAnn
 	if !kept {
 		t.Errorf("no object %q in the tree", keep)
 	}
+	if len(gens) == 0 {
+		t.Error("no generator in the tree")
+	}
 	for _, g := range gens {
 		if g.Annotations != nil {
 			t.Errorf("generator %q has annotations %v after the refusal", g.Name, g.Annotations)
@@ -349,16 +360,24 @@ func TestDeliveryIntent_LaterRefusalRestoresObjects(t *testing.T) {
 					t.Fatalf("got %v, want the duplicate Kustomization refused", err)
 				}
 				objs, gens := layoutObjects(t, ml)
+				kept := false
 				for _, o := range objs {
 					_, found, _ := unstructured.NestedFieldNoCopy(o.Object, "metadata", "annotations")
 					switch {
 					case o.GetName() == "own-cm":
+						kept = true
 						if got := o.GetAnnotations(); !mapsEqual(got, map[string]string{pruneKey: "disabled"}) {
 							t.Errorf("own-cm has annotations %v after the refusal, want its own", got)
 						}
 					case found:
 						t.Errorf("%s %q has an annotations field after the refusal: %v", o.GetKind(), o.GetName(), o.GetAnnotations())
 					}
+				}
+				if !kept {
+					t.Error(`no object "own-cm" in the tree`)
+				}
+				if len(gens) == 0 {
+					t.Error("no generator in the tree")
 				}
 				for _, g := range gens {
 					if g.Annotations != nil {
@@ -396,6 +415,9 @@ func TestDeliveryIntent_GeneratorConflictRefused(t *testing.T) {
 				t.Errorf("the generator's own annotations became %v", got)
 			}
 			objs, _ := layoutObjects(t, ml)
+			if len(objs) == 0 {
+				t.Error("no object in the tree")
+			}
 			for _, o := range objs {
 				if _, found, _ := unstructured.NestedFieldNoCopy(o.Object, "metadata", "annotations"); found {
 					t.Errorf("%s %q has an annotations field after the refusal", o.GetKind(), o.GetName())
@@ -521,9 +543,9 @@ func TestDeliveryIntent_PatchScopeSeesGeneratedConfigMaps(t *testing.T) {
 	}
 }
 
-// TestDeliveryIntent_KeepsOtherAnnotations: an object's and a generator's own
-// annotations stay beside the ones the intent adds, and a value that is
-// already the wanted one is accepted.
+// TestDeliveryIntent_KeepsOtherAnnotations: an object's own annotations stay
+// beside the ones the intent adds, and a value that is already the wanted one
+// is accepted.
 func TestDeliveryIntent_KeepsOtherAnnotations(t *testing.T) {
 	app := stack.NewApplication("app", "default", &fakeAppConfig{objs: []*client.Object{
 		annotatedCM("noted", "example.com/note", "x"),
@@ -791,9 +813,11 @@ func TestDeliveryIntent_ListIsDecidedByKind(t *testing.T) {
 	}
 	cases := map[string]struct {
 		obj client.Object
-		// self is the kind applied as one object, carrying the annotation;
+		// self is the kind applied as one object, carrying the annotation,
+		// and held the number of entries its own items array still has;
 		// items are the ConfigMaps applied from inside it, carrying it.
 		self  string
+		held  int
 		items []string
 	}{
 		"unstructured kind ending in List without items": {
@@ -826,6 +850,7 @@ func TestDeliveryIntent_ListIsDecidedByKind(t *testing.T) {
 				Items:      []corev1.ConfigMap{typedCM("held")},
 			},
 			self: "Inventory",
+			held: 1,
 		},
 	}
 	for name, tc := range cases {
@@ -853,6 +878,9 @@ func TestDeliveryIntent_ListIsDecidedByKind(t *testing.T) {
 							t.Errorf("%s: %s is applied with delivery annotations %v, want %v", writer, tc.self, got, want)
 						}
 						held, _, _ := unstructured.NestedSlice(o.Object, "items")
+						if len(held) != tc.held {
+							t.Errorf("%s: the %s holds %d items, want %d", writer, tc.self, len(held), tc.held)
+						}
 						for _, h := range held {
 							if m, _ := h.(map[string]any); m != nil {
 								if ann, ok, _ := unstructured.NestedMap(m, "metadata", "annotations"); ok {
