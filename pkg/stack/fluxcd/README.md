@@ -557,7 +557,9 @@ annotations on that application's objects, and on no other application's:
 `IntegrateWithLayout` (and so `CreateLayoutWithResources`) sets them, under all three placements
 and every grouping, on:
 
-- every object the application emits, the items of a `List` included (the envelope is left alone);
+- every object the application emits. For a `List` that is what it holds, a `List` inside it
+  included, and never the envelope. As in kustomize, an object is a `List` when its kind ends in
+  `List`; any other kind is one object, also when it has an `items` field;
 - every object a `LayoutAugmenter` adds to the application's own layout or a child layout below it;
 - every `configMapGenerator` of those layouts, as the entry's `options.annotations`, because
   kustomize builds those ConfigMaps after kure has written the tree.

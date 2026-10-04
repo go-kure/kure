@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -33,8 +34,8 @@ func deliveryAnnotations(d stack.DeliveryIntent) map[string]string {
 
 // applyDeliveryIntents sets, for every application the tree under ml records
 // (layout.OriginApplicationObjects) whose Delivery asks for something, the
-// matching annotations on that application's objects — List items, not the
-// envelope — and, as options.annotations, on the configMapGenerators of its
+// matching annotations on that application's objects — what a List holds, not
+// the envelope (builtObjects) — and, as options.annotations, on the configMapGenerators of its
 // own layout and the layouts below it, since kustomize builds those
 // ConfigMaps later. An annotation already present with the wanted value is
 // left alone, so integrating a tree again changes nothing; one present with
@@ -67,7 +68,7 @@ func applyDeliveryIntents(ml *layout.ManifestLayout) (undo func(), err error) {
 				if obj == nil {
 					continue
 				}
-				items, err := objectItems(obj)
+				items, err := builtObjects(obj)
 				if err != nil {
 					return errors.Wrapf(err, "application %q: read list items", rec.Application.Name)
 				}
@@ -191,33 +192,49 @@ func describeObject(obj client.Object) string {
 	return fmt.Sprintf("%s %q", kind, name)
 }
 
-// objectItems returns r itself, or its items when r is a List: a List is an
-// envelope, and kustomize builds the items. The items are the List's own, so
-// a change to one is a change to the List.
-func objectItems(r client.Object) ([]client.Object, error) {
-	if u, ok := r.(*unstructured.Unstructured); ok && u.IsList() {
+// builtObjects returns the objects kustomize builds from r: r itself, or the
+// objects a List holds, a List among them opened the same way. As kustomize
+// decides it, an unstructured object is a List when its kind ends in "List"
+// (one without items holds nothing); any other kind is one object, whatever
+// fields it has. A typed object is a List when it is a list type. The items
+// are the List's own, so a change to one is a change to the List.
+func builtObjects(r client.Object) ([]client.Object, error) {
+	var items []client.Object
+	if u, ok := r.(*unstructured.Unstructured); ok {
+		if !strings.HasSuffix(u.GetKind(), "List") {
+			return []client.Object{r}, nil
+		}
+		if !u.IsList() {
+			return nil, nil
+		}
 		list, err := u.ToList()
 		if err != nil {
 			return nil, err
 		}
-		out := make([]client.Object, 0, len(list.Items))
 		for i := range list.Items {
-			out = append(out, &list.Items[i])
+			items = append(items, &list.Items[i])
 		}
-		return out, nil
-	}
-	if meta.IsListType(r) {
-		items, err := meta.ExtractList(r)
+	} else {
+		if !meta.IsListType(r) {
+			return []client.Object{r}, nil
+		}
+		extracted, err := meta.ExtractList(r)
 		if err != nil {
 			return nil, err
 		}
-		var out []client.Object
-		for _, item := range items {
+		for _, item := range extracted {
 			if obj, ok := item.(client.Object); ok {
-				out = append(out, obj)
+				items = append(items, obj)
 			}
 		}
-		return out, nil
 	}
-	return []client.Object{r}, nil
+	var out []client.Object
+	for _, item := range items {
+		built, err := builtObjects(item)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, built...)
+	}
+	return out, nil
 }
