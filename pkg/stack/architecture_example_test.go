@@ -24,5 +24,5 @@ func Example_architectureValidate() {
 		return nil
 	}
 	fmt.Println(check(c))
-	// Output: cluster is not layoutable: bundle "web" failed validation: validation failed for Bundle 'web' field 'applications': application at index 0 is nil
+	// Output: cluster is not layoutable: bundle "web" at node "apps" failed validation: validation failed for Bundle 'web' field 'applications': application at index 0 is nil
 }
