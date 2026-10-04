@@ -281,6 +281,19 @@ func bootstrapDir(rootNode *stack.Node) string {
 	return rootName(rootNode)
 }
 
+// sourceName returns the name a generated GitRepository or OCIRepository
+// carries: the root node's name when it has one, [DefaultSourceName] otherwise.
+// The bootstrap Kustomization's sourceRef must resolve through this same
+// function: it previously hardcoded [DefaultSourceName] while the source object
+// took the root node's name, so a named root node produced a Kustomization
+// pointing at a source that was never emitted.
+func sourceName(rootNode *stack.Node) string {
+	if name := rootName(rootNode); name != "" {
+		return name
+	}
+	return DefaultSourceName
+}
+
 // validateRootName checks the root node's name where it is about to become a
 // path segment: of the gotk bootstrap Kustomization's spec.path and of the
 // FluxInstance's sync.path. The bootstrap entry points take a node, not a
@@ -307,19 +320,6 @@ func validateSyncRootName(config *stack.BootstrapConfig, rootNode *stack.Node) e
 		return nil
 	}
 	return validateRootName(rootNode)
-}
-
-// sourceName returns the name a generated GitRepository or OCIRepository
-// carries: the root node's name when it has one, [DefaultSourceName] otherwise.
-// The bootstrap Kustomization's sourceRef must resolve through this same
-// function: it previously hardcoded [DefaultSourceName] while the source object
-// took the root node's name, so a named root node produced a Kustomization
-// pointing at a source that was never emitted.
-func sourceName(rootNode *stack.Node) string {
-	if name := rootName(rootNode); name != "" {
-		return name
-	}
-	return DefaultSourceName
 }
 
 // resolvedSourceKind returns the kind of source object bootstrap will emit for

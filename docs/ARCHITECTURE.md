@@ -1286,7 +1286,7 @@ guesses a name it was handed cannot be composed with a caller that generates nam
 | Layer | What it checks | Where |
 |---|---|---|
 | Constructors | Nothing. An unregistered type panics — a programming error, not input | `pkg/kubernetes/create.go` |
-| Domain model | Bundle rules: name present and usable as an object name (a DNS-1123 subdomain) and as a directory name, no nil application, no cycle or duplicate name among umbrella `Bundle.Children`, and no bundle owned by two umbrellas or by both an umbrella and a `Node`; no cycle in the `Node` tree, and every node name usable as a directory name | `stack.ValidateCluster`, `Bundle.Validate` |
+| Domain model | Bundle rules: name present, no nil application, no cycle or duplicate name among umbrella `Bundle.Children`, and no bundle owned by two umbrellas or by both an umbrella and a `Node`; no cycle in the `Node` tree | `stack.ValidateCluster`, `Bundle.Validate` |
 | Layout rules | Known option values, and a `ClusterName` without a `..` path segment; run by both walks on the rules as given, and by the Flux `IntegrateWithLayout` | `layout.LayoutRules.Validate` |
 | Explicit validators | Opt-in checks a caller runs when it wants them | `kubernetes.ValidatePodSpecPSA`, `gvk.ValidateGVK`, `io.ValidateOutputFormat` |
 | The cluster | Schema, admission, CRD structural rules | apply time |
