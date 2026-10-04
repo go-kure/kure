@@ -76,10 +76,6 @@ func (bg *BootstrapGenerator) GenerateBootstrap(config *stack.BootstrapConfig, r
 		return nil, nil
 	}
 
-	if err := validateRootName(rootNode); err != nil {
-		return nil, err
-	}
-
 	mode := config.FluxMode
 	if mode == "" {
 		mode = DefaultFluxMode
@@ -87,8 +83,16 @@ func (bg *BootstrapGenerator) GenerateBootstrap(config *stack.BootstrapConfig, r
 
 	switch mode {
 	case DefaultFluxMode:
+		if err := validateSyncRootName(config, rootNode); err != nil {
+			return nil, err
+		}
 		return bg.generateFluxOperatorBootstrap(config, rootNode)
 	case ModeGotk:
+		// The bootstrap Kustomization's spec.path is built from the root
+		// name with or without a SourceURL.
+		if err := validateRootName(rootNode); err != nil {
+			return nil, err
+		}
 		return bg.generateGotkBootstrap(config, rootNode)
 	default:
 		return nil, errors.NewValidationError("fluxMode", config.FluxMode, "BootstrapConfig",
@@ -265,6 +269,17 @@ func validateRootName(rootNode *stack.Node) error {
 	return nil
 }
 
+// validateSyncRootName checks the root node's name for a FluxInstance. The
+// name is used only in sync.path, and generateFluxInstance builds a sync only
+// when config has a SourceURL: without one the name goes nowhere and is not
+// checked.
+func validateSyncRootName(config *stack.BootstrapConfig, rootNode *stack.Node) error {
+	if config.SourceURL == "" {
+		return nil
+	}
+	return validateRootName(rootNode)
+}
+
 // sourceName returns the name a generated GitRepository or OCIRepository
 // carries: the root node's name when it has one, [DefaultSourceName] otherwise.
 // The bootstrap Kustomization's sourceRef must resolve through this same
@@ -407,7 +422,7 @@ func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig
 	if config == nil {
 		return nil, nil
 	}
-	if err := validateRootName(rootNode); err != nil {
+	if err := validateSyncRootName(config, rootNode); err != nil {
 		return nil, err
 	}
 	obj := bg.generateFluxInstance(config, rootNode)

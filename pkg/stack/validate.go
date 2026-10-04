@@ -17,8 +17,9 @@ import (
 //     descendants is rejected, naming the node where the cycle closes.
 //  1. Every Node bundle passes Bundle.Validate (which recursively validates
 //     umbrella Children subtrees including cycle detection and the name of
-//     each bundle), and every node name passes ValidateDirectoryName. A root
-//     node without a name is the one exception: it has no directory.
+//     each bundle), and every node name passes ValidateDirectoryName, under
+//     every layout grouping: the name is a segment of the node's path. A root
+//     node without a name is the one exception: it adds no segment.
 //  2. Disjointness: a bundle pointer appearing inside any umbrella Children
 //     subtree must NOT also be attached as the Bundle of any stack.Node.
 //  3. No umbrella child pointer is shared by two distinct umbrella parents.
@@ -40,11 +41,15 @@ func ValidateCluster(c *Cluster) error {
 	// cycle. Every later walk of the Node tree may then iterate nodeOrder
 	// instead of recursing again.
 	//
-	// The same walk checks every node name, because a node name becomes a
-	// directory. The path it reports is the one walked from the root, joined
-	// here rather than read from Node.ParentPath, which a hand-built tree may
-	// not have set. The root is exempt when it is unnamed: it has no directory
-	// of its own.
+	// The same walk checks every node name. A node name is a segment of the
+	// node's path in the model (Node.GetPath and the path map join the names
+	// with "/"), and of its directory when the layout gives it one. The check
+	// therefore does not depend on the layout rules: a child that flat node
+	// grouping absorbs into its parent's directory still has a path, and an
+	// empty name or one holding "/" can give two nodes the same one. The
+	// path the error reports is the one walked from the root, joined here
+	// rather than read from Node.ParentPath, which a hand-built tree may not
+	// have set. The root is exempt when it is unnamed: it adds no segment.
 	nodeBundles := make(map[*Bundle]*Node)
 	nodePaths := make(map[*Node]string)
 	onPath := make(map[*Node]bool)

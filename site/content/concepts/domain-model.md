@@ -28,6 +28,13 @@ Nodes map to **directory structures** in the GitOps repository. Each node can al
 
 `stack.ValidateCluster` rejects a cycle in the node graph (a `Node` reached again from one of its own descendants), naming the node where the cycle closes. It does not reject a node shared by two parents, but such a node is walked once under each parent, and Flux and ArgoCD generation refuse the result (`layout.IndexOrigins`: a node or bundle rendered by two layouts has no single path) — keep the graph a tree.
 
+`stack.ValidateCluster` also checks names, so a name that could never work is refused before anything is written, and nothing is shortened or rewritten:
+
+- A **node name** must be one path segment: not empty, not `.` or `..`, and without `/`, `\` or a NUL byte. Only the root node may be unnamed. The rule holds under every layout grouping, because a node name is a segment of the node's path in the model (`Node.GetPath`) before it is a directory.
+- A **bundle name**, including that of every umbrella child, must also be a valid Flux Kustomization name: a DNS-1123 subdomain of at most 63 characters (`my.app` is valid, `My-App` is not). The limit is 63 because Flux writes the name into a label value.
+
+The error names the node or bundle by its path. An application name is checked later, by the layout walk, and only where the layout rules give the application a directory of its own. The rules in full are in the [stack API reference](/api-reference/stack/).
+
 ### Bundle
 
 A deployment unit corresponding to a single GitOps reconciliation resource (e.g., a Flux Kustomization or ArgoCD Application). Bundles contain applications and support:

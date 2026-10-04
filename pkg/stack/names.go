@@ -38,10 +38,17 @@ func ValidateKustomizationName(name string) error {
 
 // ValidateDirectoryName reports whether name can be the name of one directory
 // in a rendered tree: a single path segment. It refuses an empty name, "."
-// and "..", and a name containing a path separator. Both "/" and "\" count on
-// every platform: the tree is joined with path/filepath, which reads "\" as a
-// separator on Windows, so a name such as `..\outside` would otherwise leave
-// the directory it is joined under.
+// and "..", a name containing a path separator, and a name containing a NUL
+// byte. Both "/" and "\" count on every platform: the tree is joined with
+// path/filepath, which reads "\" as a separator on Windows, so a name such as
+// `..\outside` would otherwise leave the directory it is joined under. A NUL
+// byte is refused because a directory with one in its name cannot be created,
+// so the write would fail after validation had passed. Characters that only
+// some file systems refuse are not checked.
+//
+// The same rule holds for a node name where no directory is made from it: a
+// node name is a segment of the node's path in the model (Node.GetPath), which
+// joins the names with "/".
 func ValidateDirectoryName(name string) error {
 	switch {
 	case name == "":
@@ -50,6 +57,8 @@ func ValidateDirectoryName(name string) error {
 		return errors.Errorf("%q is not a directory name of its own", name)
 	case strings.ContainsAny(name, `/\`):
 		return errors.Errorf("%q contains a path separator: a directory name is one path segment", name)
+	case strings.ContainsRune(name, 0):
+		return errors.Errorf("%q contains a NUL byte: a directory with one in its name cannot be created", name)
 	}
 	return nil
 }

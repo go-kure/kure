@@ -95,3 +95,43 @@ func TestBootstrap_RootNodeName(t *testing.T) {
 		t.Fatalf("bootstrap Kustomization spec.path = %v, want [%s]", paths, want)
 	}
 }
+
+// TestBootstrap_RootNodeName_NoSync: the name is checked only where a path is
+// built from it. Without a SourceURL the FluxInstance carries no sync, so the
+// root name is not used and any name generates. The gotk Kustomization's
+// spec.path is built with or without a SourceURL, so that mode still refuses.
+func TestBootstrap_RootNodeName_NoSync(t *testing.T) {
+	config := func(mode string) *stack.BootstrapConfig {
+		return &stack.BootstrapConfig{
+			Enabled:     true,
+			FluxMode:    mode,
+			FluxVersion: "v2.4.0",
+			Registry:    "registry.example.com",
+		}
+	}
+	root := &stack.Node{Name: "../outside"}
+
+	fi, err := fluxstack.NewBootstrapGenerator().GenerateFluxInstance(config(fluxstack.DefaultFluxMode), root)
+	if err != nil {
+		t.Fatalf("GenerateFluxInstance without a source: got %v, want nil", err)
+	}
+	if fi == nil || fi.Spec.Sync != nil {
+		t.Fatalf("GenerateFluxInstance without a source: got %+v, want a FluxInstance without sync", fi)
+	}
+
+	objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.DefaultFluxMode), root)
+	if err != nil {
+		t.Fatalf("GenerateBootstrap, flux-operator mode without a source: got %v, want nil", err)
+	}
+	if len(objs) == 0 {
+		t.Fatal("GenerateBootstrap, flux-operator mode without a source: got no objects")
+	}
+
+	objs, err = fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.ModeGotk), root)
+	if err == nil || !strings.Contains(err.Error(), "path separator") {
+		t.Fatalf("GenerateBootstrap, gotk mode without a source: got %v, want the name refused", err)
+	}
+	if objs != nil {
+		t.Fatalf("got %d objects next to the error", len(objs))
+	}
+}

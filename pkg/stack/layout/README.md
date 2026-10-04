@@ -132,8 +132,10 @@ with the same group, kind, namespace and name (kustomize cannot build it); objec
 share a file name are written into one multi-document file, as `FilePerKind` intends.
 
 A name that becomes a directory must be one path segment (`stack.ValidateDirectoryName`): not
-empty, not `.` or `..`, and without `/` or `\`. Bundle and node names are checked by
-`stack.ValidateCluster`, which every walk runs first. An application name is checked by the walk
+empty, not `.` or `..`, and without `/`, `\` or a NUL byte. Bundle and node names are checked by
+`stack.ValidateCluster`, which every walk runs first. That check does not look at the rules: a
+node that `NodeGrouping: GroupFlat` absorbs into its parent's directory is checked too, because
+its name is a segment of the node's path in the model. An application name is checked by the walk
 itself, and only where the rules give the application a directory: under `GroupByName`, or for an
 augmenter application that takes its own layout under either grouping. An application written
 into its bundle's directory keeps any name. The error names the application and the directory it
