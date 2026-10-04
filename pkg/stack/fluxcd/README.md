@@ -523,6 +523,14 @@ for _, obj := range objects {
 ```
 <!-- doc-example:end -->
 
+### Root node name
+
+The root node's name is a path segment of the gotk bootstrap Kustomization's `spec.path` and of
+the `FluxInstance`'s `spec.sync.path`. `GenerateBootstrap` and `GenerateFluxInstance` take a
+node, not a cluster, so they check that name themselves with `stack.ValidateDirectoryName`: a
+name holding `/` or `\`, or `.` or `..`, is refused. No root node and an unnamed root are valid;
+neither adds a segment.
+
 ### Sync name
 
 `BootstrapConfig.SyncName` becomes the `FluxInstance`'s `spec.sync.name`: the name flux-operator
@@ -612,6 +620,13 @@ Kustomizations.
 `b.Children`. `GenerateFromLayout` and `GenerateFromCluster` cover the whole
 umbrella closure, because the walker renders every umbrella child as a layout
 of its own.
+
+A bundle's name is its Kustomization's name, so the generator refuses one that
+`stack.ValidateKustomizationName` refuses: not a DNS-1123 subdomain, or longer
+than 63 characters. `GenerateFromCluster` gets that from `stack.ValidateCluster`.
+The name is checked again wherever a Kustomization is built from a bundle,
+which is what covers `GenerateForBundle`: it takes a bundle no validation has
+seen.
 
 ### Placement in layouts
 

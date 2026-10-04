@@ -195,8 +195,9 @@ func (a *Bundle) Validate() error {
 // the bundle's Flux Kustomization and, under layout.GroupByName, of its
 // directory. path is the bundle's path from the bundle Validate was called on,
 // so the error names the bundle and not only its last segment. It runs after
-// validateChildren, which has already refused a nil child and a cycle; seen
-// keeps a bundle reachable twice from being reported twice.
+// validateChildren, which has already refused a nil child, a child without a
+// name (reported with its parent and index, not with this path) and a cycle;
+// seen keeps a bundle reachable twice from being reported twice.
 func (a *Bundle) validateNames(path string, seen map[*Bundle]bool) error {
 	if seen[a] {
 		return nil

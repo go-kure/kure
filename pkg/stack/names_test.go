@@ -101,6 +101,13 @@ func TestBundleValidate_Names(t *testing.T) {
 			&Bundle{Name: "platform", Children: []*Bundle{{Name: "infra", Children: []*Bundle{{Name: long}}}}},
 			[]string{"'platform/infra/" + long + "'", "at most 63 characters"},
 		},
+		{
+			// The older check on Children refuses this one first: it names
+			// the parent and the child's index, not the path.
+			"umbrella grandchild without a name",
+			&Bundle{Name: "platform", Children: []*Bundle{{Name: "infra", Children: []*Bundle{{Name: ""}}}}},
+			[]string{"'infra'", "child at index 0 has empty name"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
