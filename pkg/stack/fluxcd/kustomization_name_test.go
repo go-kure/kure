@@ -321,6 +321,19 @@ func TestKustomizationName_GenerateForBundleRefusesItsOwnName(t *testing.T) {
 			want: []string{`"shop"`, `"shop/shop-api"`, `"apps-shop"`},
 		},
 		{
+			name: "two umbrella children with one KustomizationName",
+			build: func() *stack.Bundle {
+				api := srBundle("shop-api")
+				api.KustomizationName = "shared"
+				ui := srBundle("shop-ui")
+				ui.KustomizationName = "shared"
+				shop := srBundle("shop")
+				shop.Children = []*stack.Bundle{api, ui}
+				return shop
+			},
+			want: []string{`"shop/shop-api"`, `"shop/shop-ui"`, `"shared"`},
+		},
+		{
 			name: "NamedDependsOn entry with the bundle's KustomizationName",
 			build: func() *stack.Bundle {
 				web := srBundle("web")
@@ -372,6 +385,19 @@ func TestKustomizationName_GenerateForBundleRefusesItsOwnName(t *testing.T) {
 			},
 			want: []string{`"web"`, "HealthChecks"},
 		},
+		{
+			name: "health check on the bundle's own Kustomization, Wait false",
+			build: func() *stack.Bundle {
+				web := srBundle("web")
+				wait := false
+				web.Wait = &wait
+				web.HealthChecks = []stack.HealthCheck{{
+					APIVersion: "kustomize.toolkit.fluxcd.io/v1", Kind: "Kustomization", Name: "web",
+				}}
+				return web
+			},
+			want: []string{`"web"`, "HealthChecks"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -385,6 +411,38 @@ func TestKustomizationName_GenerateForBundleRefusesItsOwnName(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// With Wait true Flux ignores spec.healthChecks, so a health check on the
+// bundle's own Kustomization cannot make it wait for itself: the bundle is
+// generated as before, the check written as given.
+func TestKustomizationName_GenerateForBundleKeepsSelfHealthCheckUnderWait(t *testing.T) {
+	web := srBundle("web")
+	web.KustomizationName = "shared"
+	wait := true
+	web.Wait = &wait
+	web.HealthChecks = []stack.HealthCheck{{
+		APIVersion: "kustomize.toolkit.fluxcd.io/v1", Kind: "Kustomization",
+		Name: "shared", Namespace: fluxstack.DefaultNamespace,
+	}}
+	objs, err := fluxstack.NewResourceGenerator().GenerateForBundle(web, "clusters/demo/x")
+	if err != nil {
+		t.Fatalf("GenerateForBundle refused a health check Flux ignores under Wait true: %v", err)
+	}
+	k, ok := objs[0].(*kustv1.Kustomization)
+	if !ok {
+		t.Fatalf("first object is %T, want a Kustomization", objs[0])
+	}
+	if !k.Spec.Wait {
+		t.Errorf("spec.wait = false, want true")
+	}
+	var got []stack.HealthCheck
+	for _, hc := range k.Spec.HealthChecks {
+		got = append(got, stack.HealthCheck{APIVersion: hc.APIVersion, Kind: hc.Kind, Name: hc.Name, Namespace: hc.Namespace})
+	}
+	if !slices.Equal(got, web.HealthChecks) {
+		t.Errorf("health checks = %v, want the one given: %v", got, web.HealthChecks)
 	}
 }
 
