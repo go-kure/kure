@@ -520,6 +520,63 @@ func TestWalk_RefusesRootBundleNamedLikeTheRootNodesDirectory(t *testing.T) {
 	}
 }
 
+// TestWalk_RefusesRootBundleNamedLikeADirectoryBelowAChildNode: with a flat
+// BundleGrouping the root node's bundle has a directory named after it inside
+// the root node's (go-kure/kure#979). A name with a path separator can resolve
+// to a directory further down, a nested node's or an application's; both
+// walkers refuse it, with and without a ClusterName, instead of returning a
+// tree the writers refuse. Under BundleGrouping by name the walk is unchanged.
+func TestWalk_RefusesRootBundleNamedLikeADirectoryBelowAChildNode(t *testing.T) {
+	// platform -> web -> api, the root node's bundle named bundleName.
+	threeTier := func(bundleName string) *stack.Cluster {
+		c := twoTier(bundleName, "web-bundle")
+		c.Node.Children[0].Children = []*stack.Node{{Name: "api", Bundle: &stack.Bundle{Name: "api-bundle", Applications: []*stack.Application{configMapApp("backend")}}}}
+		return c
+	}
+	appDirs := layout.LayoutRules{BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupByName}
+	for name, tc := range map[string]struct {
+		rules  layout.LayoutRules
+		bundle string
+		dir    string
+		taker  string
+	}{
+		"nested node":                    {nodeOnly, "web/api", "platform/web/api", `node "api"`},
+		"nested node, ClusterName prod":  {withClusterName(nodeOnly, "prod"), "web/api", "prod/platform/web/api", `node "api"`},
+		"nested node, other case":        {nodeOnly, "WEB/Api", "platform/WEB/Api", `node "api"`},
+		"application of a child node":    {appDirs, "web/frontend", "platform/web/frontend", `application "frontend"`},
+		"application of the nested node": {appDirs, "web/api/backend", "platform/web/api/backend", `application "backend"`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			want := fmt.Sprintf("bundle %q would be rendered to directory %q, which %s further down the tree already takes", tc.bundle, tc.dir, tc.taker)
+			if _, err := layout.WalkCluster(threeTier(tc.bundle), tc.rules); err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("WalkCluster: got %v, want the refusal %q", err, want)
+			}
+			// WalkClusterByPackage places the root node without the
+			// ClusterName.
+			wantPkg := fmt.Sprintf("bundle %q would be rendered to directory %q, which %s further down the tree already takes", tc.bundle, "platform/"+tc.bundle, tc.taker)
+			if _, err := layout.WalkClusterByPackage(threeTier(tc.bundle), tc.rules); err == nil || !strings.Contains(err.Error(), wantPkg) {
+				t.Errorf("WalkClusterByPackage: got %v, want the refusal %q", err, wantPkg)
+			}
+		})
+	}
+
+	// A directory inside a child node's that nothing else takes is not refused.
+	ml := walk(t, threeTier("web/other"), nodeOnly)
+	if got, want := collectRepoPaths(ml), []string{"platform", "platform/web/other", "platform/web", "platform/web/api"}; !slices.Equal(got, want) {
+		t.Errorf("layouts = %v, want %v", got, want)
+	}
+
+	// By name the walk never refused such a name and still does not; the
+	// writers refuse the tree.
+	ml, err := layout.WalkCluster(threeTier("web/api"), groupByName)
+	if err != nil {
+		t.Fatalf("BundleGrouping by name: %v", err)
+	}
+	if err := ml.WriteToDisk(t.TempDir()); err == nil || !strings.Contains(err.Error(), "resolve to the same directory") {
+		t.Errorf("BundleGrouping by name, WriteToDisk: got %v, want the writers' same-directory refusal", err)
+	}
+}
+
 // TestManifestLayout_SameDirectory: two layouts are one directory when their
 // paths, resolved under the output directory and cleaned, are equal without
 // regard to case, which is how the writers tell directories apart.

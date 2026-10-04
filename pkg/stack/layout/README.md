@@ -220,8 +220,11 @@ describe `WriteToDisk("")`, which writes a rooted path as an absolute one), so a
 differs only in case, or one that resolves to the same directory (`/web`, `./web`), is refused
 too. Rename one of them. A bundle name that resolves to the root node's directory itself (`.`,
 `/`) names no directory inside it and is refused the same way, naming the bundle and the
-directory. `BundleGrouping: GroupByName` is no way around either: the bundle's directory is
-the same there, the walk does not check it, and the writers refuse the tree.
+directory. So is a bundle name with a path separator that resolves to a directory another
+layout further down already takes (`web/api` beside the nodes `web` and `api`); the error names
+the node, bundle or application that takes it. `BundleGrouping: GroupByName` is no way around
+either: the bundle's directory is the same there, the walk does not check it, and the writers
+refuse the tree.
 
 The workflow engines add a directory of their own to the top of the tree: `flux-system` (Flux,
 `FluxSeparate`) and `argocd` (ArgoCD). When the top is the root node's directory, a root node's
