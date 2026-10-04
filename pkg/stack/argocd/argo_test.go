@@ -641,6 +641,13 @@ func TestCreateLayoutWithResources_RefusesLayoutInTheArgoDirectory(t *testing.T)
 			}
 		})
 	}
+	// A rooted ClusterName that ends in the root node's name: the writers
+	// resolve it under their output directory, and so does the refusal.
+	rooted := layout.DefaultLayoutRules()
+	rooted.ClusterName = "/platform"
+	if _, err := Engine().CreateLayoutWithResources(named("platform-bundle", "argocd"), rooted); err == nil || !strings.Contains(err.Error(), `node "argocd" is rendered to`) {
+		t.Errorf("ClusterName /platform: got %v, want the refusal of node %q", err, "argocd")
+	}
 	// Under a ClusterName the Applications' directory is beside the root
 	// node's, so the same names are written.
 	rules := layout.DefaultLayoutRules()

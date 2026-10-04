@@ -416,6 +416,9 @@ func TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory(t *testing.T) {
 	for name, rules := range map[string]layout.LayoutRules{
 		"no ClusterName":   nodeOnly,
 		"ClusterName prod": withClusterName(nodeOnly, "prod"),
+		// The ClusterName ends in the root node's name and is rooted: the
+		// writers resolve it under their output directory.
+		"ClusterName /platform": withClusterName(nodeOnly, "/platform"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := layout.WalkCluster(twoTier("web", "web-bundle"), rules); err == nil || !strings.Contains(err.Error(), want) {
@@ -471,8 +474,8 @@ func TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory(t *testing.T) {
 }
 
 // TestManifestLayout_SameDirectory: two layouts are one directory when their
-// cleaned paths are equal without regard to case, which is how the writers
-// tell directories apart.
+// paths, resolved under the output directory and cleaned, are equal without
+// regard to case, which is how the writers tell directories apart.
 func TestManifestLayout_SameDirectory(t *testing.T) {
 	at := func(namespace, name string) *layout.ManifestLayout {
 		return &layout.ManifestLayout{Namespace: namespace, Name: name}
@@ -487,6 +490,9 @@ func TestManifestLayout_SameDirectory(t *testing.T) {
 		{at("platform", "web"), at("platform", "./web"), true},
 		{at("platform", "web"), at("platform", "web/"), true},
 		{at("platform", "web"), at(".", "platform/web"), true},
+		// A rooted path resolves under the output directory.
+		{at("platform", "web"), at("/platform", "web"), true},
+		{at("platform", "web"), at("//platform", "web"), true},
 		{at("platform", "web"), at("platform", "web2"), false},
 		{at("platform", "web"), at("other", "web"), false},
 		// Equal under Unicode case folding, not in lower case.

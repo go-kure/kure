@@ -241,6 +241,17 @@ func TestFluxSeparate_RefusesLayoutInTheFluxDirectory(t *testing.T) {
 			writeAll(t, integrated(t, bundleNamed("flux-system"), r))
 		})
 	}
+	// A rooted ClusterName that ends in the root node's name: the writers
+	// resolve it under their output directory, and so does the refusal.
+	t.Run("rooted ClusterName", func(t *testing.T) {
+		r := rules
+		r.ClusterName = "/platform"
+		const want = `node "flux-system" is rendered to`
+		li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+		if _, err := li.CreateLayoutWithResources(nodeNamed("flux-system"), r); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("CreateLayoutWithResources: got %v, want the refusal %q", err, want)
+		}
+	})
 	// The comparison is the writers': a name they write to a directory of its
 	// own is not refused. U+017F equals "s" under Unicode case folding and
 	// is not its lower case, which is what the writers compare.
