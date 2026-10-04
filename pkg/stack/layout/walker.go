@@ -83,10 +83,16 @@ type rootUnit struct {
 // The two directories are compared as the writers compare them (SameDirectory),
 // so a name that differs only in case, or one that resolves to the same
 // directory ("/web", "./web"), is refused here too, not when the tree is
-// written.
+// written. A bundle name that resolves to the root node's directory itself
+// (".", "/") is refused the same way: it names no directory inside it.
 func (r *rootUnit) checkRootUnitName() error {
 	if r == nil || r.unit == nil {
 		return nil
+	}
+	if r.unit.SameDirectory(r.layout) {
+		return errors.ResourceValidationError("Bundle", r.unit.Name, "name",
+			fmt.Sprintf("bundle %q would be rendered to directory %q, which is the root node's: the root node's bundle has a directory named after it inside the root node's directory, so its name must name a directory there",
+				r.unit.Name, r.layout.FullRepoPath()), nil)
 	}
 	for _, child := range r.layout.Children {
 		if child != r.unit && child.SameDirectory(r.unit) {
