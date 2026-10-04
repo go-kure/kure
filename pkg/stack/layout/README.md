@@ -162,6 +162,27 @@ share a file name are written into one multi-document file, as `FilePerKind` int
 - **FileNaming**: Resource file naming pattern (see [File Naming Modes](#file-naming-modes))
 - **ClusterName**: Optional cluster name prefix for cluster-aware directory paths
 
+The rules carry no application file mode: no walk sets one on the layouts it builds. Whether an
+application is written as one file is the layout's own `ApplicationFileMode` (every writer), or
+`Config.ApplicationFileMode` as the default for application layouts in `WriteManifest`.
+
+`WalkCluster` and `WalkClusterByPackage` validate the rules they are given before they build
+anything (`LayoutRules.Validate`), so no caller has to and no entry point that walks checks on its
+own. The rules are validated as given, then unset values take their defaults: an unset value is
+valid. Two things are refused, each with an error naming the field and the value:
+
+- an unknown value of `NodeGrouping`, `BundleGrouping`, `ApplicationGrouping`, `FilePer`,
+  `FluxPlacement` or `FileNaming`. It is not walked as if it were another value;
+- a `ClusterName` with a `..` path segment (`../prod`, `clusters/../prod`). The cluster directory
+  is the top layout's `Namespace`, which the writers refuse with such a segment, so the walk
+  refuses it first. This is stricter than the writers in one case, by design: `x/../platform`
+  over a root node `platform` would be cleaned to `platform` and written, and is refused all the
+  same. Every other spelling is accepted and written: `.`, a nested or rooted path, a trailing
+  slash, dots inside a segment (`a..b`).
+
+The rules are checked whatever the cluster is: a nil cluster with invalid rules returns the rules
+error, not a nil layout.
+
 ### 3. Two Main Walker Functions
 - **WalkCluster()**: Standard hierarchical layout (Node → Bundle → App structure)
 - **WalkClusterByPackage()**: Groups by PackageRef for multi-source scenarios
@@ -517,7 +538,7 @@ Augmenters are responsible for ensuring uniqueness. The recommended convention i
 
 #### DependsOn
 
-Set `ManifestLayout.DependsOn` to a list of sibling layout names. In `FluxIntegratedPerLayout` mode the layout integrator translates these into `spec.dependsOn` entries on the child's `Kustomization` CR, enabling ordered reconciliation between hook groups (e.g. pre-install → hooks → post-install).
+Set `ManifestLayout.DependsOn` to the names of the `Kustomization` CRs that must reconcile first. In `FluxIntegratedPerLayout` mode the layout integrator copies them verbatim into `spec.dependsOn` on the child's own CR, enabling ordered reconciliation between hook groups (e.g. pre-install → hooks → post-install). A hook-group or application layout's CR is named after the layout, so a sibling's layout name is its CR name; the CR of a node layout that renders no bundle is named `<path with "/" replaced by "-">-node`. The field applies only to a child layout that gets a CR of its own (not an umbrella child, not `AppFileSingle`, rendering no bundle); in every other case, and under the other placements, it is dropped without an error.
 
 ### ClusterName-Aware Layouts
 

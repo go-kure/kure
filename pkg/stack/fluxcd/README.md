@@ -41,8 +41,9 @@ cluster := exampleCluster()
 // to the layout call, not on the engine — see Layout Integration below.
 engine := fluxcd.Engine()
 
-// Generate all Flux resources for a cluster (paths of a default-rules walk)
-objects, err := engine.GenerateFromCluster(cluster)
+// Generate all Flux resources for a cluster: each spec.path is a directory
+// a walk with the rules you pass writes
+objects, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 if err != nil {
     panic(err)
 }
@@ -90,8 +91,8 @@ engine := fluxcd.Engine()
 rules := layout.DefaultLayoutRules()
 bundle := cluster.Node.Bundle
 
-// From an entire cluster: walks it with layout.DefaultLayoutRules()
-objects, err := engine.GenerateFromCluster(cluster)
+// From an entire cluster: walks it with the rules you write the tree with
+objects, err := engine.GenerateFromCluster(cluster, rules)
 if err != nil {
     panic(err)
 }
@@ -126,11 +127,20 @@ Each directory that renders bundles produces one Flux Kustomization resource (se
 - Interval and pruning configuration
 
 `GenerateFromCluster` walks the cluster itself, so it renders every application and runs every
-`LayoutAugmenter`: their errors surface there. Its paths are the directories `WalkCluster` writes
-under the default rules — the root node at `<root>`, its children at `<root>/<child>` — which is
-also what the bootstrap sync path `./<root>` expects. A caller that writes the layout with other
-rules generates from that layout instead: `CreateLayoutWithResources`, or `GenerateFromLayout` on
-its own `WalkCluster` result.
+`LayoutAugmenter`: their errors surface there. It walks with the `layout.LayoutRules` it is given,
+so its paths are the directories `WalkCluster` writes under those rules: pass the rules you write
+the tree with. Under `layout.DefaultLayoutRules()` that is the root node at `<root>` and its
+children at `<root>/<child>`, which is also what the bootstrap sync path `./<root>` expects; with
+`ClusterName: "."` and an unnamed root node it is the root of the tree, not `cluster`. The objects
+come back as a list and are placed nowhere, and the list is the same under `FluxSeparate` and
+`FluxIntegratedPerBundle`. Rules with `FluxIntegratedPerLayout` are refused: a tree written with
+that placement lists no directory child in its parent's `kustomization.yaml`, and the
+Kustomizations that apply those children (application, augmenter and bundle-less node
+directories) exist only where the integrator places them, so the list would leave them applied by
+nothing. Use `CreateLayoutWithResources` with those rules instead. On
+`WorkflowEngine` (the `stack.Workflow` interface) the rules arrive as a
+`stack.LayoutRulesProvider` and must be a `layout.LayoutRules` value: anything else, `nil`
+included, is refused, never replaced by the defaults.
 
 ## Kustomization names
 
@@ -300,7 +310,6 @@ for the identifier to find every place its value can reach emitted YAML.
 | `DefaultSourceName` | `flux-system` | the root node has no name | naming the root `stack.Node` |
 | `DefaultFluxMode` | `flux-operator` | `BootstrapConfig.FluxMode` is empty | setting `BootstrapConfig.FluxMode` |
 | `DefaultSourceKind` | `OCIRepository` | `BootstrapConfig.SourceKind` does not name `GitRepository`, the empty string included | setting `BootstrapConfig.SourceKind` |
-| `DefaultBootstrapPathRoot` | `manifests` | building the bootstrap Kustomization's `spec.path` | not overrideable; the root node's name is joined onto it |
 | `DefaultFluxDirName` | `flux-system` | a separate Flux layout needs a directory | not overrideable |
 | `DefaultSourceRef` | `latest` | an OCI source, or an OCI `FluxInstance` sync, has no `SourceRef` | setting `BootstrapConfig.SourceRef` |
 | `DefaultSyncPath` | `./` | the root node has no name | not overrideable; it is the prefix a sync path is built from |
@@ -308,9 +317,9 @@ for the identifier to find every place its value can reach emitted YAML.
 Three of these — `DefaultInterval`, `DefaultNamespace` and `DefaultBootstrapName` —
 are copied into exported generator fields by `NewResourceGenerator` / `NewBootstrapGenerator`, and
 a field assigned afterwards is never overridden. The rest are applied where they are used and are
-overridden by naming the corresponding input, as the last column says. Three defaults have no
+overridden by naming the corresponding input, as the last column says. Two defaults have no
 override at all and say so, rather than being listed as though they had one; `FluxInstanceName`
-is the fourth row without one, and is not a default at all (next but one paragraph).
+is the third row without one, and is not a default at all (next but one paragraph).
 
 An empty `BootstrapGenerator.BootstrapName` resolves back to `DefaultBootstrapName` at emission.
 A generator built as a struct literal rather than through `NewBootstrapGenerator` leaves the field
@@ -524,6 +533,17 @@ Kustomizations the caller or an application places are not builds kure answers f
 `flux-system`, which is built beside the rest of the tree, so a Source with a generated Source's
 identity anywhere else in the tree is refused even when it is identical.
 
+A Kustomization the integration keeps in place of its own (same name and `spec.path`, in the
+layout that would host it) is checked as the generated one would be, with what the kept object
+itself sets and in whatever form it has: typed, unstructured or inside a `List`
+(go-kure/kure#979). Its `spec.path` is a build in which a generated Source may appear once; when
+that build holds the root node's layout, its patches and postBuild are checked against the Sources
+hosted there; and its `dependsOn`, `wait` and health checks enter the reconcile-order check (see
+[One Kustomization per directory](#one-kustomization-per-directory)). An unstructured one is read
+through the typed Flux `Kustomization`; one that cannot be read that way (a field of the wrong
+type, for one) is refused, with an error naming the layout that holds it and its namespace and
+name.
+
 ## Bootstrap Generation
 
 Generate Flux system bootstrap manifests. Two modes are supported:
@@ -560,8 +580,8 @@ is an explicit opt-in to the upstream behaviour: a manifests base is downloaded 
 generation time — the named release for a `vX.Y.Z` value, the latest release for anything else
 (upstream selects a release only for a `v`-prefixed version). `TestVendoredPinsMatchGoMod` fails when
 `GotkVersion` or `FluxOperatorVersion` differs from its `go.mod` require, or when a controller
-image in the gotk bundle differs from the matching `fluxcd/<controller>/api` require (controllers
-without an API module, such as image-reflector-controller, are not compared); see
+image in the gotk bundle differs from the matching `fluxcd/<controller>/api` require (a controller
+whose API module kure does not require is not compared); see
 `internal/gotk` for the refresh procedure after a flux2 bump.
 
 <!-- doc-example: pkg/stack/fluxcd ExampleWorkflowEngine_GenerateBootstrap -->
@@ -589,6 +609,30 @@ for _, obj := range objects {
 }
 ```
 <!-- doc-example:end -->
+
+### The directory the bootstrap applies
+
+Both modes point Flux at the same directory for the same root node (go-kure/kure#979): the one
+named after the root node, relative to the root of the source, which is where a walk without a
+`ClusterName` writes a named root node. Each mode spells it the way its field requires:
+
+| Root node | `"gotk"`: bootstrap Kustomization `spec.path` | `"flux-operator"`: `FluxInstance` `spec.sync.path` |
+|---|---|---|
+| named `prod` | `prod` | `./prod` |
+| unnamed, or none passed | `.` | `./` |
+
+`spec.path` is spelled like every other Kustomization path this package writes (see
+[Kustomization paths](#kustomization-paths)): no leading `./`, and `.` for the root of the source.
+`spec.sync.path` is `DefaultSyncPath` followed by the directory. Flux treats `x` and `./x` alike.
+`"gotk"` mode used to write `manifests/<root>`, a prefix none of the layout writers produces; a
+consumer that depends on such a prefix sets `spec.path` on the returned Kustomization.
+
+The bootstrap is given the root node, not the layout rules, and its path does not follow them, so
+the walked root can be somewhere else. A walk with a `ClusterName` writes the root in or under
+the cluster directory (`<ClusterName>/<root>`; the cluster directory itself for an unnamed root,
+or when its last segment is the root's name). A walk without one writes an unnamed root node to
+`cluster`, not to the root of the source. The table under
+[Kustomization paths](#kustomization-paths) has examples.
 
 ### Sync name
 
@@ -662,7 +706,7 @@ README.
 Controls where Flux Kustomization resources are placed:
 
 - `FluxSeparate` - Flux resources collected in a separate `flux-system/` directory inside the root layout's own directory (where the root's `kustomization.yaml` references it); children referenced as directories, except those that render bundles, which their own CRs apply. `WriteToDisk` and `WriteToTar` name its files by `LayoutRules.FileNaming`, like the rest of the tree: `flux-system-kustomization-<name>.yaml` by default, `kustomization-<name>.yaml` with `FileNamingKindName` (go-kure/kure#976; before, always the default pattern). Rules passed to `IntegrateWithLayout` that leave `FileNaming` unset take the root layout's.
-- `FluxIntegratedPerLayout` - a Flux Kustomization CR for **every** layout (incl. augmenter-added child layouts), hosted in its parent layout; the parent's `kustomization.yaml` lists those CR files as its own resources and references no child directory. Finest granularity.
+- `FluxIntegratedPerLayout` - a Flux Kustomization CR for every layout that renders bundles (bundles a `GroupFlat` merge puts in one directory share one CR, named after the first) and for every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle (augmenter-added child layouts included), hosted in its parent layout (the walked root, which has no parent, hosts its own); the parent's `kustomization.yaml` lists those CR files as its own resources and references no child directory. Not literally every layout: a layout whose CR name another generated CR already uses, such as an augmenter application named like its bundle, is refused instead (see [Non-Bundle Child Layout CRs](#non-bundle-child-layout-crs)). A Kustomization already in the tree with that name, in the namespace of the generated CRs, is kept in place of a generated one when it sits in the layout that would host it and has the same `spec.path`, and is refused otherwise. Finest granularity.
 - `FluxIntegratedPerBundle` - Flux Kustomization CRs at **bundle boundaries only**, each hosted in its parent layout; a bundle's interior (application and augmenter-added child layouts) is a single kustomize build, with those children referenced as directories. A child that renders bundles is not referenced: its own CR applies it. Coarser: Flux reconciles per bundle, kustomize handles the interior.
 
 External augmenters may add child layouts that are not represented in the bundle model; integrated placement discovers those layouts and emits the required Flux resources.
@@ -755,6 +799,16 @@ configurations — such as a bundle referenced both by a `Node` and by another
 bundle's `Children`, shared umbrella ownership, or multi-package umbrellas —
 fail fast with a validation error rather than producing malformed output.
 
+The layout rules are validated by the walk (`layout.LayoutRules.Validate`, see the layout
+package's "LayoutRules Configuration"): `CreateLayoutWithResources` and `GenerateFromCluster` do
+not check them on their own, and an unknown option value or a `ClusterName` with a `..` path
+segment fails there with an error naming the field, also when the cluster is nil or has no root
+node (`GenerateFromCluster` walks that cluster too, after its placement refusal, and returns
+nothing only when the rules are valid). `IntegrateWithLayout` is handed a tree it did not walk and reads the
+placement and the file naming from the rules, so it runs the same check first, before it looks at
+the tree; it has no placement check of its own. An unknown placement is reported like any other
+unknown rule value, naming the field `FluxPlacement`.
+
 `CreateLayoutWithResources` additionally calls `validateSourceRefsForFluxIntegrated`
 for **both inline placements** (`FluxIntegratedPerLayout` and
 `FluxIntegratedPerBundle`) — both emit bundle/node CRs that carry a `spec.sourceRef`.
@@ -763,7 +817,9 @@ This checks that every bundle
 reachable from the cluster node tree — node bundles and umbrella child bundles
 recursively — has a complete `SourceRef` with both `Kind` and `Name` set. A nil,
 zero-value, or partially-populated `SourceRef` is rejected before layout walking
-begins. The integrator also enforces this at CR-creation time as defense in
+begins, and the error names the placement in use (`FluxIntegratedPerLayout mode
+requires a SourceRef …` or `FluxIntegratedPerBundle mode requires a SourceRef …`).
+The integrator also enforces this at CR-creation time as defense in
 depth. `FluxSeparate` and non-Flux paths are unaffected.
 
 ## Related Packages

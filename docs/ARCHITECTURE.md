@@ -310,7 +310,7 @@ type ManifestLayoutResult interface { // implemented by *layout.ManifestLayout
 }
 
 type Workflow interface {
-    GenerateFromCluster(*Cluster) ([]client.Object, error)
+    GenerateFromCluster(*Cluster, LayoutRulesProvider) ([]client.Object, error)
     CreateLayoutWithResources(*Cluster, LayoutRulesProvider) (ManifestLayoutResult, error)
     GenerateBootstrap(*BootstrapConfig, *Node) ([]client.Object, error)
 }
@@ -438,18 +438,22 @@ All four are declared in `pkg/errors/errors.go`.
 ### Error Wrapping Strategy
 
 Kure follows Go's error wrapping conventions while adding structured context. The method below
-illustrates the convention; the Flux engine's own `GenerateFromCluster` delegates to its
-`ResourceGen` unchanged:
+illustrates the convention; the Flux engine's own `GenerateFromCluster` checks that the rules are
+a `layout.LayoutRules` value and delegates to its `ResourceGen`, whose errors it returns unchanged:
 
 <!-- doc-example:excerpt an illustrative method body for a hypothetical engine, not the current source -->
 ```go
-func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
+func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster, rules stack.LayoutRulesProvider) ([]client.Object, error) {
     if c == nil {
         return nil, errors.ResourceValidationError("Cluster", "", "cluster", 
                                                    "cluster cannot be nil", nil)
     }
+    layoutRules, ok := rules.(layout.LayoutRules)
+    if !ok {
+        return nil, errors.New("rules must be of type layout.LayoutRules")
+    }
     
-    resources, err := we.ResourceGen.GenerateFromCluster(c)
+    resources, err := we.ResourceGen.GenerateFromCluster(c, layoutRules)
     if err != nil {
         return nil, errors.Wrapf(err, "failed to generate resources for cluster %s", c.Name)
     }
@@ -659,7 +663,6 @@ type LayoutRules struct {
     NodeGrouping        GroupingMode
     BundleGrouping      GroupingMode
     ApplicationGrouping GroupingMode
-    ApplicationFileMode ApplicationFileMode
     FilePer             FileExportMode
     ClusterName         string
     FluxPlacement       FluxPlacement
@@ -714,8 +717,10 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error)
 func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*ManifestLayout, error)
 ```
 
-Both validate the cluster first (`stack.ValidateCluster`), then apply the grouping axes described
-above.
+Both validate the rules they are given (`LayoutRules.Validate`: an unknown option value or a
+`ClusterName` with a `..` path segment is an error) and then the cluster
+(`stack.ValidateCluster`), before they apply the grouping axes described above. No entry point
+that walks validates the rules on its own.
 
 ---
 
@@ -823,8 +828,9 @@ what stated it. Commit the generated files; `./scripts/gen-builders.sh check` fa
 If the generator reports that it cannot determine a kind's scope, that is the intended failure: add
 the `+kubebuilder:resource` marker upstream, or ship the `CustomResourceDefinition` in the module.
 Do not default it. The built-in table is not a third option here: `builtinClusterScoped`
-(`pkg/kubernetes/internal/kinds/scope.go`) is consulted only for the two modules in
-`builtinModules` — `k8s.io/api` and `k8s.io/apiextensions-apiserver`, whose types carry no markers
+(`pkg/kubernetes/internal/kinds/scope.go`) is consulted only for the three modules in
+`builtinModules` — `k8s.io/api`, `k8s.io/apiextensions-apiserver` and `k8s.io/kube-aggregator`,
+whose types carry no markers
 because the API server defines their scope — so an entry added there for a CRD family's kind is
 never read, and the same error comes back. That table is only the right place when the kind you are
 adding is itself a Kubernetes built-in.
@@ -844,6 +850,19 @@ change. Check each kind's scope against the `+genclient:nonNamespaced` tag on it
   of the table;
 - drop the kind from `clusterScopedUnregisteredKinds` in `pkg/manifest` if it was listed there — a
   test fails until you do.
+
+A built-in whose Go type lives in another `k8s.io` module (`APIService`, in
+`k8s.io/kube-aggregator`) needs four more, because nothing about that module is known yet:
+
+- add the module to `builtinModules`, so `builtinClusterScoped` is consulted for it and the kind is
+  recorded as a built-in;
+- add its import-path prefix to `packageRoutes` (`pkg/kubernetes/internal/kinds/kinds.go`) with an
+  empty family, which routes the constructor to `pkg/kubernetes`; the generator stops with "no kure
+  package routes import path" until it is there;
+- add the module to the table in `internal/kuretest/sources.go` as an uncovered built-in;
+  `TestEveryKindHasOneSource` fails on a module that is not in the table;
+- pin it in the `replace` block of `go.mod` at the release of the other `k8s.io` modules, and
+  import its API package only.
 
 #### 3. Add sugar only in one of the three admitted classes
 
@@ -1003,8 +1022,8 @@ type ResourceGenerator struct {
     // Tool-specific configuration
 }
 
-func (rg *ResourceGenerator) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
-    // Tool-specific resource generation
+func (rg *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error) {
+    // Tool-specific resource generation, from a walk of c with rules
 }
 
 // Implement other ResourceGenerator methods
@@ -1080,7 +1099,7 @@ func TestWorkflowGeneration(t *testing.T) {
     
     // Generate with workflow
     engine := fluxcd.Engine()
-    resources, err := engine.GenerateFromCluster(cluster)
+    resources, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
     
     // Validate generated resources
     // Test layout integration
@@ -1124,7 +1143,7 @@ func (n *Node) InitializePathMap() {
 #### 2. Batch Operations
 <!-- doc-example:excerpt a method outline with an elided body, not the current source -->
 ```go
-func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
+func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster, rules stack.LayoutRulesProvider) ([]client.Object, error) {
     // Generate all resources in single pass
     // Minimize allocation overhead
 }
@@ -1264,6 +1283,7 @@ guesses a name it was handed cannot be composed with a caller that generates nam
 |---|---|---|
 | Constructors | Nothing. An unregistered type panics — a programming error, not input | `pkg/kubernetes/create.go` |
 | Domain model | Bundle rules: name present, no nil application, no cycle or duplicate name among umbrella `Bundle.Children`, and no bundle owned by two umbrellas or by both an umbrella and a `Node`; no cycle in the `Node` tree | `stack.ValidateCluster`, `Bundle.Validate` |
+| Layout rules | Known option values, and a `ClusterName` without a `..` path segment; run by both walks on the rules as given, and by the Flux `IntegrateWithLayout` | `layout.LayoutRules.Validate` |
 | Explicit validators | Opt-in checks a caller runs when it wants them | `kubernetes.ValidatePodSpecPSA`, `gvk.ValidateGVK`, `io.ValidateOutputFormat` |
 | The cluster | Schema, admission, CRD structural rules | apply time |
 
@@ -1401,7 +1421,7 @@ func TestFluxWorkflowGeneration(t *testing.T) {
     
     // Test resource generation
     engine := fluxcd.Engine()
-    resources, err := engine.GenerateFromCluster(cluster)
+    resources, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
     
     if err != nil {
         t.Fatalf("unexpected error: %v", err)

@@ -14,6 +14,7 @@ import (
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	imagev1 "github.com/fluxcd/image-automation-controller/api/v1"
+	reflectorv1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
@@ -37,6 +38,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -85,12 +87,14 @@ func registerAllSchemes() error {
 		nodev1.AddToScheme,
 		admissionregistrationv1.AddToScheme,
 		apiextensionsv1.AddToScheme,
+		apiregistrationv1.AddToScheme,
 		cmacme.AddToScheme,
 		certv1.AddToScheme,
 		cmmeta.AddToScheme,
 		fluxv1.AddToScheme,
 		helmv2.AddToScheme,
 		imagev1.AddToScheme,
+		reflectorv1.AddToScheme,
 		kustv1.AddToScheme,
 		notificationv1.AddToScheme,
 		notificationv1beta3.AddToScheme,

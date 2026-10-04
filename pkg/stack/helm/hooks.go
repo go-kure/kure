@@ -25,8 +25,9 @@ var excludedHookPhases = map[string]bool{
 	"test":          true,
 }
 
-// SplitByHookWeight groups rendered Helm manifests by hook phase and weight for
-// ordered FluxCD Kustomization generation. Groups are returned in execution order:
+// SplitByHookWeight groups rendered Helm manifests by hook phase and weight, so
+// a caller can generate one FluxCD Kustomization per group; kure itself does not
+// convert a HookGroup. Groups are returned in execution order:
 // pre-install, pre-upgrade, main (non-hook), post-install, post-upgrade, then any
 // remaining unknown hook phases alphabetically.
 //

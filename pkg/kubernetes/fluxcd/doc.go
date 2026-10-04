@@ -20,7 +20,8 @@
 // Applications covered include sources (GitRepository, OCIRepository,
 // HelmRepository, Bucket, ExternalArtifact, ArtifactGenerator), workloads
 // (Kustomization, HelmRelease), the notification stack (Provider, Alert,
-// Receiver), image automation (ImageUpdateAutomation), and objects from the
+// Receiver), image automation (ImageRepository, ImagePolicy,
+// ImageUpdateAutomation), and objects from the
 // Flux operator (FluxInstance, FluxReport, ResourceSet,
 // ResourceSetInputProvider).
 //

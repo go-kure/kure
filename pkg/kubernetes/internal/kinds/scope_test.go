@@ -55,6 +55,10 @@ func loadRegistered(t *testing.T) ([]Kind, map[string]upstream.Type) {
 // EndpointSlice and Lease, registered in the same change, carry no such tag and
 // are namespaced. None of the eight was in the hand-seeded table. That makes 41
 // entries.
+//
+// APIService is the forty-second: kure registered apiregistration.k8s.io/v1
+// from k8s.io/kube-aggregator v0.37.1, where the type carries
+// +genclient:nonNamespaced.
 var frozenClusterScoped = set(
 	"/ComponentStatus",
 	"/Namespace",
@@ -68,6 +72,7 @@ var frozenClusterScoped = set(
 	"admissionregistration.k8s.io/ValidatingAdmissionPolicyBinding",
 	"admissionregistration.k8s.io/ValidatingWebhookConfiguration",
 	"apiextensions.k8s.io/CustomResourceDefinition",
+	"apiregistration.k8s.io/APIService",
 	"cert-manager.io/ClusterIssuer",
 	"cilium.io/CiliumBGPAdvertisement",
 	"cilium.io/CiliumBGPClusterConfig",

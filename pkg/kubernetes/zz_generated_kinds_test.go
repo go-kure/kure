@@ -28,6 +28,7 @@ type generatedKind struct {
 // generatedKinds lists every generated wrapper; the identity test walks the
 // scheme and fails on any registered kind missing here.
 var generatedKinds = []generatedKind{
+	{GVK: schema.GroupVersionKind{Group: "apiregistration.k8s.io", Version: "v1", Kind: "APIService"}, Namespaced: false, Create: func(name, _ string) client.Object { return kubernetes.CreateAPIService(name) }},
 	{GVK: schema.GroupVersionKind{Group: "gateway.networking.k8s.io", Version: "v1", Kind: "BackendTLSPolicy"}, Namespaced: true, Create: func(name, namespace string) client.Object { return kubernetes.CreateBackendTLSPolicy(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Binding"}, Namespaced: true, Create: func(name, namespace string) client.Object { return kubernetes.CreateBinding(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "storage.k8s.io", Version: "v1", Kind: "CSIDriver"}, Namespaced: false, Create: func(name, _ string) client.Object { return kubernetes.CreateCSIDriver(name) }},
@@ -159,6 +160,8 @@ var generatedKinds = []generatedKind{
 	{GVK: schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "HelmChart"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateHelmChart(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "helm.toolkit.fluxcd.io", Version: "v2", Kind: "HelmRelease"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateHelmRelease(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "HelmRepository"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateHelmRepository(name, namespace) }},
+	{GVK: schema.GroupVersionKind{Group: "image.toolkit.fluxcd.io", Version: "v1", Kind: "ImagePolicy"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateImagePolicy(name, namespace) }},
+	{GVK: schema.GroupVersionKind{Group: "image.toolkit.fluxcd.io", Version: "v1", Kind: "ImageRepository"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateImageRepository(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "image.toolkit.fluxcd.io", Version: "v1", Kind: "ImageUpdateAutomation"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateImageUpdateAutomation(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "kustomize.toolkit.fluxcd.io", Version: "v1", Kind: "Kustomization"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateKustomization(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "OCIRepository"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateOCIRepository(name, namespace) }},

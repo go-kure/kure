@@ -15,6 +15,7 @@ func TestGeneratedConstructors(t *testing.T) {
 		namespaced bool
 		obj        client.Object
 	}{
+		{"APIService", false, CreateAPIService("name")},
 		{"BackendTLSPolicy", true, CreateBackendTLSPolicy("name", "ns")},
 		{"Binding", true, CreateBinding("name", "ns")},
 		{"CSIDriver", false, CreateCSIDriver("name")},

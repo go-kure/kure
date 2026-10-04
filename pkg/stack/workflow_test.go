@@ -89,7 +89,7 @@ func TestWorkflowInterface(t *testing.T) {
 			}
 
 			// Test GenerateFromCluster
-			_, err = wf.GenerateFromCluster(cluster)
+			_, err = wf.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 			if err != nil {
 				t.Errorf("GenerateFromCluster() error = %v", err)
 			}

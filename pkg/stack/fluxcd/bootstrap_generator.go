@@ -2,7 +2,6 @@ package fluxcd
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -250,6 +249,30 @@ func rootName(rootNode *stack.Node) string {
 	return rootNode.Name
 }
 
+// bootstrapDir returns the directory both bootstrap modes point Flux at,
+// relative to the root of the source: the root node's name, which is the
+// directory a walk without a ClusterName writes a named root node to
+// (layout.WalkCluster), and "" — the root of the source — for an unnamed or
+// absent root node.
+//
+// The bootstrap is given the root node, not the layout rules, so the directory
+// does not follow them, and the walked root can be somewhere else: a walk with
+// a ClusterName puts the root in or under the cluster directory, and a walk
+// without one puts an unnamed root at "cluster", not at the root of the source.
+//
+// Each mode spells that one directory its own way. The gotk bootstrap
+// Kustomization's spec.path is the directory itself with no "./" prefix, and
+// "." for the root of the source, as layout.ManifestLayout.FullRepoPath
+// spells every other spec.path the package writes. The FluxInstance's
+// sync.path is [DefaultSyncPath] followed by the directory.
+//
+// The gotk path used to be "manifests/<root>", a prefix no writer of the
+// package produces, while the FluxInstance named "./<root>": two directories
+// for one root.
+func bootstrapDir(rootNode *stack.Node) string {
+	return rootName(rootNode)
+}
+
 // sourceName returns the name a generated GitRepository or OCIRepository
 // carries: the root node's name when it has one, [DefaultSourceName] otherwise.
 // The bootstrap Kustomization's sourceRef must resolve through this same
@@ -312,7 +335,13 @@ func resolvedSyncRef(config *stack.BootstrapConfig) string {
 }
 
 // generateFluxSystemKustomization creates a Kustomization for the flux-system.
+// Its spec.path is the directory bootstrapDir names, "." for the root of the
+// source.
 func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
+	dir := bootstrapDir(rootNode)
+	if dir == "" {
+		dir = "."
+	}
 	kust := &kustv1.Kustomization{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: kustv1.GroupVersion.String(),
@@ -324,7 +353,7 @@ func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.Boot
 		},
 		Spec: kustv1.KustomizationSpec{
 			Interval: metav1.Duration{Duration: bg.DefaultInterval},
-			Path:     filepath.ToSlash(filepath.Join(DefaultBootstrapPathRoot, rootName(rootNode))),
+			Path:     dir,
 			Prune:    pruneValue(config.Prune),
 			SourceRef: kustv1.CrossNamespaceSourceReference{
 				Kind: resolvedSourceKind(config),
@@ -450,17 +479,12 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 
 	// Add sync configuration if source is provided
 	if config.SourceURL != "" {
-		path := DefaultSyncPath
-		if name := rootName(rootNode); name != "" {
-			path = DefaultSyncPath + name
-		}
-
 		spec.Sync = &fluxv1.Sync{
 			Name:     config.SyncName,
 			Kind:     resolvedSourceKind(config),
 			URL:      config.SourceURL,
 			Ref:      resolvedSyncRef(config),
-			Path:     path,
+			Path:     DefaultSyncPath + bootstrapDir(rootNode),
 			Interval: &metav1.Duration{Duration: bg.DefaultInterval},
 		}
 	}

@@ -50,28 +50,47 @@ func NewResourceGenerator() *ResourceGenerator {
 }
 
 // GenerateFromCluster creates Flux Kustomizations and Sources from a cluster
-// definition. It runs stack.ValidateCluster first to fail fast on structural
-// errors (umbrella cycles, disjointness violations, etc.), then walks the
-// cluster with layout.DefaultLayoutRules and generates from that layout (see
-// GenerateFromLayout).
+// definition: it walks the cluster with rules and generates from that layout
+// (see GenerateFromLayout).
 //
-// The spec.path values are therefore the directories WalkCluster writes under
-// the default rules: the root node at <root>, its children at <root>/<child>.
-// Callers that write the layout with other rules must generate from the
-// layout they write instead — CreateLayoutWithResources, or GenerateFromLayout
-// on their own WalkCluster result. The walk renders every application and
-// runs every LayoutAugmenter, so their errors surface here.
-func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
+// It refuses, in this order: FluxIntegratedPerLayout rules (below), whatever
+// the cluster; invalid rules with an absent or empty cluster, which otherwise
+// yields nothing; a cluster stack.ValidateCluster refuses (umbrella cycles,
+// disjointness violations, etc.), before the walk; and rules the walk refuses
+// (layout.LayoutRules.Validate), reported like every other walk error. Invalid
+// rules are therefore an error whatever the cluster is.
+//
+// The spec.path values are the directories WalkCluster writes under rules, so
+// rules must be the ones the caller writes the tree with: with
+// layout.DefaultLayoutRules, the root node at <root> and its children at
+// <root>/<child>. The objects are returned as a list and placed nowhere
+// (CreateLayoutWithResources places them in the layout it walks), and the list
+// is the same under FluxSeparate and FluxIntegratedPerBundle.
+//
+// FluxIntegratedPerLayout is refused. A tree written with it lists no
+// directory child in its parent, and the Kustomizations that apply those
+// children (application, augmenter and bundle-less node directories) exist
+// only where the integrator places them, so this list would leave them applied
+// by nothing: use CreateLayoutWithResources with those rules.
+//
+// The walk renders every application and runs every LayoutAugmenter, so their
+// errors surface here.
+func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error) {
+	if rules.FluxPlacement == layout.FluxIntegratedPerLayout {
+		return nil, errors.Errorf("GenerateFromCluster does not support FluxPlacement %q: the Kustomizations that apply a per-layout tree's child directories exist only in a layout; use CreateLayoutWithResources with these rules", rules.FluxPlacement)
+	}
 	if c == nil || c.Node == nil {
-		return nil, nil
+		// Nothing to generate; the walk still refuses rules it would not walk.
+		_, err := layout.WalkCluster(nil, rules)
+		return nil, err
 	}
 	if err := stack.ValidateCluster(c); err != nil {
 		return nil, err
 	}
-	ml, err := layout.WalkCluster(c, layout.DefaultLayoutRules())
+	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {
 		return nil, errors.ResourceValidationError("Cluster", c.Name, "layout",
-			fmt.Sprintf("failed to walk the cluster with the default layout rules: %v", err), err)
+			fmt.Sprintf("failed to walk the cluster with the given layout rules: %v", err), err)
 	}
 	return g.GenerateFromLayout(ml, c)
 }

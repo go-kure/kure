@@ -69,10 +69,99 @@ func TestLayoutIntegrator_IntegrateWithLayout_InvalidPlacement(t *testing.T) {
 	// Set invalid placement on the rules (the sole authority).
 	rules := layout.LayoutRules{FluxPlacement: layout.FluxPlacement("invalid")}
 	err := integrator.IntegrateWithLayout(ml, cluster, rules)
-	// Its own error, not the origins refusal of this hand-built tree.
-	if err == nil || !strings.Contains(err.Error(), "fluxPlacement") || !strings.Contains(err.Error(), "invalid") {
+	// The rules error, not the origins refusal of this hand-built tree.
+	if err == nil || !strings.Contains(err.Error(), "FluxPlacement") || !strings.Contains(err.Error(), "invalid") {
 		t.Errorf("expected the invalid-placement error, got %v", err)
 	}
+}
+
+// invalidLayoutRules are rules layout.LayoutRules.Validate refuses, each with
+// the field its error names: one per option, and a ClusterName no writer
+// would write.
+func invalidLayoutRules() map[string]struct {
+	rules layout.LayoutRules
+	field string
+} {
+	type tc = struct {
+		rules layout.LayoutRules
+		field string
+	}
+	return map[string]tc{
+		"node grouping":        {layout.LayoutRules{NodeGrouping: "nested"}, "NodeGrouping"},
+		"bundle grouping":      {layout.LayoutRules{BundleGrouping: "nested"}, "BundleGrouping"},
+		"application grouping": {layout.LayoutRules{ApplicationGrouping: "nested"}, "ApplicationGrouping"},
+		"file per":             {layout.LayoutRules{FilePer: "namespace"}, "FilePer"},
+		"flux placement":       {layout.LayoutRules{FluxPlacement: "inline"}, "FluxPlacement"},
+		"file naming":          {layout.LayoutRules{FileNaming: "name-kind"}, "FileNaming"},
+		"cluster name":         {layout.LayoutRules{ClusterName: "../prod"}, "ClusterName"},
+	}
+}
+
+// TestLayoutIntegrator_RefusesInvalidRules pins that neither entry point of the
+// integrator checks the rules on its own (go-kure/kure#979): the walk's one
+// validation refuses them in CreateLayoutWithResources, and IntegrateWithLayout,
+// which is handed a tree it did not walk, runs the same check before it reads
+// the placement and the file naming.
+func TestLayoutIntegrator_RefusesInvalidRules(t *testing.T) {
+	cluster := func() *stack.Cluster {
+		return &stack.Cluster{
+			Name: "test-cluster",
+			Node: &stack.Node{
+				Name:   "platform",
+				Bundle: &stack.Bundle{Name: "platform"},
+			},
+		}
+	}
+	for name, tc := range invalidLayoutRules() {
+		t.Run("CreateLayoutWithResources/"+name, func(t *testing.T) {
+			integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+			ml, err := integrator.CreateLayoutWithResources(cluster(), tc.rules)
+			if err == nil || !strings.Contains(err.Error(), tc.field) {
+				t.Fatalf("err = %v, want one naming %s", err, tc.field)
+			}
+			if ml != nil {
+				t.Error("a layout was returned with the error")
+			}
+		})
+		t.Run("IntegrateWithLayout/"+name, func(t *testing.T) {
+			integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+			c := cluster()
+			ml, err := layout.WalkCluster(c, layout.LayoutRules{})
+			if err != nil {
+				t.Fatalf("WalkCluster: %v", err)
+			}
+			before := len(ml.Resources)
+			err = integrator.IntegrateWithLayout(ml, c, tc.rules)
+			if err == nil || !strings.Contains(err.Error(), tc.field) {
+				t.Fatalf("err = %v, want one naming %s", err, tc.field)
+			}
+			if len(ml.Resources) != before || len(ml.Children) != 0 {
+				t.Errorf("the refused call changed the tree: %d resources (was %d), %d children",
+					len(ml.Resources), before, len(ml.Children))
+			}
+		})
+	}
+	// The rules are wrong whatever the cluster is; valid rules and no cluster
+	// still build nothing.
+	t.Run("CreateLayoutWithResources/nil cluster", func(t *testing.T) {
+		integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+		ml, err := integrator.CreateLayoutWithResources(nil, layout.LayoutRules{FileNaming: "name-kind"})
+		if err == nil || !strings.Contains(err.Error(), "FileNaming") || ml != nil {
+			t.Errorf("invalid rules: layout %v, err %v, want the rules error", ml, err)
+		}
+		ml, err = integrator.CreateLayoutWithResources(nil, layout.LayoutRules{})
+		if err != nil || ml != nil {
+			t.Errorf("valid rules: layout %v, err %v, want neither", ml, err)
+		}
+	})
+	// The rules are wrong whatever the tree is.
+	t.Run("IntegrateWithLayout/nil layout", func(t *testing.T) {
+		integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+		err := integrator.IntegrateWithLayout(nil, cluster(), layout.LayoutRules{FileNaming: "name-kind"})
+		if err == nil || !strings.Contains(err.Error(), "FileNaming") {
+			t.Errorf("err = %v, want the rules error", err)
+		}
+	})
 }
 
 func TestLayoutIntegrator_IntegrateWithLayout_Integrated(t *testing.T) {

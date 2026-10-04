@@ -639,7 +639,7 @@ func TestGenerateFromLayout_Order(t *testing.T) {
 func TestGenerateFromCluster_DefaultRules(t *testing.T) {
 	web := &stack.Node{Name: "web", Bundle: srBundle("web-bundle", cmApp("web-app"))}
 	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform-bundle"), Children: []*stack.Node{web}}}
-	objs, err := fluxstack.NewResourceGenerator().GenerateFromCluster(c)
+	objs, err := fluxstack.NewResourceGenerator().GenerateFromCluster(c, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatal(err)
 	}

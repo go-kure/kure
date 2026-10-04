@@ -54,9 +54,9 @@ const (
 // the pinned upstream module sources, returning one entry per kind keyed by
 // group/kind.
 //
-// Built-in k8s.io/api types carry no such marker: the API server, not a
+// Built-in types carry no such marker: the API server, not a
 // marker, defines their scope, and upstream's absent-marker default
-// (Namespaced) is wrong for the twenty-four cluster-scoped built-ins kure
+// (Namespaced) is wrong for the twenty-five cluster-scoped built-ins kure
 // registers. DeriveScopes reports what the markers say and does not paper over
 // that difference — [ResolveScopes] is the function that applies
 // builtinClusterScoped on top and is what callers should use.

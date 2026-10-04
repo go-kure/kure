@@ -268,6 +268,22 @@ What changed, and what to do:
   a `List`: they are one object in the cluster.
 - **No `..` in a layout's name or namespace.** Every writer refuses a layout whose `Name` or
   `Namespace` has a `..` path segment, with or without extra files.
+- **The walk validates its rules.** `WalkCluster` and `WalkClusterByPackage` run
+  `LayoutRules.Validate` on the rules they are given, and so does every entry point that walks
+  (`CreateLayoutWithResources`, `GenerateFromCluster`), also for an absent or empty cluster. An
+  unknown value of a grouping, `FilePer`, `FluxPlacement` or
+  `FileNaming` is now an error; before, it was walked as if it were another value. A `ClusterName`
+  with a `..` path segment is refused at the walk instead of at write, also one the walk would
+  have cleaned away (`x/../platform`). An unset value is still valid and takes its default. Fix
+  the value the error names. The Flux `IntegrateWithLayout` runs the same check in place of its
+  own placement check, so its error for an unknown placement now names the field `FluxPlacement`
+  (it was `fluxPlacement`).
+- **`LayoutRules` has no `ApplicationFileMode`.** No walk ever applied it, so a valid value set
+  there changed no layout and no file; the field is removed. Code that sets it no longer
+  compiles: delete the line, the layouts and the files written stay the same. A `LayoutRules`
+  value serialised as a whole no longer carries the key, and an unknown value there is no longer
+  an error. To write an application as one file, set `Config.ApplicationFileMode` for
+  `WriteManifest`, or the layout's own `ApplicationFileMode`.
 
 See the [Layout Engine reference](/api-reference/layout/) for the full rule.
 
@@ -285,8 +301,16 @@ What changed, and what to do:
 - **Removed APIs.** `GenerateFromBundle`, `GenerateFromNode`, `EngineWithMode`, `EngineWithConfig`,
   `NewWorkflowEngineWithConfig`, `SetKustomizationMode` and `ResourceGenerator.Mode` are gone. <!-- doc-api-refs:ignore removed in this release -->
   Generate from a walked layout (`ResourceGenerator.GenerateFromLayout`) or for one bundle at a path
-  you supply (`GenerateForBundle`). `GenerateFromCluster` stays and uses the directories of a
-  default-rules walk.
+  you supply (`GenerateForBundle`).
+- **`GenerateFromCluster` takes the layout rules.** It walked with `layout.DefaultLayoutRules()`
+  whatever rules the caller wrote the tree with, so with a `ClusterName` or other groupings its
+  paths named directories the tree did not have. It now takes the rules as a second argument, on
+  `stack.Workflow` and on both engines, and each path is a directory a walk with those rules
+  writes. Pass the rules you write the tree with; `layout.DefaultLayoutRules()` keeps the paths it
+  returned before. The Flux engine refuses rules with `FluxIntegratedPerLayout`: that tree's child
+  directories are applied by Kustomizations only `CreateLayoutWithResources` places, so use that
+  entry point for the placement. Rules the walk refuses are an error from both engines, whatever
+  the cluster is: an absent or empty cluster returns nothing only with valid rules.
 - **Integrate walked layouts only.** `IntegrateWithLayout` refuses a layout `layout.WalkCluster`
   did not build from the same cluster — build the tree with `WalkCluster` instead of by hand.
 - **PerLayout hosts.** Under `FluxIntegratedPerLayout` a node bundle's CR now sits in the parent of
@@ -315,6 +339,13 @@ What changed, and what to do:
   `substitute` does not set), is refused: the bootstrap
   applies that directory without either, and the two would keep overwriting each other's Source.
   Narrow the patch target or move the patch or postBuild to a bundle below the root node.
+  A Kustomization already in the tree that the integration keeps in place of its own (same name
+  and `spec.path`, in the layout that would host it) is held to the same refusals as a generated
+  one, whether it is typed, unstructured or inside a `List`: two copies of a generated Source
+  that the integration did not add, in the build of its directory; a root-build patch or
+  postBuild that changes a hosted Source; and a cycle through its `dependsOn`, `wait` or health
+  checks. One that cannot be read as a Flux Kustomization (a field of the wrong type, for one) is
+  refused, naming its layout.
 - **Grouping axes.** `NodeGrouping`, `BundleGrouping` and `ApplicationGrouping` are independent;
   they used to take effect only when bundles and applications were both flat, and a `ClusterName`
   always flattened the root bundle. Combinations that were silently rendered fully nested now
@@ -489,7 +520,7 @@ A child layout receives a CR when:
 
 ### Ordered reconciliation with DependsOn
 
-Set `ManifestLayout.DependsOn` to a list of sibling layout names to express reconciliation order between hook groups. The integrator translates these into `spec.dependsOn` entries on the emitted CR:
+Set `ManifestLayout.DependsOn` to the names of the sibling layouts' CRs to express reconciliation order between hook groups; a hook-group layout's CR is named after the layout. The integrator copies the entries verbatim into `spec.dependsOn` on the emitted CR, and only under `FluxIntegratedPerLayout`:
 
 <!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowDependsOn -->
 ```go
@@ -557,6 +588,16 @@ Generate Flux system bootstrap manifests. Two modes are available:
 - **`"gotk"`** — emits the legacy GitOps Toolkit component manifests directly.
 
 When `FluxMode` is empty, it defaults to `"flux-operator"`.
+
+Both modes point Flux at the same directory: the one named after the root node, relative to the
+root of the source, which is where a walk without a `ClusterName` writes a named root node.
+`"gotk"` mode writes it as the bootstrap Kustomization's `spec.path` (`prod`, or `.` when the root
+node has no name); `"flux-operator"` mode writes it as the `FluxInstance`'s `sync.path` (`./prod`,
+or `./`). `"gotk"` mode used to write `manifests/<root>`: if your tree sits under such a prefix,
+set `spec.path` on the returned Kustomization yourself. The bootstrap does not know your layout
+rules, so the walked root can be somewhere else in two cases: a walk with a `ClusterName` writes
+the root in or under the cluster directory, and a walk without one writes an unnamed root node to
+`cluster`, while the bootstrap names the root of the source.
 
 `"flux-operator"` mode needs both `FluxVersion` and `Registry`: they become the `FluxInstance`'s
 distribution version and registry, and Kure has no default for either. If one is empty,
