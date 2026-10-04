@@ -415,9 +415,8 @@ node's bundle used to render in the root node's directory, the one the bootstrap
 Flux Kustomization that applied that directory was hosted inside it: it was part of the build it
 applied. The bundle now has a directory inside the root node's, named after the bundle
 (`platform/platform-bundle` for root node `platform` with bundle `platform-bundle`), and its
-Kustomization sits where the Kustomization of every child node's bundle sits: in the root node's
-directory under the integrated placements, in the `flux-system/` directory at the top of the tree
-under `FluxSeparate`. Bundles that a flat `NodeGrouping` merges into the root node share that directory, named
+Kustomization sits in the root node's directory under the integrated placements, and in the
+`flux-system/` directory at the top of the tree under `FluxSeparate`. Bundles that a flat `NodeGrouping` merges into the root node share that directory, named
 after the first of them. With `BundleGrouping: GroupByName` nothing changes: the bundle already
 had its directory.
 
