@@ -31,11 +31,13 @@ func TestGenerateFromCluster_DependencyCopy(t *testing.T) {
 		if err != nil {
 			t.Fatalf("copy with KustomizationName %q: GenerateFromCluster: %v", copyName, err)
 		}
+		found := false
 		for _, o := range objs {
 			u := o.(*unstructured.Unstructured)
 			if u.GetName() != "web" {
 				continue
 			}
+			found = true
 			deps, _, err := unstructured.NestedStringSlice(u.Object, "spec", "dependencies")
 			if err != nil {
 				t.Fatal(err)
@@ -43,6 +45,9 @@ func TestGenerateFromCluster_DependencyCopy(t *testing.T) {
 			if !slices.Equal(deps, []string{"db-cr"}) {
 				t.Errorf("copy with KustomizationName %q: web spec.dependencies = %v, want [db-cr]", copyName, deps)
 			}
+		}
+		if !found {
+			t.Fatalf("copy with KustomizationName %q: no Application named web among %d objects", copyName, len(objs))
 		}
 	}
 
