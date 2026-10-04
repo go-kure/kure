@@ -162,8 +162,9 @@ directly under the walked root (`layout_integrator.go:1384-1389`).
 
 **Bootstrap, flux-operator mode (the default).**
 - Emits the embedded flux-operator install bundle (`v0.58.1`) and a `FluxInstance` named `flux`.
-- `distribution.registry` and `distribution.version` are written verbatim, including as empty
-  strings.
+- `distribution.registry` and `distribution.version` are written verbatim. `v0.2.0-beta.15` wrote
+  an empty value too, as an empty string; since
+  [go-kure/kure#975](https://github.com/go-kure/kure/issues/975) an empty value is an error.
 - `sync` is emitted only when `SourceURL` is set.
 
 **Bootstrap, gotk mode.** Emits the vendored components, a Kustomization at
@@ -231,7 +232,8 @@ What a consumer can do today:
 ## Part 2: target behaviour
 
 Each section names the change, the target, a design outline and the acceptance criteria. The
-linked issue tracks the implementation.
+linked issue tracks the implementation. A section whose change has shipped is marked **Shipped**
+and describes what the code does now.
 
 ### Kustomization name separate from the bundle name ([go-kure/kure#971](https://github.com/go-kure/kure/issues/971))
 
@@ -371,19 +373,27 @@ delivery engine's annotations. The Flux workflow turns that intent into the Flux
 
 ### Bootstrap refuses an empty distribution ([go-kure/kure#975](https://github.com/go-kure/kure/issues/975))
 
-**Target.** flux-operator mode no longer writes `registry: ""` or `version: ""`.
+**Shipped.** flux-operator mode no longer writes `registry: ""` or `version: ""`.
 
-**Design outline.** Building a FluxInstance returns a validation error naming the field when
-`Registry` or `FluxVersion` is empty. Two entry points build one, and both validate:
-`GenerateBootstrap` in flux-operator mode, through `generateFluxOperatorBootstrap`
-(`bootstrap_generator.go:74-93`, `:146`), and the public `GenerateFluxInstance` (`:386-396`). Both
-call `generateFluxInstance` (`:399-434`), which returns no error today and gains one.
-gotk mode is unchanged. It reads both fields too, but an empty value is valid there: an empty
-`FluxVersion` builds from the vendored version without a download, and an empty `Registry` keeps
-the default (`:187-208`).
+**What it does.**
 
-**Acceptance.** Through both entry points, each empty field is refused with its name; set values
-still render verbatim.
+- Building a FluxInstance returns a validation error when `BootstrapConfig.FluxVersion` or
+  `Registry` is empty. The error names each missing field; when both are empty, one error names
+  both.
+- Both entry points refuse: `GenerateBootstrap` in flux-operator mode, which is also the mode when
+  `FluxMode` is empty, and the public `GenerateFluxInstance`. Both build the FluxInstance in
+  `generateFluxInstance`, which checks before it builds.
+- A refused `GenerateBootstrap` returns no objects: the install bundle is not returned without its
+  FluxInstance.
+- No default is filled in. The caller supplies both values, and set values still render verbatim.
+- gotk mode is unchanged. It reads both fields too, but an empty value is valid there: an empty
+  `FluxVersion` builds from the vendored version without a download, and an empty `Registry` keeps
+  the default.
+
+**Breaking.** A caller that relied on the empty distribution being written now gets an error.
+
+**Tests.** `pkg/stack/fluxcd/bootstrap_distribution_test.go` covers each empty field and both
+together through both entry points, the set case, and the gotk control.
 
 ### FileNaming applied everywhere ([go-kure/kure#976](https://github.com/go-kure/kure/issues/976))
 
