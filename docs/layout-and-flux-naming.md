@@ -49,7 +49,7 @@ references until those ship.
 | Type | Fields that decide names and placement | Source |
 |---|---|---|
 | `stack.Node` | `Name`, `Children`, `Bundle` (one per node), `PackageRef`. No dependency, Kustomization or directory field. | `Node` in `pkg/stack/cluster.go` |
-| `stack.Bundle` | `Name`, `DependsOn []*Bundle`, `NamedDependsOn`, `Children` (umbrella), `SourceRef`, `Interval`, `Prune`, `Wait`, `Timeout`, `RetryInterval`, `Force`, `Suspend`, `HealthChecks`, `Patches`, `PostBuild`, `Labels`, `Annotations`. No field for the Kustomization's name, namespace or directory. | `Bundle` in `pkg/stack/bundle.go` |
+| `stack.Bundle` | `Name`, `KustomizationName` (go-kure/kure#971; `v0.2.0-beta.15` had no field for the Kustomization's name), `DependsOn []*Bundle`, `NamedDependsOn`, `Children` (umbrella), `SourceRef`, `Interval`, `Prune`, `Wait`, `Timeout`, `RetryInterval`, `Force`, `Suspend`, `HealthChecks`, `Patches`, `PostBuild`, `Labels`, `Annotations`. No field for the Kustomization's namespace or directory. | `Bundle` in `pkg/stack/bundle.go` |
 | `stack.Application` | `Name`, `Namespace`, `Config`. No delivery or dependency field. | `Application` in `pkg/stack/application.go` |
 
 `layout.WalkCluster` turns the model into a `ManifestLayout` tree. `fluxcd.LayoutIntegrator` adds
@@ -81,11 +81,14 @@ directory deeper in the tree.
 
 **Names.**
 
-- A bundle's Kustomization is named `Bundle.Name`, in the generator's `DefaultNamespace`
-  (`kustomizationForBundle` in `pkg/stack/fluxcd/resource_generator.go`).
-- Several bundles in one directory (a `GroupFlat` merge) share one Kustomization named after the
-  first bundle (`generateForUnit` in `resource_generator.go`; `OriginIndex.UnitName` and
-  `UnitOfName` in `pkg/stack/layout/origin.go`).
+- A bundle's Kustomization is named `Bundle.KustomizationName`, or `Bundle.Name` when that is
+  empty, in the generator's `DefaultNamespace` (`Bundle.UnitName` in `pkg/stack/bundle.go`;
+  `kustomizationForBundle` in `pkg/stack/fluxcd/resource_generator.go`). The field is there since
+  go-kure/kure#971; `v0.2.0-beta.15` named it `Bundle.Name`. Below, a bundle's Kustomization name
+  is that name in effect.
+- Several bundles in one directory (a `GroupFlat` merge) share one Kustomization, which takes the
+  Kustomization name of the first bundle (`generateForUnit` in `resource_generator.go`;
+  `OriginIndex.UnitName` and `UnitOfName` in `pkg/stack/layout/origin.go`).
 - Under `FluxIntegratedPerLayout`, a bundle-less node layout gets a Kustomization named
   `<path with / replaced by ->-node`, and an application or augmenter layout one named after the
   layout (`layoutCRName` in `layout_integrator.go`).
@@ -189,10 +192,11 @@ FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since go
 | Input | Result | Source |
 |---|---|---|
 | Two bundles with the same name | refused wherever the origin index is built: the integrator under every placement, `GenerateFromLayout` and the ArgoCD workflow. `WalkCluster` and the writers alone do not check it. | `IndexOrigins` in `origin.go`; callers `addIntegratedFluxToLayout`, `ResourceGenerator.GenerateFromLayout` and `WorkflowEngine.generateFromLayout` in `pkg/stack/argocd/argo.go` |
-| A payload Kustomization named like its bundle, in the namespace of the generated Kustomization (the generator's `DefaultNamespace`) | refused under `FluxSeparate`. Under the two integrated placements it is refused unless it sits in the layout that hosts the generated Kustomization and has the same `spec.path`: that one is kept as it is, and none is generated for the bundle. A bundle rendered in the walked root layout is its own host, so its payload can meet this. The check compares namespace and name, so it does not refuse the same name in another namespace. | `integratedPlacement.host`, `integratedPlacement.add`, `crKey` and `addSeparateFluxToLayout` in `layout_integrator.go`; `kustomizationForBundle` |
+| Two bundles whose Kustomizations would get one name, whether it comes from `KustomizationName` or from `Name` (go-kure/kure#971) | refused in the same places; the error names both bundles by their paths. `GenerateForBundle` builds no index and sees one bundle: it refuses a `DependsOn` bundle, an umbrella child, a `NamedDependsOn` entry or a health check with that bundle's own Kustomization name, and two children with one. | `IndexOrigins` in `origin.go`; `checkOwnUnitName`, called from `ResourceGenerator.GenerateForBundle`, in `resource_generator.go` |
+| A payload Kustomization named like the one generated for its bundle (the bundle's name, unless the bundle sets `KustomizationName`: go-kure/kure#971), in the namespace of the generated Kustomization (the generator's `DefaultNamespace`) | refused under `FluxSeparate`. Under the two integrated placements it is refused unless it sits in the layout that hosts the generated Kustomization and has the same `spec.path`: that one is kept as it is, and none is generated for the bundle. A bundle rendered in the walked root layout is its own host, so its payload can meet this. The check compares namespace and name, so it does not refuse the same name in another namespace. | `integratedPlacement.host`, `integratedPlacement.add`, `crKey` and `addSeparateFluxToLayout` in `layout_integrator.go`; `kustomizationForBundle` |
 | A Kustomization name generated twice in one integration | refused by the integrator. The key is the bare name: every generated Kustomization is in `DefaultNamespace`. | `integratedPlacement.claim` in `layout_integrator.go`; `kustomizationForBundle` and `createKustomizationForLayout` |
-| `FluxIntegratedPerLayout` with `ApplicationGrouping: GroupByName`, application named like its bundle (the common case) | refused as a name used twice | same |
-| `FluxIntegratedPerLayout`, augmenter application named like its bundle | refused as a name used twice | same |
+| `FluxIntegratedPerLayout` with `ApplicationGrouping: GroupByName`, application named like its bundle's Kustomization (the common case: a bundle without `KustomizationName` and an application with the bundle's name) | refused as a name used twice | same |
+| `FluxIntegratedPerLayout`, augmenter application named like its bundle's Kustomization | refused as a name used twice | same |
 | Two directory layouts resolving to one directory | refused by the writers | `checkLayoutTree` in `pkg/stack/layout/treecheck.go` |
 | Two single-file layouts (`AppFileSingle`) in one directory | accepted when their file names differ; refused when they resolve to the same file | `checkLayoutTree` |
 | Dotted names, names over 63 characters | accepted unchanged | none |
@@ -202,14 +206,16 @@ FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since go
 
 ### 1.8 What a consumer cannot control today
 
-1. **The name of a bundle's Kustomization.** Only by naming the bundle; a merged directory takes its
-   first bundle's name; `-node` names have no parameter.
+1. **The name of a Kustomization that is not one bundle's own.** A bundle's Kustomization takes
+   `Bundle.KustomizationName` since go-kure/kure#971 (in `v0.2.0-beta.15`, only by naming the
+   bundle). A merged directory takes its first bundle's Kustomization name; `-node` names have no
+   parameter.
 2. **The directory that hosts it.** The only lever is the placement.
-3. **A directory name separate from the Kustomization name.** An umbrella child's directory and its
-   Kustomization are both the child bundle's name (`renderUmbrellaChildren`,
-   `kustomizationForBundle`).
-   Renaming the walked layout before `IntegrateWithLayout` separates them and is accepted, but no
-   document or test covers that route.
+3. **A directory name separate from the bundle name.** An umbrella child's directory is the child
+   bundle's name (`renderUmbrellaChildren`), whatever its Kustomization is named
+   (`kustomizationForBundle`; go-kure/kure#971).
+   Renaming the walked layout before `IntegrateWithLayout` gives the directory another name and is
+   accepted, but no document or test covers that route.
 4. **Ordering between groups, from the model.** A group gets a Kustomization only under
    `FluxIntegratedPerLayout`, with a fixed name, and `Node` has no dependency field. The one route
    to a `dependsOn` is on the layout, not the model: set `DependsOn` (Kustomization names, as
@@ -260,30 +266,72 @@ and describes what the code does now.
 
 ### Kustomization name separate from the bundle name ([go-kure/kure#971](https://github.com/go-kure/kure/issues/971))
 
-**Target.** A consumer can name a bundle's Kustomization without renaming the bundle.
+**Shipped.** A consumer can name a bundle's Kustomization without renaming the bundle.
 
-**Design outline.**
+**What it does.**
 
-- **New field:** `Bundle.KustomizationName string`; empty means `Bundle.Name`. The same name is the
-  identity of the ArgoCD Application generated for that directory (`IndexOrigins` treats them as
-  one identity), so the ticket settles whether the field gets an engine-neutral name.
-- **Every place that now reads `Bundle.Name` as a Kustomization name** reads the effective name:
-  - `kustomizationForBundle` (`resource_generator.go`);
-  - the umbrella health checks, which name each child (the umbrella branch of
-    `kustomizationForBundle`);
-  - unit naming (`OriginIndex.UnitName` and `UnitOfName` in `origin.go`);
-  - dependency translation (`OriginIndex.UnitDependencies`; `generateForUnit` and the
-    `DependsOn` loops of `kustomizationForBundle`);
-  - the ArgoCD Application name (`applicationForBundle` in `pkg/stack/argocd/argo.go`).
-- **Name lookups:** the origin index keys its by-name map on the effective name, so
-  `NamedDependsOn` and health checks name Kustomizations, never bundles.
-- **Uniqueness:** checked on the effective name (`IndexOrigins`). `Bundle.Name` stays unique as
-  well, because a copied bundle is resolved by name.
+- **The field:** `Bundle.KustomizationName string`; empty means `Bundle.Name`. `Bundle.UnitName()`
+  returns the name in effect (`pkg/stack/bundle.go`). `Bundle.Name` stays the bundle's identity
+  and its directory, so every `spec.path` is what it is without the field.
+- **One name for both workflows:** under the ArgoCD workflow the same value names the Application
+  generated for the bundle. The accessor is called `UnitName` because it names the reconciliation
+  unit generated for the bundle, the word `layout.OriginIndex` uses for the same thing.
+- **Everything that refers to a bundle's Kustomization** uses the name in effect:
+  - the Kustomization itself (`kustomizationForBundle` in `resource_generator.go`);
+  - an umbrella's health check on each child (the umbrella branch of `kustomizationForBundle`);
+  - `spec.dependsOn` for each `DependsOn` bundle (the `DependsOn` loop of
+    `kustomizationForBundle`), and after a merge the unit that applies it
+    (`OriginIndex.UnitDependencies` in `origin.go`);
+  - unit naming (`OriginIndex.UnitName` and `UnitOfName`): bundles merged into one directory
+    share the first bundle's name in effect;
+  - the ArgoCD Application's name and its `spec.dependencies` entries (`applicationForBundle` in
+    `pkg/stack/argocd/argo.go`).
+- **Name lookups:** the origin index looks a name up among the names in effect
+  (`OriginIndex.UnitOfName`), so a `NamedDependsOn` entry or a health check on a Flux
+  Kustomization names a Kustomization, never a bundle. The `Name` of a bundle that sets
+  `KustomizationName` is not that bundle's Kustomization: such an entry reaches the bundle whose
+  Kustomization has that name, and is kept as written, as an external reference is, when no
+  rendered bundle's has.
+- **Uniqueness:** two bundles whose Kustomizations would get one name are refused wherever the
+  origin index is built, and the error names both bundles by their paths (`IndexOrigins`).
+  `Bundle.Name` stays unique as well, because a copied bundle is resolved by its `Name`.
+  `GenerateForBundle` builds no index: it refuses a `DependsOn` bundle, an umbrella child, a
+  `NamedDependsOn` entry or a health check with the bundle's own Kustomization name, and two
+  children with one (`checkOwnUnitName` in `resource_generator.go`); the entry points that build
+  the index drop a unit's reference to itself instead.
+- **Validation:** `Bundle.Validate` compares the names in effect wherever it compares against a
+  Kustomization reference: a `DependsOn` bundle against a `NamedDependsOn` entry, a child against
+  both lists, and a child that names its parent in `NamedDependsOn` (`validateChildren` in
+  `pkg/stack/bundle.go`). The checks on the bundle's own identity (two children with one `Name`,
+  a child named like its parent) stay on `Name`.
+- **A `DependsOn` copy:** a `DependsOn` entry that is not one of the cluster's bundles but has the
+  `Name` of one is a copy of it and stands for it, so the dependency is on that bundle's
+  Kustomization. A copy that leaves `KustomizationName` empty, or sets the bundle's name in
+  effect, is accepted. A copy that names another Kustomization is refused, naming both, and so is
+  a copy of a bundle whose Kustomization name is also in the dependant's `NamedDependsOn`
+  (`validateDependencyCopies` in `pkg/stack/validate.go`, called from `ValidateCluster`;
+  `OriginIndex.checkDependencyCopies`, called from `IndexOrigins`, for a tree walked earlier).
+  `Bundle.Validate` sees one bundle and compares on the name the copy carries, so one valid input
+  is refused: a name-only copy of a bundle that sets `KustomizationName`, beside a
+  `NamedDependsOn` entry equal to the bundle's `Name`. Setting the bundle's `KustomizationName`
+  on the copy says which Kustomization is meant.
+- **The payload collision:** the integrator compares a payload Kustomization with the generated
+  name, so a payload Kustomization named like the bundle no longer collides once the generated
+  one has another name, and one named like the generated Kustomization still does.
+- **Not checked yet:** the value is not held to the rules for a Kubernetes object name;
+  go-kure/kure#978 adds that check.
 
-**Acceptance.**
-- A payload Kustomization named like the bundle is accepted when `KustomizationName` differs.
-- Two bundles with different names but the same effective name are refused, naming both.
-- An umbrella's health checks and its children's `dependsOn` use the children's effective names.
+**Breaking.** None when the field is unset: every generated object and path is unchanged.
+
+**Tests.** `pkg/stack/fluxcd/kustomization_name_test.go` covers the name, `dependsOn` and umbrella
+health checks under the three placements, the payload Kustomization, the duplicate name and the
+entry points without an integrator. `pkg/stack/layout/origin_unitname_test.go` covers the index,
+`pkg/stack/bundle_unitname_test.go` the validation pairs, and
+`pkg/stack/argocd/kustomization_name_test.go` the Application. The `DependsOn` copies are covered
+by `pkg/stack/validate_copy_test.go`, `pkg/stack/layout/origin_copy_test.go` and
+`dependency_copy_test.go` in `pkg/stack/fluxcd` and `pkg/stack/argocd`. `unset_output_test.go` in
+`pkg/stack/fluxcd` and `pkg/stack/argocd` compares what a cluster without the field produces,
+byte for byte, with output stored from the code before the field existed.
 
 ### Directory name separate from the Kustomization name ([go-kure/kure#972](https://github.com/go-kure/kure/issues/972))
 
