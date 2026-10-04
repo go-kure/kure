@@ -80,7 +80,7 @@ func TestDependencyCopy_Refused(t *testing.T) {
 				assertCopyRefused(t, "CreateLayoutWithResources/"+string(placement), err, tc.want)
 			}
 			c, _ := copyCluster(tc.copyName, tc.named...)
-			_, err := fluxstack.NewResourceGenerator().GenerateFromCluster(c)
+			_, err := fluxstack.NewResourceGenerator().GenerateFromCluster(c, layout.DefaultLayoutRules())
 			assertCopyRefused(t, "GenerateFromCluster", err, tc.want)
 
 			c, _ = copyCluster(tc.copyName, tc.named...)

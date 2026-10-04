@@ -207,11 +207,13 @@ func TestKustomizationName_DuplicateRefused(t *testing.T) {
 	}
 }
 
-// TestKustomizationName_GenerateFromCluster: the default-rules entry point
-// names the Kustomizations and their references the same way.
+// TestKustomizationName_GenerateFromCluster: the entry point that takes a
+// cluster and the caller's rules, here the default ones, names the
+// Kustomizations and their references the same way.
 func TestKustomizationName_GenerateFromCluster(t *testing.T) {
 	objs, err := fluxstack.NewResourceGenerator().GenerateFromCluster(
-		shopCluster(map[string]string{"shop": "apps-shop", "shop-db": "apps-shop-db"}))
+		shopCluster(map[string]string{"shop": "apps-shop", "shop-db": "apps-shop-db"}),
+		layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("GenerateFromCluster: %v", err)
 	}

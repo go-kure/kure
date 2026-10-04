@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/go-kure/kure/pkg/stack"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 // TestGenerateFromCluster_DependencyCopy: a DependsOn bundle that is a copy of
@@ -27,7 +28,7 @@ func TestGenerateFromCluster_DependencyCopy(t *testing.T) {
 	}
 
 	for _, copyName := range []string{"db-cr", ""} {
-		objs, err := Engine().GenerateFromCluster(cluster(copyName))
+		objs, err := Engine().GenerateFromCluster(cluster(copyName), layout.DefaultLayoutRules())
 		if err != nil {
 			t.Fatalf("copy with KustomizationName %q: GenerateFromCluster: %v", copyName, err)
 		}
@@ -51,7 +52,7 @@ func TestGenerateFromCluster_DependencyCopy(t *testing.T) {
 		}
 	}
 
-	objs, err := Engine().GenerateFromCluster(cluster("x"))
+	objs, err := Engine().GenerateFromCluster(cluster("x"), layout.DefaultLayoutRules())
 	if err == nil {
 		t.Fatal("GenerateFromCluster accepted a dependency copy that names another Application than the bundle")
 	}
