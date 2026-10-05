@@ -175,6 +175,40 @@ var streamCases = []struct {
 		wantErrs: [][]string{{"yaml:"}},
 	},
 	{
+		// Two malformed documents in a row, each split off by a separator
+		// line, are two errors that each leave the decoder at the next
+		// document: the one after them is read. The first error is the
+		// JSON reader's, for the separator line: the decoder changes
+		// reader in that call, and returns the JSON error when the
+		// document its YAML reader then reads does not parse either.
+		name:     "two malformed JSON documents in a row among JSON documents with a separator line between them",
+		doc:      configMapDoc("a") + "\n---\n" + malformedJSON + "---\n" + malformedJSON + "---\n" + configMapDoc("c") + "\n",
+		want:     []string{"a", "c"},
+		wantErrs: [][]string{{"invalid character '-'"}, {"yaml:"}},
+	},
+	{
+		// After a leading separator line the YAML reader reads all of it.
+		name:     "a separator line, then two malformed JSON documents in a row among JSON documents with a separator line between them",
+		doc:      "---\n" + configMapDoc("a") + "\n---\n" + malformedJSON + "---\n" + malformedJSON + "---\n" + configMapDoc("c") + "\n",
+		want:     []string{"a", "c"},
+		wantErrs: [][]string{{"yaml:"}, {"yaml:"}},
+	},
+	{
+		// The first error is the JSON reader's and may have left the
+		// decoder where it was; the second is the YAML reader's for a
+		// document it split off, so the parse goes on.
+		name:     "two malformed JSON documents with a separator line between them, then a document",
+		doc:      malformedJSON + "---\n" + malformedJSON + "---\n" + configMapDoc("c") + "\n",
+		want:     []string{"c"},
+		wantErrs: [][]string{{jsonSyntax}, {"yaml:"}},
+	},
+	{
+		name:     "one JSON document, malformed JSON, a separator line, malformed JSON, a separator line, then a document",
+		doc:      configMapDoc("a") + "\n" + malformedJSON + "---\n" + malformedJSON + "---\n" + configMapDoc("c") + "\n",
+		want:     []string{"a", "c"},
+		wantErrs: [][]string{{jsonSyntax}, {"yaml:"}},
+	},
+	{
 		// After one JSON document the decoder can still fall back to its
 		// YAML reader, which reads on from the separator line.
 		name:     "one JSON document, malformed JSON, a separator line, then a document",
