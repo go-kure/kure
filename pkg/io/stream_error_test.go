@@ -88,6 +88,15 @@ var streamCases = []struct {
 		wantErrs: [][]string{{jsonSyntax}},
 	},
 	{
+		// Without the newline the decoder is left with no reader after the
+		// JSON error; with it, the call after that error is the end of the
+		// stream.
+		name:     "one JSON document, then malformed JSON that ends the stream without a newline",
+		doc:      configMapDoc("a") + "\n" + strings.TrimSuffix(malformedJSON, "\n"),
+		want:     []string{"a"},
+		wantErrs: [][]string{{jsonSyntax}},
+	},
+	{
 		name:     "two JSON documents, then malformed JSON",
 		doc:      configMapDoc("a") + "\n" + configMapDoc("b") + "\n" + malformedJSON,
 		want:     []string{"a", "b"},
