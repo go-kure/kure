@@ -870,6 +870,9 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      segments) to disk, tar and manifest, and checks on the written files that no Kustomization
      delivers a file holding its Source, that some build holds the Source and delivers the
      Kustomization, and that disk equals tar;
+     each combination is pinned as integrated or as refused with a named error;
+     `TestCheckSourceHosts_SeesWhatBreaksTheInvariant` is the control of that check, on trees
+     written by hand;
      `TestPerLayout_RootNodeLayoutTakesNoGeneratedSource` for the selection and the refusal;
      `TestKeptKustomization_SourceInsideWhatItApplies` for a kept Kustomization in every form.
 3. **`GenerateFromCluster` takes the caller's layout rules.** Shipped.

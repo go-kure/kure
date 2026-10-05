@@ -831,10 +831,12 @@ func (g *ResourceGenerator) createSource(ref *stack.SourceRef, name string) (cli
 		}
 		return or, nil
 	default:
-		return nil, errors.NewValidationError("kind", ref.Kind, "SourceRef",
-			[]string{"GitRepository", "OCIRepository"})
+		return nil, errors.NewValidationError("kind", ref.Kind, "SourceRef", derivedSourceKinds)
 	}
 }
+
+// derivedSourceKinds are the kinds createSource derives a Source for.
+var derivedSourceKinds = []string{"GitRepository", "OCIRepository"}
 
 // GetName returns the name of this resource generator.
 func (g *ResourceGenerator) GetName() string {

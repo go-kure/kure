@@ -1123,7 +1123,7 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 // its source from ref, a Source this pass derives, while what it applies holds
 // the root node's layout, which hosts that Source. The caller adds the remedy.
 func (p *integratedPlacement) sourceInsideDelivery(name, specPath string, ref kustv1.CrossNamespaceSourceReference) string {
-	return fmt.Sprintf("Flux Kustomization %q (spec.path %q) would take its source from %s %q, which the integration generates from a SourceRef with a URL and hosts in %q, the root node's layout: that is inside what the Kustomization applies, so it would wait for a Source that only its own apply creates",
+	return fmt.Sprintf("Flux Kustomization %q (spec.path %q) would take its source from %s %q, which the integration generates from a SourceRef with a URL and hosts in %q, the root node's layout: that is inside what the Kustomization applies, and a Kustomization must not deliver its own Source (with no other copy of it, it would wait for a Source that only its own apply creates)",
 		name, specPath, ref.Kind, ref.Name, p.root.FullRepoPath())
 }
 
@@ -1177,8 +1177,10 @@ func holdsLayout(l, target *layout.ManifestLayout) bool {
 }
 
 // derivableSources returns the sourceKey of every Source an integration of the
-// tree under top derives: one per SourceRef with a URL among the bundles its
-// layouts render. An omitted namespace is defaultNS, as it is for the Source.
+// tree under top derives: one per SourceRef with a URL and a kind createSource
+// derives a Source for, among the bundles its layouts render (a URL with
+// another kind is createSource's error, not a Source). An omitted namespace is
+// defaultNS, as it is for the Source.
 func derivableSources(top *layout.ManifestLayout, defaultNS string) map[string]bool {
 	out := map[string]bool{}
 	var walk func(l *layout.ManifestLayout)
@@ -1187,7 +1189,7 @@ func derivableSources(top *layout.ManifestLayout, defaultNS string) map[string]b
 			return
 		}
 		for _, b := range l.OriginBundles() {
-			if b.SourceRef != nil && b.SourceRef.URL != "" {
+			if b.SourceRef != nil && b.SourceRef.URL != "" && slices.Contains(derivedSourceKinds, b.SourceRef.Kind) {
 				out[sourceRefKey(sourceRefOf(b), defaultNS)] = true
 			}
 		}
