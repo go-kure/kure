@@ -1123,7 +1123,7 @@ A layout's own fields apply to that layout's Kustomization only: a layout below 
 
 **Bundle labels and annotations.** In a tree walked from a cluster, `Bundle.Labels` and `Bundle.Annotations` are on the bundle's Kustomization and on the per-layout Kustomizations above, and on no object the applications generate: the walker generates each application on its own, and only `Bundle.Generate` adds them to objects.
 
-**Refusals.** The settings in effect are checked where the Kustomization is created, before anything is written. A `Timeout` or `RetryInterval` must parse as a Go duration and be one Flux takes, neither negative nor under a millisecond (see [Durations](#durations)). Every label and annotation in effect is checked with the validators the Kubernetes API uses for `metadata.labels` and `metadata.annotations`, key by key and then as a whole (the total size of the annotations). The error names the layout by its directory (`ManifestLayout 'prod/shop/db'`) and the field, and for an inherited entry the bundle (`inherited from bundle "shop"`). A bundle's own Kustomization carries the bundle's labels and annotations unchecked, as before: the check is made only where a per-layout Kustomization takes them.
+**Refusals.** The settings in effect are checked where the Kustomization is created, before anything is written. A `Timeout` or `RetryInterval` must parse as a Go duration and be one Flux takes, neither negative nor positive and under a millisecond (see [Durations](#durations)). Every label and annotation in effect is checked with the validators the Kubernetes API uses for `metadata.labels` and `metadata.annotations`, key by key and then as a whole (the total size of the annotations). The error names the layout by its directory (`ManifestLayout 'prod/shop/db'`) and the field, and for an inherited entry the bundle (`inherited from bundle "shop"`). A bundle's own Kustomization carries the bundle's labels and annotations unchecked, as before: the check is made only where a per-layout Kustomization takes them.
 
 **A second integration** keeps the per-layout Kustomization the first one placed, as it is: its settings are not written again, so a field changed on the layout or the bundle in between is not on it. Remove the kept Kustomization or walk the cluster again.
 
@@ -1252,7 +1252,7 @@ The check is made on the form the value is written in, not the one it was author
 is written as Go prints it, so `"90s"` is written `1m30s` and `"1us"` is written `1µs`. Go's
 `time.ParseDuration` takes more than Flux does, a sign and the units `ns` and `us`, so two kinds
 of value parse and are refused here, because the API server would refuse the object: a
-negative duration (`"-1s"`) and one under a millisecond (`"1us"`, `"500ns"`). Zero is written `0s`
+negative duration (`"-1s"`) and a positive one under a millisecond (`"1us"`, `"500ns"`). Zero is written `0s`
 and is taken. A day is no unit of a Go duration, so `"1d"` is refused as a value that does not
 parse, as it was before.
 
@@ -1262,7 +1262,7 @@ Flux takes; for a value a layout inherits it names the bundle as well, and for a
 default the generator and `DefaultInterval`:
 
 ```text
-retryInterval "-2m" is written as "-2m0s", which the Flux API does not take: it takes digits with a unit of ms, s, m or h, so no negative duration and none under a millisecond
+retryInterval "-2m" is written as "-2m0s", which the Flux API does not take: it takes digits with a unit of ms, s, m or h, so no negative duration and no positive one under a millisecond
 ```
 
 A layout's inherited timeout or retry interval is first written into the Kustomization of the

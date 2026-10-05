@@ -17,9 +17,9 @@ import (
 )
 
 // TestFluxDuration: the form a duration is written in is the one a
-// metav1.Duration marshals to, and Flux takes it unless it is negative or
-// under a millisecond. The authored form does not matter: "90s" is written
-// "1m30s".
+// metav1.Duration marshals to, and Flux takes it unless it is negative, or
+// positive and under a millisecond. The authored form does not matter: "90s"
+// is written "1m30s".
 func TestFluxDuration(t *testing.T) {
 	for _, tc := range []struct {
 		d       time.Duration
@@ -266,7 +266,7 @@ func TestLayoutDurationRefusalNamesLayoutAndBundle(t *testing.T) {
 	}{
 		{
 			name: "own, negative", own: "-1s", inherited: "5m",
-			wants: []string{"ManifestLayout", "prod/shop/db", `timeout "-1s" is written as "-1s", which the Flux API does not take`, "digits with a unit of ms, s, m or h"},
+			wants: []string{"ManifestLayout", "prod/shop/db", `timeout "-1s" is written as "-1s", which the Flux API does not take`, "digits with a unit of ms, s, m or h, so no negative duration and no positive one under a millisecond"},
 			not:   "inherited",
 		},
 		{

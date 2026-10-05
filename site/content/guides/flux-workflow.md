@@ -349,7 +349,9 @@ What changed, and what to do:
   builds had several owners, and pruning one unit deleted a Source the others still used. Golden
   files move the Source to the root. `FluxSeparate` is unchanged.
 - **Refusals.** Two bundles with one name, a CR name used twice, a node or bundle layout written as
-  `AppFileSingle`, and a directory holding two objects with one identity are errors. So are a Flux
+  `AppFileSingle`, and a directory holding two objects with one identity are errors; a `List` is
+  read for the objects it holds, so the two are refused however many Lists deep one of them
+  sits. So are a Flux
   Kustomization inside a `List` that takes another Kustomization's identity (kustomize builds a
   List's items); a Source identity (kind, namespace, name) defined with different content
   anywhere in the pass, in another layout or at another API version; and, under `FluxSeparate`,
@@ -634,7 +636,7 @@ were. Interval and prune stay the generator's. What to do:
 - **A label or annotation the Kubernetes API does not accept is refused** where a per-layout
   Kustomization takes it, naming the layout and, for one it inherits, the bundle.
 - **A duration Flux does not take is refused**, on every placement and on the bootstrap: a
-  negative one (`"-1s"`) or one under a millisecond (`"1us"`), in a bundle's `Interval`,
+  negative one (`"-1s"`) or a positive one under a millisecond (`"1us"`), in a bundle's `Interval`,
   `Timeout` or `RetryInterval`, a layout's `Timeout` or `RetryInterval`, or a generator's
   `DefaultInterval`. The Flux API refuses the object such a value is written into, so no
   object it ever accepted changes. `Bundle.Validate` still accepts these values.
@@ -874,7 +876,9 @@ show(ml.(*layout.ManifestLayout))
 The engine writes `kustomize.toolkit.fluxcd.io/prune: disabled` and
 `kustomize.toolkit.fluxcd.io/force: enabled` on that application's objects under every placement
 and grouping, including the objects an augmenter adds to the application's own layout and the
-ConfigMaps its `configMapGenerator` entries build. An object that already carries one of the two
+ConfigMaps its `configMapGenerator` entries build. For a `List` the application emits, the objects
+it holds are annotated, those of a `List` inside it included, and never the List itself. An
+object that already carries one of the two
 annotations with another value is refused with an error naming it. The annotations are applied by
 `IntegrateWithLayout` and `CreateLayoutWithResources`; see the
 [Flux Engine reference](/api-reference/flux-engine/) for the full rule, including what prune

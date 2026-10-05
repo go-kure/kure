@@ -1480,7 +1480,7 @@ layout. Readiness passes through the chain of Kustomizations a bundle with `Wait
   (`checkDefaultInterval`): a bundle's Kustomization without an interval, a per-layout
   Kustomization, the gotk bootstrap Kustomization, a generated `GitRepository` or
   `OCIRepository` and the `FluxInstance` sync. Go's duration syntax is wider than the pattern,
-  so a negative duration and one under a millisecond parse and are refused here; a day unit
+  so a negative duration and a positive one under a millisecond parse and are refused here; a day unit
   does not parse and is refused as before. `Bundle.Validate` is unchanged, so no other workflow
   refuses anything new. A `SourceRef` has no duration, so a bundle's reach no source. The check
   came out of the review of this change: without it a bundle's `-1s`, which its own

@@ -58,9 +58,10 @@ type Object struct {
 // change to the List. They are read from its map and not from a written form,
 // so one that holds itself, directly or through the Lists it holds, would be
 // opened without end: it is refused. So is a typed List that holds itself as
-// the object of an item, which cannot be marshalled, where apimachinery takes
-// it and the Lists between for lists (refuseItemCycle). No other value that
-// reaches itself is looked for.
+// the object of an item, where apimachinery takes it and the Lists between
+// for lists (refuseItemCycle): where each of them writes its Items it cannot
+// be marshalled, and where one does not it is refused by the same rule. No
+// other value that reaches itself is looked for.
 func Objects(r runtime.Object) ([]Object, error) {
 	return objects(Object{Object: r}, map[uintptr]bool{})
 }
@@ -199,10 +200,14 @@ type listRef struct {
 }
 
 // refuseItemCycle fails when a typed List holds itself among its items,
-// directly or through the typed Lists it holds. Such a List has no written
-// form: an item held as an object is marshalled by a call of its own
-// (RawExtension.MarshalJSON), so the encoder never sees the whole path and
-// the marshalling does not end. open has the Lists being read around obj.
+// directly or through the typed Lists it holds. Where every List on that
+// path writes its Items, the List has no written form: an item held as an
+// object is marshalled by a call of its own (RawExtension.MarshalJSON), so
+// the encoder never sees the whole path and the marshalling does not end.
+// Where one of them does not write its Items, the List may have a written
+// form and is refused all the same: the rule is on the list as apimachinery
+// reads it (meta.IsListType), not on what it writes. open has the Lists
+// being read around obj.
 //
 // A List is followed where apimachinery takes it for one (meta.IsListType: a
 // pointer to a struct with an Items field), through what it holds as its

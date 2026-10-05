@@ -34,7 +34,7 @@ func fluxDuration(d time.Duration) (written string, ok bool) {
 // object the error names (from, empty otherwise), and the form it is written
 // in, which is the one Flux reads.
 func durationRefusal(field, authored, from, written string) string {
-	return fmt.Sprintf("%s %q%s is written as %q, which the Flux API does not take: it takes digits with a unit of ms, s, m or h, so no negative duration and none under a millisecond",
+	return fmt.Sprintf("%s %q%s is written as %q, which the Flux API does not take: it takes digits with a unit of ms, s, m or h, so no negative duration and no positive one under a millisecond",
 		field, authored, from, written)
 }
 

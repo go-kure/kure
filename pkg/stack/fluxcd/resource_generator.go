@@ -809,8 +809,9 @@ func rendersBundleNamed(ix *layout.OriginIndex, name string) bool {
 // parseBundleDuration parses one of a bundle's duration fields, returning a
 // validation error that names the field and the rejected value. A value that
 // parses is then held to what Flux takes in a Kustomization (fluxDuration):
-// a negative one, or one under a millisecond, is refused here, naming the
-// bundle by its path, where the API server would refuse the Kustomization.
+// a negative one, or a positive one under a millisecond, is refused here,
+// naming the bundle by its path, where the API server would refuse the
+// Kustomization.
 // Bundle.Validate does not make that second check: it is Flux's rule, and
 // another engine refuses nothing for it.
 func parseBundleDuration(b *stack.Bundle, field, value string) (time.Duration, error) {

@@ -389,8 +389,8 @@ func TestCreateLayoutWithResources_Success(t *testing.T) {
 }
 
 // TestArgoWorkflow_TakesDurationsOnlyFluxRefuses is the control of the Flux
-// workflow's duration check (go-kure/kure#1015): a negative duration and one
-// under a millisecond are refused where the Flux workflow writes a
+// workflow's duration check (go-kure/kure#1015): a negative duration and a
+// positive one under a millisecond are refused where the Flux workflow writes a
 // Kustomization, because the Flux API does not take them. That rule is
 // Flux's. A bundle carrying such values validates and generates under this
 // workflow as before.
