@@ -628,12 +628,17 @@ func TestCreateLayoutWithResources_RefusesLayoutInTheArgoDirectory(t *testing.T)
 		c    *stack.Cluster
 		want string
 	}{
-		"root bundle":            {named("argocd", "web"), `bundle "argocd" is rendered to "platform/argocd", the directory the ArgoCD Applications are written to`},
-		"root bundle, case only": {named("ArgoCD", "web"), `bundle "ArgoCD" is rendered to "platform/ArgoCD", the directory the ArgoCD Applications are written to`},
-		"child node":             {named("platform-bundle", "argocd"), `node "argocd" is rendered to "platform/argocd", the directory the ArgoCD Applications are written to`},
-		// A name that resolves to the same directory is the same directory.
-		"child node, rooted name":    {named("platform-bundle", "/argocd"), `node "/argocd" is rendered to "platform/argocd", the directory the ArgoCD Applications are written to`},
-		"child node, dot-slash name": {named("platform-bundle", "./argocd"), `node "./argocd" is rendered to "platform/argocd", the directory the ArgoCD Applications are written to`},
+		"root bundle": {named("argocd", "web"), `bundle "argocd" is rendered to "platform/argocd", the directory the ArgoCD Applications are written to`},
+		"child node":  {named("platform-bundle", "argocd"), `node "argocd" is rendered to "platform/argocd", the directory the ArgoCD Applications are written to`},
+		// A node name that differs only in case is the same directory to
+		// the writers. (A bundle name is lowercase.)
+		"child node, case only": {named("platform-bundle", "ArgoCD"), `node "ArgoCD" is rendered to "platform/ArgoCD", the directory the ArgoCD Applications are written to`},
+		// A name that would resolve to that directory without being it
+		// holds a path separator or an upper-case bundle name:
+		// stack.ValidateCluster refuses it before any directory is compared.
+		"child node, rooted name":    {named("platform-bundle", "/argocd"), `"/argocd" contains a path separator`},
+		"child node, dot-slash name": {named("platform-bundle", "./argocd"), `"./argocd" contains a path separator`},
+		"root bundle, case only":     {named("ArgoCD", "web"), `"ArgoCD" is not a valid bundle name`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := Engine().CreateLayoutWithResources(tc.c, layout.DefaultLayoutRules()); err == nil || !strings.Contains(err.Error(), tc.want) {

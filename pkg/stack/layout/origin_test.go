@@ -424,18 +424,26 @@ func TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory(t *testing.T) {
 			if _, err := layout.WalkClusterByPackage(twoTier("web", "web-bundle"), rules); err == nil || !strings.Contains(err.Error(), want) {
 				t.Errorf("WalkClusterByPackage: got %v, want the refusal %q", err, want)
 			}
-			// A name that differs only in case is one directory to the
-			// writers, so it is refused here as well.
-			const wantCase = `node "web" and bundle "WEB" are both rendered to directory`
-			if _, err := layout.WalkCluster(twoTier("WEB", "web-bundle"), rules); err == nil || !strings.Contains(err.Error(), wantCase) {
+			// A node name that differs only in case is one directory to the
+			// writers, so it is refused here as well. (A bundle name is
+			// lowercase, stack.ValidateCluster refuses any other.)
+			const wantCase = `node "WEB" and bundle "web" are both rendered to directory`
+			upper := func() *stack.Cluster {
+				c := twoTier("web", "web-bundle")
+				c.Node.Children[0].Name = "WEB"
+				return c
+			}
+			if _, err := layout.WalkCluster(upper(), rules); err == nil || !strings.Contains(err.Error(), wantCase) {
 				t.Errorf("WalkCluster: got %v, want the refusal %q", err, wantCase)
 			}
-			if _, err := layout.WalkClusterByPackage(twoTier("WEB", "web-bundle"), rules); err == nil || !strings.Contains(err.Error(), wantCase) {
+			if _, err := layout.WalkClusterByPackage(upper(), rules); err == nil || !strings.Contains(err.Error(), wantCase) {
 				t.Errorf("WalkClusterByPackage: got %v, want the refusal %q", err, wantCase)
 			}
-			// So is a node name that resolves to the bundle's directory.
+			// A node name that would resolve to the bundle's directory holds
+			// a path separator, and stack.ValidateCluster refuses it before
+			// the walk compares any directory.
 			for _, alias := range []string{"/web", "./web", "web/"} {
-				wantAlias := fmt.Sprintf("node %q and bundle %q are both rendered to directory", alias, "web")
+				wantAlias := fmt.Sprintf("%q contains a path separator", alias)
 				c := twoTier("web", "web-bundle")
 				c.Node.Children[0].Name = alias
 				if _, err := layout.WalkCluster(c, rules); err == nil || !strings.Contains(err.Error(), wantAlias) {
