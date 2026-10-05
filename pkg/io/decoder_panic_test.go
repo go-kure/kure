@@ -209,6 +209,41 @@ func TestDecoderPanic(t *testing.T) {
 	}
 }
 
+// After a recovered panic the decoder returns the error alone: no object and no
+// kind a caller could go on with. A decode that does not panic returns what the
+// deserializer returned.
+func TestDecodeRegistered_PanicReturnsTheErrorAlone(t *testing.T) {
+	policyKind := schema.GroupVersionKind{Group: "cilium.io", Version: "v2", Kind: "CiliumNetworkPolicy"}
+	for _, tc := range []struct {
+		name string
+		kind *schema.GroupVersionKind
+	}{
+		{"a document", nil},
+		{"a typed-list item", &policyKind},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			obj, actual, err := decodeRegistered([]byte(ciliumPolicy("p", icmpNoType)), tc.kind)
+			if err == nil || !strings.Contains(err.Error(), "the decoder panicked") {
+				t.Fatalf("want the panic as an error, got %v", err)
+			}
+			if obj != nil {
+				t.Errorf("an object is returned beside the error: %T", obj)
+			}
+			if actual != nil {
+				t.Errorf("a kind is returned beside the error: %v", actual)
+			}
+
+			obj, actual, err = decodeRegistered([]byte(ciliumPolicy("p", icmpTyped)), tc.kind)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if obj == nil || actual == nil || *actual != policyKind {
+				t.Errorf("want the policy and its kind, got %T and %v", obj, actual)
+			}
+		})
+	}
+}
+
 // The panic of one document or item costs only that one: what stands beside it
 // is still returned, and the same kind decodes when its field has a type.
 func TestParse_DecoderPanicLeavesTheRest(t *testing.T) {
