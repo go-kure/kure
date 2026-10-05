@@ -17,6 +17,7 @@ import (
 	kio "github.com/go-kure/kure/pkg/io"
 	pubfluxcd "github.com/go-kure/kure/pkg/kubernetes/fluxcd"
 	"github.com/go-kure/kure/pkg/stack"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 // BootstrapGenerator implements the workflow.BootstrapGenerator interface for Flux.
@@ -71,7 +72,17 @@ func NewBootstrapGenerator() *BootstrapGenerator {
 
 // GenerateBootstrap creates bootstrap resources for setting up Flux.
 // When FluxMode is empty, flux-operator is used as the default.
-func (bg *BootstrapGenerator) GenerateBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node) ([]client.Object, error) {
+//
+// rules are the layout rules the tree is written with: both modes point Flux
+// at the top directory of the tree a walk with them writes for rootNode
+// (bootstrapDir). They are validated first, as a walk validates them, so
+// invalid rules are an error whatever config is, a nil or disabled one
+// included.
+func (bg *BootstrapGenerator) GenerateBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node, rules layout.LayoutRules) ([]client.Object, error) {
+	dir, err := bootstrapDir(rootNode, rules)
+	if err != nil {
+		return nil, err
+	}
 	if config == nil || !config.Enabled {
 		return nil, nil
 	}
@@ -83,20 +94,20 @@ func (bg *BootstrapGenerator) GenerateBootstrap(config *stack.BootstrapConfig, r
 
 	switch mode {
 	case DefaultFluxMode:
-		if err := validateSyncRootName(config, rootNode); err != nil {
+		if err := validateSyncRootName(config, rootNode, rules); err != nil {
 			return nil, err
 		}
-		return bg.generateFluxOperatorBootstrap(config, rootNode)
+		return bg.generateFluxOperatorBootstrap(config, dir)
 	case ModeGotk:
-		// The bootstrap Kustomization's spec.path is built from the root
-		// name with or without a SourceURL.
-		if err := validateRootName(rootNode); err != nil {
+		// The bootstrap Kustomization's spec.path is built with or without
+		// a SourceURL.
+		if err := validateRootName(rootNode, rules); err != nil {
 			return nil, err
 		}
 		if err := validateRootSourceName(rootNode); err != nil {
 			return nil, err
 		}
-		return bg.generateGotkBootstrap(config, rootNode)
+		return bg.generateGotkBootstrap(config, rootNode, dir)
 	default:
 		return nil, errors.NewValidationError("fluxMode", config.FluxMode, "BootstrapConfig",
 			bg.SupportedBootstrapModes())
@@ -111,8 +122,10 @@ func (bg *BootstrapGenerator) SupportedBootstrapModes() []string {
 	return []string{DefaultFluxMode, ModeGotk}
 }
 
-// generateGotkBootstrap generates bootstrap resources using the standard Flux toolkit.
-func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node) ([]client.Object, error) {
+// generateGotkBootstrap generates bootstrap resources using the standard Flux
+// toolkit. dir is the directory the bootstrap Kustomization applies
+// (bootstrapDir).
+func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node, dir string) ([]client.Object, error) {
 	var resources []client.Object
 
 	// Generate core Flux components
@@ -124,7 +137,7 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 	resources = append(resources, gotkResources...)
 
 	// Generate flux-system Kustomization
-	fluxSystemKust := bg.generateFluxSystemKustomization(config, rootNode)
+	fluxSystemKust := bg.generateFluxSystemKustomization(config, rootNode, dir)
 	resources = append(resources, fluxSystemKust)
 
 	// Generate source for the root node based on SourceKind. An absent
@@ -154,14 +167,16 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 // separately. Emitting the full set here makes the generator self-sufficient
 // so callers can return a
 // single apply-ready bundle.
-func (bg *BootstrapGenerator) generateFluxOperatorBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node) ([]client.Object, error) {
+//
+// dir is the directory the FluxInstance's sync applies (bootstrapDir).
+func (bg *BootstrapGenerator) generateFluxOperatorBootstrap(config *stack.BootstrapConfig, dir string) ([]client.Object, error) {
 	installObjs, err := FluxOperatorInstallObjects()
 	if err != nil {
 		return nil, errors.ResourceValidationError("BootstrapConfig", "flux-operator", "install",
 			fmt.Sprintf("failed to load vendored flux-operator install bundle: %v", err), err)
 	}
 
-	fluxInstance, err := bg.generateFluxInstance(config, rootNode)
+	fluxInstance, err := bg.generateFluxInstance(config, dir)
 	if err != nil {
 		return nil, err
 	}
@@ -262,27 +277,48 @@ func rootName(rootNode *stack.Node) string {
 }
 
 // bootstrapDir returns the directory both bootstrap modes point Flux at,
-// relative to the root of the source: the root node's name, which is the
-// directory a walk without a ClusterName writes a named root node to
-// (layout.WalkCluster), and "" — the root of the source — for an unnamed or
-// absent root node.
+// relative to the root of the source: the top directory of the tree a walk
+// with rules writes for rootNode (layout.TopDirectory, which the walk takes
+// its own top from). That is the cluster directory when the rules have a
+// ClusterName; without one the root node's name, "cluster" for an unnamed root
+// node, and "." — the root of the source — when there is no root node. Invalid
+// rules are the error layout.TopDirectory returns for them.
 //
-// The bootstrap is given the root node, not the layout rules, so the directory
-// does not follow them, and the walked root can be somewhere else: a walk with
-// a ClusterName puts the root in or under the cluster directory, and a walk
-// without one puts an unnamed root at "cluster", not at the root of the source.
+// A rooted directory (a ClusterName such as "/prod") is returned without its
+// leading slash, which is where the writers put it: they resolve it under the
+// directory they write to.
 //
 // Each mode spells that one directory its own way. The gotk bootstrap
 // Kustomization's spec.path is the directory itself with no "./" prefix, and
 // "." for the root of the source, as layout.ManifestLayout.FullRepoPath
 // spells every other spec.path the package writes. The FluxInstance's
-// sync.path is [DefaultSyncPath] followed by the directory.
+// sync.path is [DefaultSyncPath] followed by the directory (syncPath).
 //
-// The gotk path used to be "manifests/<root>", a prefix no writer of the
-// package produces, while the FluxInstance named "./<root>": two directories
-// for one root.
-func bootstrapDir(rootNode *stack.Node) string {
-	return rootName(rootNode)
+// The directory used to be the root node's name whatever the rules were
+// (go-kure/kure#979): the bootstrap was given the root node and not the rules,
+// so under a ClusterName, and for an unnamed root node without one, Flux was
+// pointed at a directory the walk did not write. Before that the gotk path was
+// "manifests/<root>", a prefix no writer of the package produces, while the
+// FluxInstance named "./<root>": two directories for one root.
+func bootstrapDir(rootNode *stack.Node, rules layout.LayoutRules) (string, error) {
+	dir, err := layout.TopDirectory(rootNode, rules)
+	if err != nil {
+		return "", err
+	}
+	if dir = strings.TrimLeft(dir, "/"); dir == "" {
+		dir = "."
+	}
+	return dir, nil
+}
+
+// syncPath spells the directory bootstrapDir returns as a FluxInstance
+// sync.path: [DefaultSyncPath] alone for the root of the source, followed by
+// the directory otherwise.
+func syncPath(dir string) string {
+	if dir == "." {
+		return DefaultSyncPath
+	}
+	return DefaultSyncPath + dir
 }
 
 // sourceName returns the name a generated GitRepository or OCIRepository
@@ -302,10 +338,12 @@ func sourceName(rootNode *stack.Node) string {
 // path segment: of the gotk bootstrap Kustomization's spec.path and of the
 // FluxInstance's sync.path. The bootstrap entry points take a node, not a
 // cluster, so stack.ValidateCluster has not checked it. No root node and an
-// unnamed root are valid: neither adds a segment.
-func validateRootName(rootNode *stack.Node) error {
+// unnamed root are valid: neither adds a segment. Nor does any root node under
+// rules with a ClusterName, where the path is the cluster directory
+// (bootstrapDir) and the name goes nowhere in it.
+func validateRootName(rootNode *stack.Node, rules layout.LayoutRules) error {
 	name := rootName(rootNode)
-	if name == "" {
+	if name == "" || rules.ClusterName != "" {
 		return nil
 	}
 	if err := stack.ValidateDirectoryName(name); err != nil {
@@ -336,11 +374,11 @@ func validateRootSourceName(rootNode *stack.Node) error {
 // when config has a SourceURL: without one the name goes nowhere and is not
 // checked. A nil config builds no FluxInstance at all, so it is accepted here
 // and the caller need not test for it first.
-func validateSyncRootName(config *stack.BootstrapConfig, rootNode *stack.Node) error {
+func validateSyncRootName(config *stack.BootstrapConfig, rootNode *stack.Node, rules layout.LayoutRules) error {
 	if config == nil || config.SourceURL == "" {
 		return nil
 	}
-	return validateRootName(rootNode)
+	return validateRootName(rootNode, rules)
 }
 
 // resolvedSourceKind returns the kind of source object bootstrap will emit for
@@ -392,13 +430,9 @@ func resolvedSyncRef(config *stack.BootstrapConfig) string {
 }
 
 // generateFluxSystemKustomization creates a Kustomization for the flux-system.
-// Its spec.path is the directory bootstrapDir names, "." for the root of the
-// source.
-func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
-	dir := bootstrapDir(rootNode)
-	if dir == "" {
-		dir = "."
-	}
+// Its spec.path is dir, the directory bootstrapDir names, "." for the root of
+// the source. Its sourceRef stays on the root node's name (sourceName).
+func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.BootstrapConfig, rootNode *stack.Node, dir string) client.Object {
 	kust := &kustv1.Kustomization{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: kustv1.GroupVersion.String(),
@@ -475,14 +509,22 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 // Returns (nil, nil) when config is nil. Unlike GenerateBootstrap, this method
 // does not check config.Enabled — the caller is responsible for that gate.
 // An empty FluxVersion or Registry is an error, as on the bootstrap path.
-func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) (*fluxv1.FluxInstance, error) {
-	if err := validateSyncRootName(config, rootNode); err != nil {
+//
+// rules are the layout rules the tree is written with, as in
+// GenerateBootstrap: the sync.path is the top directory of that tree, and
+// invalid rules are an error whatever config is, nil included.
+func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node, rules layout.LayoutRules) (*fluxv1.FluxInstance, error) {
+	dir, err := bootstrapDir(rootNode, rules)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateSyncRootName(config, rootNode, rules); err != nil {
 		return nil, err
 	}
 	if config == nil {
 		return nil, nil
 	}
-	obj, err := bg.generateFluxInstance(config, rootNode)
+	obj, err := bg.generateFluxInstance(config, dir)
 	if err != nil {
 		return nil, err
 	}
@@ -520,7 +562,8 @@ func requireDistribution(config *stack.BootstrapConfig) error {
 
 // generateFluxInstance creates a FluxInstance for flux-operator mode. It is the
 // one place both entry points build it, so the distribution check lives here.
-func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) (client.Object, error) {
+// dir is the directory its sync applies (bootstrapDir).
+func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig, dir string) (client.Object, error) {
 	if err := requireDistribution(config); err != nil {
 		return nil, err
 	}
@@ -544,7 +587,7 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 			Kind:     resolvedSourceKind(config),
 			URL:      config.SourceURL,
 			Ref:      resolvedSyncRef(config),
-			Path:     DefaultSyncPath + bootstrapDir(rootNode),
+			Path:     syncPath(dir),
 			Interval: &metav1.Duration{Duration: bg.DefaultInterval},
 		}
 	}

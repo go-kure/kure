@@ -9,6 +9,7 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 // distributionCases are the four combinations of the two values a
@@ -62,7 +63,7 @@ func TestGenerateFluxInstanceRequiresDistribution(t *testing.T) {
 				Enabled:     true,
 				FluxVersion: tc.fluxVersion,
 				Registry:    tc.registry,
-			}, &stack.Node{Name: "prod"})
+			}, &stack.Node{Name: "prod"}, layout.LayoutRules{})
 
 			if len(tc.missing) > 0 {
 				assertDistributionError(t, err, tc.missing)
@@ -96,7 +97,7 @@ func TestFluxOperatorBootstrapRequiresDistribution(t *testing.T) {
 					FluxMode:    mode,
 					FluxVersion: tc.fluxVersion,
 					Registry:    tc.registry,
-				}, &stack.Node{Name: "prod"})
+				}, &stack.Node{Name: "prod"}, layout.LayoutRules{})
 
 				if len(tc.missing) > 0 {
 					assertDistributionError(t, err, tc.missing)
@@ -126,7 +127,8 @@ func TestGotkBootstrapAcceptsAnEmptyDistribution(t *testing.T) {
 	resources, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(&stack.BootstrapConfig{
 		Enabled:  true,
 		FluxMode: "gotk",
-	}, &stack.Node{Name: "prod"})
+	}, &stack.Node{Name: "prod"}, layout.LayoutRules{})
+
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}

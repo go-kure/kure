@@ -926,7 +926,7 @@ func TestWorkflowEngine_CreateLayoutWithResources_BadRules(t *testing.T) {
 
 func TestWorkflowEngine_GenerateBootstrap_Disabled(t *testing.T) {
 	we := fluxstack.NewWorkflowEngine()
-	objs, err := we.GenerateBootstrap(&stack.BootstrapConfig{Enabled: false}, nil)
+	objs, err := we.GenerateBootstrap(&stack.BootstrapConfig{Enabled: false}, nil, layout.LayoutRules{})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

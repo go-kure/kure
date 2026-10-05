@@ -138,8 +138,8 @@ is the one path built with it.
 | `GenerateForBundle(b, path)` | `path` verbatim | `ResourceGenerator.GenerateForBundle` |
 | `GenerateFromCluster(c, rules)` | walks with the caller's `rules` and generates from that layout, so the paths are those of the first row for a tree written with the same rules. Rules with `FluxIntegratedPerLayout` are refused, pointing to `CreateLayoutWithResources` (go-kure/kure#979; `v0.2.0-beta.15` took no rules and walked with `DefaultLayoutRules()`). | `ResourceGenerator.GenerateFromCluster` in `resource_generator.go` |
 | `FluxIntegratedPerLayout` node Kustomization | the layout's directory | `createKustomizationForLayout` in `resource_generator.go` |
-| Bootstrap, gotk mode | `<root>`, or `.` for an unnamed root: the directory the FluxInstance `sync.path` names (go-kure/kure#979; `v0.2.0-beta.15` wrote `manifests/<root>`) | `bootstrapDir` and the `spec.path` built in `generateFluxSystemKustomization`, `pkg/stack/fluxcd/bootstrap_generator.go` |
-| Bootstrap, FluxInstance `sync.path` | `./<root>`, or `./` for an unnamed root | `bootstrapDir` and the sync path built in `generateFluxInstance`, `bootstrap_generator.go` |
+| Bootstrap, gotk mode | the top directory of the tree a walk with the caller's rules writes: the `ClusterName` directory, or without one `<root>`, `cluster` for an unnamed root and `.` for no root node. The directory the FluxInstance `sync.path` names (go-kure/kure#979; `v0.2.0-beta.15` wrote `manifests/<root>`) | `bootstrapDir`, which asks `layout.TopDirectory` (`pkg/stack/layout/walker.go`), and the `spec.path` built in `generateFluxSystemKustomization`, `pkg/stack/fluxcd/bootstrap_generator.go` |
+| Bootstrap, FluxInstance `sync.path` | `./` followed by that directory; `./` alone for the root of the source | `bootstrapDir`, `syncPath` and the sync built in `generateFluxInstance`, `bootstrap_generator.go` |
 
 ### 1.5 Bundle fields on the Kustomization
 
@@ -185,10 +185,11 @@ directly under the walked root (`addSeparateFluxToLayout` in `layout_integrator.
 - `sync` is emitted only when `SourceURL` is set.
 
 **Bootstrap, gotk mode.** Emits the vendored components, a Kustomization whose `spec.path` is
-`<root>` (`.` for an unnamed root), and a Source when `SourceURL` is set (`generateGotkBootstrap`
-and `generateFluxSystemKustomization` in `bootstrap_generator.go`). That is the directory the
-FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since go-kure/kure#979
-(`v0.2.0-beta.15` wrote `manifests/<root>`).
+the top directory of the written tree (section 1.4), and a Source when `SourceURL` is set
+(`generateGotkBootstrap` and `generateFluxSystemKustomization` in `bootstrap_generator.go`). That
+is the directory the FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since
+go-kure/kure#979 (`v0.2.0-beta.15` wrote `manifests/<root>`). The Source and the Kustomization's
+`sourceRef` are named after the root node whatever the rules are (`sourceName`).
 
 ### 1.7 Collision guards
 
@@ -784,7 +785,8 @@ generates. kure shortens and rewrites nothing; the caller chooses a valid name.
   it builds a path from it (`validateRootName` and `validateSyncRootName` in
   `bootstrap_generator.go`): always in gotk mode (the bootstrap Kustomization's `spec.path`), and
   in flux-operator mode and `GenerateFluxInstance` only when a sync is built, that is when
-  `SourceURL` is set (the FluxInstance's `sync.path`). Without a sync the root name is not read.
+  `SourceURL` is set (the FluxInstance's `sync.path`). Without a sync the root name is not read,
+  and under rules with a `ClusterName` no path is built from it (go-kure/kure#979, item 9).
   In gotk mode a named root also names the generated `GitRepository` or `OCIRepository` and the
   bootstrap Kustomization's `sourceRef`, so there it must be a DNS-1123 subdomain as well
   (`validateRootSourceName`), with or without a `SourceURL`.
@@ -924,8 +926,8 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      `FluxIntegratedPerLayout` below a `ClusterName` wrapper, the root node's layout has a
      layout Kustomization, hosted in the wrapper, which applies the directory that hosts the
      Sources. Item 1 gave it the root bundle's `SourceRef` (`unitSource`), and with a URL on
-     that `SourceRef` it took a Source its own apply delivers: with Flux pointed at the
-     wrapper, the top of the written tree (item 9), nothing else creates that Source and the
+     that `SourceRef` it took a Source its own apply delivers: the bootstrap points Flux at the
+     wrapper, the top of the written tree (item 9), so nothing else creates that Source and the
      Kustomization waits for it.
      `integratedPlacement.layoutSource` now passes over a generated Source for the Kustomization
      of the root node's layout (or of a layout above it, on a tree built by hand), whether the
@@ -940,10 +942,10 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      keeps in place of its own, and a tree built by hand, to the same rule after placement.
    - Two checks can no longer be met by a root bundle on a walked tree and stay in place.
      `integratedPlacement.checkRootBuildKeepsHostedSources` worded its remedy for one ("move
-     the patch to a bundle below the root node"); it now words it for the Kustomization it
-     still guards, one the integration keeps in place of its own that builds the root node's
-     layout (narrow the patch target, or remove the patch or postBuild from that
-     Kustomization). The reconcile-order check (`checkPlacedReconcileOrder`) refused a root
+     the patch to a bundle below the root node"); it now words it for a Kustomization that
+     builds the root node's layout (narrow the patch target, or remove the patch or postBuild
+     from that Kustomization). Since item 9 no tree the integration places reaches that check
+     (see there). The reconcile-order check (`checkPlacedReconcileOrder`) refused a root
      bundle that waits while a child node's bundle depends on it; the root bundle's directory
      now holds no child node's Kustomization, so that cycle is gone. (It still hosts those of
      the bundle's umbrella children and, under `FluxIntegratedPerLayout`, of the layouts inside
@@ -990,14 +992,13 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
 4. **Both bootstrap modes name one directory.** Shipped.
    - Before: the gotk Kustomization had `spec.path: manifests/<root>`, the FluxInstance
      `sync.path: ./<root>`.
-   - Now: both take the directory from `bootstrapDir` (`bootstrap_generator.go`), which is the
-     root node's name. The gotk `spec.path` is that directory, `.` for an unnamed or absent root
-     node (`generateFluxSystemKustomization`); the FluxInstance `sync.path` is `./` followed by
-     it (`generateFluxInstance`).
+   - Now: both take the directory from `bootstrapDir` (`bootstrap_generator.go`); which
+     directory that is, is item 9. The gotk `spec.path` is that directory, `.` for the root of
+     the source (`generateFluxSystemKustomization`); the FluxInstance `sync.path` is `./`
+     followed by it (`syncPath`, `generateFluxInstance`).
    - Breaking: the gotk `spec.path` loses its `manifests/` prefix.
    - Tests: `TestBootstrapModesNameTheSameDirectory` and
-     `TestBootstrapPathIsTheWalkedRootDirectory` in `pkg/stack/fluxcd/bootstrap_path_test.go`.
-     The second covers a named root walked without a `ClusterName`; the other shapes are item 9.
+     `TestBootstrapPathIsTheTopOfTheWrittenTree` in `pkg/stack/fluxcd/bootstrap_path_test.go`.
 5. **Under `FluxIntegratedPerLayout` the patch-scope check does not see a generated ConfigMap.**
    Shipped: resolved by item 1.
    - Before item 1: with every grouping flat and `FlattenSingleTier: true`, a bundle whose one
@@ -1083,14 +1084,91 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      `TestWalk_AcceptedClusterNameIsWritten` in `pkg/stack/layout/rules_validation_test.go`;
      `TestLayoutIntegrator_RefusesInvalidRules` in `pkg/stack/fluxcd/layout_integrator_test.go`;
      `TestCreateLayoutWithResources_RefusesInvalidRules` in `pkg/stack/argocd/argo_test.go`.
-9. **The bootstrap directory does not follow the layout rules.** Target.
-   - Current: both bootstrap modes point Flux at the root node's name (`bootstrapDir`); the
-     bootstrap is given the root node, not the rules or the tree. The walked tree's top is
+9. **The bootstrap directory does not follow the layout rules.** Shipped.
+   - Before: both bootstrap modes pointed Flux at the root node's name (`bootstrapDir`); the
+     bootstrap was given the root node, not the rules or the tree. The walked tree's top was
      elsewhere for an unnamed root without `ClusterName` (`cluster/`) and for a `ClusterName`
      whose directory is not the root's name (section 1.2).
-   - Expected: the directory the bootstrap applies is the top directory of the written tree.
-     That needs the bootstrap to learn the directory, an API change; its form is decided after
-     items 1 and 2.
+   - Now: `GenerateBootstrap` (the `stack.Workflow` interface, both engines and
+     `BootstrapGenerator`) and `GenerateFluxInstance` take the layout rules. `bootstrapDir`
+     asks `layout.TopDirectory(rootNode, rules)` (`walker.go`), which reads the same function
+     the walk takes its top from (`grouping.topLayout`), so the tree and the bootstrap cannot
+     differ: the `ClusterName` directory, or without one the root node's name, `cluster` for an
+     unnamed root node and `.` for no root node (nothing is walked then; the caller applies the
+     directory it writes to). The rules are validated first, so invalid ones are an error
+     whatever the `BootstrapConfig` is. The Flux engine refuses rules that are not a
+     `layout.LayoutRules`, nil included, as item 3 does; the ArgoCD engine takes the rules and
+     reads nothing from them. The generated Source's name and the bootstrap Kustomization's
+     `sourceRef` stay on the root node's name.
+   - `WriteManifest` writes the `ClusterName` directory its `kustomization.yaml` like
+     `WriteToDisk` and `WriteToTar` (`manifestPlan` in `writerplan.go`). It used to write none
+     into a one-segment one that held no resource file, no bundle and no `AppFileSingle` child's
+     file; the
+     bootstrap applies that directory, and without the file Flux would build every file below
+     it. The generator refusal that existed only because of the missing file
+     (go-kure/kure#899) is no longer met there: the generators are written into the file.
+     `checkUnwrittenGenerators` (`treecheck.go`) stays for the `AppFileSingle` root with no
+     resources and no children, which no writer gives a `kustomization.yaml`.
+   - The organisation layout document shows the bootstrap Kustomization's path as the
+     `flux-system` directory; kure's bootstrap applies the top directory of the written tree,
+     whose `kustomization.yaml` lists `flux-system` under the Separate placement, so the
+     objects that directory holds are applied either way.
+   - Item 2's refusal stays as it is. Its reason no longer depends on where a caller points
+     Flux: kure's bootstrap applies the wrapper, so on a walked tree nothing else delivers the
+     Source.
+   - `integratedPlacement.checkRootBuildKeepsHostedSources` follows the build the bootstrap
+     applies. It refuses a Kustomization that builds the root node's layout and changes a
+     Source hosted there only when the top of the tree holds that layout too. It stays as an
+     invariant: no tree the integration places reaches it today. `IntegrateWithLayout` sets
+     one placement on the whole tree, and the one Kustomization it places or keeps on the root
+     node's layout is that layout's own, under `FluxIntegratedPerLayout`, where the wrapper
+     lists the Kustomization and not the directory. So a kept copy of that Kustomization whose
+     patch or postBuild changes a hosted Source is accepted: it is the only one to apply that
+     Source. It was refused while the bootstrap was pointed at the root node's directory.
+   - `integratedPlacement.hostSourcesOncePerBuild` does not change. A caller's copy of a
+     generated Source in a wrapper that lists the root node's directory is still refused: the
+     wrapper's build would hold it and the root's copy, kustomize refuses one object twice,
+     and the integration removes neither.
+   - Not solved, and stated as limits in the fluxcd README: a tree written below a sub-path of
+     the repository (the base directory a writer is given is the caller's), and
+     `WalkClusterByPackage` trees.
+   - Breaking:
+     - the signatures: `GenerateBootstrap(config, rootNode, rules)` and
+       `GenerateFluxInstance(config, rootNode, rules)`;
+     - with a `ClusterName`, the gotk `spec.path` and the FluxInstance `sync.path` move from
+       the root node's name to the cluster directory;
+     - an unnamed root node without a `ClusterName` moves from the root of the source to
+       `cluster`;
+     - `WriteManifest` writes one more file, the `kustomization.yaml` of a one-segment
+       `ClusterName` directory it used to leave without one; a file of that name a caller put there is
+       replaced, as in every other directory;
+     - that file lists the directory's children, so `WriteManifest` holds the build it starts
+       to the checks the other writers run there. Three hand-built trees whose unnamed root
+       wrote no `kustomization.yaml` are now refused as in the other writers: a directory
+       child that sets `Namespace` to its own path (item 11), listed children that hold one
+       object twice, and a listed `KustomizationRecursive` child;
+     - under a `ClusterName` the bootstrap no longer checks the root node's name as a
+       directory name: its path takes no segment from the name. The walk still checks it,
+       as the name is the directory `<ClusterName>/<root>` of the written tree.
+   - No longer refused: the kept layout Kustomization of the root node's directory below a
+     `ClusterName` wrapper under `FluxIntegratedPerLayout`, with a patch or postBuild that
+     changes a Source hosted there.
+   - Tests: `TestTopDirectory`, `TestTopDirectory_IsTheWalksTop` and
+     `TestTopDirectory_RefusesInvalidRules` in `pkg/stack/layout/top_directory_test.go`;
+     `TestBootstrapPathIsTheTopOfTheWrittenTree`, `TestBootstrap_RefusesInvalidRules`,
+     `TestWorkflowEngine_GenerateBootstrap_RefusesRulesOfAnotherType` and
+     `TestBootstrap_RootNodeNameIsNoSegmentUnderClusterName` in
+     `pkg/stack/fluxcd/bootstrap_path_test.go`; `TestGenerateBootstrap_ReadsNothingFromRules`
+     in `pkg/stack/argocd/argo_test.go`;
+     `TestWriteManifest_ClusterRootEmptyContainerWritesKustomization` in
+     `pkg/stack/layout/write_test.go`; `TestWriters_ClusterRootGeneratesConfigMap` and
+     `TestWriters_ClusterRootBuildIsChecked` in `pkg/stack/layout/rootgenerator_test.go`;
+     `TestCheckRootBuildKeepsHostedSources_FollowsTheBootstrapBuild` in
+     `pkg/stack/fluxcd/root_build_internal_test.go`, with the accepted tree run through the
+     integration in `TestIntegrate_RootBuildChangesHostedSource`
+     (`pkg/stack/fluxcd/source_build_test.go`) and
+     `TestKeptKustomization_RootBuildChangesHostedSource`
+     (`pkg/stack/fluxcd/kept_forms_test.go`).
 10. **The rules carry no application file mode.** Shipped.
     - Before: `LayoutRules.ApplicationFileMode` was validated, but no walk applied it, so
       `AppFileSingle` in the rules changed nothing.

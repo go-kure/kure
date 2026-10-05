@@ -5,6 +5,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -370,6 +371,38 @@ metadata:
 // Source from inside what it applies says.
 const ownSourceRefusal = "would take its source from"
 
+// sourceHostRefusal is what the integration's refusal of a sourceHostShapes
+// shape under a placement, a propertyGroupings grouping and a ClusterName
+// says, "" when the tree is integrated. Every combination is one or the other.
+func sourceHostRefusal(placement layout.FluxPlacement, grouping, clusterName, shape string) string {
+	const urlLess = "bundle-less root, one URL-less SourceRef"
+	perLayout := placement == layout.FluxIntegratedPerLayout
+	// wrapped: the root node's layout sits below a ClusterName directory. An
+	// unnamed root is rendered into that directory, and a named one, platform
+	// in every shape, is that directory when the ClusterName ends in its name.
+	wrapped := clusterName != "" && !strings.HasPrefix(shape, "unnamed") && path.Base(clusterName) != "platform"
+	switch {
+	// Not the Source invariant's: the root node's layout Kustomization is
+	// named after its path, and a rooted path starts the name with a "-".
+	case perLayout && wrapped && strings.HasPrefix(clusterName, "/"):
+		return "is not a valid Flux Kustomization name"
+	// The root node's layout has a Kustomization of its own, hosted in
+	// the ClusterName directory above it, and every SourceRef has a URL.
+	case perLayout && wrapped && shape != urlLess:
+		return ownSourceRefusal
+	// Not the Source invariant's: a flat NodeGrouping merges bundles with
+	// different SourceRefs into one Kustomization.
+	case grouping == "nodeFlat" && (shape == urlLess || shape == "root bundle and child node, a Source each"):
+		return "sourceRef differ"
+	// Not the Source invariant's: with a directory per bundle no node's layout
+	// renders one, and a SourceRef with a URL is not taken from a bundle
+	// below, so a node's layout Kustomization has no source.
+	case perLayout && grouping == "GroupByName":
+		return "needs a Kustomization CR but no enclosing bundle"
+	}
+	return ""
+}
+
 // TestGeneratedSourceIsHostedBeforeItsKustomizations renders every shape under
 // every placement, grouping and ClusterName, with every writer, and holds each
 // written tree to the Source invariant (checkSourceHosts). A tree that cannot
@@ -386,28 +419,6 @@ func TestGeneratedSourceIsHostedBeforeItsKustomizations(t *testing.T) {
 		shapes = append(shapes, s)
 	}
 	slices.Sort(shapes)
-	const urlLess = "bundle-less root, one URL-less SourceRef"
-	// wantRefusal is what the refusal of a combination says, "" when the
-	// tree is integrated. Every combination is one or the other.
-	wantRefusal := func(placement layout.FluxPlacement, grouping, clusterName, shape string) string {
-		perLayout := placement == layout.FluxIntegratedPerLayout
-		switch {
-		// The root node's layout has a Kustomization of its own, hosted in
-		// the ClusterName directory above it, and every SourceRef has a URL.
-		case perLayout && clusterName != "" && !strings.HasPrefix(shape, "unnamed") && shape != urlLess:
-			return ownSourceRefusal
-		// Not this invariant's: a flat NodeGrouping merges bundles with
-		// different SourceRefs into one Kustomization.
-		case grouping == "nodeFlat" && (shape == urlLess || shape == "root bundle and child node, a Source each"):
-			return "sourceRef differ"
-		// Not this invariant's: with a directory per bundle no node's layout
-		// renders one, and a SourceRef with a URL is not taken from a bundle
-		// below, so a node's layout Kustomization has no source.
-		case perLayout && grouping == "GroupByName":
-			return "needs a Kustomization CR but no enclosing bundle"
-		}
-		return ""
-	}
 	accepted := map[string]int{}
 	for _, placement := range placements {
 		for _, grouping := range []string{"nodeOnly", "GroupByName", "nodeFlat"} {
@@ -417,7 +428,7 @@ func TestGeneratedSourceIsHostedBeforeItsKustomizations(t *testing.T) {
 						rules := propertyGroupings[grouping]
 						rules.FluxPlacement = placement
 						rules.ClusterName = clusterName
-						want := wantRefusal(placement, grouping, clusterName, shape)
+						want := sourceHostRefusal(placement, grouping, clusterName, shape)
 						ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(sourceHostShapes[shape](), rules)
 						if want != "" {
 							if err == nil || !strings.Contains(err.Error(), want) {

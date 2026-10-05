@@ -282,10 +282,23 @@ patterns below, `<bundle>` is that directory name too: the bundle's `DirName`, o
 without one.
 
 An unnamed root node under a `ClusterName` is rendered into the `ClusterName` directory, and its
-bundle into `<ClusterName>/<bundle>`. `WriteManifest` writes no `kustomization.yaml` into an empty
-`ClusterName` directory; into this one it does, as it did while the directory rendered the bundle.
-Without it, a Flux Kustomization that builds the directory would take in every file below it, each
-bundle's included.
+bundle into `<ClusterName>/<bundle>`. Every writer writes the `ClusterName` directory its
+`kustomization.yaml`, also when the directory holds no resource of its own. Without it, a Flux
+Kustomization that builds the directory would take in every file below it, each bundle's included.
+
+**Breaking change (go-kure/kure#979).** `WriteManifest` used to write no `kustomization.yaml`
+into a one-segment `ClusterName` directory (`prod`, not `clusters/prod`) that held no resource
+file, no bundle and no `AppFileSingle` child's file; `WriteToDisk` and `WriteToTar` always wrote
+one. It now writes it too, so a tree
+written with `WriteManifest` has one more file at its top. That file is created like every other
+one the writer writes: a file of that name already in the directory is replaced, and a caller
+that writes its own there afterwards replaces kure's. The file lists the directory's children, so
+`WriteManifest` now holds the build it starts to every check a directory with a
+`kustomization.yaml` gets, as the other two writers do. Three hand-built trees it used to write
+are refused: an unnamed root whose directory child is nested below its own name (`Namespace` set
+to the child's own path, see "Layout paths"), one whose listed children hold one object twice
+(kustomize refuses that in a build), and one that lists a `KustomizationRecursive` child, which
+has no `kustomization.yaml` for the entry to name. A walked tree has none of the three.
 
 **Breaking change (go-kure/kure#979).** Before, the root node's bundles rendered in the root
 node's directory. Their files, the Flux Kustomization's `spec.path` and the ArgoCD Application's
@@ -493,10 +506,9 @@ files by name. An augmenter that needs the old names sets `FileNamingDefault` on
   relative to the parent's directory (`sub/<Name>.yaml` for a child below it), and the writers
   refuse a listed file outside that directory or in a spelling of it that differs only in case; in
   `WriteManifest` the child's mode is its effective one, so a child with no mode of its own under
-  `ArgoProfile`'s `AppFileSingle` is listed as `<Name>.yaml`, not as a directory, and the unnamed
-  cluster root, which `WriteManifest` otherwise leaves without a `kustomization.yaml`, gets one
-  when it holds such a file. A child with no resources writes no file, so nothing lists it and
-  it gives the cluster root no `kustomization.yaml`.
+  `ArgoProfile`'s `AppFileSingle` is listed as `<Name>.yaml`, not as a directory, also by the
+  unnamed cluster root. A child with no resources writes no file, so nothing lists it; a cluster
+  root that holds only such a child still gets its `kustomization.yaml`, which lists nothing.
   An `AppFileSingle` root, with no parent to list its file, still writes a `kustomization.yaml`
   next to it, which lists its children in that same directory (see "Layout paths").
 - Every writer refuses an `AppFileSingle` child that has children of its own before writing
@@ -515,10 +527,11 @@ files by name. An augmenter that needs the old names sets `FileNamingDefault` on
   its own directory and `kustomization.yaml`.
 - The same holds for any other layout the writer writes no `kustomization.yaml` for
   (go-kure/kure#899). That is an `AppFileSingle` root with no resources and no children, in every
-  writer, including one made `AppFileSingle` through `Config` in `WriteManifest`. In
-  `WriteManifest` it is also a layout shaped like the synthetic cluster root (`Name ""`, a
-  single-segment `Namespace`) with no resource file, no bundle and no `AppFileSingle` child that
-  writes a file. A `KustomizationRecursive` root, `AppFileSingle` or not, is refused as
+  writer, including one made `AppFileSingle` through `Config` in `WriteManifest`. A layout shaped
+  like the synthetic cluster root (`Name ""`, a single-segment `Namespace`) with nothing to list
+  was one too in `WriteManifest`; since go-kure/kure#979 it gets its `kustomization.yaml` there
+  as in the other writers, and its generators are written into it. A `KustomizationRecursive`
+  root, `AppFileSingle` or not, is refused as
   Recursive. Each is refused before anything is written when it carries `ConfigMapGenerators`,
   which were silently dropped before. `FlattenSingleTier` no longer builds such a root: it
   moved a lone augmenter application and its generators onto the root, and since
@@ -683,7 +696,9 @@ On a node's own layout the walker fills `KustomizationName` from `stack.Node.Kus
 
 Setting `LayoutRules.ClusterName` prepends the cluster name as a root directory, producing paths like `{clusterName}/{nodeName}/...` instead of `{nodeName}/...`. This is useful when a single repository manages multiple clusters. When the last segment of `ClusterName` is the root node's name (for example `ClusterName` `platform` with a root node `platform`), the root node is the cluster directory itself: the output is `platform/...`, not `platform/platform/...`.
 
-Without a `ClusterName` the root node sits at `{rootName}` and every child node nests under it (`{rootName}/{childName}/...`), which is also where the Flux bootstrap sync path `./{rootName}` points. An unnamed root node has no directory of its own and stays at `cluster`, with its children at `cluster/{childName}` as before; deeper descendants now nest under them (`cluster/{childName}/{grandchildName}`), where they used to be written outside `cluster/`, unreferenced. `WalkClusterByPackage` places each package's root the same way, below the package directory; a package whose root node belongs to another package has no root directory of its own either, so its unnamed wrapper stays at `cluster`. A node outside the package adds no directory of its own: its in-package descendants attach to the nearest in-package ancestor (or the package root), including where the tree leaves a package and re-enters it lower down.
+Without a `ClusterName` the root node sits at `{rootName}` and every child node nests under it (`{rootName}/{childName}/...`). An unnamed root node has no directory of its own and stays at `cluster`, with its children at `cluster/{childName}` as before; deeper descendants now nest under them (`cluster/{childName}/{grandchildName}`), where they used to be written outside `cluster/`, unreferenced. `WalkClusterByPackage` places each package's root the same way, below the package directory; a package whose root node belongs to another package has no root directory of its own either, so its unnamed wrapper stays at `cluster`. A node outside the package adds no directory of its own: its in-package descendants attach to the nearest in-package ancestor (or the package root), including where the tree leaves a package and re-enters it lower down.
+
+`TopDirectory(rootNode, rules)` returns the directory at the top of the tree `WalkCluster` builds: the one that holds the tree's first `kustomization.yaml`, and so the one to point Flux at. With a `ClusterName` it is the cluster directory; without one it is the root node's name, `cluster` for an unnamed root node, and `.` when the root node is nil (no tree is walked, and the caller applies the directory it writes to). It is spelled as `FullRepoPath` spells every directory, relative to the directory the tree is written into. The walk takes its top from the same place, so the two cannot differ, and the Flux bootstrap asks it for the directory it applies. The rules are validated first, as `WalkCluster` validates them. Two limits: it does not describe a `WalkClusterByPackage` tree, which is placed without the `ClusterName`, one tree per package; and it does not know the directory a writer is given, so a tree written below a sub-path of the repository is at that sub-path joined with this directory.
 
 ### Flatten Single Tier (opt-in)
 

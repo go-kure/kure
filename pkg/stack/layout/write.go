@@ -74,9 +74,9 @@ func checkOriginFileModes(ml *ManifestLayout, cfg Config) error {
 }
 
 // writeManifest writes ml and its children; every directory gets a
-// kustomization.yaml (see ManifestLayout.writeToDisk), except the empty
-// synthetic cluster root and a layout whose mode resolves to
-// KustomizationRecursive. root is false for a child: an AppFileSingle child
+// kustomization.yaml (see ManifestLayout.writeToDisk), except a layout whose
+// mode resolves to KustomizationRecursive. root is false for a child: an
+// AppFileSingle child
 // writes its one file into its Namespace, normally its parent's directory,
 // and the kustomization.yaml the parent writes lists that file by its path
 // relative to the parent's directory (go-kure/kure#860, go-kure/kure#879).
@@ -126,11 +126,12 @@ func writeManifest(plan writerPlan, cfg Config, ml *ManifestLayout, root bool) e
 		return err
 	}
 
-	// Generate kustomization.yaml if there are resources or children, except
-	// at the empty synthetic cluster root (see manifestPlan). Every directory
-	// with manifests should have a kustomization.yaml for proper GitOps
-	// workflow. An AppFileSingle child writes none: its parent's
-	// kustomization.yaml lists its file.
+	// Generate kustomization.yaml (see manifestPlan for which layouts get
+	// one). Every directory with manifests should have a kustomization.yaml
+	// for proper GitOps workflow, and so does the ClusterName directory at
+	// the top of a walked tree, which the Flux bootstrap applies. An
+	// AppFileSingle child writes none: its parent's kustomization.yaml lists
+	// its file.
 	if plan.writesKustomization(ml, root) {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)

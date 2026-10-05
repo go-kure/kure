@@ -105,11 +105,12 @@ const (
 	// SourceRef leaves the Git reference unset rather than guessing a branch.
 	DefaultSourceRef = "latest"
 
-	// DefaultSyncPath is the path a FluxInstance sync block uses when the root
-	// node has no name, and the prefix its name is appended to when it has one.
-	// It has no override: it is the prefix a sync path is built from, not a
-	// value a caller replaces. The gotk bootstrap Kustomization names the same
-	// directory without this prefix (bootstrapDir).
+	// DefaultSyncPath is the path a FluxInstance sync block uses when the
+	// bootstrap applies the root of the source (no root node and no
+	// ClusterName), and the prefix the directory is appended to otherwise
+	// (syncPath). It has no override: it is the prefix a sync path is built
+	// from, not a value a caller replaces. The gotk bootstrap Kustomization
+	// names the same directory without this prefix (bootstrapDir).
 	DefaultSyncPath = "./"
 )
 

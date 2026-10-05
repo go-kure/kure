@@ -345,8 +345,7 @@ What changed, and what to do:
   `<path, "/" → "-">-node`.
 - **Sources live in the root.** Under both integrated placements, every GitRepository or
   OCIRepository the integration derives from a `SourceRef` URL is written once, into the root
-  node's layout (the directory the bootstrap sync path `./<root>` names, not a `ClusterName`
-  wrapper above it). Before, each unit's parent layout held a copy, so a Source shared by several
+  node's layout (the root node's directory, not a `ClusterName` wrapper above it). Before, each unit's parent layout held a copy, so a Source shared by several
   builds had several owners, and pruning one unit deleted a Source the others still used. Golden
   files move the Source to the root. `FluxSeparate` is unchanged.
 - **Refusals.** Two bundles with one name, a CR name used twice, a node or bundle layout written as
@@ -357,16 +356,7 @@ What changed, and what to do:
   any Source already in the tree with the identity of one the integration generates into
   `flux-system`, even an identical one. Under `FluxIntegratedPerBundle`, a caller's copy of a
   generated Source in a `ClusterName` wrapper above the root node is refused too: that build also
-  includes the root's copy, and kustomize refuses one object twice. A Kustomization whose build
-  holds the root node's directory applies what the bootstrap applies, so a patch of it that
-  applies to a Source the integration hosts there, or a postBuild substitution that changes one
-  (with `substituteFrom` set, any `${...}` in the `SourceRef` URL reading a var the inline
-  `substitute` does not set), is refused: the bootstrap
-  applies that directory without either, and the two would keep overwriting each other's Source.
-  Narrow the patch target so that it leaves the Source out, or remove the patch or postBuild from
-  that Kustomization. Since
-  go-kure/kure#979 no bundle renders in the root node's directory, so on a walked tree this is
-  met only by a Kustomization of your own that the integration keeps (below).
+  includes the root's copy, and kustomize refuses one object twice.
   No Kustomization takes its source from inside what it applies (go-kure/kure#979): under
   `FluxIntegratedPerLayout` with a `ClusterName` wrapper above a named root node, the root node's
   directory has a Kustomization of its own, which applies the directory that hosts every
@@ -374,17 +364,21 @@ What changed, and what to do:
   the bundles below share, and a tree in which every `SourceRef` has a URL is refused, naming the
   Kustomization and the Source. Give one bundle a `SourceRef` without a URL, naming a Source that
   exists before the tree is applied, or use `FluxIntegratedPerBundle`. Before, the root bundle's
-  generated Source was accepted there; with Flux pointed at the `ClusterName` directory, the top
-  of the written tree, the Kustomization would have waited for a Source only its own apply
-  creates.
+  generated Source was accepted there; the bootstrap points Flux at the `ClusterName` directory,
+  the top of the written tree, so the Kustomization would have waited for a Source only its own
+  apply creates.
   A Kustomization already in the tree that the integration keeps in place of its own (same name
   and `spec.path`, in the layout that would host it) is held to the same refusals as a generated
   one, whether it is typed, unstructured or inside a `List`: two copies of a generated Source
-  that the integration did not add, in the build of its directory; a root-build patch or
-  postBuild that changes a hosted Source; a `sourceRef` that names a generated Source when its
-  build holds the root node's directory; and a cycle through its `dependsOn`, `wait` or health
-  checks. One that cannot be read as a Flux Kustomization (a field of the wrong type, for one) is
-  refused, naming its layout.
+  that the integration did not add, in the build of its directory; a `sourceRef` that names a
+  generated Source when its build holds the root node's directory; and a cycle through its
+  `dependsOn`, `wait` or health checks. One that cannot be read as a Flux Kustomization (a field
+  of the wrong type, for one) is refused, naming its layout. Its patches and postBuild are its
+  own: the one kept Kustomization that builds the directory hosting the generated Sources is the
+  root node's layout Kustomization below a `ClusterName` wrapper under
+  `FluxIntegratedPerLayout`, and since go-kure/kure#979 the bootstrap applies the wrapper, which
+  lists that Kustomization and not the directory, so it alone applies those Sources (before, a
+  patch or postBuild of it that changed one was refused).
 - **Grouping axes.** `NodeGrouping`, `BundleGrouping` and `ApplicationGrouping` are independent;
   they used to take effect only when bundles and applications were both flat, and a `ClusterName`
   always flattened the root bundle. Combinations that were silently rendered fully nested now
@@ -446,7 +440,8 @@ no longer collide. See the
 ### The root node's bundle has its own directory (breaking change in go-kure/kure#979)
 
 The root node's directory renders no bundle. With a flat `BundleGrouping` (the default) the root
-node's bundle used to render in the root node's directory, the one the bootstrap applies, and the
+node's bundle used to render in the root node's directory, which the bootstrap applies when there
+is no `ClusterName`, and the
 Flux Kustomization that applied that directory was hosted inside it: it was part of the build it
 applied. The bundle now has a directory inside the root node's, named after the bundle
 (`platform/platform-bundle` for root node `platform` with bundle `platform-bundle`) or by the
@@ -860,15 +855,28 @@ Generate Flux system bootstrap manifests. Two modes are available:
 
 When `FluxMode` is empty, it defaults to `"flux-operator"`.
 
-Both modes point Flux at the same directory: the one named after the root node, relative to the
-root of the source, which is where a walk without a `ClusterName` writes a named root node.
-`"gotk"` mode writes it as the bootstrap Kustomization's `spec.path` (`prod`, or `.` when the root
-node has no name); `"flux-operator"` mode writes it as the `FluxInstance`'s `sync.path` (`./prod`,
-or `./`). `"gotk"` mode used to write `manifests/<root>`: if your tree sits under such a prefix,
-set `spec.path` on the returned Kustomization yourself. The bootstrap does not know your layout
-rules, so the walked root can be somewhere else in two cases: a walk with a `ClusterName` writes
-the root in or under the cluster directory, and a walk without one writes an unnamed root node to
-`cluster`, while the bootstrap names the root of the source.
+`GenerateBootstrap` takes the layout rules you write the tree with, and both modes point Flux at
+the top directory of that tree, relative to the root of the source: the cluster directory when
+the rules have a `ClusterName`; without one the root node's name, `cluster` for an unnamed root
+node, and the root of the source when you pass no root node. `"gotk"` mode writes it as the
+bootstrap Kustomization's `spec.path` (`prod`, `clusters/prod`, or `.` for the root of the
+source); `"flux-operator"` mode writes it as the `FluxInstance`'s `sync.path` (`./prod`,
+`./clusters/prod`, or `./`). Pass the same rules you pass to `GenerateFromCluster` or
+`WalkCluster`: the engine refuses rules that are not a `layout.LayoutRules` value, nil included,
+and invalid ones.
+
+**Breaking change (go-kure/kure#979).** `GenerateBootstrap` and `GenerateFluxInstance` take the
+rules as a third argument. The bootstrap used to name the root node whatever the rules were, so
+with a `ClusterName` both paths move to the cluster directory, and an unnamed root node without
+one moves from the root of the source to `cluster`. A named root node without a `ClusterName`
+keeps its path. Apply the regenerated bootstrap objects; until then a cluster keeps applying the
+old directory.
+
+Two limits. The directory is relative to the directory the tree is written into: if you write the
+tree below a sub-path of the repository, or under a prefix such as the `manifests/<root>` that
+`"gotk"` mode once wrote, set `spec.path` or `sync.path` on the returned object yourself. And it
+describes a `WalkCluster` tree: `WalkClusterByPackage` writes one tree per package, placed
+without the `ClusterName`, and the bootstrap does not point at those.
 
 `"flux-operator"` mode needs both `FluxVersion` and `Registry`: they become the `FluxInstance`'s
 distribution version and registry, and Kure has no default for either. If one is empty,
@@ -908,7 +916,7 @@ bootstrapConfig := &stack.BootstrapConfig{
     SourceRef:   "latest",
 }
 
-objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
+objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode, layout.LayoutRules{})
 if err != nil {
     panic(err)
 }
@@ -926,11 +934,13 @@ into the full reference the operator's `GitRepository` needs (`main` becomes `re
 A value that already starts with `refs/` — a tag such as `refs/tags/v1.0.0` — is passed through
 unchanged in `"flux-operator"` mode only; `"gotk"` mode always treats a Git `SourceRef` as a branch.
 
-The root node's name becomes a segment of the path the bootstrap applies, so it is checked as a
-directory name wherever a path is built from it: always in `"gotk"` mode, and in
+Without a `ClusterName` the root node's name is the path the bootstrap applies, so it is checked
+as a directory name wherever a path is built from it: always in `"gotk"` mode, and in
 `"flux-operator"` mode when `SourceURL` is set (without one the `FluxInstance` has no sync and the
 name is not used). A name holding `/`, `\` or a NUL byte, or `.` or `..`, is refused; no root node
-and an unnamed root are valid. In `"gotk"` mode a named root also names the generated source and
+and an unnamed root are valid. Under a `ClusterName` the path is the cluster directory and the
+bootstrap does not check the name as a directory name; the walk still does, as a named root node
+is the directory `<ClusterName>/<root>` of the written tree. In `"gotk"` mode a named root also names the generated source and
 the bootstrap Kustomization's `sourceRef`, so there it must be a DNS-1123 subdomain as well:
 `Prod` and `prod_root` are refused.
 
@@ -952,7 +962,7 @@ bootstrapConfig := &stack.BootstrapConfig{
 
 engine.GetBootstrapGenerator().DefaultNamespace = "custom-flux" // default: "flux-system"
 
-objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
+objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode, layout.LayoutRules{})
 if err != nil {
     panic(err)
 }
@@ -1009,7 +1019,7 @@ bootstrapConfig := &stack.BootstrapConfig{
     SyncName:    "fleet",
 }
 
-fi, err := engine.GetBootstrapGenerator().GenerateFluxInstance(bootstrapConfig, rootNode)
+fi, err := engine.GetBootstrapGenerator().GenerateFluxInstance(bootstrapConfig, rootNode, layout.LayoutRules{})
 if err != nil {
     panic(err)
 }

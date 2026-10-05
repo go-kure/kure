@@ -375,8 +375,14 @@ func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterf
 
 // BootstrapGenerator interface implementation
 
-// GenerateBootstrap creates bootstrap resources for setting up ArgoCD.
-func (w *WorkflowEngine) GenerateBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node) ([]client.Object, error) {
+// GenerateBootstrap creates bootstrap resources for setting up ArgoCD. It
+// takes the layout rules because stack.Workflow passes them (the Flux
+// bootstrap points Flux at the top directory of the tree they write), and
+// reads nothing from them: neither their type nor their values are checked.
+// Rules that are nil, of another type than layout.LayoutRules, or invalid
+// change nothing here, where the Flux engine's GenerateBootstrap refuses all
+// three.
+func (w *WorkflowEngine) GenerateBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node, _ stack.LayoutRulesProvider) ([]client.Object, error) {
 	if config == nil || !config.Enabled {
 		return nil, nil
 	}

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -402,33 +401,15 @@ func manifestPlan(basePath string, cfg Config) writerPlan {
 			if kustomizationMode(l) == KustomizationRecursive {
 				return false
 			}
+			// The ClusterName directory at the top of a walked tree (Name "",
+			// a single-segment Namespace) gets its kustomization.yaml like
+			// every other directory, also when it holds no resource of its
+			// own. It is the directory the Flux bootstrap applies
+			// (TopDirectory): without the file Flux would build every file
+			// below it, each bundle's included, and apply them a second
+			// time. WriteManifest used to write none there
+			// (go-kure/kure#979); WriteToDisk and WriteToTar always did.
 			sorted, _ := files(l)
-			// The synthetic cluster root is the cluster-name container
-			// created by walkClusterWithClusterName: Name="", single-segment
-			// Namespace. It gets no kustomization.yaml when it has no
-			// resources of its own. With FlattenSingleTier the root may
-			// absorb a collapsed child's Resources, in which case it does
-			// need one, and so does one that holds an AppFileSingle child's
-			// file (a child with no resources writes none). An unnamed root
-			// node is rendered into that directory: when it has a bundle,
-			// which is rendered one directory lower (OriginUnit), the
-			// directory keeps its kustomization.yaml, as it did while it
-			// rendered the bundle itself. Without one, a Flux Kustomization
-			// whose spec.path is this directory would build every file below
-			// it, the bundle's included, and apply them a second time
-			// (go-kure/kure#979).
-			skipClusterRoot := l.Namespace != "" &&
-				strings.Count(l.Namespace, string(filepath.Separator)) == 0 &&
-				l.Name == "" &&
-				len(sorted) == 0 &&
-				!l.rendersBundle() &&
-				l.origin.unit == nil &&
-				!slices.ContainsFunc(l.Children, func(c *ManifestLayout) bool {
-					return c != nil && manifestAppMode(c, cfg) == AppFileSingle && c.writesSingleFile()
-				})
-			if skipClusterRoot {
-				return false
-			}
 			return manifestAppMode(l, cfg) != AppFileSingle || (root && (len(sorted) > 0 || len(l.Children) > 0))
 		},
 	}

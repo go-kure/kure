@@ -2,7 +2,6 @@ package fluxcd_test
 
 import (
 	"bytes"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -228,23 +227,24 @@ func TestKeptKustomization_ReconcileOrder(t *testing.T) {
 }
 
 // TestKeptKustomization_RootBuildChangesHostedSource: a kept Kustomization
-// that builds the directory the Flux bootstrap applies, where the integration
-// hosts a Source, is refused in every form when a patch of it selects the
-// Source or its postBuild substitutes into it (go-kure/kure#908). The one such
-// Kustomization is the layout Kustomization of the root node's layout, under
-// FluxIntegratedPerLayout below a ClusterName wrapper: the root bundle's
-// builds the bundle's own directory (go-kure/kure#979), and is accepted with
-// the same patch or postBuild in every form and placement.
+// whose patch selects a Source the integration hosts, or whose postBuild
+// substitutes into it, is accepted in every form: no build the Flux bootstrap
+// applies holds that Source beside it (go-kure/kure#908 refuses the one that
+// would). The layout Kustomization of the root node's layout, under
+// FluxIntegratedPerLayout below a ClusterName wrapper, builds the directory
+// that hosts the Source, and the wrapper the bootstrap applies lists that
+// Kustomization, not the directory: it is the only one to apply the Source
+// (go-kure/kure#979). The root bundle's builds the bundle's own directory,
+// which holds no Source, in every placement.
 func TestKeptKustomization_RootBuildChangesHostedSource(t *testing.T) {
 	plain := func(_, _ *stack.Bundle) {}
 	wrapped := propertyGroupings["nodeOnly"]
 	wrapped.FluxPlacement = layout.FluxIntegratedPerLayout
 	wrapped.ClusterName = "prod"
 	for _, tc := range []struct {
-		name    string
-		build   func() *stack.Cluster
-		change  func(k *kustv1.Kustomization)
-		refused string
+		name   string
+		build  func() *stack.Cluster
+		change func(k *kustv1.Kustomization)
 	}{
 		{
 			name:  "patch selecting the Source",
@@ -252,7 +252,6 @@ func TestKeptKustomization_RootBuildChangesHostedSource(t *testing.T) {
 			change: func(k *kustv1.Kustomization) {
 				k.Spec.Patches = []kustomize.Patch{{Patch: sourcePatch, Target: &kustomize.Selector{Kind: "GitRepository"}}}
 			},
-			refused: "patch 0 (target {kind: GitRepository}) selects it",
 		},
 		{
 			name:  "postBuild substituting into the Source",
@@ -260,24 +259,40 @@ func TestKeptKustomization_RootBuildChangesHostedSource(t *testing.T) {
 			change: func(k *kustv1.Kustomization) {
 				k.Spec.PostBuild = &kustv1.PostBuild{Substitute: map[string]string{"GIT_HOST": "git.example.com"}}
 			},
-			refused: "postBuild substitution changes it",
 		},
 	} {
-		rootCR := rootLayoutCRName(t, tc.build, wrapped, "prod/platform")
+		const rootDir = "prod/platform"
+		rootCR := rootLayoutCRName(t, tc.build, wrapped, rootDir)
 		for _, form := range keptForms {
 			t.Run(tc.name+"/root node's layout/"+form, func(t *testing.T) {
 				checkKeptTreeWrites(t, tc.build, wrapped, rootCR, form)
 
 				ml, c := keptIn(t, tc.build, wrapped, rootCR, form, tc.change, nil)
-				err := integrate(ml, c, wrapped)
-				if err == nil {
-					t.Fatalf("got no error, want a refusal naming %q", tc.refused)
+				if err := integrate(ml, c, wrapped); err != nil {
+					t.Fatalf("the kept Kustomization of the root node's layout is the only one to apply what the layout hosts: %v", err)
 				}
-				for _, want := range []string{fmt.Sprintf("Flux Kustomization %q", rootCR), `GitRepository "shared"`, tc.refused} {
-					if !strings.Contains(err.Error(), want) {
-						t.Errorf("refusal %q does not name %q", err, want)
+				if got, want := sourceCopies(ml, "shared"), map[string]int{rootDir: 1}; !intMapsEqual(got, want) {
+					t.Errorf("GitRepository shared hosted %v, want %v", got, want)
+				}
+				// The integration placed no Kustomization of its own beside
+				// the caller's, which carries the patch or postBuild.
+				var typed []*kustv1.Kustomization
+				for _, k := range kustomizations(ml) {
+					if k.Name == rootCR {
+						typed = append(typed, k)
 					}
 				}
+				if form != "typed" {
+					if len(typed) != 0 {
+						t.Errorf("the integration placed its own Kustomization %q beside the kept one", rootCR)
+					}
+					checkBootstrapBuildHoldsNoSource(t, ml)
+					return
+				}
+				if len(typed) != 1 || (len(typed[0].Spec.Patches) == 0 && typed[0].Spec.PostBuild == nil) {
+					t.Fatalf("the tree holds %d typed Kustomizations %q, want the kept one alone, with its patch or postBuild", len(typed), rootCR)
+				}
+				checkOnlyTheCRAppliesTheSource(t, ml, rootDir)
 			})
 			for _, placement := range integratedPlacements {
 				t.Run(tc.name+"/root bundle/"+string(placement)+"/"+form, func(t *testing.T) {

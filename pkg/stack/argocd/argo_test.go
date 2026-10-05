@@ -393,7 +393,7 @@ func TestGenerateBootstrap_Disabled(t *testing.T) {
 	config := &stack.BootstrapConfig{Enabled: false}
 	node := &stack.Node{}
 
-	objs, err := engine.GenerateBootstrap(config, node)
+	objs, err := engine.GenerateBootstrap(config, node, layout.LayoutRules{})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -406,7 +406,7 @@ func TestGenerateBootstrap_NilConfig(t *testing.T) {
 	engine := Engine()
 	node := &stack.Node{}
 
-	objs, err := engine.GenerateBootstrap(nil, node)
+	objs, err := engine.GenerateBootstrap(nil, node, layout.LayoutRules{})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -420,12 +420,46 @@ func TestGenerateBootstrap_Enabled(t *testing.T) {
 	config := &stack.BootstrapConfig{Enabled: true}
 	node := &stack.Node{}
 
-	objs, err := engine.GenerateBootstrap(config, node)
+	objs, err := engine.GenerateBootstrap(config, node, layout.LayoutRules{})
 	if err == nil {
 		t.Error("expected error for unimplemented ArgoCD bootstrap")
 	}
 	if objs != nil {
 		t.Errorf("expected nil objects for unimplemented bootstrap, got %d", len(objs))
+	}
+}
+
+// TestGenerateBootstrap_ReadsNothingFromRules: the ArgoCD engine takes the
+// layout rules because stack.Workflow passes them and reads nothing from them
+// (go-kure/kure#979). Rules that are nil, of another type or invalid give the
+// result valid ones give, for a nil, a disabled and an enabled config. The
+// Flux engine refuses all three.
+func TestGenerateBootstrap_ReadsNothingFromRules(t *testing.T) {
+	engine := Engine()
+	for rulesName, rules := range map[string]stack.LayoutRulesProvider{
+		"nil":          nil,
+		"another type": badArgoRules{},
+		"invalid":      layout.LayoutRules{ClusterName: "../prod"},
+	} {
+		for configName, config := range map[string]*stack.BootstrapConfig{
+			"nil config": nil,
+			"disabled":   {Enabled: false},
+			"enabled":    {Enabled: true},
+		} {
+			t.Run(rulesName+"/"+configName, func(t *testing.T) {
+				wantObjs, wantErr := engine.GenerateBootstrap(config, &stack.Node{Name: "prod"}, layout.LayoutRules{})
+				objs, err := engine.GenerateBootstrap(config, &stack.Node{Name: "prod"}, rules)
+				if objs != nil || wantObjs != nil {
+					t.Fatalf("got %d objects, %d with valid rules; the ArgoCD bootstrap returns none", len(objs), len(wantObjs))
+				}
+				if (err == nil) != (wantErr == nil) || (err != nil && err.Error() != wantErr.Error()) {
+					t.Errorf("err = %v, want what valid rules give: %v", err, wantErr)
+				}
+				if err != nil && strings.Contains(err.Error(), "rules") {
+					t.Errorf("err = %v names the rules, which are not read", err)
+				}
+			})
+		}
 	}
 }
 

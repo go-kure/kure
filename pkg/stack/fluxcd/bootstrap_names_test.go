@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 // TestBootstrap_RootNodeName: the bootstrap generator takes a root node, not a
@@ -64,7 +65,7 @@ func TestBootstrap_RootNodeName(t *testing.T) {
 		}
 		for _, mode := range []string{fluxstack.ModeGotk, fluxstack.DefaultFluxMode} {
 			t.Run(tt.name+"/GenerateBootstrap/"+mode, func(t *testing.T) {
-				objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(mode), tt.root)
+				objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(mode), tt.root, layout.LayoutRules{})
 				check(t, err, tt.wantErr, name)
 				if tt.wantErr != "" && objs != nil {
 					t.Fatalf("got %d objects next to the error", len(objs))
@@ -72,7 +73,7 @@ func TestBootstrap_RootNodeName(t *testing.T) {
 			})
 		}
 		t.Run(tt.name+"/GenerateFluxInstance", func(t *testing.T) {
-			fi, err := fluxstack.NewBootstrapGenerator().GenerateFluxInstance(config(fluxstack.DefaultFluxMode), tt.root)
+			fi, err := fluxstack.NewBootstrapGenerator().GenerateFluxInstance(config(fluxstack.DefaultFluxMode), tt.root, layout.LayoutRules{})
 			check(t, err, tt.wantErr, name)
 			if tt.wantErr != "" && fi != nil {
 				t.Fatal("got a FluxInstance next to the error")
@@ -82,7 +83,7 @@ func TestBootstrap_RootNodeName(t *testing.T) {
 
 	// The accepted name is the last path segment, unchanged. What precedes it
 	// is the bootstrap path's own rule, tested with that rule.
-	objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.ModeGotk), &stack.Node{Name: "prod.eu"})
+	objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.ModeGotk), &stack.Node{Name: "prod.eu"}, layout.LayoutRules{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +114,7 @@ func TestBootstrap_RootNodeName_NoSync(t *testing.T) {
 	}
 	root := &stack.Node{Name: "../outside"}
 
-	fi, err := fluxstack.NewBootstrapGenerator().GenerateFluxInstance(config(fluxstack.DefaultFluxMode), root)
+	fi, err := fluxstack.NewBootstrapGenerator().GenerateFluxInstance(config(fluxstack.DefaultFluxMode), root, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateFluxInstance without a source: got %v, want nil", err)
 	}
@@ -121,7 +122,7 @@ func TestBootstrap_RootNodeName_NoSync(t *testing.T) {
 		t.Fatalf("GenerateFluxInstance without a source: got %+v, want a FluxInstance without sync", fi)
 	}
 
-	objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.DefaultFluxMode), root)
+	objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.DefaultFluxMode), root, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap, flux-operator mode without a source: got %v, want nil", err)
 	}
@@ -129,7 +130,7 @@ func TestBootstrap_RootNodeName_NoSync(t *testing.T) {
 		t.Fatal("GenerateBootstrap, flux-operator mode without a source: got no objects")
 	}
 
-	objs, err = fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.ModeGotk), root)
+	objs, err = fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.ModeGotk), root, layout.LayoutRules{})
 	if err == nil || !strings.Contains(err.Error(), "path separator") {
 		t.Fatalf("GenerateBootstrap, gotk mode without a source: got %v, want the name refused", err)
 	}
@@ -143,11 +144,11 @@ func TestBootstrap_RootNodeName_NoSync(t *testing.T) {
 // check in GenerateFluxInstance, so it must accept a nil config itself.
 func TestBootstrap_RootNodeName_NilConfig(t *testing.T) {
 	for _, root := range []*stack.Node{nil, {}, {Name: "production"}, {Name: "../outside"}} {
-		fi, err := fluxstack.NewBootstrapGenerator().GenerateFluxInstance(nil, root)
+		fi, err := fluxstack.NewBootstrapGenerator().GenerateFluxInstance(nil, root, layout.LayoutRules{})
 		if err != nil || fi != nil {
 			t.Fatalf("GenerateFluxInstance(nil, %+v) = %v, %v; want nil, nil", root, fi, err)
 		}
-		objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(nil, root)
+		objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(nil, root, layout.LayoutRules{})
 		if err != nil || objs != nil {
 			t.Fatalf("GenerateBootstrap(nil, %+v) = %v, %v; want nil, nil", root, objs, err)
 		}
@@ -176,7 +177,7 @@ func TestBootstrap_RootNodeName_SourceName(t *testing.T) {
 	for _, name := range []string{"Prod", "prod_root"} {
 		root := &stack.Node{Name: name}
 		for _, u := range []string{url, ""} {
-			objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.ModeGotk, u), root)
+			objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.ModeGotk, u), root, layout.LayoutRules{})
 			if err == nil {
 				t.Fatalf("gotk mode, root %q, SourceURL %q: generated, want the name refused", name, u)
 			}
@@ -190,11 +191,11 @@ func TestBootstrap_RootNodeName_SourceName(t *testing.T) {
 			}
 		}
 
-		objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.DefaultFluxMode, url), root)
+		objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(fluxstack.DefaultFluxMode, url), root, layout.LayoutRules{})
 		if err != nil || len(objs) == 0 {
 			t.Fatalf("flux-operator mode, root %q: got %d objects, %v; want the bootstrap", name, len(objs), err)
 		}
-		fi, err := fluxstack.NewBootstrapGenerator().GenerateFluxInstance(config(fluxstack.DefaultFluxMode, url), root)
+		fi, err := fluxstack.NewBootstrapGenerator().GenerateFluxInstance(config(fluxstack.DefaultFluxMode, url), root, layout.LayoutRules{})
 		if err != nil || fi == nil || fi.Spec.Sync == nil || path.Base(fi.Spec.Sync.Path) != name {
 			t.Fatalf("GenerateFluxInstance, root %q: got %+v, %v; want a sync path ending in the name", name, fi, err)
 		}

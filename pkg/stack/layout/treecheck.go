@@ -571,11 +571,12 @@ func checkSingleChildGenerators(child *ManifestLayout, outDir outDirFunc) error 
 // checkUnwrittenGenerators refuses a layout with ConfigMapGenerators that the
 // writer writes no kustomization.yaml for (go-kure/kure#899): a generator
 // exists only inside a kustomization.yaml, so it would be dropped. That is an
-// AppFileSingle root with no resources and no children, and, in
-// WriteManifest, a layout shaped like the synthetic cluster root (Name "", a
-// single-segment Namespace) with no resource file, no bundle and no
-// AppFileSingle child that writes a file. An AppFileSingle child is refused in
-// its own words by checkSingleChildGenerators before it is walked, and a
+// AppFileSingle root with no resources and no children, in every writer. It
+// was also WriteManifest's empty ClusterName directory, until WriteManifest
+// began to write that directory's kustomization.yaml (go-kure/kure#979): its
+// generators are now written, as WriteToDisk and WriteToTar write them. An
+// AppFileSingle child is refused in its own words by
+// checkSingleChildGenerators before it is walked, and a
 // KustomizationRecursive layout by checkRecursiveLayouts.
 func checkUnwrittenGenerators(l *ManifestLayout, plan writerPlan, root bool) error {
 	if len(l.ConfigMapGenerators) == 0 || plan.writesKustomization(l, root) ||
