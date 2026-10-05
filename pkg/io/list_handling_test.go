@@ -686,7 +686,8 @@ func TestParse_ItemOfAnUnregisteredListKeepsWhatItStates(t *testing.T) {
 
 // The bytes an item is decoded from, one for one: what the item leaves out of
 // apiVersion and kind stands behind its last field, and every byte the item
-// has is where it was, white space and a field stated twice included.
+// has is kept, in its order, white space and a field stated twice included;
+// the closing brace and what follows it stand behind what was added.
 func TestWithListIdentity_ByteForByte(t *testing.T) {
 	const listVersion, itemKind = "example.com/v1", "Widget"
 	for _, c := range []struct{ name, item, apiVersion, kind, want string }{
