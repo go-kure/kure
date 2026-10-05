@@ -361,7 +361,8 @@ What changed, and what to do:
   `FluxIntegratedPerLayout` with a `ClusterName` wrapper above a named root node, the root node's
   directory has a Kustomization of its own, which applies the directory that hosts every
   generated Source. It takes none of them; its source is the one `SourceRef` without a URL that
-  the bundles below share, and a tree in which every `SourceRef` has a URL is refused, naming the
+  the bundles below share (where two of them differ, the root node's own bundle's, when that has
+  no URL), and a tree in which every `SourceRef` has a URL is refused, naming the
   Kustomization and the Source. Give one bundle a `SourceRef` without a URL, naming a Source that
   exists before the tree is applied, or use `FluxIntegratedPerBundle`. Before, the root bundle's
   generated Source was accepted there; the bootstrap points Flux at the `ClusterName` directory,
@@ -720,7 +721,7 @@ A child layout receives a CR when:
 - `!child.UmbrellaChild`
 - `child.ApplicationFileMode != AppFileSingle`
 - it renders no bundle (a child that does already has that bundle's CR in the parent)
-- a source resolves: the `SourceRef` of the nearest bundle-rendering layout at or above the parent, with both `Kind` and `Name` set (with `BundleGrouping: GroupFlat` the root node's directory renders no bundle and counts with the `SourceRef` of the root node's own bundle; with `GroupByName` no node's directory counts), else the one `SourceRef` the URL-less bundles below the child share (nil, empty struct, missing either field, or ambiguous is a hard error — a `Kustomization` without `spec.sourceRef` is invalid); the Kustomization of the root node's directory, below a `ClusterName` wrapper, takes no Source the integration generates and is refused when no other is left (go-kure/kure#979)
+- a source resolves: the `SourceRef` of the nearest bundle-rendering layout at or above the parent, with both `Kind` and `Name` set (with `BundleGrouping: GroupFlat` the root node's directory renders no bundle and counts with the `SourceRef` of the root node's own bundle; with `GroupByName` no node's directory counts), else the one `SourceRef` the URL-less bundles below the child share, else (no `SourceRef` without a URL below the child, or two that differ) the `SourceRef` of the bundle of the nearest node, at or above the child's own, that has one: what a node's directory takes with `GroupByName` when every `SourceRef` at and below it has a URL or the ones without a URL below it differ (nil, empty struct, missing either field, or still ambiguous with no such bundle is a hard error — a `Kustomization` without `spec.sourceRef` is invalid); the Kustomization of the root node's directory, below a `ClusterName` wrapper, takes no Source the integration generates and is refused when no other is left (go-kure/kure#979)
 
 `CreateLayoutWithResources` validates SourceRef completeness for all bundles before layout walking. Both the node bundle and every umbrella child bundle must have `SourceRef.Kind` and `SourceRef.Name` set when either inline mode (`FluxIntegratedPerLayout` or `FluxIntegratedPerBundle`) is active — both emit bundle/node CRs carrying a `spec.sourceRef`. `FluxSeparate` and non-Flux callers are unaffected.
 
