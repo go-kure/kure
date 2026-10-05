@@ -56,7 +56,21 @@ Before go-kure/kure#771, `FullRepoPath()` dropped `Name` whenever `Namespace` en
 string, and callers commonly set `Namespace` to the full path including the child's own name. That
 rule also collapsed layouts that merely shared a name or a name suffix onto one directory, losing
 resources from the kustomize graph. A caller still joining the child's `Name` into its `Namespace`
-now gets that name twice (`.../<name>/<name>`); pass the parent's path instead.
+would get that name twice (`.../<name>/<name>`), below the directory its parent's
+`kustomization.yaml` lists, which then holds no `kustomization.yaml`. Every writer refuses such a
+child before anything is written (go-kure/kure#979): a directory child that its parent lists and
+whose `Namespace` is `<parent directory>/<Name>`, the path the child itself should have. The error
+names both layouts, the directory written and the directory the parent lists; pass the parent's
+path instead. Only that shape is refused. Layouts of one name built with the parent's path nest as
+above (`web/web`), a child placed elsewhere on purpose is written as described above, and so is a
+child no entry names: one its parent does not list (an umbrella child, one that renders bundles, a
+directory child of a `FluxIntegratedPerLayout` parent, and for `WriteToDisk` and `WriteToTar` a
+child of another package), or any child of a parent that writes no `kustomization.yaml`. The
+directories compared are the writer's own, so under an `AppFileSingle` root the parent directory
+is the root's `Namespace`.
+
+**Breaking change (go-kure/kure#979).** A hand-built tree with such a child was written, with a
+parent entry that named a directory without a `kustomization.yaml`. It is now refused.
 
 Every writer (`WriteToDisk`, `WriteToTar`, `WriteManifest`) checks the whole tree before writing
 anything, and refuses two layouts that resolve to the same directory, or two `AppFileSingle`

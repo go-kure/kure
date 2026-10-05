@@ -859,6 +859,30 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
       and through a layout's own `ManifestLayout.ApplicationFileMode` (`manifest.go`).
     - Breaking: a caller that set the field gets a compile error. Output does not change.
     - Tests: `TestLayoutRules_HasNoApplicationFileMode` in `pkg/stack/layout/types_test.go`.
+11. **A directory child whose `Namespace` is its own path is written with a dangling parent
+    entry.** Shipped.
+    - Before: `ManifestLayout.FullRepoPath` joins `Name` onto `Namespace` (`manifest.go`), so a
+      hand-built child that set `Namespace` to its own path, `<parent directory>/<name>`, was
+      written to `<parent directory>/<name>/<name>`, while the parent's `kustomization.yaml`
+      listed `<name>` (`childEntry` in `writerplan.go`): a directory without a
+      `kustomization.yaml`. Nothing refused it; the tree was written and the build of the parent
+      failed.
+    - Now: the pre-write tree check (`checkLayoutTree`, through `checkDirectoryChildEntry` in
+      `writerplan.go`) refuses that one shape, for every writer whose parent lists the child. The
+      error names both layouts, the directory written and the directory the parent lists, and
+      says to set `Namespace` to the parent's path. The directories compared are the writer's
+      own, so under an `AppFileSingle` root the parent directory is the root's `Namespace`.
+    - Not refused: layouts of one name built with the parent's path (`web/web`); a child placed
+      elsewhere on purpose, such as a root that lists sibling layers living under a group
+      directory, which `pkg/stack/layout/README.md` allows; a child no entry names (one its
+      parent does not list, or any child of a parent that writes no `kustomization.yaml`). No
+      walked tree meets the refusal.
+    - Breaking: a hand-built tree with such a child was written and is now refused.
+    - Tests: `TestWriters_RefuseDirectoryChildNestedBelowItsEntry`,
+      `TestWriters_DirectoryChildInParentPathIsListed`,
+      `TestWriters_DirectoryChildPlacedElsewhereIsWritten`,
+      `TestWriters_UnlistedDirectoryChildMayNest` and `TestWalkers_SameNameLevelsAreWritten` in
+      `pkg/stack/layout/dirchild_test.go`.
 
 **Acceptance.** Each target has a test rendering the input above and asserting the expected tree;
 the shipped items name theirs.

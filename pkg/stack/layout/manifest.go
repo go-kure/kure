@@ -115,8 +115,9 @@ func (ml *ManifestLayout) resolveManifestFileName() ManifestFileNameFunc {
 
 // FullRepoPath returns the layout's directory: Namespace joined with Name.
 // Namespace is always the parent's path ("." for the tree root); an empty
-// Namespace means "cluster". A child whose Namespace already ends in its Name
-// nests one level deeper (go-kure/kure#771); set Namespace to the parent path.
+// Namespace means "cluster". A child whose Namespace is already its own path
+// nests one level deeper (go-kure/kure#771), and the writers refuse it where
+// its parent lists it (go-kure/kure#979); set Namespace to the parent path.
 func (ml *ManifestLayout) FullRepoPath() string {
 	ns := ml.Namespace
 	if ns == "" {

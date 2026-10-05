@@ -30,6 +30,9 @@ import (
 //     lists, lands outside the parent's directory or in a spelling of it that
 //     differs only in case, or the child's Name is rooted or holds a path
 //     separator (see checkSingleChildEntry);
+//   - a directory child, which its parent's kustomization.yaml lists by its
+//     Name, has its own path as Namespace and so is written below the
+//     directory listed (see checkDirectoryChildEntry);
 //   - a layout holds one object twice, counting the ConfigMaps its
 //     kustomization.yaml generates (see checkResourceIdentities);
 //   - an extra file takes a path the writer owns (see checkExtraFiles);
@@ -117,6 +120,13 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 		return err
 	}
 	if err := checkSingleFiles(root, plan); err != nil {
+		return err
+	}
+	// After the checks above, so a tree they refuse (a ".." segment, two
+	// layouts in one directory, a file where a directory is needed) is refused
+	// in their words; before the checks below, which read what each build
+	// takes in from the same entries.
+	if err := checkDirectoryChildEntries(root, plan); err != nil {
 		return err
 	}
 	if err := checkRecursiveLayouts(root, plan); err != nil {
