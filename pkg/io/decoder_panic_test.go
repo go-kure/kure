@@ -215,6 +215,11 @@ func TestDecoderPanic(t *testing.T) {
 // kind a caller could go on with. A decode that does not panic returns what the
 // deserializer returned.
 func TestDecodeRegistered_PanicReturnsTheErrorAlone(t *testing.T) {
+	// A parse registers the schemes before it decodes; this test decodes
+	// without a parse.
+	if err := kubernetes.RegisterSchemes(); err != nil {
+		t.Fatal(err)
+	}
 	policyKind := schema.GroupVersionKind{Group: "cilium.io", Version: "v2", Kind: "CiliumNetworkPolicy"}
 	for _, tc := range []struct {
 		name string
