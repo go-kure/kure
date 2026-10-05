@@ -57,19 +57,20 @@ func TestRegisteredScopesComeFromTheResolution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scopes := map[string]markers.Scope{}
-	for _, d := range resolved {
-		scopes[d.Key] = d.Scope
+	// One resolution per kind, in the order given, so the two are paired by
+	// position. A map keyed by group/kind would give both versions of a kind
+	// registered twice the resolution of whichever came last.
+	if len(resolved) != len(all) {
+		t.Fatalf("%d scopes resolved for %d kinds", len(resolved), len(all))
 	}
 	namespaced, cluster := 0, 0
-	for _, k := range all {
-		scope, ok := scopes[k.Key()]
-		if !ok {
-			t.Errorf("%s: no resolved scope", k.Key())
-			continue
+	for i, k := range all {
+		d := resolved[i]
+		if d.Key != k.Key() {
+			t.Fatalf("resolution %d is for %s, the kind at that position is %s", i, d.Key, k.GVK)
 		}
-		if want := scope != markers.ScopeCluster; k.Namespaced != want {
-			t.Errorf("%s: Registered says namespaced=%v, the resolution says %v", k.Key(), k.Namespaced, want)
+		if want := d.Scope != markers.ScopeCluster; k.Namespaced != want {
+			t.Errorf("%s: Registered says namespaced=%v, the resolution says %v", k.GVK, k.Namespaced, want)
 		}
 		if k.Namespaced {
 			namespaced++
@@ -102,29 +103,31 @@ func TestDerivedScopesAgreeWithTheFrozenFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := map[string]ScopeSource{}
-	for _, d := range resolved {
-		source[d.Key] = d.Source
-	}
-	byKey := map[string]Kind{}
-	for _, k := range all {
-		byKey[k.Key()] = k
+	// Both are one entry per kind in the order given. They are paired by
+	// position: the source belongs to one version's type, and a kind registered
+	// at two versions has two entries under one group/kind key.
+	if len(resolved) != len(all) {
+		t.Fatalf("resolved %d scopes for %d kinds", len(resolved), len(all))
 	}
 
 	fromMarker, clusterFromMarker := 0, 0
 	var elsewhere []string
-	for _, d := range derived {
-		k := byKey[d.Key]
+	for i, d := range derived {
+		k := all[i]
+		if d.Key != k.Key() || resolved[i].Key != k.Key() {
+			t.Fatalf("entry %d: derived %s, resolved %s, the kind at that position is %s", i, d.Key, resolved[i].Key, k.GVK)
+		}
+		source := resolved[i].Source
 		wantCluster := frozenClusterScoped[d.Key]
 		gotCluster := d.Scope == markers.ScopeCluster
-		if source[d.Key] != SourceMarker {
+		if source != SourceMarker {
 			// The built-in modules carry no markers at all, and an unmarked CRD
 			// type is answered from the manifest its module ships. Neither is a
 			// parser result, so neither is evidence about the parser.
 			if gotCluster {
-				t.Errorf("%s (%s.%s): a marker derived Cluster, but the resolution used %s", d.Key, k.ImportPath, k.TypeName, source[d.Key])
+				t.Errorf("%s (%s.%s): a marker derived Cluster, but the resolution used %s", k.GVK, k.ImportPath, k.TypeName, source)
 			}
-			elsewhere = append(elsewhere, d.Key+" ["+string(source[d.Key])+"]")
+			elsewhere = append(elsewhere, k.GVK.String()+" ["+string(source)+"]")
 			continue
 		}
 		fromMarker++

@@ -16,7 +16,7 @@ example built.
 
 ## Constructors
 
-Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_generated_create.go`, produced from the scheme by `pkg/kubernetes/internal/gen` (`make gen-builders`, checked by `make check-builders` in CI). A wrapper delegates to `kubernetes.Create[T]` and emits **TypeMeta and identity only**: no default, no label, no spec value. Namespaced kinds take `(name, namespace)`, cluster-scoped kinds take `(name)`. The upstream struct is the construction API; set spec fields directly or through the admissible `Set*`/`Add*` sugar below.
+Every kind this package registers, except `BGPPeer` at the deprecated `metallb.io/v1beta1` (see [BGP Peers](#bgp-peers)), has a generated `Create<Kind>` wrapper in `zz_generated_create.go`, produced from the scheme by `pkg/kubernetes/internal/gen` (`make gen-builders`, checked by `make check-builders` in CI). A wrapper delegates to `kubernetes.Create[T]` and emits **TypeMeta and identity only**: no default, no label, no spec value. Namespaced kinds take `(name, namespace)`, cluster-scoped kinds take `(name)`. The upstream struct is the construction API; set spec fields directly or through the admissible `Set*`/`Add*` sugar below.
 
 <!-- doc-example: pkg/kubernetes/metallb ExampleCreateIPAddressPool -->
 ```go
@@ -53,8 +53,9 @@ MetalLB serves `BGPPeer` at two versions: `metallb.io/v1beta1`, which it depreca
 
 Both versions are registered, so a manifest at either one parses to its own typed object. Only
 v1beta2 has a constructor: a wrapper is named after its kind, and one package cannot hold two
-`CreateBGPPeer`. To build a v1beta1 object, use the upstream type directly
-(`&metallbv1beta1.BGPPeer{...}` with its `TypeMeta` set). kure does not convert between the two.
+`CreateBGPPeer`. To build a v1beta1 object, name the upstream type:
+`kubernetes.Create[metallbv1beta1.BGPPeer](name, namespace)`, the generic form every wrapper calls,
+or the struct itself with its `TypeMeta` set. kure does not convert between the two.
 
 <!-- doc-example: pkg/kubernetes/metallb ExampleCreateBGPPeer -->
 ```go

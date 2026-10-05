@@ -83,7 +83,8 @@ the generator refuses that. The version that goes without is listed, with the re
 in `skippedWrappers` (`pkg/kubernetes/internal/kinds/skips.go`). It stays registered:
 a manifest at that version still parses to its typed object and the kind keeps its row
 in the [generated table](/api-reference/api-tables/). A caller that needs to build one
-uses the upstream type directly. An entry is accepted only when it resolves such a
+names the upstream type: the generic `Create[T]` above still works for it, since the
+type is registered. An entry is accepted only when it resolves such a
 clash — it names a registered kind, gives a reason, and another version of the same
 kind in the same package keeps the wrapper — so the table cannot be used to drop a
 constructor nothing else stands in for.
@@ -626,16 +627,17 @@ version:
   registered at some other version is not an answer — it reads as unregistered,
   which is what it is.
 - `KindForAnyVersion(apiVersion, kind)` does not require the version to be
-  registered, and is the row behind the version-insensitive answers: scope, and what
-  declared it. It returns the row for the exact version when kure registers it, and
-  otherwise the row `KindByGroupKind` returns. That row may describe a different
-  version than the one asked about, so anything version-specific on it is not an
-  answer to the question that was asked.
+  registered, and is the row behind the version-insensitive answer: scope. It returns
+  the row for the exact version when kure registers it, and otherwise the row
+  `KindByGroupKind` returns. That row may describe a different version than the one
+  asked about, so anything version-specific on it is not an answer to the question
+  that was asked. `ScopeSource` is one of those: it says what declared the scope for
+  the returned row's own type.
 - `KindByGroupKind("group/Kind")` returns one row for the group/kind. A group/kind
   registered at two versions has two rows — MetalLB's `BGPPeer`, at
   `metallb.io/v1beta1` and `metallb.io/v1beta2` — and this returns the first in table
   order, the lowest version string, which is not necessarily the stored one. Read from
-  it only what the versions share.
+  it only what the versions share, which is the scope.
 - `IsNamespaced(apiVersion, kind)` ignores the version. Scope is a property of the
   resource and is the same across the versions of one group/kind, so a manifest
   written against a version kure does not register is still answered rather than
