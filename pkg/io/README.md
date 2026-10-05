@@ -42,10 +42,10 @@ for _, obj := range append(objects, more...) {
 
 ### Parse Errors
 
-A parse reads every document of the stream. Each one that does not decode is an
-error in the `ParseErrors` value the parse returns, a type of the
-[errors](/api-reference/errors/) package, and the objects that did decode are
-returned beside it.
+A document that is well-formed but does not decode into a Kubernetes object is
+an error in the `ParseErrors` value the parse returns, a type of the
+[errors](/api-reference/errors/) package. The other documents of the stream are
+still decoded, and their objects are returned beside the error.
 
 A registered kind is decoded into its upstream Go type, so that type's own
 `UnmarshalJSON` runs inside the parse. One that panics does not take the caller
