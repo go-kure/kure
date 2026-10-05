@@ -52,7 +52,10 @@ configurations and the four admission policy kinds are registered and come back 
 their `k8s.io/api` types in both modes; a caller that matched them as
 `*unstructured.Unstructured` must match the typed object instead. The same holds for
 `APIService`, typed as its `k8s.io/kube-aggregator` type, and for the Flux
-`ImageRepository` and `ImagePolicy`. `VerticalPodAutoscaler` is not registered and
+`ImageRepository` and `ImagePolicy`. The MetalLB `BGPPeer` at `metallb.io/v1beta2` is
+registered beside `metallb.io/v1beta1` and comes back as its typed object too; a caller
+that matched it as `*unstructured.Unstructured` must match the typed object instead.
+`VerticalPodAutoscaler` is not registered and
 still needs `AllowUnstructured`. The full list is the
 [generated table](/api-reference/api-tables/).
 
