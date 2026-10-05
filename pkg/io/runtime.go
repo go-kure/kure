@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"sort"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -135,7 +137,7 @@ func ParseYAMLWithOptions(data []byte, opts ParseOptions) ([]client.Object, erro
 	return parse(data, opts)
 }
 
-// maxListNesting is how deep a list may sit inside generic Lists. Each level
+// maxListNesting is how deep a list may sit inside other lists. Each level
 // decodes what it holds again, so an unbounded depth would make the cost of a
 // document quadratic in its size; no manifest nests lists this deep.
 const maxListNesting = 8
@@ -144,32 +146,46 @@ const maxListNesting = 8
 // document of a single kind yields that object. A list document yields its
 // items in the order the document gives them, never the list itself; see
 // flattenList. The objects that decoded are returned next to the errors of the
-// ones that did not. nesting is the number of generic Lists the document sits
-// inside: zero for a document of the stream.
+// ones that did not. nesting is the number of lists the document sits inside
+// whose items are documents of their own, the v1 List and the list of an
+// unregistered kind: zero for a document of the stream.
+//
+// A document has one reading. The Kubernetes decoder finds apiVersion and kind
+// under those keys in any case, while a list is recognised by the exact keys,
+// so a document that states either under another case would be one thing to
+// one reader and another to the other. It is refused before anything reads
+// it; see foldedKeys.
 func decodeDocument(raw []byte, opts ParseOptions, nesting int) ([]runtime.Object, []error) {
-	if list, items, ok := registeredList(raw); ok {
-		if nesting > maxListNesting {
-			return nil, []error{errors.NewParseError("Kubernetes object",
-				fmt.Sprintf("%s is nested more than %d lists deep", list.GetObjectKind().GroupVersionKind().Kind, maxListNesting),
-				0, 0, nil)}
-		}
-		return flattenList(items, list, opts, nesting)
+	// fields stays nil for a document that is not a JSON object. The decoder
+	// below says what is wrong with such a document.
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &fields)
+	if refused := foldedKeys(fields, "apiVersion", "kind"); len(refused) > 0 {
+		return nil, parseErrorsOfKeys(refused)
 	}
+
+	if list, ok := registeredList(fields); ok {
+		listGVK := list.GetObjectKind().GroupVersionKind()
+		want, generic, err := listItemKind(list, listGVK.GroupVersion())
+		if err != nil {
+			return nil, []error{errors.NewParseError("Kubernetes object",
+				fmt.Sprintf("failed to read the items of %s", listGVK.Kind), 0, 0, err)}
+		}
+		decodeItem := func(item []byte) ([]runtime.Object, []error) {
+			return decodeTypedItem(item, want)
+		}
+		if generic {
+			decodeItem = func(item []byte) ([]runtime.Object, []error) {
+				return decodeDocument(item, opts, nesting+1)
+			}
+		}
+		return flattenList(fields, listGVK.Kind, nesting, decodeItem)
+	}
+
 	obj, _, err := decodeRegistered(raw, nil)
 	if err != nil {
 		if opts.AllowUnstructured && runtime.IsNotRegisteredError(err) {
-			unstObj, _, unstErr := unstructured.UnstructuredJSONScheme.Decode(raw, nil, nil)
-			if unstErr != nil {
-				return nil, []error{errors.NewParseError("Kubernetes object", "failed to decode unstructured object", 0, 0, unstErr)}
-			}
-			if list, ok := unstObj.(*unstructured.UnstructuredList); ok {
-				items := make([]runtime.Object, 0, len(list.Items))
-				for i := range list.Items {
-					items = append(items, &list.Items[i])
-				}
-				return items, nil
-			}
-			return []runtime.Object{unstObj}, nil
+			return decodeUnregistered(raw, fields, opts, nesting)
 		}
 		return nil, []error{errors.NewParseError("Kubernetes object", "failed to decode object", 0, 0, err)}
 	}
@@ -182,43 +198,143 @@ func decodeDocument(raw []byte, opts ParseOptions, nesting int) ([]runtime.Objec
 	return []runtime.Object{obj}, nil
 }
 
-// registeredList reports whether raw is a list document of a kind the scheme
-// registers. When it is, it returns an empty list of that kind, carrying its
-// GroupVersionKind, and the document's items, undecoded. The document is
+// foldedKeys returns an error for each key of fields that equals one of exact
+// only after case folding (Kind, ITEMS), sorted by key. Such a key is not the
+// one the document's readers agree on, and nothing says which of them the
+// author meant, so the document that carries it is refused and the error names
+// the key and the spelling that is read.
+func foldedKeys(fields map[string]json.RawMessage, exact ...string) []error {
+	var keys []string
+	spelling := make(map[string]string)
+	for key := range fields {
+		for _, want := range exact {
+			if key != want && strings.EqualFold(key, want) {
+				keys = append(keys, key)
+				spelling[key] = want
+			}
+		}
+	}
+	sort.Strings(keys)
+	errs := make([]error, 0, len(keys))
+	for _, key := range keys {
+		errs = append(errs, errors.Errorf("the key %+q equals %+q only after case folding; write it %+q or remove it",
+			key, spelling[key], spelling[key]))
+	}
+	return errs
+}
+
+// parseErrorsOfKeys turns the errors of foldedKeys into the parse errors of the
+// document that carries the keys.
+func parseErrorsOfKeys(refused []error) []error {
+	errs := make([]error, 0, len(refused))
+	for _, err := range refused {
+		errs = append(errs, errors.NewParseError("Kubernetes object", err.Error(), 0, 0, nil))
+	}
+	return errs
+}
+
+// decodeUnregistered decodes a document of a kind the scheme does not know,
+// for a parse that allows unstructured objects. fields is the document's
+// top level.
+//
+// A kind that ends in List and states items is a list, and is taken through
+// the item handling every list gets: see flattenList. Its items are documents
+// of their own, like those of the v1 List, so an item of a registered kind
+// comes back as its Go type and a list among them is opened in place. An item
+// that leaves apiVersion or kind out is given the list's: the list's
+// apiVersion, and its kind without the List. A kind that ends in List and
+// states its items only under a key in another case (Items) goes the same way
+// and is refused there: nothing says whether its author meant a list.
+//
+// Any other document is one object, whatever fields it has: a kind that does
+// not end in List keeps a field named items as part of its content.
+func decodeUnregistered(raw []byte, fields map[string]json.RawMessage, opts ParseOptions, nesting int) ([]runtime.Object, []error) {
+	// Both were read as strings by the decoder that found the kind unregistered.
+	apiVersion, _ := stringField(fields, "apiVersion")
+	kind, _ := stringField(fields, "kind")
+	if _, stated := fields["items"]; strings.HasSuffix(kind, "List") && (stated || len(foldedKeys(fields, "items")) > 0) {
+		itemKind := strings.TrimSuffix(kind, "List")
+		return flattenList(fields, kind, nesting, func(item []byte) ([]runtime.Object, []error) {
+			return decodeDocument(withListIdentity(item, apiVersion, itemKind), opts, nesting+1)
+		})
+	}
+	obj := &unstructured.Unstructured{}
+	if _, _, err := unstructured.UnstructuredJSONScheme.Decode(raw, nil, obj); err != nil {
+		return nil, []error{errors.NewParseError("Kubernetes object", "failed to decode unstructured object", 0, 0, err)}
+	}
+	return []runtime.Object{obj}, nil
+}
+
+// withListIdentity returns item with apiVersion and kind stated: what the item
+// leaves out of the two, under the exact key, is added with the given value.
+// It is added behind the item's last field and the item's own bytes are kept
+// as they are: an item is not written out again from what was read of it,
+// which would drop whatever that reading does not hold, a field stated twice
+// for one. An item that states both, and one that is not a JSON object, is
+// returned as it is.
+func withListIdentity(item []byte, apiVersion, kind string) []byte {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(item, &fields); err != nil || fields == nil {
+		return item
+	}
+	var added []byte
+	for _, id := range []struct{ key, value string }{{"apiVersion", apiVersion}, {"kind", kind}} {
+		stated, err := stringField(fields, id.key)
+		if err != nil || stated != "" || id.value == "" {
+			continue
+		}
+		value, err := json.Marshal(id.value)
+		if err != nil {
+			continue
+		}
+		if len(fields) > 0 || len(added) > 0 {
+			added = append(added, ',')
+		}
+		added = append(added, `"`+id.key+`":`...)
+		added = append(added, value...)
+	}
+	// The item is a JSON object, so its last brace is the one that closes it.
+	end := bytes.LastIndexByte(item, '}')
+	if len(added) == 0 || end < 0 {
+		return item
+	}
+	filled := make([]byte, 0, len(item)+len(added))
+	filled = append(filled, item[:end]...)
+	filled = append(filled, added...)
+	return append(filled, item[end:]...)
+}
+
+// registeredList reports whether fields, the top level of a document, is that
+// of a list document of a kind the scheme registers. When it is, it returns an
+// empty list of that kind, carrying its GroupVersionKind. The document is
 // recognised by the kind it states and is not decoded as a whole: one item
 // that does not decode must not take the items beside it down with it.
 //
-// apiVersion, kind and items are read under exactly those keys, the ones the
-// Kubernetes decoder reads an object from. A key that differs in case only
-// (Kind, Items) is not one of them: it must not turn another document into a
-// list, nor replace a list's items.
-func registeredList(raw []byte) (list runtime.Object, items json.RawMessage, ok bool) {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		return nil, nil, false
-	}
+// apiVersion and kind are read under exactly those keys. A document that
+// states either under another case never gets here; see decodeDocument.
+func registeredList(fields map[string]json.RawMessage) (list runtime.Object, ok bool) {
 	apiVersion, err := stringField(fields, "apiVersion")
 	if err != nil {
-		return nil, nil, false
+		return nil, false
 	}
 	kind, err := stringField(fields, "kind")
 	if err != nil || kind == "" {
-		return nil, nil, false
+		return nil, false
 	}
 	gv, err := schema.ParseGroupVersion(apiVersion)
 	if err != nil {
-		return nil, nil, false
+		return nil, false
 	}
 	gvk := gv.WithKind(kind)
 	list, err = kubernetes.Scheme.New(gvk)
 	if err != nil {
-		return nil, nil, false
+		return nil, false
 	}
 	if _, isObject := list.(client.Object); isObject || !meta.IsListType(list) {
-		return nil, nil, false
+		return nil, false
 	}
 	list.GetObjectKind().SetGroupVersionKind(gvk)
-	return list, fields["items"], true
+	return list, true
 }
 
 // stringField returns the string a document states under key, exactly as
@@ -236,38 +352,54 @@ func stringField(fields map[string]json.RawMessage, key string) (string, error) 
 	return s, nil
 }
 
-// flattenList returns the items of a list document of a registered kind, in
-// the list's own order. rawItems is the document's items field and list an
-// empty list of its kind. It covers the two shapes such a list has:
+// flattenList returns the items of a list document, in the list's own order.
+// fields is the document's top level, kind the kind it states, and decodeItem
+// what turns one item into objects. It is the one path for the three shapes a
+// list has:
 //
 //   - a typed list (DeploymentList): its items are of the one kind the list
 //     holds. An item that leaves apiVersion and kind out, as the API server's
 //     own list responses do, is given the kind's; an item that states them must
-//     state the kind the list holds.
+//     state the kind the list holds. See decodeTypedItem.
 //   - the generic v1 List: each item is a document of its own and is decoded
-//     like one, so an item of an unregistered kind follows opts.AllowUnstructured
-//     and an item that is itself a list is flattened in place, up to
-//     maxListNesting deep.
+//     like one, so an item of an unregistered kind follows
+//     ParseOptions.AllowUnstructured and an item that is itself a list is
+//     flattened in place.
+//   - the list of an unregistered kind (WidgetList), in a parse that allows
+//     unstructured objects: its items are documents of their own too. See
+//     decodeUnregistered.
+//
+// A list is refused as a whole, with no item returned, when it sits inside
+// more than maxListNesting lists, when it states its items under a key in
+// another case (Items), which the readers of a list do not agree on, and when
+// its own metadata carries labels or annotations: the items are all a parse
+// returns of a list, and they cannot keep what was said about the list.
 //
 // Each item is decoded by itself: one that does not decode, a null among them,
 // is an error naming its position, and the items beside it are still returned.
-// An empty list yields no object and no error. Only the items are read; the
-// list's own metadata is not.
-func flattenList(rawItems json.RawMessage, list runtime.Object, opts ParseOptions, nesting int) ([]runtime.Object, []error) {
-	listGVK := list.GetObjectKind().GroupVersionKind()
-	listErr := func(cause error) []error {
-		return []error{errors.NewParseError("Kubernetes object",
-			fmt.Sprintf("failed to read the items of %s", listGVK.Kind), 0, 0, cause)}
+// An empty list yields no object and no error.
+func flattenList(fields map[string]json.RawMessage, kind string, nesting int, decodeItem func(item []byte) ([]runtime.Object, []error)) ([]runtime.Object, []error) {
+	refuse := func(reason string, cause error) []error {
+		return []error{errors.NewParseError("Kubernetes object", reason, 0, 0, cause)}
+	}
+	if nesting > maxListNesting {
+		return nil, refuse(fmt.Sprintf("%s is nested more than %d lists deep", kind, maxListNesting), nil)
+	}
+	if refused := foldedKeys(fields, "items"); len(refused) > 0 {
+		return nil, parseErrorsOfKeys(refused)
+	}
+	carried, err := listMetadata(fields)
+	if err != nil {
+		return nil, refuse(fmt.Sprintf("failed to read the metadata of %s", kind), err)
+	}
+	if carried != "" {
+		return nil, refuse(fmt.Sprintf("%s has metadata of its own that its items cannot keep: %s", kind, carried), nil)
 	}
 	var items []json.RawMessage
-	if len(rawItems) > 0 {
+	if rawItems := fields["items"]; len(rawItems) > 0 {
 		if err := json.Unmarshal(rawItems, &items); err != nil {
-			return nil, listErr(err)
+			return nil, refuse(fmt.Sprintf("failed to read the items of %s", kind), err)
 		}
-	}
-	want, generic, err := listItemKind(list, listGVK.GroupVersion())
-	if err != nil {
-		return nil, listErr(err)
 	}
 
 	objs := make([]runtime.Object, 0, len(items))
@@ -275,27 +407,61 @@ func flattenList(rawItems json.RawMessage, list runtime.Object, opts ParseOption
 	for i, item := range items {
 		itemErr := func(cause error) error {
 			return errors.NewParseError("Kubernetes object",
-				fmt.Sprintf("item %d of %s", i, listGVK.Kind), 0, 0, cause)
+				fmt.Sprintf("item %d of %s", i, kind), 0, 0, cause)
 		}
-		switch {
-		case bytes.Equal(bytes.TrimSpace(item), []byte("null")):
-			errs = append(errs, itemErr(errors.ErrNilRuntimeObject))
-		case generic:
-			itemObjs, itemErrs := decodeDocument(item, opts, nesting+1)
-			objs = append(objs, itemObjs...)
-			for _, e := range itemErrs {
-				errs = append(errs, itemErr(e))
-			}
-		default:
-			obj, err := decodeTypedItem(item, want)
-			if err != nil {
-				errs = append(errs, itemErr(err))
-				continue
-			}
-			objs = append(objs, obj)
+		if bytes.Equal(bytes.TrimSpace(item), []byte("null")) {
+			errs = append(errs, itemErr(nullItemError{}))
+			continue
+		}
+		itemObjs, itemErrs := decodeItem(item)
+		objs = append(objs, itemObjs...)
+		for _, e := range itemErrs {
+			errs = append(errs, itemErr(e))
 		}
 	}
 	return objs, errs
+}
+
+// nullItemError is the error for a null among the items of a list. Its text
+// says what the author wrote; it is errors.ErrNilRuntimeObject to errors.Is.
+type nullItemError struct{}
+
+func (nullItemError) Error() string { return "the item is null, not an object" }
+
+func (nullItemError) Unwrap() error { return errors.ErrNilRuntimeObject }
+
+// listMetadata returns the labels and annotations a list document states for
+// itself, as the text an error names them by ("annotations a, b; labels app"),
+// and "" when it states none. Only those two are read: a list's
+// resourceVersion, continue and the like describe the response the list came
+// in, and nothing is lost with them. Metadata that cannot be read is an error:
+// it cannot be shown to carry no label and no annotation.
+func listMetadata(fields map[string]json.RawMessage) (string, error) {
+	var metadata map[string]json.RawMessage
+	if raw := fields["metadata"]; len(raw) > 0 {
+		if err := json.Unmarshal(raw, &metadata); err != nil {
+			return "", err
+		}
+	}
+	var carried []string
+	for _, field := range []string{"annotations", "labels"} {
+		var entries map[string]json.RawMessage
+		if raw := metadata[field]; len(raw) > 0 {
+			if err := json.Unmarshal(raw, &entries); err != nil {
+				return "", err
+			}
+		}
+		if len(entries) == 0 {
+			continue
+		}
+		keys := make([]string, 0, len(entries))
+		for key := range entries {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		carried = append(carried, field+" "+strings.Join(keys, ", "))
+	}
+	return strings.Join(carried, "; "), nil
 }
 
 // listItemKind returns what a registered list holds: generic is true for the
@@ -327,12 +493,16 @@ func listItemKind(list runtime.Object, listGV schema.GroupVersion) (want schema.
 // decoding, because the decoder fills in what an apiVersion such as "apps/"
 // leaves out and would hide that the item stated something else. They are read
 // under the exact keys apiVersion and kind, the ones the object is decoded
-// from: a key that differs in case only must not stand in for them. An empty
-// or null value counts as left out, as it does for the decoder.
-func decodeTypedItem(raw []byte, want schema.GroupVersionKind) (runtime.Object, error) {
+// from; an item that states either under a key in another case is refused like
+// a document that does, see foldedKeys. An empty or null value counts as left
+// out, as it does for the decoder.
+func decodeTypedItem(raw []byte, want schema.GroupVersionKind) ([]runtime.Object, []error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &fields); err != nil {
-		return nil, err
+		return nil, []error{err}
+	}
+	if refused := foldedKeys(fields, "apiVersion", "kind"); len(refused) > 0 {
+		return nil, refused
 	}
 	for _, id := range []struct{ key, want string }{
 		{"apiVersion", want.GroupVersion().String()},
@@ -340,27 +510,27 @@ func decodeTypedItem(raw []byte, want schema.GroupVersionKind) (runtime.Object, 
 	} {
 		s, err := stringField(fields, id.key)
 		if err != nil {
-			return nil, err
+			return nil, []error{err}
 		}
 		if s != "" && s != id.want {
-			return nil, errors.Errorf("the item states %s %q, the list holds %s", id.key, s, want)
+			return nil, []error{errors.Errorf("the item states %s %q, the list holds %s", id.key, s, want)}
 		}
 	}
 	obj, actual, err := decodeRegistered(raw, &want)
 	if err != nil {
-		return nil, err
+		return nil, []error{err}
 	}
 	if actual == nil || *actual != want {
-		return nil, errors.Errorf("the item states %v, the list holds %s", actual, want)
+		return nil, []error{errors.Errorf("the item states %v, the list holds %s", actual, want)}
 	}
 	obj.GetObjectKind().SetGroupVersionKind(want)
 	if err := checkType(obj); err != nil {
-		return nil, err
+		return nil, []error{err}
 	}
 	if err := requireObject(obj); err != nil {
-		return nil, err
+		return nil, []error{err}
 	}
-	return obj, nil
+	return []runtime.Object{obj}, nil
 }
 
 // decodeRegistered decodes raw with the scheme's deserializer; kind is what raw

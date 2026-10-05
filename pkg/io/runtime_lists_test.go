@@ -310,8 +310,8 @@ items:
 			if err == nil {
 				t.Fatalf("a null item must be refused, got %v", describe(objs))
 			}
-			if want := "item 1 of List"; !strings.Contains(err.Error(), want) {
-				t.Errorf("error %q does not name the item (%q)", err, want)
+			if want := "item 1 of List: the item is null, not an object"; !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not name the item and say what it is (%q)", err, want)
 			}
 			if !errors.Is(err, errors2.ErrNilRuntimeObject) {
 				t.Errorf("error %q does not wrap ErrNilRuntimeObject", err)
@@ -377,8 +377,8 @@ func TestParseYAML_TypedListNullItemIsRefused(t *testing.T) {
 				if err == nil {
 					t.Fatalf("a null item must be refused, got %v", describe(objs))
 				}
-				if want := "item 1 of DeploymentList"; !strings.Contains(err.Error(), want) {
-					t.Errorf("error %q does not name the item (%q)", err, want)
+				if want := "item 1 of DeploymentList: the item is null, not an object"; !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not name the item and say what it is (%q)", err, want)
 				}
 				if !errors.Is(err, errors2.ErrNilRuntimeObject) {
 					t.Errorf("error %q does not wrap ErrNilRuntimeObject", err)
@@ -397,7 +397,7 @@ func TestParseYAML_TypedListNullItemIsRefused(t *testing.T) {
 // apiVersion that names the group and no version: the decoder would fill the
 // version in and return the item as if it had stated the list's. The last two
 // items state another identity under apiVersion and kind and the list's under
-// the same key in another case; the exact keys are the ones that count.
+// the same key in another case; such a key is refused whatever it states.
 func TestParseYAML_TypedListItemStatingPartOfItsIdentity(t *testing.T) {
 	doc := `apiVersion: apps/v1
 kind: DeploymentList
@@ -493,45 +493,6 @@ items:
 			}
 			if got, want := describe(objs), []string{"ConfigMap/cm"}; !reflect.DeepEqual(got, want) {
 				t.Fatalf("objects = %v, want %v", got, want)
-			}
-		})
-	}
-}
-
-// A list is recognised, and its items are read, under the exact keys
-// apiVersion, kind and items. A key that differs in case only is not one of
-// them: it does not replace a list's items, does not hide that a document is a
-// list, and does not turn a document of another kind into an empty list, which
-// would return nothing and no error for a document that is refused otherwise.
-func TestParseYAML_ListIsRecognisedByItsExactKeys(t *testing.T) {
-	flattened := map[string]string{
-		"typed list, Items beside items":   `{"apiVersion":"apps/v1","kind":"DeploymentList","items":[{"metadata":{"name":"good"}}],"Items":null}`,
-		"generic List, Items beside items": `{"apiVersion":"v1","kind":"List","items":[{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"good"}}],"Items":null}`,
-		"typed list, Kind beside kind":     `{"apiVersion":"apps/v1","kind":"DeploymentList","Kind":"Deployment","items":[{"metadata":{"name":"good"}}]}`,
-	}
-	for name, doc := range flattened {
-		for _, m := range parseModes {
-			t.Run(name+"/"+m.name, func(t *testing.T) {
-				objs, err := ParseYAMLWithOptions([]byte(doc), m.opts)
-				if err != nil {
-					t.Fatalf("parse: %v", err)
-				}
-				if got, want := describe(objs), []string{"Deployment/good"}; !reflect.DeepEqual(got, want) {
-					t.Fatalf("objects = %v, want %v", got, want)
-				}
-			})
-		}
-	}
-
-	notAList := `{"apiVersion":"v1","kind":"ConfigMap","Kind":"List","metadata":{"name":"cm"}}`
-	for _, m := range parseModes {
-		t.Run("ConfigMap, Kind List beside kind/"+m.name, func(t *testing.T) {
-			objs, err := ParseYAMLWithOptions([]byte(notAList), m.opts)
-			if err == nil {
-				t.Fatalf("the document must be refused as it was before lists were flattened, got %v", describe(objs))
-			}
-			if len(objs) != 0 {
-				t.Fatalf("got %v, want nothing", describe(objs))
 			}
 		})
 	}
