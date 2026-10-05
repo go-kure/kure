@@ -50,14 +50,15 @@ type Object struct {
 // item held as raw JSON is the object that JSON encodes, and an empty item
 // holds nothing, as does one that is a nil pointer, which is written as null.
 // A List among them need not carry object metadata (metav1.List has none) to
-// be opened. A typed object that writes items its Go value gives no access
-// to, from a field apimachinery does not take for a list's items, has them
-// read from the written form.
+// be opened. A typed object that writes its items from a field apimachinery
+// does not take for a list's items, so that its Go value gives no access to
+// them or gives other ones, has them read from the written form (writtenAs).
 //
 // The items of an unstructured List are the List's own: a change to one is a
 // change to the List. They are read from its map and not from a written form,
 // so one that holds itself, directly or through the Lists it holds, would be
-// opened without end: it is refused.
+// opened without end: it is refused. So is a typed List that holds itself as
+// the object of an item, which cannot be marshalled (refuseItemCycle).
 func Objects(r runtime.Object) ([]Object, error) {
 	return objects(Object{Object: r}, map[uintptr]bool{})
 }
@@ -102,6 +103,9 @@ func listItems(obj runtime.Object) (items []Object, isList bool, err error) {
 	if u, ok := obj.(*unstructured.Unstructured); ok {
 		return unstructuredItems(u)
 	}
+	if err := refuseItemCycle(obj, map[listRef]bool{}); err != nil {
+		return nil, false, err
+	}
 	written, err := writtenForm(obj)
 	if err != nil {
 		return nil, false, err
@@ -111,25 +115,17 @@ func listItems(obj runtime.Object) (items []Object, isList bool, err error) {
 		return nil, false, nil
 	}
 	if !meta.IsListType(obj) {
-		items, isList, err = unstructuredItems(&unstructured.Unstructured{Object: written})
-		for i := range items {
-			items[i].Read = true
-		}
-		return items, isList, err
+		return readItems(written)
 	}
 	extracted, err := typedListItems(obj)
 	if err != nil {
 		return nil, false, err
 	}
 	// What is written under items decides, as it does for an unstructured
-	// List: the Go value's items are the List's only where an array is
-	// written.
-	switch held.(type) {
-	case nil:
-		return nil, true, nil
-	case []any:
-	default:
-		return nil, false, nil
+	// List: the Go value's items are the List's only where they are what is
+	// written there.
+	if !writtenAs(extracted, held) {
+		return readItems(written)
 	}
 	for _, item := range extracted {
 		if empty(item) {
@@ -149,6 +145,96 @@ func listItems(obj runtime.Object) (items []Object, isList bool, err error) {
 		}
 	}
 	return items, true, nil
+}
+
+// readItems is listItems on the written form of a typed object whose kind
+// ends in "List": the items are read from it, so they are copies.
+func readItems(written map[string]any) (items []Object, isList bool, err error) {
+	items, isList, err = unstructuredItems(&unstructured.Unstructured{Object: written})
+	for i := range items {
+		items[i].Read = true
+	}
+	return items, isList, err
+}
+
+// writtenAs reports whether held, what a typed List writes under items, is
+// an array of exactly the items its Go value gives: as many, and each written
+// as the List writes it. It is not for a List that writes null, something
+// that is no array, or an array it takes from another field.
+//
+// The same content written from another field cannot be told from the
+// field's own. A change to such an item does not reach what is written, which
+// the delivery intent finds when it verifies the written form afterwards.
+func writtenAs(items []runtime.Object, held any) bool {
+	written, ok := held.([]any)
+	if !ok || len(written) != len(items) {
+		return false
+	}
+	for i, item := range items {
+		data := []byte("null")
+		if raw, ok := item.(*runtime.Unknown); ok {
+			data = raw.Raw
+		} else if !empty(item) {
+			var err error
+			if data, err = json.Marshal(item); err != nil {
+				return false
+			}
+		}
+		var own any
+		if err := json.Unmarshal(data, &own); err != nil || !reflect.DeepEqual(own, written[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// listRef names a typed List by its type and address.
+type listRef struct {
+	typ reflect.Type
+	ptr uintptr
+}
+
+// refuseItemCycle fails when a typed List holds itself among its items,
+// directly or through the typed Lists it holds. Such a List has no written
+// form: an item held as an object is marshalled by a call of its own
+// (RawExtension.MarshalJSON), so the encoder never sees the whole path and
+// the marshalling does not end. open has the Lists being read around obj.
+//
+// Only what a List holds as its items is followed, read as the writers
+// serialize it, so an object beside an item's raw JSON is not. A value that
+// reaches itself another way is not looked for, here as in the writers.
+func refuseItemCycle(obj runtime.Object, open map[listRef]bool) error {
+	if _, ok := obj.(*unstructured.Unstructured); ok || !meta.IsListType(obj) {
+		return nil
+	}
+	v := reflect.ValueOf(obj)
+	if v.Kind() != reflect.Pointer {
+		return nil
+	}
+	ref := listRef{typ: v.Type(), ptr: v.Pointer()}
+	if open[ref] {
+		kind := obj.GetObjectKind().GroupVersionKind().Kind
+		if kind == "" {
+			kind = "List"
+		}
+		return errors.Errorf("a %s holds itself among its items", kind)
+	}
+	items, err := typedListItems(obj)
+	if err != nil {
+		// Refused where the List is read.
+		return nil
+	}
+	open[ref] = true
+	defer delete(open, ref)
+	for _, item := range items {
+		if empty(item) {
+			continue
+		}
+		if err := refuseItemCycle(item, open); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // empty reports whether an item of a typed List holds no object: no item, or

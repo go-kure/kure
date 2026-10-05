@@ -1,6 +1,7 @@
 package layout_test
 
 import (
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -117,6 +118,43 @@ func TestWriters_RefuseDuplicateNestedInLists(t *testing.T) {
 					configMapNamed("twice"), holding(t, configMapNamed("once")),
 				}}
 				writtenFiles(t, writer, layout.DefaultLayoutConfig(), ml)
+			})
+		}
+	}
+}
+
+// TestWriters_RefuseListThatHoldsItself: a List that holds itself among its
+// items has no end to write. Every writer refuses it with an error, whether
+// it is unstructured, typed, or a List without object metadata held as an
+// item. The stack is kept small, so that a reader that does not stop fails
+// here.
+func TestWriters_RefuseListThatHoldsItself(t *testing.T) {
+	defer debug.SetMaxStack(debug.SetMaxStack(32 << 20))
+	cases := map[string]func() client.Object{
+		"a List without object metadata": func() client.Object {
+			itself := listWithoutObjectMetadata()
+			itself.Items = []runtime.RawExtension{{Object: itself}}
+			return rawListOf("holder", runtime.RawExtension{Object: itself})
+		},
+		"a typed List": func() client.Object {
+			itself := rawListOf("holder")
+			itself.Items = []runtime.RawExtension{{Object: itself}}
+			return itself
+		},
+		"an unstructured List": func() client.Object {
+			itself := listOf("List")
+			itself.Object["items"] = []any{itself.Object}
+			return itself
+		},
+	}
+	for name, build := range cases {
+		for _, writer := range allWriters {
+			t.Run(name+"/"+writer, func(t *testing.T) {
+				ml := &layout.ManifestLayout{Name: "p", Namespace: ".", Resources: []client.Object{build()}}
+				err := writeRefused(t, writer, layout.DefaultLayoutConfig(), ml)
+				if want := "holds itself among its items"; err == nil || !strings.Contains(err.Error(), want) {
+					t.Errorf("err = %v, want it to contain %q", err, want)
+				}
 			})
 		}
 	}

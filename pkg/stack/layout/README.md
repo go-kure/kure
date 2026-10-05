@@ -166,13 +166,15 @@ Every check above that compares objects reads a resource that way (go-kure/kure#
 of one layout, the check of one build and the check of Kustomization names take a resource for the
 objects kustomize builds from it, so two objects of one identity are refused however many Lists
 deep one of them sits. For a typed object the `items` field is the one in the written file, so a
-typed List kind that leaves an empty `items` out is one object. An item of a typed List need not
+typed List kind that leaves an empty `items` out is one object, and one that writes other items
+than its Go value holds is read for the ones it writes. An item of a typed List need not
 carry object metadata to be read: a List without any, such as the core `v1` List as a Go value
 (`metav1.List`), is opened like any other, and an item held as raw JSON is the object it encodes.
 An item that is none of these and has no object metadata is refused: its namespace and name cannot
-be read. An item that is a nil pointer is written as `null` and holds nothing. An unstructured List
-that holds itself among its items is refused. The Flux integration reads a resource by the same
-rule, so it and the writers agree on which objects a tree holds.
+be read. An item that is a nil pointer is written as `null` and holds nothing. A List that holds
+itself among its items is refused: an unstructured one, and a typed one that holds itself as the
+object of an item. The Flux integration reads a resource by the same rule, so it and the writers
+agree on which objects a tree holds.
 
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)
