@@ -48,6 +48,13 @@ A document that fails to decode into a Kubernetes object is an error in the
 the documents before and after it are decoded all the same, and their objects
 are returned beside the error.
 
+A place where the stream itself cannot be read is an error as well. Where the
+decoder can go on from it, the parse does: a YAML document that does not parse
+costs only itself, and the documents after it are read. Where the decoder
+cannot, the parse ends there. It returns one error for the place beside the
+objects decoded before it, and what follows in the stream is not read. Malformed
+JSON in a stream of JSON documents is such a place.
+
 A registered kind is decoded into its upstream Go type, so that type's own
 `UnmarshalJSON` runs inside the parse. One that panics does not take the caller
 down. The document, or the list item, becomes a parse error that names the object

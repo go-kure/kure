@@ -32,7 +32,27 @@ func parse(yamlbytes []byte, opts ParseOptions) ([]client.Object, error) {
 	// Parsing approach adapted from
 	// https://dx13.co.uk/articles/2021/01/15/kubernetes-types-using-go/
 
-	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(yamlbytes), 4096)
+	return parseStream(yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(yamlbytes), 4096), opts)
+}
+
+// documentDecoder is what a parse reads the documents of its stream from, one
+// per call, until the error that marks the end of the stream.
+type documentDecoder interface {
+	Decode(into any) error
+}
+
+// parseStream decodes the documents decoder yields into the objects they
+// hold. It reads until the stream ends, or until the decoder stops moving.
+//
+// The decoder reports a place of the stream it cannot read as an error, and
+// only some of those errors leave it at the next document. A YAML document
+// that does not parse does: the decoder has split it off already, and its
+// error is a YAMLSyntaxError. Malformed JSON does not always: the decoder may
+// return an error on every further call and never the end of the stream. So a
+// second error in a row that is not such a YAML error ends the parse. The
+// first error of the row stands for the place; the one that ends the parse
+// says nothing more about it and is not kept.
+func parseStream(decoder documentDecoder, opts ParseOptions) ([]client.Object, error) {
 	retVal := make([]runtime.Object, 0)
 
 	if err := kubernetes.RegisterSchemes(); err != nil {
@@ -41,15 +61,25 @@ func parse(yamlbytes []byte, opts ParseOptions) ([]client.Object, error) {
 
 	var errs []error
 
+	// unsure is true after an error that may have left the decoder where it
+	// was.
+	unsure := false
 	for {
 		var raw runtime.RawExtension
 		if err := decoder.Decode(&raw); err != nil {
 			if stderrors.Is(err, io.EOF) {
 				break
 			}
+			var split yamlutil.YAMLSyntaxError
+			movedOn := stderrors.As(err, &split)
+			if unsure && !movedOn {
+				break
+			}
 			errs = append(errs, errors.NewParseError("YAML document", "failed to decode document", 0, 0, err))
+			unsure = !movedOn
 			continue
 		}
+		unsure = false
 		if len(bytes.TrimSpace(raw.Raw)) == 0 {
 			continue
 		}
