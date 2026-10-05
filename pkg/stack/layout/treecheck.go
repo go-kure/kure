@@ -1,19 +1,17 @@
 package layout
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/kustomize/kyaml/resid"
 
+	"github.com/go-kure/kure/internal/built"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 )
@@ -250,6 +248,9 @@ func checkKustomizationNames(root *ManifestLayout) error {
 			other, dup := holders[key]
 			switch {
 			case dup && other == l:
+				// checkResourceIdentities reads the same objects and has
+				// refused this layout before the tree gets here; the case
+				// keeps this check complete without it.
 				return errors.NewFileError("write", l.FullRepoPath(), fmt.Sprintf(
 					"layout %q holds the Flux Kustomization %s twice: Kustomization names must be unique", l.FullRepoPath(), key), nil)
 			case dup:
@@ -272,91 +273,29 @@ func checkKustomizationNames(root *ManifestLayout) error {
 	return walk(root)
 }
 
-// builtObjects returns the objects kustomize builds from l's resources: each
-// resource, a List replaced by its items. A List is what kustomize opens as
-// one (resource.Factory in sigs.k8s.io/kustomize/api): an object whose kind
-// ends in "List" and that has an items field, opened again when an item is
-// itself such a List. A kind that does not end in "List" is one object,
-// whatever fields it has, and so is a List kind without items. A null items
-// field is an empty List. A List whose items field is not an array fails the
-// kustomize build; it is returned as the one object it is, since there is
-// nothing in it to read.
+// builtObjects returns the objects kustomize builds from l's resources, in
+// order: each resource, a List replaced by what it holds. What a List is and
+// how it is opened is built.Objects' rule, the one the Flux integration reads
+// a resource by as well: an object whose kind ends in "List" and that has an
+// items field, opened again when an item is itself such a List. A kind that
+// does not end in "List" is one object, whatever fields it has, and so is a
+// List kind without items. A null items field is an empty List. An item a
+// typed List holds as raw JSON is the object that JSON encodes.
 func builtObjects(l *ManifestLayout) ([]runtime.Object, error) {
 	var out []runtime.Object
-	queue := make([]runtime.Object, 0, len(l.Resources))
 	for _, r := range l.Resources {
-		if r != nil {
-			queue = append(queue, r)
+		if r == nil {
+			continue
 		}
-	}
-	for len(queue) > 0 {
-		obj := queue[0]
-		queue = queue[1:]
-		items, isList, err := listItems(obj)
+		objs, err := built.Objects(r)
 		if err != nil {
 			return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
 		}
-		if !isList {
-			out = append(out, obj)
-			continue
+		for _, obj := range objs {
+			out = append(out, obj.Object)
 		}
-		queue = append(queue, items...)
 	}
 	return out, nil
-}
-
-// listItems returns the items of obj when it is a List as builtObjects
-// defines one, and whether it is.
-func listItems(obj runtime.Object) (items []runtime.Object, isList bool, err error) {
-	if !strings.HasSuffix(obj.GetObjectKind().GroupVersionKind().Kind, "List") {
-		return nil, false, nil
-	}
-	if u, ok := obj.(*unstructured.Unstructured); ok {
-		raw, has := u.Object["items"]
-		switch {
-		case !has:
-			return nil, false, nil
-		case raw == nil:
-			return nil, true, nil
-		case !u.IsList():
-			return nil, false, nil
-		}
-		list, err := u.ToList()
-		if err != nil {
-			return nil, false, err
-		}
-		for i := range list.Items {
-			items = append(items, &list.Items[i])
-		}
-		return items, true, nil
-	}
-	if !meta.IsListType(obj) {
-		return nil, false, nil
-	}
-	extracted, err := typedListItems(obj)
-	if err != nil {
-		return nil, false, err
-	}
-	// A typed List can hold an item as raw JSON (runtime.RawExtension), which
-	// the writers serialize as the object it encodes: it is read as that
-	// object. An empty item holds nothing.
-	for _, item := range extracted {
-		raw, isRaw := item.(*runtime.Unknown)
-		switch {
-		case item == nil:
-		case !isRaw:
-			items = append(items, item)
-		default:
-			u := &unstructured.Unstructured{}
-			if err := json.Unmarshal(raw.Raw, &u.Object); err != nil {
-				return nil, false, err
-			}
-			if u.Object != nil {
-				items = append(items, u)
-			}
-		}
-	}
-	return items, true, nil
 }
 
 // checkBuildIdentities refuses two layouts holding objects with one identity
@@ -690,10 +629,16 @@ func buildIdentity(gvk schema.GroupVersionKind, namespace, name string) string {
 }
 
 // eachIdentity calls fn, in order, with the identity key renders for every
-// object l holds, a List's items standing in for the List. An object without
-// a kind has none and is skipped.
+// object kustomize builds from l's resources (see builtObjects). A List is an
+// envelope: kustomize builds what it holds, so that is what must be unique,
+// not the (usually unnamed) List, however many Lists deep an object sits. An
+// object without a kind has no identity and is skipped.
 func eachIdentity(l *ManifestLayout, key identityKey, fn func(id string) error) error {
-	claim := func(obj runtime.Object) error {
+	objs, err := builtObjects(l)
+	if err != nil {
+		return err
+	}
+	for _, obj := range objs {
 		acc, err := meta.Accessor(obj)
 		if err != nil {
 			return errors.Wrapf(err, "layout %q: read object metadata", l.FullRepoPath())
@@ -703,41 +648,9 @@ func eachIdentity(l *ManifestLayout, key identityKey, fn func(id string) error) 
 			// A typed object with an unset TypeMeta has no kind to
 			// identify it by; two of different Go types would share an
 			// empty key. It is not this check's to judge.
-			return nil
-		}
-		return fn(key(gvk, acc.GetNamespace(), acc.GetName()))
-	}
-	for _, obj := range l.Resources {
-		if obj == nil {
 			continue
 		}
-		// A List is an envelope: kustomize builds its items, so the
-		// items are what must be unique, not the (usually unnamed) List.
-		if u, ok := obj.(*unstructured.Unstructured); ok && u.IsList() {
-			list, err := u.ToList()
-			if err != nil {
-				return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-			}
-			for i := range list.Items {
-				if err := claim(&list.Items[i]); err != nil {
-					return err
-				}
-			}
-			continue
-		}
-		if meta.IsListType(obj) {
-			items, err := meta.ExtractList(obj)
-			if err != nil {
-				return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-			}
-			for _, item := range items {
-				if err := claim(item); err != nil {
-					return err
-				}
-			}
-			continue
-		}
-		if err := claim(obj); err != nil {
+		if err := fn(key(gvk, acc.GetNamespace(), acc.GetName())); err != nil {
 			return err
 		}
 	}

@@ -691,7 +691,10 @@ writers agree on which Kustomizations and Sources a tree holds. An item of a typ
 carry object metadata (`metav1.List` has none): the integrator opens such a List too, and reads
 any other such item as the object the writers serialize for it. The writers refuse a Flux
 Kustomization whose namespace and name they cannot read. The existing per-layout and
-per-build identity checks are unchanged.
+per-build identity checks were left unchanged by that change. Since go-kure/kure#1006 they
+read a resource by this rule as well, through one function the integrator and the delivery
+intent share (`internal/built`): a duplicate nested in Lists is refused, and a typed List whose
+item is raw JSON or a List without object metadata is no longer refused for that item.
 
 **Tests.** `pkg/stack/layout/fluxtree_test.go`, `pkg/stack/fluxcd/fluxtree_test.go` and
 `TestCreateLayoutWithResources_UmbrellaTreeWrites` in `pkg/stack/argocd/argo_test.go` cover:

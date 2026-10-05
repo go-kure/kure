@@ -14,7 +14,6 @@ import (
 	"github.com/fluxcd/pkg/envsubst"
 	fluxkustomize "github.com/fluxcd/pkg/kustomize"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -22,6 +21,7 @@ import (
 	"sigs.k8s.io/kustomize/api/resource"
 	"sigs.k8s.io/kustomize/kyaml/resid"
 
+	"github.com/go-kure/kure/internal/built"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -1493,97 +1493,44 @@ func indexExistingSources(ml, skip *layout.ManifestLayout) (map[string][]hostedO
 	return out, walk(ml)
 }
 
-// resourceItems returns l's resources as kustomize builds them, the rule the
-// layout package's pre-write check reads them by (go-kure/kure#977): a List is
-// an envelope, and kustomize builds its items. A List is an object whose kind
-// ends in "List" and that has items; a List among the items is opened as
-// well, and one whose items are null holds nothing. Any other object is
-// returned as itself, whatever fields it has: a kind that does not end in
-// "List", a List kind without an items field, and one whose items are not a
-// list.
+// resourceItems returns l's resources as kustomize builds them, by the rule
+// the layout package's pre-write check reads them by (built.Objects,
+// go-kure/kure#977): a List is an envelope, and kustomize builds its items. A
+// List is an object whose kind ends in "List" and that has items; a List
+// among the items is opened as well, and one whose items are null holds
+// nothing. Any other object is returned as itself, whatever fields it has: a
+// kind that does not end in "List", a List kind without an items field, and
+// one whose items are not a list.
+//
+// A typed List can hold an item as raw JSON (runtime.RawExtension), which the
+// writers serialize as the object it encodes: it is returned as that object.
+// An item need not carry object metadata (a client.Object) either: one that
+// does not, and is no List, is returned as the object the writers serialize
+// for it.
 func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 	var out []client.Object
-	// keep returns a built object. An item of a typed List need not carry
-	// object metadata (a client.Object): one that does not is returned as the
-	// object the writers serialize for it.
-	keep := func(obj runtime.Object) error {
-		if o, ok := obj.(client.Object); ok {
-			out = append(out, o)
-			return nil
-		}
-		raw, err := json.Marshal(obj)
-		if err != nil {
-			return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-		}
-		u := &unstructured.Unstructured{}
-		if err := json.Unmarshal(raw, &u.Object); err != nil {
-			return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-		}
-		out = append(out, u)
-		return nil
-	}
-	queue := make([]runtime.Object, 0, len(l.Resources))
 	for _, r := range l.Resources {
-		if r != nil {
-			queue = append(queue, r)
-		}
-	}
-	for len(queue) > 0 {
-		obj := queue[0]
-		queue = queue[1:]
-		if !strings.HasSuffix(obj.GetObjectKind().GroupVersionKind().Kind, "List") {
-			if err := keep(obj); err != nil {
-				return nil, err
-			}
+		if r == nil {
 			continue
 		}
-		if u, ok := obj.(*unstructured.Unstructured); ok {
-			raw, has := u.Object["items"]
-			switch {
-			case has && raw == nil:
-				// A List that holds nothing.
-			case !u.IsList():
-				out = append(out, u)
-			default:
-				list, err := u.ToList()
-				if err != nil {
-					return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-				}
-				for i := range list.Items {
-					queue = append(queue, &list.Items[i])
-				}
-			}
-			continue
-		}
-		if !meta.IsListType(obj) {
-			if err := keep(obj); err != nil {
-				return nil, err
-			}
-			continue
-		}
-		items, err := typedListItems(obj)
+		objs, err := built.Objects(r)
 		if err != nil {
 			return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
 		}
-		// A typed List can hold an item as raw JSON (runtime.RawExtension),
-		// which the writers serialize as the object it encodes: it is read
-		// as that object. An empty item holds nothing. Any other item is
-		// read as it is, a List that has no object metadata of its own
-		// (metav1.List, for one) included.
-		for _, item := range items {
-			switch o := item.(type) {
-			case nil:
-			case *runtime.Unknown:
-				u := &unstructured.Unstructured{}
-				if err := json.Unmarshal(o.Raw, &u.Object); err != nil {
-					return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-				}
-				if u.Object != nil {
-					queue = append(queue, u)
-				}
-			default:
-				queue = append(queue, o)
+		for _, obj := range objs {
+			if o, ok := obj.Object.(client.Object); ok {
+				out = append(out, o)
+				continue
 			}
+			raw, err := json.Marshal(obj.Object)
+			if err != nil {
+				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+			}
+			u := &unstructured.Unstructured{}
+			if err := json.Unmarshal(raw, &u.Object); err != nil {
+				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+			}
+			out = append(out, u)
 		}
 	}
 	return out, nil
@@ -2188,48 +2135,15 @@ func normalizeRulesPlacement(rules layout.LayoutRules) layout.LayoutRules {
 	return rules
 }
 
-// typedListItems returns the items of a typed List as the writers serialize
-// them, the rule the layout package's pre-write check reads them by
-// (resourceItems). An item held as a runtime.RawExtension is serialized from
-// its raw JSON when it has any and from its object otherwise
-// (RawExtension.MarshalJSON), so it is read in that order: meta.ExtractList
-// reads the object first, and would name an object the written file does not
-// hold when the two differ. The raw JSON is returned as a runtime.Unknown.
-//
-// meta.ExtractList reads the list, so whatever it accepts as a list of items
-// is accepted here and whatever it refuses (an Items pointer that is nil,
-// among others) is refused with its error. It decides by the element type of
-// the Items slice, and so does the correction: a named slice type and a
-// pointer to the slice are read alike. An empty item is a nil entry.
-func typedListItems(list runtime.Object) ([]runtime.Object, error) {
-	items, err := meta.ExtractList(list)
-	if err != nil || len(items) == 0 {
-		return items, err
-	}
-	ptr, err := meta.GetItemsPtr(list)
-	if err != nil {
-		return nil, err
-	}
-	slice := reflect.ValueOf(ptr).Elem()
-	if slice.Type().Elem() != reflect.TypeFor[runtime.RawExtension]() {
-		return items, nil
-	}
-	for i := range items {
-		if raw := slice.Index(i).Interface().(runtime.RawExtension).Raw; raw != nil {
-			items[i] = &runtime.Unknown{Raw: raw}
-		}
-	}
-	return items, nil
-}
-
-// generatedKustomizations returns, in typed form and in the order kustomize
-// builds them, the Flux Kustomizations of l that this integration placed or
-// kept (generated: their namespace/name keys). It reads l as kustomize builds
-// it (resourceItems), so one the integration kept in place of its own (add)
-// counts in whatever form it has: typed, unstructured or inside a List. One
-// that is not typed is converted through its JSON, and a conversion failure is
-// an error naming the layout and the object, never a Kustomization the
-// integrator's checks leave out (go-kure/kure#979).
+// generatedKustomizations returns, in typed form and in the order of l's
+// resources, a List's in the List's place, the Flux Kustomizations of l that
+// this integration placed or kept (generated: their namespace/name keys). It
+// reads l as kustomize builds it (resourceItems), so one the integration kept
+// in place of its own (add) counts in whatever form it has: typed,
+// unstructured or inside a List. One that is not typed is converted through
+// its JSON, and a conversion failure is an error naming the layout and the
+// object, never a Kustomization the integrator's checks leave out
+// (go-kure/kure#979).
 func generatedKustomizations(l *layout.ManifestLayout, generated map[string]bool) ([]*kustv1.Kustomization, error) {
 	objs, err := resourceItems(l)
 	if err != nil {
