@@ -235,6 +235,9 @@ func TestPerLayout_ByName_DifferingSourcesBelowTakeTheNodesBundleSource(t *testi
 		name        string
 		build       func() *stack.Cluster
 		clusterName string
+		// flatNodes renders every node into the root node's directory
+		// (NodeGrouping GroupFlat): the root node is that layout's own.
+		flatNodes bool
 		// want maps the directory of a node's layout to its source; decided
 		// are the ones among them below which the SourceRefs differ.
 		want    map[string]string
@@ -245,6 +248,16 @@ func TestPerLayout_ByName_DifferingSourcesBelowTakeTheNodesBundleSource(t *testi
 			build:       differingTree(rootBundle, false),
 			clusterName: "prod",
 			want:        map[string]string{"prod/platform": "root-src", "prod/platform/api": "api-src", "prod/platform/ui": "ui-src"},
+			decided:     []string{"prod/platform"},
+		},
+		{
+			// The nodes below are rendered into the root node's layout,
+			// whose own node is still the root: its bundle decides.
+			name:        "the root node's layout with every node rendered into it, below a ClusterName directory",
+			build:       differingTree(rootBundle, false),
+			clusterName: "prod",
+			flatNodes:   true,
+			want:        map[string]string{"prod/platform": "root-src", "prod/platform/core": "root-src", "prod/platform/api": "api-src", "prod/platform/ui": "ui-src"},
 			decided:     []string{"prod/platform"},
 		},
 		{
@@ -271,6 +284,9 @@ func TestPerLayout_ByName_DifferingSourcesBelowTakeTheNodesBundleSource(t *testi
 			t.Run(tc.name+"/"+grouping, func(t *testing.T) {
 				rules.FluxPlacement = layout.FluxIntegratedPerLayout
 				rules.ClusterName = tc.clusterName
+				if tc.flatNodes {
+					rules.NodeGrouping = layout.GroupFlat
+				}
 				ml := integrated(t, tc.build(), rules)
 				got := sourcesByPath(ml)
 				for dir, source := range tc.want {
@@ -278,6 +294,8 @@ func TestPerLayout_ByName_DifferingSourcesBelowTakeTheNodesBundleSource(t *testi
 						t.Errorf("the Kustomization with spec.path %q takes its source from %q, want %q (all: %v)", dir, got[dir], source, got)
 					}
 				}
+				// With the bundles in their nodes' directories, a directory
+				// per node: there the root node's bundle encloses its layout.
 				flatRules := propertyGroupings["nodeOnly"]
 				flatRules.FluxPlacement = layout.FluxIntegratedPerLayout
 				flatRules.ClusterName = tc.clusterName
