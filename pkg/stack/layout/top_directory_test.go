@@ -36,6 +36,15 @@ func TestTopDirectory(t *testing.T) {
 		"ClusterName ends in the root's name": {named, "clusters/prod", "clusters/prod"},
 
 		"ClusterName .": {named, ".", "."},
+
+		// A rooted ClusterName is the directory the writers resolve it to,
+		// with no leading slash; the walk's own FullRepoPath keeps the slash.
+		"rooted ClusterName":                {named, "/rooted", "rooted"},
+		"rooted ClusterName, unnamed root":  {unnamed, "/rooted", "rooted"},
+		"rooted ClusterName of two":         {named, "/clusters/eu", "clusters/eu"},
+		"ClusterName /":                     {named, "/", "."},
+		"ClusterName /, no root node":       {nil, "/", "."},
+		"rooted ClusterName is root's name": {named, "/prod", "prod"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, err := layout.TopDirectory(tc.root, layout.LayoutRules{ClusterName: tc.clusterName})
@@ -78,6 +87,10 @@ func topDirectoryShapes() map[string]func() *stack.Cluster {
 // FlattenSingleTier: the tree WalkCluster returns is at the directory
 // TopDirectory names. A FlattenSingleTier collapse moves no top: the layout
 // that absorbs a collapsed one keeps its own directory.
+//
+// The walk's FullRepoPath keeps the leading slash of a rooted ClusterName and
+// TopDirectory does not, so the slash is dropped from the walk's side here;
+// TestTopDirectory pins the rooted values themselves.
 func TestTopDirectory_IsTheWalksTop(t *testing.T) {
 	groupings := map[string]layout.LayoutRules{"groupByName": groupByName, "nodeOnly": nodeOnly, "nodeFlat": nodeFlat}
 	clusterNames := []string{"", ".", "prod", "apps", "platform", "clusters/prod", "clusters/prod/", "clusters/apps", "./prod", "/prod", "a..b"}
@@ -94,7 +107,7 @@ func TestTopDirectory_IsTheWalksTop(t *testing.T) {
 						if err != nil {
 							t.Fatalf("TopDirectory: %v", err)
 						}
-						if got := walk(t, c, rules).FullRepoPath(); got != top {
+						if got := strings.TrimLeft(walk(t, c, rules).FullRepoPath(), "/"); got != top {
 							t.Errorf("the walk's top is %q, TopDirectory says %q", got, top)
 						}
 					})

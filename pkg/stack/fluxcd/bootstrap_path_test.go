@@ -243,6 +243,14 @@ func TestBootstrap_RootNodeNameIsNoSegmentUnderClusterName(t *testing.T) {
 // segments, the root node's own name and a rooted one.
 var bootstrapClusterNames = []string{"", ".", "prod", "env/prod", "platform", "/rooted"}
 
+// unrootedPath returns the directory of ml as layout.TopDirectory spells it:
+// the layout's FullRepoPath without the leading slash a rooted ClusterName
+// leaves on it. It is the one place these tests drop that slash: the bootstrap
+// paths are compared with TopDirectory as they are.
+func unrootedPath(ml *layout.ManifestLayout) string {
+	return strings.TrimLeft(ml.FullRepoPath(), "/")
+}
+
 // TestBootstrapPathIsTheTopOfTheWrittenTree renders the shapes of the Source
 // invariant's matrix (sourceHostShapes) under every placement, grouping and
 // ClusterName and holds the bootstrap to the walk: layout.TopDirectory is the
@@ -289,13 +297,13 @@ func TestBootstrapPathIsTheTopOfTheWrittenTree(t *testing.T) {
 						if err != nil {
 							t.Fatalf("WalkCluster: %v", err)
 						}
-						if got := walked.FullRepoPath(); got != top {
+						if got := unrootedPath(walked); got != top {
 							t.Fatalf("the walk's top is %q, TopDirectory says %q", got, top)
 						}
 
 						sync := fluxInstanceSyncPath(t, c.Node, rules)
-						if want := strings.TrimLeft(top, "/"); path.Clean(sync) != path.Clean(want) {
-							t.Fatalf("FluxInstance sync.path %q, want the directory %q", sync, want)
+						if path.Clean(sync) != top {
+							t.Fatalf("FluxInstance sync.path %q, want the directory %q", sync, top)
 						}
 
 						refusal := sourceHostRefusal(placement, grouping, clusterName, shape)
@@ -305,7 +313,7 @@ func TestBootstrapPathIsTheTopOfTheWrittenTree(t *testing.T) {
 							if err != nil {
 								t.Fatalf("refused, want the tree integrated: %v", err)
 							}
-							if got := ml.FullRepoPath(); got != top {
+							if got := unrootedPath(ml); got != top {
 								t.Fatalf("the integrated tree's top is %q, TopDirectory says %q", got, top)
 							}
 							integratedTrees[fmt.Sprintf("%s under ClusterName %q", placement, clusterName)]++
@@ -379,8 +387,8 @@ func TestGotkBootstrapPathIsTheTopOfTheWrittenTree(t *testing.T) {
 					t.Fatalf("TopDirectory: %v", err)
 				}
 				gotk, sync := bootstrapPaths(t, c.Node, rules)
-				if want := strings.TrimLeft(top, "/"); path.Clean(gotk) != path.Clean(want) {
-					t.Fatalf("gotk spec.path %q, want the directory %q", gotk, want)
+				if gotk != top {
+					t.Fatalf("gotk spec.path %q, want the directory %q", gotk, top)
 				}
 				if g, s := path.Clean(gotk), path.Clean(sync); g != s {
 					t.Fatalf("the two modes name different directories: gotk %q, FluxInstance %q", g, s)
@@ -390,7 +398,7 @@ func TestGotkBootstrapPathIsTheTopOfTheWrittenTree(t *testing.T) {
 				if err != nil {
 					t.Fatalf("WalkCluster: %v", err)
 				}
-				if got := walked.FullRepoPath(); got != top {
+				if got := unrootedPath(walked); got != top {
 					t.Fatalf("the walk's top is %q, TopDirectory says %q", got, top)
 				}
 				for writer, tree := range writeAll(t, walked) {

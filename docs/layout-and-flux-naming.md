@@ -1095,10 +1095,13 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      the walk takes its top from (`grouping.topLayout`), so the tree and the bootstrap cannot
      differ: the `ClusterName` directory, or without one the root node's name, `cluster` for an
      unnamed root node and `.` for no root node (nothing is walked then; the caller applies the
-     directory it writes to). The rules are validated first, so invalid ones are an error
-     whatever the `BootstrapConfig` is. The Flux engine refuses rules that are not a
-     `layout.LayoutRules`, nil included, as item 3 does; the ArgoCD engine takes the rules and
-     reads nothing from them. The generated Source's name and the bootstrap Kustomization's
+     directory it writes to). `TopDirectory` returns it relative, with no leading slash: for a
+     rooted `ClusterName` (`/prod`) the walk's own `FullRepoPath` keeps the slash and the writers
+     resolve it under the directory they write to, which is the directory returned (`prod`), so a
+     caller hands Flux the path the bootstrap does. The rules are validated first, so invalid
+     ones are an error whatever the `BootstrapConfig` is. The Flux engine refuses rules that are
+     not a `layout.LayoutRules`, nil included, as item 3 does; the ArgoCD engine takes the rules
+     and reads nothing from them. The generated Source's name and the bootstrap Kustomization's
      `sourceRef` stay on the root node's name.
    - `WriteManifest` writes the `ClusterName` directory its `kustomization.yaml` like
      `WriteToDisk` and `WriteToTar` (`manifestPlan` in `writerplan.go`). It used to write none
