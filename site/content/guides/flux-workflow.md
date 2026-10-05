@@ -432,7 +432,7 @@ What changed, and what to do:
   is the name of the root node's bundle's directory would render to the same path; the walk
   refuses it, naming both, also when the names differ only in case or the node's name resolves to
   that directory (`./web` for `web`). Rename one. A bundle name that resolves to the root node's
-  own directory (`.`, `/`), or to a directory another layout further down already takes (`web/api`
+  own directory (`.`, `/`), or to a directory a layout below a child node already takes (`web/api`
   beside the nodes `web` and `api`), is refused as well.
 - **A root node's bundle named `flux-system` is refused under `FluxSeparate`.** Without a
   `ClusterName` its directory would be the one the Flux resources are written to. Rename the

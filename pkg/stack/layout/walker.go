@@ -85,7 +85,7 @@ type rootUnit struct {
 // directory ("/web", "./web"), is refused here too, not when the tree is
 // written. A bundle name that resolves to the root node's directory itself
 // (".", "/") is refused the same way: it names no directory inside it. So is
-// one that resolves to the directory of a layout further down the tree
+// one that resolves to the directory of a layout below a child node
 // ("web/api" beside the nodes web and api): see checkBelow.
 func (r *rootUnit) checkRootUnitName() error {
 	if r == nil || r.unit == nil {
@@ -136,7 +136,8 @@ func (r *rootUnit) checkBelow(l *ManifestLayout) error {
 }
 
 // describe says, for an error, what the walked layout l with origin o is the
-// directory of: its application, its first node or its first bundle.
+// directory of: its application, its first node or its first bundle. A layout
+// without any of them (a directory an augmenter added) is named as a layout.
 func (o origin) describe(l *ManifestLayout) string {
 	switch {
 	case o.app != nil:
