@@ -871,10 +871,15 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
       `writerplan.go`) refuses that one shape, for every writer whose parent lists the child. The
       error names both layouts, the directory written and the directory the parent lists, and
       says to set `Namespace` to the parent's path. The directories compared are the writer's
-      own, so under an `AppFileSingle` root the parent directory is the root's `Namespace`.
+      own, so under an `AppFileSingle` root the parent directory is the root's `Namespace`. They
+      are compared without regard to case, as the writers compare directories (`normDir`): a
+      `Namespace` that is the child's own path in another case is the same mistake, and the error
+      says the difference is one of case. Whether a parent writes a `kustomization.yaml` is asked
+      once per parent (`checkDirectoryChildEntries`), not once per child.
     - Not refused: layouts of one name built with the parent's path (`web/web`); a child placed
       elsewhere on purpose, such as a root that lists sibling layers living under a group
-      directory, which `pkg/stack/layout/README.md` allows; a child no entry names (one its
+      directory, which `pkg/stack/layout/README.md` allows, also when that directory resembles
+      the child's name without being it in another case; a child no entry names (one its
       parent does not list, or any child of a parent that writes no `kustomization.yaml`). No
       walked tree meets the refusal.
     - Breaking: a hand-built tree with such a child was written and is now refused.
@@ -882,7 +887,8 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
       `TestWriters_DirectoryChildInParentPathIsListed`,
       `TestWriters_DirectoryChildPlacedElsewhereIsWritten`,
       `TestWriters_UnlistedDirectoryChildMayNest` and `TestWalkers_SameNameLevelsAreWritten` in
-      `pkg/stack/layout/dirchild_test.go`.
+      `pkg/stack/layout/dirchild_test.go`; `TestCheckDirectoryChildEntries_AsksEachParentOnce` in
+      `pkg/stack/layout/writerplan_test.go`.
 
 **Acceptance.** Each target has a test rendering the input above and asserting the expected tree;
 the shipped items name theirs.

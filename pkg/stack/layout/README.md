@@ -61,7 +61,10 @@ would get that name twice (`.../<name>/<name>`), below the directory its parent'
 child before anything is written (go-kure/kure#979): a directory child that its parent lists and
 whose `Namespace` is `<parent directory>/<Name>`, the path the child itself should have. The error
 names both layouts, the directory written and the directory the parent lists; pass the parent's
-path instead. Only that shape is refused. Layouts of one name built with the parent's path nest as
+path instead. The two paths are compared without regard to case, as the writers compare
+directories: a `Namespace` that is the child's own path in another case (`apps/web` for a child
+named `Web` under `apps`) is the same mistake, and the error says the difference is one of case.
+Only that shape is refused. Layouts of one name built with the parent's path nest as
 above (`web/web`), a child placed elsewhere on purpose is written as described above, and so is a
 child no entry names: one its parent does not list (an umbrella child, one that renders bundles, a
 directory child of a `FluxIntegratedPerLayout` parent, and for `WriteToDisk` and `WriteToTar` a

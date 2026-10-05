@@ -62,7 +62,21 @@ func TestWriters_RefuseDirectoryChildNestedBelowItsEntry(t *testing.T) {
 				return parent
 			},
 			writers: allWriters,
-			want:    []string{`layout "apps/web/web"`, `apps/web/web", not to "`, `apps/web", the directory`, `parent layout "apps"`, `lists as "web"`},
+			want:    []string{`layout "apps/web/web"`, `apps/web/web", not to "`, `apps/web", the directory`, `parent layout "apps"`, `lists as "web"`, `Namespace "apps/web" is the child's own path`},
+		},
+		// The same mistake in another case: the entry Web names apps/Web, which
+		// does not exist on a case-sensitive volume and is apps/web, holding
+		// only the child's directory, on a case-insensitive one.
+		"Namespace is the child's own path in another case": {
+			tree: func() *layout.ManifestLayout {
+				child := namedChild("web", "apps/web")
+				child.Name = "Web"
+				parent := cmLayout("apps", ".")
+				parent.Children = []*layout.ManifestLayout{child}
+				return parent
+			},
+			writers: allWriters,
+			want:    []string{`layout "apps/web/Web"`, `apps/web/Web", not to "`, `apps/Web", the directory`, `parent layout "apps"`, `lists as "Web"`, `Namespace "apps/web" differs only in case from the child's own path`},
 		},
 		"grandchild": {
 			tree: func() *layout.ManifestLayout {
@@ -240,26 +254,49 @@ func TestWriters_DirectoryChildInParentPathIsListed(t *testing.T) {
 // directory that has no layout of its own. It is not the refused shape (its
 // Namespace is not its own path) and is written as before; the root's
 // kustomization.yaml is then not a valid kustomize entry point, which is the
-// caller's choice.
+// caller's choice. A group directory that differs from the child's Name by
+// more than case is such a placement too, and is not the refused shape.
 func TestWriters_DirectoryChildPlacedElsewhereIsWritten(t *testing.T) {
-	for _, writer := range allWriters {
-		t.Run(writer, func(t *testing.T) {
-			root := &layout.ManifestLayout{Name: "", Namespace: ".", Children: []*layout.ManifestLayout{
-				namedChild("flux-system", "."),
-				namedChild("flux-system-platform", "."),
-				namedChild("cert-manager", "platform"),
-			}}
-			files := writtenFiles(t, writer, layout.Config{}, root)
-			for _, want := range []string{
+	cases := map[string]struct {
+		tree func() *layout.ManifestLayout
+		want []string
+	}{
+		"sibling layers under a group directory": {
+			tree: func() *layout.ManifestLayout {
+				return &layout.ManifestLayout{Name: "", Namespace: ".", Children: []*layout.ManifestLayout{
+					namedChild("flux-system", "."),
+					namedChild("flux-system-platform", "."),
+					namedChild("cert-manager", "platform"),
+				}}
+			},
+			want: []string{
 				"flux-system/kustomization.yaml",
 				"flux-system-platform/kustomization.yaml",
 				"platform/cert-manager/kustomization.yaml",
-			} {
-				if _, ok := files[want]; !ok {
-					t.Errorf("no %s written; wrote %v", want, slices.Sorted(maps.Keys(files)))
+			},
+		},
+		"group directory that differs from the Name by more than case": {
+			tree: func() *layout.ManifestLayout {
+				child := namedChild("web", "apps/webs")
+				child.Name = "Web"
+				parent := cmLayout("apps", ".")
+				parent.Children = []*layout.ManifestLayout{child}
+				return parent
+			},
+			want: []string{"apps/kustomization.yaml", "apps/webs/Web/kustomization.yaml"},
+		},
+	}
+	for name, tc := range cases {
+		for _, writer := range allWriters {
+			t.Run(name+"/"+writer, func(t *testing.T) {
+				files := writtenFiles(t, writer, layout.Config{}, tc.tree())
+				for _, want := range tc.want {
+					if _, ok := files[want]; !ok {
+						t.Errorf("no %s written; wrote %v", want, slices.Sorted(maps.Keys(files)))
+					}
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
