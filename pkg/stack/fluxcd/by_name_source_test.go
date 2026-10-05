@@ -41,6 +41,35 @@ func grandchildTree() *stack.Cluster {
 	return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: urlBundle("core", "shared"), Children: []*stack.Node{web}}}
 }
 
+// plainBundle is a bundle whose SourceRef has no URL and names source.
+func plainBundle(name, source string) *stack.Bundle {
+	b := srBundle(name, cmApp(name+"-app"))
+	b.SourceRef = &stack.SourceRef{Kind: "GitRepository", Name: source, Namespace: "flux-system"}
+	return b
+}
+
+// differingTree: platform (the bundle root builds, or none) -> api (Source
+// api-src), ui (Source ui-src) and shop (a SourceRef with a URL that generates
+// Source shared), below a node apps without a bundle when group is set.
+// Neither of the first two SourceRefs has a URL, and they differ.
+func differingTree(root func() *stack.Bundle, group bool) func() *stack.Cluster {
+	return func() *stack.Cluster {
+		var rootBundle *stack.Bundle
+		if root != nil {
+			rootBundle = root()
+		}
+		children := []*stack.Node{
+			{Name: "api", Bundle: plainBundle("api", "api-src")},
+			{Name: "ui", Bundle: plainBundle("ui", "ui-src")},
+			{Name: "shop", Bundle: urlBundle("shop", "shared")},
+		}
+		if group {
+			children = []*stack.Node{{Name: "apps", Children: children}}
+		}
+		return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: rootBundle, Children: children}}
+	}
+}
+
 // sourcesByPath maps the spec.path of every Flux Kustomization in ml to the
 // name of the Source it takes.
 func sourcesByPath(ml *layout.ManifestLayout) map[string]string {
@@ -189,6 +218,139 @@ func TestPerLayout_ByName_BundleLessNodeTakesTheNearestBundleAbove(t *testing.T)
 				}
 				checkWrittenSources(t, ml)
 				checkIdempotent(t, tc.build(), rules)
+			})
+		}
+	}
+}
+
+// TestPerLayout_ByName_DifferingSourcesBelowTakeTheNodesBundleSource: a node's
+// layout below which two SourceRefs without a URL differ has no source among
+// them. It takes the SourceRef of its own node's bundle, or of the nearest
+// node above that has one, as it does when the bundles are rendered in their
+// nodes' directories (BundleGrouping GroupFlat); the nodes below keep their
+// own.
+func TestPerLayout_ByName_DifferingSourcesBelowTakeTheNodesBundleSource(t *testing.T) {
+	rootBundle := func() *stack.Bundle { return plainBundle("core", "root-src") }
+	for _, tc := range []struct {
+		name        string
+		build       func() *stack.Cluster
+		clusterName string
+		// want maps the directory of a node's layout to its source; decided
+		// are the ones among them below which the SourceRefs differ.
+		want    map[string]string
+		decided []string
+	}{
+		{
+			name:        "the root node's layout, below a ClusterName directory",
+			build:       differingTree(rootBundle, false),
+			clusterName: "prod",
+			want:        map[string]string{"prod/platform": "root-src", "prod/platform/api": "api-src", "prod/platform/ui": "ui-src"},
+			decided:     []string{"prod/platform"},
+		},
+		{
+			name:    "a group node takes the root bundle's",
+			build:   differingTree(rootBundle, true),
+			want:    map[string]string{"platform/apps": "root-src", "platform/apps/api": "api-src", "platform/apps/ui": "ui-src"},
+			decided: []string{"platform/apps"},
+		},
+		{
+			// A URL on the node's own bundle is no obstacle below the root
+			// node: its Source is hosted in the root node's layout.
+			name: "a node whose own bundle has a URL",
+			build: func() *stack.Cluster {
+				c := differingTree(nil, false)()
+				web := &stack.Node{Name: "web", Bundle: urlBundle("web", "web-src"), Children: c.Node.Children}
+				c.Node.Children = []*stack.Node{web}
+				return c
+			},
+			want:    map[string]string{"platform/web": "web-src", "platform/web/api": "api-src", "platform/web/ui": "ui-src"},
+			decided: []string{"platform/web"},
+		},
+	} {
+		for grouping, rules := range byNameGroupings {
+			t.Run(tc.name+"/"+grouping, func(t *testing.T) {
+				rules.FluxPlacement = layout.FluxIntegratedPerLayout
+				rules.ClusterName = tc.clusterName
+				ml := integrated(t, tc.build(), rules)
+				got := sourcesByPath(ml)
+				for dir, source := range tc.want {
+					if got[dir] != source {
+						t.Errorf("the Kustomization with spec.path %q takes its source from %q, want %q (all: %v)", dir, got[dir], source, got)
+					}
+				}
+				flatRules := propertyGroupings["nodeOnly"]
+				flatRules.FluxPlacement = layout.FluxIntegratedPerLayout
+				flatRules.ClusterName = tc.clusterName
+				flat := sourcesByPath(integrated(t, tc.build(), flatRules))
+				for _, dir := range tc.decided {
+					if flat[dir] == "" || flat[dir] != got[dir] {
+						t.Errorf("node layout %q takes its source from %q, and from %q with BundleGrouping GroupFlat: want the same", dir, got[dir], flat[dir])
+					}
+				}
+				checkWrittenSources(t, ml)
+				checkIdempotent(t, tc.build(), rules)
+			})
+		}
+	}
+}
+
+// TestPerLayout_DifferingSourcesBelow_RefusalSaysWhatHelps: where the
+// SourceRefs below a node's layout differ and no bundle of a node at or above
+// it gives it a source, the refusal names the way out that applies: such a
+// bundle, without a URL where the layout is the root node's below a
+// ClusterName directory (its Kustomization would deliver a generated Source),
+// and where that bundle is there with a URL, the Source it names.
+func TestPerLayout_DifferingSourcesBelow_RefusalSaysWhatHelps(t *testing.T) {
+	const differ = "has no enclosing bundle and the bundles below it have different SourceRefs, so its Flux Kustomization has no single source; "
+	groupings := map[string]layout.LayoutRules{"BundleGrouping GroupFlat": propertyGroupings["nodeOnly"]}
+	for name, rules := range byNameGroupings {
+		groupings["BundleGrouping GroupByName, "+name] = rules
+	}
+	for _, tc := range []struct {
+		name        string
+		build       func() *stack.Cluster
+		clusterName string
+		// byNameOnly: with BundleGrouping GroupFlat no layout of the tree is
+		// left without a source.
+		byNameOnly bool
+		want       string
+		not        string
+	}{
+		{
+			name:  "no bundle at or above a group node",
+			build: differingTree(nil, true),
+			want:  `layout "platform/apps" ` + differ + "give a node at or above it a bundle with a SourceRef, which its Kustomization then takes",
+			not:   "without a URL",
+		},
+		{
+			name:        "the root node's layout without a bundle, below a ClusterName directory",
+			build:       differingTree(nil, false),
+			clusterName: "prod",
+			want:        `layout "prod/platform" ` + differ + "give a node at or above it a bundle with a SourceRef without a URL, which its Kustomization then takes",
+		},
+		{
+			name:        "the root node's bundle has a URL, below a ClusterName directory",
+			build:       differingTree(func() *stack.Bundle { return urlBundle("core", "shared") }, false),
+			clusterName: "prod",
+			want: `layout "prod/platform" ` + differ + `the bundle of the nearest node at or above it names GitRepository "shared", which the integration generates from a SourceRef with a URL and hosts inside what this Kustomization applies: ` +
+				"give that bundle a SourceRef without a URL, naming a Source that exists before the tree is applied",
+			not: "give a node at or above it",
+		},
+	} {
+		for grouping, rules := range groupings {
+			t.Run(tc.name+"/"+grouping, func(t *testing.T) {
+				rules.FluxPlacement = layout.FluxIntegratedPerLayout
+				rules.ClusterName = tc.clusterName
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(tc.build(), rules)
+				if err == nil {
+					t.Fatalf("got no error, want the refusal %q", tc.want)
+				}
+				if !strings.Contains(err.Error(), tc.want) {
+					t.Errorf("refusal %q does not say %q", err, tc.want)
+				}
+				if tc.not != "" && strings.Contains(err.Error(), tc.not) {
+					t.Errorf("refusal %q says %q", err, tc.not)
+				}
 			})
 		}
 	}

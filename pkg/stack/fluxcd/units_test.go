@@ -538,8 +538,8 @@ func TestPerLayout_SharedSourceEffectiveNamespace(t *testing.T) {
 // encloses a node's: the bundle-less child node takes the root bundle's
 // SourceRef all the same, as the bundle of the nearest node above it (item 12),
 // and node web the one of its own bundle. Below a ClusterName wrapper the root
-// node's layout is asked first, finds two SourceRefs without a URL below it,
-// and is refused as before.
+// node's layout finds two SourceRefs without a URL below it that differ, and
+// takes its own node's bundle's: the same source as under a flat grouping.
 func TestPerLayout_RootNodeLayoutKeepsTheRootBundlesSource(t *testing.T) {
 	build := func() *stack.Cluster {
 		ref := func(name string) *stack.SourceRef {
@@ -594,12 +594,16 @@ func TestPerLayout_RootNodeLayoutKeepsTheRootBundlesSource(t *testing.T) {
 		rules := propertyGroupings["GroupByName"]
 		rules.FluxPlacement = layout.FluxIntegratedPerLayout
 		rules.ClusterName = "prod"
-		// The root node's layout is asked first, and the two bundles below
-		// it name different sources.
-		refusal := `layout "prod/platform" has no enclosing bundle and the bundles below it have different SourceRefs`
-		_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(build(), rules)
-		if err == nil || !strings.Contains(err.Error(), refusal) {
-			t.Errorf("got %v, want the refusal %q", err, refusal)
+		// The two bundles below the root node's layout name different
+		// sources: its own node's bundle decides, as under a flat grouping.
+		want := map[string]string{
+			"prod/platform":          "root-src",
+			"prod/platform/platform": "root-src", "prod/platform/platform/core": "root-src",
+			"prod/platform/empty": "root-src",
+			"prod/platform/web":   "web-src", "prod/platform/web/web": "web-src", "prod/platform/web/web/web-app": "web-src",
+		}
+		if got := sources(integrated(t, build(), rules)); !reflect.DeepEqual(got, want) {
+			t.Errorf("sourceRef by spec.path = %v, want %v", got, want)
 		}
 	})
 }
