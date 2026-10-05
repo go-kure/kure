@@ -204,8 +204,8 @@ a Kustomization of its own); and it names the way out: the field that names the 
 (`Bundle.KustomizationName`, `Node.KustomizationName` or `ManifestLayout.KustomizationName`), or
 another name for the one in the tree. For a node whose walked layout carries a name the node does
 not set, that is the layout and its field: the layout's name is the one in effect. A Kustomization
-that no application holds, such as one added to a walked layout by hand, is named by its layout
-alone.
+that no application holds, such as one added to a walked layout by hand or put where an
+application's was, is named by its layout alone.
 
 `Bundle.Validate` compares the names in effect wherever it compares against a Kustomization
 reference. A bundle that lists the bundle `db` in `DependsOn` and the name `db` in

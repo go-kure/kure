@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
@@ -200,6 +201,85 @@ func TestKustomizationClash_KustomizationNoApplicationHolds(t *testing.T) {
 			)
 			if strings.Contains(err.Error(), "an object of application") {
 				t.Errorf("the error names an application for a Kustomization no application holds:\n%v", err)
+			}
+		})
+	}
+}
+
+// TestKustomizationClash_KustomizationInsideAList: kustomize builds a List's
+// items, so a Kustomization inside a List an application emits is that
+// application's, and the refusal names it so.
+func TestKustomizationClash_KustomizationInsideAList(t *testing.T) {
+	for _, placement := range allPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			ks, ok := fluxKustomization("shop", "./").(*unstructured.Unstructured)
+			if !ok {
+				t.Fatal("fluxKustomization is not unstructured")
+			}
+			var list client.Object = wrapInList(ks)
+			delivery := stack.NewApplication("delivery", "default", &fakeAppConfig{objs: []*client.Object{&list}})
+			apps := &stack.Node{Name: "apps", Bundle: srBundle("shop", delivery)}
+			root := &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("core")), Children: []*stack.Node{apps}}
+			apps.SetParent(root)
+			c := &stack.Cluster{Name: "demo", Node: root}
+
+			rules := placed(propertyGroupings["nodeOnly"], placement)
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+			mustContainAll(t, err,
+				`already has Flux Kustomization "shop"`,
+				`an object of application "delivery" of bundle "shop"`,
+				`set Bundle.KustomizationName on bundle "shop" to name the generated one`,
+			)
+		})
+	}
+}
+
+// TestKustomizationClash_ObjectReplacedSinceTheWalk: a caller that puts
+// another Kustomization of the same name where the application's was has
+// made it no application's. The walk's record still holds the application's
+// object, but the tree does not: the refusal names the one in the tree by its
+// layout and spec.path alone.
+func TestKustomizationClash_ObjectReplacedSinceTheWalk(t *testing.T) {
+	var replace func(l *layout.ManifestLayout) int
+	replace = func(l *layout.ManifestLayout) int {
+		n := 0
+		for i, obj := range l.Resources {
+			if obj.GetObjectKind().GroupVersionKind().Kind == "Kustomization" && obj.GetName() == "shop" {
+				l.Resources[i] = fluxKustomization("shop", "elsewhere")
+				n++
+			}
+		}
+		for _, child := range l.Children {
+			n += replace(child)
+		}
+		return n
+	}
+	for _, placement := range allPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			rules := placed(propertyGroupings["nodeOnly"], placement)
+			shop := srBundle("shop", authoredApp("delivery", "shop"))
+			apps := &stack.Node{Name: "apps", Bundle: shop}
+			root := &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("core")), Children: []*stack.Node{apps}}
+			apps.SetParent(root)
+			c := &stack.Cluster{Name: "demo", Node: root}
+			ml, err := layout.WalkCluster(c, rules)
+			if err != nil {
+				t.Fatalf("WalkCluster: %v", err)
+			}
+			if n := replace(ml); n != 1 {
+				t.Fatalf("replaced %d Kustomizations named shop, want 1", n)
+			}
+
+			err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+			mustContainAll(t, err,
+				`already has Flux Kustomization "shop"`,
+				`spec.path "elsewhere"`,
+				`for bundle "shop"`,
+				`set Bundle.KustomizationName on bundle "shop" to name the generated one`,
+				`or give the one already there another name`,
+			)
+			if strings.Contains(err.Error(), "an object of application") {
+				t.Errorf("the error names an application for an object put in its place since the walk:\n%v", err)
 			}
 		})
 	}
