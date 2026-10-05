@@ -459,15 +459,16 @@ func TestWriters_RefuseDuplicateFluxKustomization(t *testing.T) {
 	}
 }
 
-// TestWriters_RefuseDuplicateFluxKustomizationInOneLayout: a duplicate the
-// per-layout check does not see, one of the two two Lists deep, is refused as
-// held twice by the one layout.
+// TestWriters_RefuseDuplicateFluxKustomizationInOneLayout: two Flux
+// Kustomizations of one name in one layout, one of them two Lists deep, are
+// one object held twice. The per-layout check opens a List as deep as the
+// check of Kustomization names does, so it is the one that refuses them.
 func TestWriters_RefuseDuplicateFluxKustomizationInOneLayout(t *testing.T) {
 	for _, writer := range allWriters {
 		p := fluxParent()
 		p.Resources = append(p.Resources, shopKs(), listOf("List", listOf("List", shopKs())))
 		err := writeRefused(t, writer, layout.DefaultLayoutConfig(), p)
-		want := `layout "p" holds the Flux Kustomization flux-system/shop twice`
+		want := `layout "p" holds the same object kustomize.toolkit.fluxcd.io/Kustomization flux-system/shop twice`
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err = %v, want it to contain %q", writer, err, want)
 		}

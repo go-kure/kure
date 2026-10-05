@@ -7,10 +7,11 @@ import (
 	"slices"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/internal/built"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -235,80 +236,28 @@ func describeObject(obj client.Object) string {
 	return fmt.Sprintf("%s %q", kind, name)
 }
 
-// builtObjects returns the objects kustomize builds from r once it is written:
-// r itself, or the objects a List holds, a List among them opened the same
-// way. A List is what kustomize takes for one (its resource factory's
-// inlineAnyEmbeddedLists): a kind ending in "List" that has an items field.
-// Any other kind is one object, whatever fields it has, and so is a kind
-// ending in "List" without items; items set to null hold nothing. For a typed
-// object the field is read from its written form, so one left out when empty
-// counts as absent. The items are the List's own, so a change to one is a
-// change to the List. For a typed List they are the ones its Go value gives
-// access to; verifyWritten refuses a written item that is not among them.
-func builtObjects(r client.Object) ([]client.Object, error) {
-	self := []client.Object{r}
-	if !strings.HasSuffix(r.GetObjectKind().GroupVersionKind().Kind, "List") {
-		return self, nil
-	}
-	var items []client.Object
-	if u, ok := r.(*unstructured.Unstructured); ok {
-		held, ok := u.Object["items"]
-		if !ok {
-			return self, nil
-		}
-		if held == nil {
-			return nil, nil
-		}
-		if !u.IsList() {
-			// Not an array: kustomize refuses the file when it builds it.
-			return self, nil
-		}
-		list, err := u.ToList()
-		if err != nil {
-			return nil, err
-		}
-		for i := range list.Items {
-			items = append(items, &list.Items[i])
-		}
-	} else {
-		held, ok, err := writtenItems(r)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return self, nil
-		}
-		if held == nil {
-			return nil, nil
-		}
-		if _, ok := held.([]any); !ok {
-			// Not an array: kustomize refuses the file when it builds it.
-			return self, nil
-		}
-		// What the Go value gives access to, read as the writers serialize
-		// it (typedListItems): an item held as raw JSON is not an object to
-		// annotate, whatever object is held beside it. Whether what was
-		// reached is all the written items is checked afterwards, on the
-		// written form (verifyWritten).
-		if meta.IsListType(r) {
-			extracted, err := typedListItems(r)
-			if err != nil {
-				return nil, err
-			}
-			for _, item := range extracted {
-				if obj, ok := item.(client.Object); ok {
-					items = append(items, obj)
-				}
-			}
-		}
+// builtObjects returns the objects of r that an annotation can be set on: of
+// the objects kustomize builds from r once it is written (built.Objects, the
+// rule the layout writers' pre-write check reads a resource by), the ones r
+// holds as Go values with object metadata. That is r itself, or what a List
+// holds, a List among the items opened the same way whether or not it carries
+// object metadata of its own (metav1.List has none). They are the List's own,
+// so a change to one is a change to the List.
+//
+// An item held as raw JSON is not among them, whatever object is held beside
+// it, and neither is one the Go value gives no access to. Whether what was
+// reached is all the written objects is checked afterwards, on the written
+// form (verifyWritten).
+func builtObjects(r runtime.Object) ([]client.Object, error) {
+	objs, err := built.Objects(r)
+	if err != nil {
+		return nil, err
 	}
 	var out []client.Object
-	for _, item := range items {
-		built, err := builtObjects(item)
-		if err != nil {
-			return nil, err
+	for _, obj := range objs {
+		if own, ok := obj.Object.(client.Object); ok && !obj.Read {
+			out = append(out, own)
 		}
-		out = append(out, built...)
 	}
 	return out, nil
 }
@@ -325,18 +274,6 @@ func writtenForm(r client.Object) (map[string]any, error) {
 		return nil, errors.Wrapf(err, "read %s as written", describeObject(r))
 	}
 	return written, nil
-}
-
-// writtenItems returns the items field of a typed object as it is written,
-// and whether the written form has one: an items field left out when empty is
-// not there for kustomize.
-func writtenItems(r client.Object) (items any, present bool, err error) {
-	written, err := writtenForm(r)
-	if err != nil {
-		return nil, false, err
-	}
-	items, present = written["items"]
-	return items, present, nil
 }
 
 // writtenObjects is builtObjects on a written form: the objects kustomize
@@ -381,8 +318,8 @@ func verifyWritten(r client.Object, want map[string]string) ([]map[string]any, e
 	if err != nil {
 		return nil, err
 	}
-	built := writtenObjects(written)
-	for _, b := range built {
+	objs := writtenObjects(written)
+	for _, b := range objs {
 		have, _, _ := unstructured.NestedStringMap(b, "metadata", "annotations")
 		for _, key := range slices.Sorted(maps.Keys(want)) {
 			if have[key] != want[key] {
@@ -391,5 +328,5 @@ func verifyWritten(r client.Object, want map[string]string) ([]map[string]any, e
 			}
 		}
 	}
-	return built, nil
+	return objs, nil
 }
