@@ -81,20 +81,19 @@ type rootUnit struct {
 // checkRootUnitName refuses a child node of the root that is named like the
 // directory of the root's bundles: both would be written to one directory.
 // The two directories are compared as the writers compare them (SameDirectory),
-// so a name that differs only in case, or one that resolves to the same
-// directory ("/web", "./web"), is refused here too, not when the tree is
-// written. A bundle name that resolves to the root node's directory itself
-// (".", "/") is refused the same way: it names no directory inside it. So is
-// one that resolves to the directory of a layout below a child node
-// ("web/api" beside the nodes web and api): see checkBelow.
+// so a node name that differs only in case is refused here too, not when the
+// tree is written. A node name that is not one path segment ("/web", "./web")
+// does not get here: stack.ValidateCluster refuses it before the walk. A
+// layout below a child node that is rendered to that directory is refused the
+// same way: see checkBelow.
+//
+// The bundle's own directory needs no check against the root node's: its name
+// is a bundle's, which stack.ValidateCluster has checked before the walk, so
+// it is one plain path segment (never ".", "..", or a name with a separator),
+// and the root node's directory joined with one is a directory inside it.
 func (r *rootUnit) checkRootUnitName() error {
 	if r == nil || r.unit == nil {
 		return nil
-	}
-	if r.unit.SameDirectory(r.layout) {
-		return errors.ResourceValidationError("Bundle", r.unit.Name, "name",
-			fmt.Sprintf("bundle %q would be rendered to directory %q, which is the root node's: the root node's bundle has a directory named after it inside the root node's directory, so its name must name a directory there",
-				r.unit.Name, r.layout.FullRepoPath()), nil)
 	}
 	for _, child := range r.layout.Children {
 		if child != r.unit && child.SameDirectory(r.unit) {
@@ -115,9 +114,14 @@ func (r *rootUnit) checkRootUnitName() error {
 }
 
 // checkBelow refuses a layout below l that is rendered to the directory of the
-// root's bundles: a bundle name with a path separator can resolve to the
-// directory of a nested node, or of one of its bundles or applications. The
-// unit's own layouts are not walked: they lie below its directory.
+// root's bundles. A node or bundle name is one path segment
+// (stack.ValidateCluster), so the directory of a nested node or bundle lies at
+// least two levels below the root node's and is never that one. Two kinds of
+// layout can be: an application's own directory, whose name is checked only
+// after this (checkApplicationDirs) and may climb out of its bundle's
+// ("../core"), and a layout an application's LayoutAugmenter adds, which
+// carries whatever Name and Namespace the augmenter gives it. The unit's own
+// layouts are not walked: they lie below its directory.
 func (r *rootUnit) checkBelow(l *ManifestLayout) error {
 	for _, child := range l.Children {
 		if child == nil {

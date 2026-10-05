@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -485,98 +486,124 @@ func TestWalk_RefusesChildNodeNamedLikeTheRootBundlesDirectory(t *testing.T) {
 	}
 }
 
-// TestWalk_RefusesRootBundleNamedLikeTheRootNodesDirectory: with a flat
+// TestWalk_RefusesRootBundleNameThatIsNoPathSegment: with a flat
 // BundleGrouping the root node's bundle has a directory named after it inside
-// the root node's (go-kure/kure#979). A name that resolves to the root node's
-// directory itself (".", "/") names no directory inside it, so both walkers
-// refuse it, with and without a ClusterName, instead of returning a tree the
-// writers refuse. Under BundleGrouping by name the walk is unchanged.
-func TestWalk_RefusesRootBundleNamedLikeTheRootNodesDirectory(t *testing.T) {
-	for name, tc := range map[string]struct {
-		rules layout.LayoutRules
-		dir   string
-	}{
-		"no ClusterName":      {nodeOnly, "platform"},
-		"ClusterName prod":    {withClusterName(nodeOnly, "prod"), "prod/platform"},
-		"NodeGrouping flat":   {nodeFlat, "platform"},
-		"ClusterName is root": {withClusterName(nodeOnly, "platform"), "platform"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			for _, alias := range []string{".", "/", "./"} {
-				want := fmt.Sprintf("bundle %q would be rendered to directory %q, which is the root node's", alias, tc.dir)
-				if _, err := layout.WalkCluster(twoTier(alias, "web-bundle"), tc.rules); err == nil || !strings.Contains(err.Error(), want) {
-					t.Errorf("WalkCluster: got %v, want the refusal %q", err, want)
-				}
-				// WalkClusterByPackage places the root node without the
-				// ClusterName.
-				wantPkg := fmt.Sprintf("bundle %q would be rendered to directory %q, which is the root node's", alias, "platform")
-				if _, err := layout.WalkClusterByPackage(twoTier(alias, "web-bundle"), tc.rules); err == nil || !strings.Contains(err.Error(), wantPkg) {
-					t.Errorf("WalkClusterByPackage: got %v, want the refusal %q", err, wantPkg)
-				}
-			}
-		})
-	}
-
-	// By name the walk never refused such a name and still does not; the
-	// writers refuse the tree.
-	ml, err := layout.WalkCluster(twoTier(".", "web-bundle"), groupByName)
-	if err != nil {
-		t.Fatalf("BundleGrouping by name: %v", err)
-	}
-	if err := ml.WriteToDisk(t.TempDir()); err == nil || !strings.Contains(err.Error(), "resolve to the same directory") {
-		t.Errorf("BundleGrouping by name, WriteToDisk: got %v, want the writers' same-directory refusal", err)
-	}
-}
-
-// TestWalk_RefusesRootBundleNamedLikeADirectoryBelowAChildNode: with a flat
-// BundleGrouping the root node's bundle has a directory named after it inside
-// the root node's (go-kure/kure#979). A name with a path separator can resolve
-// to a directory further down, a nested node's or an application's; both
-// walkers refuse it, with and without a ClusterName, instead of returning a
-// tree the writers refuse. Under BundleGrouping by name the walk is unchanged.
-func TestWalk_RefusesRootBundleNamedLikeADirectoryBelowAChildNode(t *testing.T) {
+// the root node's (go-kure/kure#979). A name that is not one path segment
+// could resolve to the root node's directory itself (".", "/") or to a
+// directory further down ("web/api"). stack.ValidateCluster refuses every such
+// name for both walkers, under every grouping and with or without a
+// ClusterName, before the walk places the bundle.
+func TestWalk_RefusesRootBundleNameThatIsNoPathSegment(t *testing.T) {
 	// platform -> web -> api, the root node's bundle named bundleName.
 	threeTier := func(bundleName string) *stack.Cluster {
 		c := twoTier(bundleName, "web-bundle")
 		c.Node.Children[0].Children = []*stack.Node{{Name: "api", Bundle: &stack.Bundle{Name: "api-bundle", Applications: []*stack.Application{configMapApp("backend")}}}}
 		return c
 	}
-	appDirs := layout.LayoutRules{BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupByName}
-	for name, tc := range map[string]struct {
-		rules  layout.LayoutRules
-		bundle string
-		dir    string
-		taker  string
-	}{
-		"nested node":                    {nodeOnly, "web/api", "platform/web/api", `node "api"`},
-		"nested node, ClusterName prod":  {withClusterName(nodeOnly, "prod"), "web/api", "prod/platform/web/api", `node "api"`},
-		"nested node, other case":        {nodeOnly, "WEB/Api", "platform/WEB/Api", `node "api"`},
-		"application of a child node":    {appDirs, "web/frontend", "platform/web/frontend", `application "frontend"`},
-		"application of the nested node": {appDirs, "web/api/backend", "platform/web/api/backend", `application "backend"`},
+	for name, rules := range map[string]layout.LayoutRules{
+		"no ClusterName":         nodeOnly,
+		"ClusterName prod":       withClusterName(nodeOnly, "prod"),
+		"NodeGrouping flat":      nodeFlat,
+		"ClusterName is root":    withClusterName(nodeOnly, "platform"),
+		"BundleGrouping by name": groupByName,
 	} {
 		t.Run(name, func(t *testing.T) {
-			want := fmt.Sprintf("bundle %q would be rendered to directory %q, which %s further down the tree already takes", tc.bundle, tc.dir, tc.taker)
-			if _, err := layout.WalkCluster(threeTier(tc.bundle), tc.rules); err == nil || !strings.Contains(err.Error(), want) {
-				t.Errorf("WalkCluster: got %v, want the refusal %q", err, want)
-			}
-			// WalkClusterByPackage places the root node without the
-			// ClusterName.
-			wantPkg := fmt.Sprintf("bundle %q would be rendered to directory %q, which %s further down the tree already takes", tc.bundle, "platform/"+tc.bundle, tc.taker)
-			if _, err := layout.WalkClusterByPackage(threeTier(tc.bundle), tc.rules); err == nil || !strings.Contains(err.Error(), wantPkg) {
-				t.Errorf("WalkClusterByPackage: got %v, want the refusal %q", err, wantPkg)
+			for bundle, want := range map[string]string{
+				".":         `"." is not a directory name of its own`,
+				"/":         `"/" contains a path separator`,
+				"./":        `"./" contains a path separator`,
+				"web/api":   `"web/api" contains a path separator`,
+				"web/other": `"web/other" contains a path separator`,
+			} {
+				if _, err := layout.WalkCluster(threeTier(bundle), rules); err == nil || !strings.Contains(err.Error(), want) {
+					t.Errorf("WalkCluster: got %v, want the refusal %q", err, want)
+				}
+				if _, err := layout.WalkClusterByPackage(threeTier(bundle), rules); err == nil || !strings.Contains(err.Error(), want) {
+					t.Errorf("WalkClusterByPackage: got %v, want the refusal %q", err, want)
+				}
 			}
 		})
 	}
+}
 
-	// A directory inside a child node's that nothing else takes is not refused.
-	ml := walk(t, threeTier("web/other"), nodeOnly)
-	if got, want := collectRepoPaths(ml), []string{"platform", "platform/web/other", "platform/web", "platform/web/api"}; !slices.Equal(got, want) {
+// strayLayoutConfig is an application whose LayoutAugmenter adds one layout
+// with the given Name and Namespace: an augmenter is free to place a layout
+// anywhere.
+type strayLayoutConfig struct{ name, namespace string }
+
+func (s *strayLayoutConfig) Generate(*stack.Application) ([]*client.Object, error) {
+	o := namedConfigMap("stray-cm")
+	return []*client.Object{&o}, nil
+}
+
+func (s *strayLayoutConfig) AugmentLayout(ml *layout.ManifestLayout) error {
+	ml.Children = append(ml.Children, &layout.ManifestLayout{
+		Name:      s.name,
+		Namespace: s.namespace,
+		Resources: []client.Object{namedConfigMap("stray-extra")},
+	})
+	return nil
+}
+
+// TestWalk_RefusesLayoutBelowAChildNodeInTheRootBundlesDirectory: with a flat
+// BundleGrouping the root node's bundle has a directory named after it inside
+// the root node's (go-kure/kure#979). A node or bundle name is one path
+// segment (stack.ValidateCluster), so neither names that directory from
+// further down. A layout an augmenter adds can, and so can an application's
+// own directory, whose name is checked only after this. Both walkers refuse
+// it, with and without a ClusterName, instead of returning a tree the writers
+// refuse. Under BundleGrouping by name the walk is unchanged.
+func TestWalk_RefusesLayoutBelowAChildNodeInTheRootBundlesDirectory(t *testing.T) {
+	// platform (bundle core) -> web, whose application adds the stray layout.
+	withStray := func(name, namespace string) *stack.Cluster {
+		c := twoTier("core", "web-bundle")
+		c.Node.Children[0].Bundle.Applications = []*stack.Application{
+			stack.NewApplication("frontend", "default", &strayLayoutConfig{name, namespace}),
+		}
+		return c
+	}
+	for name, tc := range map[string]struct {
+		rules           layout.LayoutRules
+		layout, in, dir string
+	}{
+		"same name":                   {nodeOnly, "core", "platform", "platform/core"},
+		"same name, ClusterName prod": {withClusterName(nodeOnly, "prod"), "core", "prod/platform", "prod/platform/core"},
+		"other case":                  {nodeOnly, "CORE", "platform", "platform/core"},
+		"a name that climbs":          {nodeOnly, "../../core", "platform/web/frontend", "platform/core"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			want := fmt.Sprintf("bundle %q would be rendered to directory %q, which layout %q further down the tree already takes", "core", tc.dir, tc.layout)
+			if _, err := layout.WalkCluster(withStray(tc.layout, tc.in), tc.rules); err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("WalkCluster: got %v, want the refusal %q", err, want)
+			}
+		})
+	}
+	// WalkClusterByPackage places the root node without the ClusterName.
+	const wantPkg = `bundle "core" would be rendered to directory "platform/core", which layout "core" further down the tree already takes`
+	if _, err := layout.WalkClusterByPackage(withStray("core", "platform"), nodeOnly); err == nil || !strings.Contains(err.Error(), wantPkg) {
+		t.Errorf("WalkClusterByPackage: got %v, want the refusal %q", err, wantPkg)
+	}
+
+	// An application name that climbs out of its bundle's directory into the
+	// root bundle's: the walk meets the shared directory before it checks the
+	// application's name.
+	climbing := twoTier("core", "web-bundle")
+	climbing.Node.Children[0].Bundle.Applications = []*stack.Application{configMapApp("../core")}
+	appDirs := layout.LayoutRules{BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupByName}
+	const wantApp = `bundle "core" would be rendered to directory "platform/core", which application "../core" further down the tree already takes`
+	if _, err := layout.WalkCluster(climbing, appDirs); err == nil || !strings.Contains(err.Error(), wantApp) {
+		t.Errorf("WalkCluster: got %v, want the refusal %q", err, wantApp)
+	}
+
+	// A directory inside the root node's that nothing else takes is not refused.
+	ml := walk(t, withStray("other", "platform"), nodeOnly)
+	if got, want := collectRepoPaths(ml), []string{"platform", "platform/core", "platform/web", "platform/web/frontend", "platform/other"}; !slices.Equal(got, want) {
 		t.Errorf("layouts = %v, want %v", got, want)
 	}
 
-	// By name the walk never refused such a name and still does not; the
+	// By name the walk never refused such a layout and still does not; the
 	// writers refuse the tree.
-	ml, err := layout.WalkCluster(threeTier("web/api"), groupByName)
+	ml, err := layout.WalkCluster(withStray("core", "platform"), groupByName)
 	if err != nil {
 		t.Fatalf("BundleGrouping by name: %v", err)
 	}

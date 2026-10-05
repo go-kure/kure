@@ -244,14 +244,15 @@ both would be written to one place; the error names the node, the bundle and the
 two directories are compared as the writers compare them (`ManifestLayout.SameDirectory`: the
 path resolved under the output directory and cleaned, without regard to case; it compares
 directories, says nothing about an `AppFileSingle` layout, which is a file, and does not
-describe `WriteToDisk("")`, which writes a rooted path as an absolute one), so a name that
-differs only in case, or one that resolves to the same directory (`/web`, `./web`), is refused
-too. Rename one of them. A bundle name that resolves to the root node's directory itself (`.`,
-`/`) names no directory inside it and is refused the same way, naming the bundle and the
-directory. So is a bundle name with a path separator that resolves to a directory a layout
-below a child node already takes (`web/api` beside the nodes `web` and `api`); the error names
-what takes it. `BundleGrouping: GroupByName` is no way around either: the bundle's directory is
-the same there, the walk does not check it, and the writers refuse the tree.
+describe `WriteToDisk("")`, which writes a rooted path as an absolute one), so a node name that
+differs only in case (`WEB` beside the bundle `web`) is refused too. Rename one of them. A name
+that is not one path segment does not reach the walk: `stack.ValidateCluster` refuses a node
+named `/web` or `./web`, and a bundle named `.`, `/` or `web/api`, before it. The bundle's
+directory is therefore always one inside the root node's. A layout below a child node can still
+be rendered to it, when an application's `LayoutAugmenter` adds one with that name and place;
+the walk refuses the tree, and the error names the bundle, the directory and what takes it.
+`BundleGrouping: GroupByName` is no way around either: the bundle's directory is the same
+there, the walk does not check it, and the writers refuse the tree.
 
 The workflow engines add a directory of their own to the top of the tree: `flux-system` (Flux,
 `FluxSeparate`) and `argocd` (ArgoCD). When the top is the root node's directory, a root node's
