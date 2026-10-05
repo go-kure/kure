@@ -192,13 +192,14 @@ The YAML encoders write an integer exactly when the object holds it as an intege
 field of a typed object, an int64 in an unstructured one. `9007199254740993` is written as
 `9007199254740993`, in both field orders, and so is every integer up to the largest uint64.
 
-A float64 is not an integer to the encoders, also when its value is one. From the smallest int64
-to the largest uint64 it is written with the digits of its JSON form, the shortest that read back
-as the same float64, in both field orders. Above 2^53 those are not always its exact expansion:
-the float64 2^62 is written `4611686018427388000`, not `4611686018427387904`. Hold a large
-integer as an integer to have it written exactly.
+A float64 is not an integer to the encoders, also when its value is one. Between -2^63 and 2^64,
+both excluded, it is written with the digits of its JSON form, the shortest that read back as the
+same float64, in both field orders. Above 2^53 those are not always its exact expansion: the
+float64 2^62 is written `4611686018427388000`, not `4611686018427387904`. Hold a large integer as
+an integer to have it written exactly.
 
-Any other number passes through a float64 and is written with that precision.
+Any other finite number, the float64 -2^63 among them, passes through a float64 and is written
+with that precision.
 
 ### Deterministic Field Ordering
 

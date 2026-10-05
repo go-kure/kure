@@ -233,10 +233,10 @@ fmt.Print(string(data))
 
 Both encoders write an integer exactly when the object holds it as an integer (an integer field of
 a typed object, an int64 in an unstructured one), up to the largest uint64: `9007199254740993`
-stays `9007199254740993`. A float64 that holds an integer in that range is written with the digits
-of its JSON form, in both field orders, which above 2^53 are not always its exact expansion: the
-float64 2^62 is written `4611686018427388000`. Hold a large integer as an integer to have it
-written exactly.
+stays `9007199254740993`. A float64 that holds an integer between -2^63 and 2^64, both excluded, is
+written with the digits of its JSON form, in both field orders, which above 2^53 are not always its
+exact expansion: the float64 2^62 is written `4611686018427388000`. Hold a large integer as an
+integer to have it written exactly.
 
 See the [IO reference](/api-reference/io) for all output formats and stripping options.
 

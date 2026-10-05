@@ -108,11 +108,15 @@ func TestEncodeObjectsToYAML_KeepsLargeIntegers(t *testing.T) {
 // The two field orders already differ for a float beyond the uint64 range;
 // that is recorded here, not changed.
 //
-// A float64 that holds an integer is written with the digits of its JSON
-// form, the shortest that read back as the same float64, in both field
-// orders. Above 2^53 those are not always its exact expansion: 2^62 is
-// 4611686018427387904 and is written 4611686018427388000. An int64 beside
-// it shows that an integer is kept.
+// A float64 that holds an integer between -2^63 and 2^64, both excluded, is
+// written with the digits of its JSON form, the shortest that read back as
+// the same float64, in both field orders. Above 2^53 those are not always its
+// exact expansion: 2^62 is 4611686018427387904 and is written
+// 4611686018427388000. An int64 beside it shows that an integer is kept.
+//
+// The float64 -2^63 is outside that rule: its JSON form,
+// -9223372036854776000, is below the smallest int64, so it stays a float64
+// and the two field orders write it differently, as they did.
 func TestEncodeObjectsToYAML_OtherNumbers(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
@@ -133,6 +137,7 @@ func TestEncodeObjectsToYAML_OtherNumbers(t *testing.T) {
 		{"float 2^62", float64(1 << 62), "serial: 4611686018427388000\n", "serial: 4611686018427388000\n"},
 		{"float 2^63", float64(1 << 63), "serial: 9223372036854776000\n", "serial: 9223372036854776000\n"},
 		{"integer beside float 2^62", int64(4611686018427388001), "serial: 4611686018427388001\n", "serial: 4611686018427388001\n"},
+		{"float -2^63", float64(-1 << 63), "serial: -9.223372036854776e+18\n", "serial: -9223372036854775808\n"},
 		{"float beyond uint64", float64(1e20), "serial: 1e+20\n", "serial: !!int 100000000000000000000\n"},
 		{"float with an exponent", float64(1e21), "serial: 1e+21\n", "serial: !!int 1000000000000000000000\n"},
 		// JSON writes negative zero as -0, which reads back as the integer 0.
