@@ -213,36 +213,58 @@ func TestBuiltinClusterScopedHasNoStaleEntries(t *testing.T) {
 // — the count is the thing a module reorganising its comments would move.
 func TestUnmarkedKindsAreAnsweredByTheShippedCRDs(t *testing.T) {
 	all, types := loadRegistered(t)
-	// Counted per group/kind, not held as a set: a kind registered at two
-	// versions has two types under one key, and one of them may carry a marker
-	// where the other does not.
-	unmarked := map[string]int{}
-	for _, key := range UnmarkedKinds(all, types) {
-		unmarked[key]++
-	}
 	resolved, err := ResolveScopes(all, types)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(resolved) != len(all) {
+		t.Fatalf("resolved %d scopes for %d kinds", len(resolved), len(all))
+	}
+	// Each resolution is held against the type of the kind at its own position,
+	// not against a set keyed by group/kind: a kind registered at two versions
+	// has two types under one key, and one of them may carry a marker where the
+	// other does not.
 	bySource := map[ScopeSource]int{}
 	fromCRD := map[string]int{}
-	for _, d := range resolved {
+	for i, d := range resolved {
+		k := all[i]
+		if d.Key != k.Key() {
+			t.Fatalf("scope %d is for %s, the kind at that position is %s (%s)", i, d.Key, k.Key(), k.GVK)
+		}
 		bySource[d.Source]++
+		if d.Source == "" {
+			t.Errorf("%s: no scope source recorded", k.GVK)
+		}
 		if d.Source == SourceShippedCRD {
 			fromCRD[d.Key]++
 		}
-		if d.Source == "" {
-			t.Errorf("%s: no scope source recorded", d.Key)
+		tp, ok := types[upstream.Key(k.ImportPath, k.TypeName)]
+		if !ok {
+			t.Errorf("%s: its upstream type %s.%s was not loaded", k.GVK, k.ImportPath, k.TypeName)
+			continue
+		}
+		unmarked := tp.Module != "" && !builtinModules[tp.Module] && !markers.HasResource(tp.Doc)
+		if unmarked && d.Source != SourceShippedCRD {
+			t.Errorf("%s carries no marker but was resolved from %q", k.GVK, d.Source)
+		}
+		if !unmarked && d.Source == SourceShippedCRD {
+			t.Errorf("%s carries a marker but was resolved from the shipped CRD", k.GVK)
 		}
 	}
-	for key, n := range unmarked {
+	// UnmarkedKinds names the same types, one entry per type under its
+	// group/kind.
+	listed := map[string]int{}
+	for _, key := range UnmarkedKinds(all, types) {
+		listed[key]++
+	}
+	for key, n := range listed {
 		if fromCRD[key] != n {
-			t.Errorf("%s: %d of its registered types carry no marker, but %d were resolved from the shipped CRD", key, n, fromCRD[key])
+			t.Errorf("%s: UnmarkedKinds lists %d of its types, but %d were resolved from the shipped CRD", key, n, fromCRD[key])
 		}
 	}
 	for key, n := range fromCRD {
-		if unmarked[key] == 0 {
-			t.Errorf("%s: %d resolved from the shipped CRD, but every registered type of it carries a marker", key, n)
+		if listed[key] != n {
+			t.Errorf("%s: %d resolved from the shipped CRD, but UnmarkedKinds lists %d of its types", key, n, listed[key])
 		}
 	}
 	if bySource[SourceShippedCRD] == 0 {
