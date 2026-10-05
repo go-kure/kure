@@ -822,7 +822,7 @@ func TestBundleValidate_Durations(t *testing.T) {
 			// A day is no unit of time.ParseDuration.
 			{"1d", true},
 			// Durations the Flux API does not take in a Kustomization, a
-			// negative one and one under a millisecond, are durations all
+			// negative one and a positive one under a millisecond, are durations all
 			// the same: that rule is Flux's, so the Flux workflow refuses
 			// them where it writes a Kustomization and nothing is refused
 			// here (go-kure/kure#1015).

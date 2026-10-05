@@ -421,9 +421,10 @@ func TestObjects_Errors(t *testing.T) {
 
 // An unstructured List's items are read from its map, so one that holds
 // itself, directly or through another, has no end to read: it is refused. So
-// is a typed List that holds itself as an item's object, which has no end to
-// marshal. The stack is kept small for the test, so that a reader that does
-// not stop fails here and not after a gigabyte of it.
+// is a typed List that holds itself as an item's object; the ones here write
+// their Items, so they have no end to marshal. The stack is kept small for
+// the test, so that a reader that does not stop fails here and not after a
+// gigabyte of it.
 func TestObjects_ListThatHoldsItself(t *testing.T) {
 	defer debug.SetMaxStack(debug.SetMaxStack(32 << 20))
 	itself := listOf("List")

@@ -164,7 +164,7 @@ fmt.Println(bundle.Name, bundle.DependsOn[0].Name, bundle.NamedDependsOn, bundle
 apply; any other value that does not parse (`"5 minutes"`, `"5min"`, `"5"`)
 is rejected by `Bundle.Validate` and by the Flux generator, never replaced by
 the default. The Flux generator also refuses a duration the Flux API does not
-take, a negative one or one under a millisecond (`"-1s"`, `"1us"`), where it
+take, a negative one or a positive one under a millisecond (`"-1s"`, `"1us"`), where it
 writes the bundle's Kustomization; `Bundle.Validate` accepts those, since the rule is
 Flux's (see the Flux engine's "Durations").
 
