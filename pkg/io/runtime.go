@@ -125,7 +125,7 @@ func decodeDocument(raw []byte, opts ParseOptions, nesting int) ([]runtime.Objec
 		}
 		return flattenList(items, list, opts, nesting)
 	}
-	obj, _, err := kubernetes.Codecs.UniversalDeserializer().Decode(raw, nil, nil)
+	obj, _, err := decodeRegistered(raw, nil)
 	if err != nil {
 		if opts.AllowUnstructured && runtime.IsNotRegisteredError(err) {
 			unstObj, _, unstErr := unstructured.UnstructuredJSONScheme.Decode(raw, nil, nil)
@@ -316,7 +316,7 @@ func decodeTypedItem(raw []byte, want schema.GroupVersionKind) (runtime.Object, 
 			return nil, errors.Errorf("the item states %s %q, the list holds %s", id.key, s, want)
 		}
 	}
-	obj, actual, err := kubernetes.Codecs.UniversalDeserializer().Decode(raw, &want, nil)
+	obj, actual, err := decodeRegistered(raw, &want)
 	if err != nil {
 		return nil, err
 	}
@@ -331,6 +331,58 @@ func decodeTypedItem(raw []byte, want schema.GroupVersionKind) (runtime.Object, 
 		return nil, err
 	}
 	return obj, nil
+}
+
+// decodeRegistered decodes raw with the scheme's deserializer; kind is what raw
+// is decoded as where it leaves apiVersion or kind out, and may be nil. The
+// deserializer runs the UnmarshalJSON of the registered types, which is code
+// kure does not own. A panic in one must not take the caller down: it comes
+// back as an error that names the object being decoded and carries the panic's
+// value, and no object is returned.
+func decodeRegistered(raw []byte, kind *schema.GroupVersionKind) (obj runtime.Object, actual *schema.GroupVersionKind, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			obj, actual, err = nil, nil, decoderPanic(r, raw, kind)
+		}
+	}()
+	return kubernetes.Codecs.UniversalDeserializer().Decode(raw, kind, nil)
+}
+
+// decoderPanic is the error for a panic with value r while raw was decoded. A
+// value that is an error stays in the chain; any other is printed.
+func decoderPanic(r any, raw []byte, kind *schema.GroupVersionKind) error {
+	cause, isErr := r.(error)
+	if !isErr {
+		cause = errors.Errorf("%v", r)
+	}
+	return errors.Wrapf(cause, "the decoder panicked on %s", describeObject(raw, kind))
+}
+
+// describeObject names the object raw states, for an error about it: its kind
+// and its name, with the namespace when it has one (Deployment "default/web").
+// kind stands in for a kind raw leaves out. It reads the exact keys kind and
+// metadata, and leaves out whatever it cannot read: without a kind it says
+// "the object".
+func describeObject(raw []byte, kind *schema.GroupVersionKind) string {
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &fields)
+	what, _ := stringField(fields, "kind")
+	if what == "" && kind != nil {
+		what = kind.Kind
+	}
+	if what == "" {
+		what = "the object"
+	}
+	var metadata map[string]json.RawMessage
+	_ = json.Unmarshal(fields["metadata"], &metadata)
+	name, _ := stringField(metadata, "name")
+	if name == "" {
+		return what
+	}
+	if namespace, _ := stringField(metadata, "namespace"); namespace != "" {
+		name = namespace + "/" + name
+	}
+	return fmt.Sprintf("%s %q", what, name)
 }
 
 // requireObject refuses a decoded value of a registered kind that is not a
