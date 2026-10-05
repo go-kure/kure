@@ -683,3 +683,52 @@ func TestParse_ItemOfAnUnregisteredListKeepsWhatItStates(t *testing.T) {
 		})
 	}
 }
+
+// The bytes an item is decoded from, one for one: what the item leaves out of
+// apiVersion and kind stands behind its last field, and every byte the item
+// has is where it was, white space and a field stated twice included.
+func TestWithListIdentity_ByteForByte(t *testing.T) {
+	const listVersion, itemKind = "example.com/v1", "Widget"
+	for _, c := range []struct{ name, item, apiVersion, kind, want string }{
+		{"both stated", `{"apiVersion":"v1","kind":"ConfigMap"}`, listVersion, itemKind,
+			`{"apiVersion":"v1","kind":"ConfigMap"}`},
+		{"no kind", `{"apiVersion":"v1","metadata":{"name":"a"}}`, listVersion, itemKind,
+			`{"apiVersion":"v1","metadata":{"name":"a"},"kind":"Widget"}`},
+		{"no apiVersion", `{"kind":"ConfigMap","metadata":{"name":"a"}}`, listVersion, itemKind,
+			`{"kind":"ConfigMap","metadata":{"name":"a"},"apiVersion":"example.com/v1"}`},
+		{"neither", `{"metadata":{"name":"a"}}`, listVersion, itemKind,
+			`{"metadata":{"name":"a"},"apiVersion":"example.com/v1","kind":"Widget"}`},
+		{"an empty object", `{ }`, listVersion, itemKind,
+			`{ "apiVersion":"example.com/v1","kind":"Widget"}`},
+		{"a null kind and an empty apiVersion", `{"apiVersion":"","kind":null}`, listVersion, itemKind,
+			`{"apiVersion":"","kind":null,"apiVersion":"example.com/v1","kind":"Widget"}`},
+		{"a kind that is no string", `{"kind":1}`, listVersion, itemKind,
+			`{"kind":1,"apiVersion":"example.com/v1"}`},
+		{"a field stated twice, white space, numbers and escapes",
+			"{\"data\":{\"a\":\"1\"}, \"data\" : {\"b\":\"2\"},\n \"n\":1.0e3,\"s\":\"\\u00e9\" }\n", listVersion, itemKind,
+			"{\"data\":{\"a\":\"1\"}, \"data\" : {\"b\":\"2\"},\n \"n\":1.0e3,\"s\":\"\\u00e9\" ,\"apiVersion\":\"example.com/v1\",\"kind\":\"Widget\"}\n"},
+		{"a brace inside the last value", `{"s":"}"}`, listVersion, itemKind,
+			`{"s":"}","apiVersion":"example.com/v1","kind":"Widget"}`},
+		{"a list that states no apiVersion", `{"metadata":{"name":"a"}}`, "", itemKind,
+			`{"metadata":{"name":"a"},"kind":"Widget"}`},
+		{"a list that states neither", `{"metadata":{"name":"a"}}`, "", "",
+			`{"metadata":{"name":"a"}}`},
+		{"an identity that needs escaping", `{}`, `a"b`, `c\d`,
+			`{"apiVersion":"a\"b","kind":"c\\d"}`},
+		{"a string", `"x"`, listVersion, itemKind, `"x"`},
+		{"an array", `[{}]`, listVersion, itemKind, `[{}]`},
+		{"a null", `null`, listVersion, itemKind, `null`},
+		{"not JSON", `{"a":`, listVersion, itemKind, `{"a":`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			item := []byte(c.item)
+			got := withListIdentity(item, c.apiVersion, c.kind)
+			if string(got) != c.want {
+				t.Errorf("withListIdentity(%q)\n got %q\nwant %q", c.item, got, c.want)
+			}
+			if string(item) != c.item {
+				t.Errorf("the item was written to: %q, was %q", item, c.item)
+			}
+		})
+	}
+}

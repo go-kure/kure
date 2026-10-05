@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 
@@ -298,10 +299,7 @@ func withListIdentity(item []byte, apiVersion, kind string) []byte {
 	if len(added) == 0 || end < 0 {
 		return item
 	}
-	filled := make([]byte, 0, len(item)+len(added))
-	filled = append(filled, item[:end]...)
-	filled = append(filled, added...)
-	return append(filled, item[end:]...)
+	return slices.Concat(item[:end], added, item[end:])
 }
 
 // registeredList reports whether fields, the top level of a document, is that
