@@ -44,7 +44,7 @@ change has not shipped may still cite lines; it moves to symbol names when the c
 
 | Type | Fields that decide names and placement | Source |
 |---|---|---|
-| `stack.Node` | `Name`, `Children`, `Bundle` (one per node), `PackageRef`. No dependency, Kustomization or directory field. | `Node` in `pkg/stack/cluster.go` |
+| `stack.Node` | `Name`, `Children`, `Bundle` (one per node), `PackageRef`; `KustomizationName`, `DependsOn []*Node` and `NamedDependsOn` since go-kure/kure#973 (`v0.2.0-beta.15` had no dependency or Kustomization field). No directory field. | `Node` in `pkg/stack/cluster.go` |
 | `stack.Bundle` | `Name`, `KustomizationName` (go-kure/kure#971; `v0.2.0-beta.15` had no field for the Kustomization's name), `DependsOn []*Bundle`, `NamedDependsOn`, `Children` (umbrella), `SourceRef`, `Interval`, `Prune`, `Wait`, `Timeout`, `RetryInterval`, `Force`, `Suspend`, `HealthChecks`, `Patches`, `PostBuild`, `Labels`, `Annotations`. No field for the Kustomization's namespace or directory. | `Bundle` in `pkg/stack/bundle.go` |
 | `stack.Application` | `Name`, `Namespace`, `Config`. No dependency field. No delivery field in `v0.2.0-beta.15`; `Delivery` was added after it ([go-kure/kure#974](https://github.com/go-kure/kure/issues/974)) and decides no name or placement. | `Application` in `pkg/stack/application.go` |
 
@@ -90,8 +90,11 @@ node with the bundle-less nodes below it merged into it.
   Kustomization name of the first bundle (`generateForUnit` in `resource_generator.go`;
   `OriginIndex.UnitName` and `UnitOfName` in `pkg/stack/layout/origin.go`).
 - Under `FluxIntegratedPerLayout`, a bundle-less node layout gets a Kustomization named
-  `<path with / replaced by ->-node`, and an application or augmenter layout one named after the
-  layout (`layoutCRName` in `layout_integrator.go`).
+  `<path with / replaced by ->-node`, and an application or augmenter layout one named
+  `<unit name>-<layout name>`, the unit name being the Kustomization name of the bundle the layout
+  belongs to (`layoutCRName` in `layout_integrator.go`). `v0.2.0-beta.15` named the second after
+  the layout alone. Since go-kure/kure#973 a node's `KustomizationName` and a layout's replace
+  either default.
 
 **Where each placement puts them.**
 
@@ -195,13 +198,13 @@ FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since go
 | Two bundles whose Kustomizations would get one name, whether it comes from `KustomizationName` or from `Name` (go-kure/kure#971) | refused in the same places; the error names both bundles by their paths. `GenerateForBundle` builds no index and sees one bundle: it refuses a `DependsOn` bundle, an umbrella child or a `NamedDependsOn` entry with that bundle's own Kustomization name, a health check on that Kustomization unless `Wait` is true, and two children with one name. | `IndexOrigins` in `origin.go`; `checkOwnUnitName`, called from `ResourceGenerator.GenerateForBundle`, in `resource_generator.go` |
 | A payload Kustomization named like the one generated for its bundle (the bundle's name, unless the bundle sets `KustomizationName`: go-kure/kure#971), in the namespace of the generated Kustomization (the generator's `DefaultNamespace`) | refused under `FluxSeparate`. Under the two integrated placements it is refused unless it sits in the layout that hosts the generated Kustomization and has the same `spec.path`: that one is kept as it is, and none is generated for the bundle. The host is the parent of the bundle's directory, never that directory itself (go-kure/kure#979), so a bundle's own payload cannot meet this. The check compares namespace and name, so it does not refuse the same name in another namespace. | `integratedPlacement.place`, `integratedPlacement.add`, `crKey` and `addSeparateFluxToLayout` in `layout_integrator.go`; `kustomizationForBundle` |
 | A Kustomization name generated twice in one integration | refused by the integrator. The key is the bare name: every generated Kustomization is in `DefaultNamespace`. | `integratedPlacement.claim` in `layout_integrator.go`; `kustomizationForBundle` and `createKustomizationForLayout` |
-| `FluxIntegratedPerLayout` with `ApplicationGrouping: GroupByName`, application named like its bundle's Kustomization (the common case: a bundle without `KustomizationName` and an application with the bundle's name) | refused as a name used twice | same |
-| `FluxIntegratedPerLayout`, augmenter application named like its bundle's Kustomization | refused as a name used twice | same |
+| `FluxIntegratedPerLayout` with `ApplicationGrouping: GroupByName`, application named like its bundle's Kustomization (the common case: a bundle without `KustomizationName` and an application with the bundle's name) | accepted since go-kure/kure#973: the application layout's Kustomization is named `<unit name>-<layout name>`. `v0.2.0-beta.15` refused it as a name used twice | `layoutCRName` in `layout_integrator.go` |
+| `FluxIntegratedPerLayout`, augmenter application named like its bundle's Kustomization | accepted since go-kure/kure#973, for the same reason; refused as a name used twice in `v0.2.0-beta.15` | `layoutCRName` |
 | Two directory layouts resolving to one directory | refused by the writers | `checkLayoutTree` in `pkg/stack/layout/treecheck.go` |
 | Two single-file layouts (`AppFileSingle`) in one directory | accepted when their file names differ; refused when they resolve to the same file | `checkLayoutTree` |
 | Dotted names | accepted unchanged | none |
 | A bundle's Kustomization name (its `KustomizationName`, or its name without one) over 63 characters | refused by the Flux workflow where it builds the Kustomization (go-kure/kure#978); accepted by `Bundle.Validate` and by the ArgoCD workflow | `checkKustomizationName` in `resource_generator.go` |
-| A Kustomization name derived for a layout under `FluxIntegratedPerLayout` (an application directory's name, a bundle-less node's `<path>-node`) that is over 63 characters or not a DNS-1123 subdomain | refused by the integrator where it creates that Kustomization (go-kure/kure#978) | `stack.ValidateKustomizationName`, called in `layout_integrator.go` |
+| The name of a per-layout Kustomization under `FluxIntegratedPerLayout`, set (`Node.KustomizationName`, `ManifestLayout.KustomizationName`) or derived (an application or augmenter layout's `<unit name>-<layout name>`, a bundle-less node's `<path>-node`), that is over 63 characters or not a DNS-1123 subdomain | refused by the integrator where it creates that Kustomization (go-kure/kure#978). The error names the node or the layout and the field that changes the name (go-kure/kure#973) | `stack.ValidateKustomizationName`, called from `checkLayoutCRName` in `layout_integrator.go` |
 | A `NamedDependsOn` entry over 63 characters | accepted unchanged | none |
 | A hand-built tree with the same Kustomization twice in one layout, or in layouts one kustomize build includes | refused by the writers, as for any object held twice | `checkResourceIdentities` (one layout) and `checkBuildIdentities` (one build), both called from `checkLayoutTree` |
 | A hand-built tree with the same Kustomization in layouts that separate builds apply | refused by the writers, in any tree: Kustomization namespace/name is unique across the tree (go-kure/kure#977) | `checkKustomizationNames` in `treecheck.go` |
@@ -211,8 +214,9 @@ FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since go
 
 1. **The name of a Kustomization that is not one bundle's own.** A bundle's Kustomization takes
    `Bundle.KustomizationName` since go-kure/kure#971 (in `v0.2.0-beta.15`, only by naming the
-   bundle). A merged directory takes its first bundle's Kustomization name; `-node` names have no
-   parameter.
+   bundle). A merged directory takes its first bundle's Kustomization name. In `v0.2.0-beta.15`
+   `-node` names have no parameter; since go-kure/kure#973 `Node.KustomizationName` names a node's
+   Kustomization and `ManifestLayout.KustomizationName` an application or augmenter layout's.
 2. **The directory that hosts it.** The only lever is the placement.
 3. **A directory name separate from the bundle name.** In `v0.2.0-beta.15` an umbrella child's
    directory is the child bundle's name (`renderUmbrellaChildren`), whatever its Kustomization is
@@ -225,6 +229,8 @@ FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since go
    to a `dependsOn` is on the layout, not the model: set `DependsOn` (Kustomization names, as
    strings) on the walked group layout before `IntegrateWithLayout`, which copies it
    (the per-layout branch of `integratedPlacement.place`, `createKustomizationForLayout`).
+   No longer the one route: `Node.DependsOn` and `Node.NamedDependsOn` order a group from the
+   model ([go-kure/kure#973](https://github.com/go-kure/kure/issues/973), below).
 5. **Engine annotations per application.** In `v0.2.0-beta.15` there is no field for prune
    protection or force replace, so a consumer writes Flux annotations onto objects itself. No
    longer so: `Application.Delivery` carries the intent
@@ -251,7 +257,8 @@ what the text said and what it says now.
    reaches it.
 3. **The "every layout" claim.** The fluxcd README said `FluxIntegratedPerLayout` gives a
    Kustomization to every layout, augmenter layouts included. It now says which layouts get one,
-   and that an augmenter application named like its bundle is refused instead.
+   and that an augmenter application named like its bundle was refused instead. (Since
+   go-kure/kure#973 such an application is accepted: its Kustomization is named after its unit.)
 4. **FileNaming.** `LayoutRules.FileNaming` was documented as the naming for manifest files
    while, under `WriteToDisk` and `WriteToTar`, it did not reach `flux-system/` or augmenter
    layouts. It now does, and the field documentation says so.
@@ -261,8 +268,10 @@ what the text said and what it says now.
 6. **`ManifestLayout.DependsOn`.** It was documented as becoming `spec.dependsOn` in
    `FluxIntegratedPerLayout` mode. Left unsaid then and stated now: that holds only for a layout
    that gets its own Kustomization, and every other case drops the field without an error. It
-   also said the entries are sibling layout names; they are Kustomization names, copied
-   verbatim, which differ from the layout's name for a node layout.
+   also said the entries are sibling layout names; they were Kustomization names, copied
+   verbatim, which differ from the layout's name for a node layout. (Since go-kure/kure#973 an
+   entry on an application or augmenter layout that names a layout of the same unit is written
+   as that layout's Kustomization name; any other entry is still written as given.)
 
 ## Part 2: target behaviour
 
@@ -419,53 +428,95 @@ its `TestDirName_UnsetOutputUnchanged` compares a cluster without the field, and
 
 ### Ordering and naming for node-level Kustomizations ([go-kure/kure#973](https://github.com/go-kure/kure/issues/973))
 
-**Target.** A group (a node without a bundle) can have a named Kustomization with dependencies.
+**Shipped.** A group (a node whose directory renders no bundle) has a Kustomization that the model
+names and orders, and the Kustomization of an application or augmenter layout no longer takes the
+name of its bundle's.
 
-**Design outline.**
+**What it does.**
 
-- **New fields,** mirroring `Bundle`: `Node.KustomizationName`, `Node.DependsOn []*Node` and
-  `Node.NamedDependsOn []string`.
-- **Where they are used:** they feed `createKustomizationForLayout`
-  (`resource_generator.go`). `KustomizationName` replaces the fixed `<path>-node` name
-  (`layoutCRName` in `layout_integrator.go`) when set.
-- **Placements:** node-level Kustomizations exist only under `FluxIntegratedPerLayout`
-  (the per-layout branch of `integratedPlacement.place`), and only for a node whose layout
-  renders no bundle (the skip condition at the top of that branch).
-  Under the other placements, on a node that `NodeGrouping: GroupFlat` merges away, and on a node
-  whose layout renders a bundle, setting these fields is refused, not silently ignored.
-- **Unset fields change nothing for nodes:** a node Kustomization keeps its `<path>-node` name.
-- **Collisions:** a node `KustomizationName` equal to a bundle's effective Kustomization name is
-  refused, as any name used twice is today (`integratedPlacement.claim`).
-- **Reconciliation settings:** a node Kustomization takes the generator's interval and prune and
-  sets no `wait` today (`createKustomizationForLayout`). The ticket decides whether a node
-  carries its own.
-- **Application and augmenter layouts, a breaking rename:** under `FluxIntegratedPerLayout` they
-  get Kustomizations named after the layout (`layoutCRName`). These collide with
-  the bundle's whenever the application shares the bundle's name (section 1.7). The default
-  becomes `<unit name>-<layout name>`, which renames these Kustomizations even when no new field
-  is set. Changing with it:
-  - sibling `dependsOn` entries, which name layouts (`ManifestLayout.DependsOn`, copied in
-    `createKustomizationForLayout`), are translated to the new names;
-  - the test that pins the old names (`TestAugmenterChildrenGetFluxCRs` in
-    `pkg/stack/fluxcd/layout_integrator_test.go`) and the README sentence "The CR is named after
-    the layout" (`pkg/stack/fluxcd/README.md`, "Non-Bundle Child Layout CRs").
-- **Override for the new default:** a new field, proposed `ManifestLayout.KustomizationName`,
-  separate from the layout's `Name`; the ticket settles the name. An augmenter sets it for the
-  layouts it creates, and a consumer sets it on a walked layout before integration. A
-  default longer than the limit of
-  [go-kure/kure#978](https://github.com/go-kure/kure/issues/978) is refused with a message naming
-  the layout and the field to set; kure does not shorten it.
+- **The fields,** mirroring `Bundle`: `Node.KustomizationName`, `Node.DependsOn []*Node` and
+  `Node.NamedDependsOn []string` (`pkg/stack/cluster.go`). The walker carries the name and the
+  named dependencies onto the node's own layout (`ManifestLayout.setNode` in `origin.go`), and
+  the integrator reads them where it creates the per-layout Kustomization (the per-layout branch
+  of `integratedPlacement.place`; `layoutCRName`, `layoutDependsOn`).
+- **Name:** `KustomizationName` replaces the derived `<path>-node` name. Unset, a node's
+  Kustomization keeps that name.
+- **Order:** each `DependsOn` node is written into `spec.dependsOn` under its Kustomization name
+  in effect, set or derived, and the `NamedDependsOn` entries follow as given
+  (`nodeIndex.dependencies` in `node_kustomization.go`). A target that has no Kustomization of
+  its own is refused, naming both nodes. A cycle is refused by the reconcile-order check, as any
+  other.
+- **`NamedDependsOn` entries are references:** an entry need not name a Kustomization kure
+  builds, and its value is not checked, as for a bundle's. An empty entry and a repeated one are
+  refused by `stack.ValidateCluster`, and one that names the Kustomization of a node in
+  `DependsOn` by the integrator; each error names the node by its path.
+- **Where a node has a Kustomization of its own:** under `FluxIntegratedPerLayout`, on a node
+  whose own directory renders no bundle and is not the top of the tree. Everywhere else the three
+  fields are refused, not ignored, and the error names the node and the fields it sets
+  (`nodeIndex.checkFields`): under the other placements and in `GenerateFromCluster` and
+  `GenerateFromLayout`, on a node that `NodeGrouping: GroupFlat` or a `FlattenSingleTier`
+  collapse renders into another node's directory, on a node whose directory renders a bundle, on
+  the top of the tree, and on a node whose layout a caller marked `UmbrellaChild`. The ArgoCD
+  workflow generates nothing for a node and refuses the fields too
+  (`checkNodeKustomizationFields` in `pkg/stack/argocd/argo.go`).
+- **Collisions:** a node's `KustomizationName` equal to another Kustomization name generated in
+  the same integration is refused, naming both owners (`integratedPlacement.claim`).
+- **Reconciliation settings:** a node Kustomization has none of its own. Interval and prune are
+  the generator's and `wait`, `timeout` and `retryInterval` stay unset
+  (`createKustomizationForLayout`); what a group applies is the Kustomizations below it.
+- **A second integration** keeps the node Kustomization the first one placed, and is refused when
+  the node's `DependsOn` or `NamedDependsOn` ask for a dependency the kept one lacks
+  (`checkKeptNodeCR`).
+- **A node changed after the walk:** the walker copies `KustomizationName` and `NamedDependsOn`
+  onto the node's layout (`ManifestLayout.setNode`) and the Kustomization is built from the
+  layout. A node that has a name while its layout carries none, or lists an entry its layout
+  does not, is refused, naming the node and the layout (`nodeIndex.checkCarried`). A name a
+  caller sets on the walked layout wins over the node's.
+- **Application and augmenter layouts:** their Kustomization is named
+  `<unit name>-<layout name>`, the unit name being the Kustomization name in effect of the bundle
+  the layout belongs to, so the application `web` of the bundle `web` gets `web-web` and no
+  longer collides with it (section 1.7).
+- **`ManifestLayout.KustomizationName`** replaces that default, and a node's derived name on a
+  node's own layout: an augmenter sets it on a layout it creates, a caller on a walked layout
+  before integration. On a layout that gets no Kustomization of its own it is not read, as
+  `DependsOn` is not.
+- **`ManifestLayout.DependsOn` on these layouts** still lists layout names. An entry that names a
+  layout of the same unit with a Kustomization of its own is written as that Kustomization's
+  name: a sibling first, else the one such layout elsewhere in the unit. Two candidates with no
+  sibling among them are refused. Any other entry is written as given.
+- **The name rule:** the name in effect of every per-layout Kustomization is checked with
+  `stack.ValidateKustomizationName` where the Kustomization is created (`checkLayoutCRName`).
+  kure shortens nothing, and the error names what to set: the node and `Node.KustomizationName`
+  for a node's name, set or derived; the layout and `ManifestLayout.KustomizationName` for a
+  layout's, set or default. The default is longer than the layout's name by the unit name, so a
+  directory name within the limit can give a default over it.
 
-**Acceptance.**
-- A node with `KustomizationName` and `NamedDependsOn` renders a Kustomization with that name and
-  those dependencies.
-- Each of the three refusals has a test and an error naming the node: the fields set under a
-  placement other than `FluxIntegratedPerLayout`, on a node that `NodeGrouping: GroupFlat` merges
-  away, and on a node whose layout renders a bundle.
-- `FluxIntegratedPerLayout` with an application named like its bundle is accepted.
-- An augmenter layout's `dependsOn` names its sibling's new Kustomization name.
-- A layout with the name set renders its Kustomization under that name; a default over the limit
-  is refused, naming the layout and the field.
+**Breaking.** With the node fields unset, a node's Kustomization and every bundle's are unchanged.
+Under `FluxIntegratedPerLayout` the Kustomization of every application and augmenter layout is
+renamed from `<layout name>` to `<unit name>-<layout name>`, and a reference to the old name
+written out by hand (a `NamedDependsOn` entry, a `ManifestLayout.DependsOn` entry that names a
+layout of another bundle) has to carry the new one. A Kustomization a caller placed under the old
+name for the layout's directory stays, and the tree gets the new one beside it until the caller
+removes the old one or sets `ManifestLayout.KustomizationName` to the old name, which keeps it and
+generates no second one. Setting that field keeps any old name. A default over 63 characters is
+refused where the shorter old name was accepted, and so is a default another Kustomization
+already has (the application `web` of the bundle `platform` beside a bundle `platform-web`)
+where the old name was free. The refusal of a per-layout name that
+go-kure/kure#978 added keeps its rule and changes its message: it names the field to set
+(`kustomizationName`) instead of `name`, and a node by its path instead of its layout.
+
+**Tests.** `pkg/stack/fluxcd/node_kustomization_test.go` covers the name, both kinds of
+dependency, the target without a Kustomization, the collision with a bundle, the cycle, every
+refusal of the fields with the node named, the unit-named layouts, the name set on a layout, the
+translated `DependsOn`, the Kustomization placed under the old name, the second integration and
+the node changed after the walk.
+`node_kustomization_names_test.go` covers the name rule for the four origins of a name, with the
+field that makes each tree render, and the `NamedDependsOn` entries.
+`pkg/stack/argocd/node_kustomization_test.go` covers the ArgoCD refusals,
+`pkg/stack/layout/node_kustomization_test.go` what the walker carries onto a layout, and
+`TestValidateCluster_NodeNamedDependsOn` in `pkg/stack/validate_test.go` the entries refused for
+every engine. The stored tree `testdata/unset-kustomization-name/integrated.txt` shows the rename
+and nothing else: its `-node` and bundle Kustomizations are byte-identical.
 
 ### Delivery intent on applications ([go-kure/kure#974](https://github.com/go-kure/kure/issues/974))
 
@@ -738,12 +789,11 @@ generates. kure shortens and rewrites nothing; the caller chooses a valid name.
   bootstrap Kustomization's `sourceRef`, so there it must be a DNS-1123 subdomain as well
   (`validateRootSourceName`), with or without a `SourceURL`.
 - **Per-layout Kustomizations.** Under `FluxIntegratedPerLayout` a directory that renders no
-  bundle gets a Kustomization named after its layout: an application directory's name, or
-  `<path>-node` for a bundle-less node. The integrator checks that name with
-  `stack.ValidateKustomizationName` where it creates the Kustomization, and refuses with the
-  layout's path. The check is on the result, whatever derived it.
-- **Not covered here:** how kure derives a Kustomization name, and the check of the names that
-  change adds, are
+  bundle gets a Kustomization of its own, named as
+  [go-kure/kure#973](https://github.com/go-kure/kure/issues/973) describes. The integrator checks
+  that name with `stack.ValidateKustomizationName` where it creates the Kustomization, and
+  refuses with the node's or the layout's path. The check is on the result, whatever derived it.
+- **Not covered here:** how kure derives a Kustomization name is
   [go-kure/kure#973](https://github.com/go-kure/kure/issues/973)'s; a layout name changed after
   the walk is contained by the writers' check
   ([go-kure/kure#977](https://github.com/go-kure/kure/issues/977)). Names of payload objects are
@@ -1110,7 +1160,9 @@ symbol name instead of by line.
    `HookGroup`, and that a consumer builds a Kustomization per group itself.
 6. The `ManifestLayout.DependsOn` comment, the layout README and the Flux workflow guide state
    which layouts it applies to, that it is dropped elsewhere without an error, and that its
-   entries are Kustomization names copied verbatim.
+   entries are Kustomization names copied verbatim. (Since go-kure/kure#973 they state the
+   translation instead: an entry on an application or augmenter layout that names a layout of
+   the same unit is written as that layout's Kustomization name.)
 
 The fluxcd README claims tied to the behaviour bugs change with
 [go-kure/kure#979](https://github.com/go-kure/kure/issues/979).
