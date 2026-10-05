@@ -335,3 +335,63 @@ func TestKustomizationClash_RecordWithoutApplication(t *testing.T) {
 		})
 	}
 }
+
+// uncomparableObject is an object whose value == cannot compare: the embedded
+// pointer supplies the methods, the slice makes the comparison panic.
+type uncomparableObject struct {
+	*unstructured.Unstructured
+	extra []string
+}
+
+// TestKustomizationClash_ObjectThatCannotBeCompared: an application may emit
+// an object of any type, one whose value cannot be compared included. The
+// refusal comes back as an error all the same. Beside such an object the
+// Kustomization is still named by the application that holds it; a
+// Kustomization that is such an object itself is named by its layout alone.
+func TestKustomizationClash_ObjectThatCannotBeCompared(t *testing.T) {
+	cluster := func(objs ...client.Object) *stack.Cluster {
+		emitted := make([]*client.Object, len(objs))
+		for i := range objs {
+			emitted[i] = &objs[i]
+		}
+		delivery := stack.NewApplication("delivery", "default", &fakeAppConfig{objs: emitted})
+		apps := &stack.Node{Name: "apps", Bundle: srBundle("shop", delivery)}
+		root := &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("core")), Children: []*stack.Node{apps}}
+		apps.SetParent(root)
+		return &stack.Cluster{Name: "demo", Node: root}
+	}
+	for _, placement := range allPlacements {
+		rules := placed(propertyGroupings["nodeOnly"], placement)
+		t.Run("beside the Kustomization/"+string(placement), func(t *testing.T) {
+			cm := &unstructured.Unstructured{}
+			cm.SetAPIVersion("v1")
+			cm.SetKind("ConfigMap")
+			cm.SetName("settings")
+			c := cluster(uncomparableObject{Unstructured: cm, extra: []string{"x"}}, fluxKustomization("shop", "./"))
+
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+			mustContainAll(t, err,
+				`already has Flux Kustomization "shop"`,
+				`an object of application "delivery" of bundle "shop"`,
+				`set Bundle.KustomizationName on bundle "shop" to name the generated one`,
+			)
+		})
+		t.Run("the Kustomization itself/"+string(placement), func(t *testing.T) {
+			ks, ok := fluxKustomization("shop", "./").(*unstructured.Unstructured)
+			if !ok {
+				t.Fatal("fluxKustomization is not unstructured")
+			}
+			c := cluster(uncomparableObject{Unstructured: ks, extra: []string{"x"}})
+
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+			mustContainAll(t, err,
+				`already has Flux Kustomization "shop"`,
+				`for bundle "shop"`,
+				`set Bundle.KustomizationName on bundle "shop" to name the generated one`,
+			)
+			if strings.Contains(err.Error(), "an object of application") {
+				t.Errorf("the error names an application for an object it cannot tell from another:\n%v", err)
+			}
+		})
+	}
+}

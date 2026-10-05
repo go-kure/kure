@@ -1791,11 +1791,11 @@ func (p *integratedPlacement) layoutNamed(l *layout.ManifestLayout) nameField {
 // identity, and that application's bundle. Those objects are read as
 // kustomize builds them, a List's items included (resourceItems), and only
 // those host still holds, the very values the walk recorded: an object a
-// caller put in an application's place since is not the application's. It
-// says nothing when no application's record holds one: an earlier
-// integration's Kustomization, or one a caller added to a layout, which the
-// tree does not tell apart. A record without an application names none, as in
-// applyDeliveryIntents.
+// caller put in an application's place since is not the application's
+// (sameValue). It says nothing when no application's record holds one: an
+// earlier integration's Kustomization, or one a caller added to a layout,
+// which the tree does not tell apart. A record without an application names
+// none, as in applyDeliveryIntents.
 func heldBy(ix *layout.OriginIndex, key string, host *layout.ManifestLayout) string {
 	for _, unit := range ix.Units() {
 		for _, rec := range unit.OriginApplicationObjects() {
@@ -1804,7 +1804,7 @@ func heldBy(ix *layout.OriginIndex, key string, host *layout.ManifestLayout) str
 			}
 			var held []client.Object
 			for _, obj := range rec.Objects {
-				if slices.Contains(host.Resources, obj) {
+				if slices.ContainsFunc(host.Resources, func(r client.Object) bool { return sameValue(r, obj) }) {
 					held = append(held, obj)
 				}
 			}
@@ -1825,6 +1825,15 @@ func heldBy(ix *layout.OriginIndex, key string, host *layout.ManifestLayout) str
 		}
 	}
 	return ""
+}
+
+// sameValue reports whether a and b are one object, not two of one content
+// (sameObject): the same value, for the pointers objects are. An application
+// may emit an object of any type, and == panics on a value that cannot be
+// compared (a struct with a slice in it): such a value is the same as none,
+// so nothing is said of it.
+func sameValue(a, b client.Object) bool {
+	return reflect.ValueOf(a).Comparable() && reflect.ValueOf(b).Comparable() && a == b
 }
 
 // nameApart is the way out of a generated Kustomization meeting one already
