@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -879,9 +880,41 @@ func TestDeepCopyCluster_Nil(t *testing.T) {
 }
 
 func TestDeepCopyNode_Nil(t *testing.T) {
-	result := deepCopyNode(nil)
+	result := deepCopyNode(nil, map[*Node]*Node{})
 	if result != nil {
 		t.Errorf("expected nil for nil node input, got %v", result)
+	}
+}
+
+// TestDeepCopyCluster_NodeKustomizationFields: the fluent builder copies the
+// cluster, and a copied node must name and order its Kustomization as the
+// node it was copied from: DependsOn points at the copy of the node it named,
+// not at the original, and a node outside the tree is kept.
+func TestDeepCopyCluster_NodeKustomizationFields(t *testing.T) {
+	outside := &Node{Name: "outside"}
+	platform := &Node{Name: "platform"}
+	apps := &Node{Name: "apps", KustomizationName: "apps-cr", DependsOn: []*Node{platform, outside}, NamedDependsOn: []string{"external"}}
+	orig := &Cluster{Name: "demo", Node: &Node{Name: "prod", Children: []*Node{apps, platform}}}
+
+	got := deepCopyCluster(orig)
+	gotApps, gotPlatform := got.Node.Children[0], got.Node.Children[1]
+	if gotApps == apps || gotPlatform == platform {
+		t.Fatal("the nodes were not copied")
+	}
+	if gotApps.KustomizationName != "apps-cr" {
+		t.Errorf("KustomizationName = %q, want apps-cr", gotApps.KustomizationName)
+	}
+	if !slices.Equal(gotApps.NamedDependsOn, []string{"external"}) {
+		t.Errorf("NamedDependsOn = %v, want [external]", gotApps.NamedDependsOn)
+	}
+	if len(gotApps.DependsOn) != 2 || gotApps.DependsOn[0] != gotPlatform || gotApps.DependsOn[1] != outside {
+		t.Errorf("DependsOn = %v, want the copied platform node and the node outside the tree", gotApps.DependsOn)
+	}
+
+	gotApps.NamedDependsOn[0] = "changed"
+	gotApps.DependsOn[1] = nil
+	if apps.NamedDependsOn[0] != "external" || apps.DependsOn[0] != platform || apps.DependsOn[1] != outside {
+		t.Error("changing the copy changed the original node")
 	}
 }
 

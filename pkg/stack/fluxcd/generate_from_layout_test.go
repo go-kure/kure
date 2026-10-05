@@ -184,24 +184,32 @@ func kustomizations(ml *layout.ManifestLayout) []*kustv1.Kustomization {
 }
 
 // expectedLayoutCRs is the PerLayout contract: every child layout that is not
-// an umbrella child, not AppFileSingle and renders no bundle gets one CR; a
-// bundle-less node layout's is named after its path plus "-node".
-func expectedLayoutCRs(ml *layout.ManifestLayout) map[string]string {
+// an umbrella child, not AppFileSingle and renders no bundle gets one CR. A
+// bundle-less node layout's is named after its path plus "-node"; any other
+// one "<unit>-<layout name>", unit being the Kustomization of the nearest
+// directory at or above its parent that renders bundles.
+func expectedLayoutCRs(ml *layout.ManifestLayout, ix *layout.OriginIndex) map[string]string {
 	want := map[string]string{}
-	var walk func(l *layout.ManifestLayout)
-	walk = func(l *layout.ManifestLayout) {
+	var walk func(l *layout.ManifestLayout, unit string)
+	walk = func(l *layout.ManifestLayout, unit string) {
+		if bundles := l.OriginBundles(); len(bundles) > 0 {
+			unit = ix.UnitName(bundles[0])
+		}
 		for _, c := range l.Children {
 			if !c.UmbrellaChild && c.ApplicationFileMode != layout.AppFileSingle && len(c.OriginBundles()) == 0 {
 				name := c.Name
-				if len(c.OriginNodes()) > 0 {
+				switch {
+				case len(c.OriginNodes()) > 0:
 					name = strings.ReplaceAll(c.FullRepoPath(), "/", "-") + "-node"
+				case unit != "":
+					name = unit + "-" + c.Name
 				}
 				want[name] = c.FullRepoPath()
 			}
-			walk(c)
+			walk(c, unit)
 		}
 	}
-	walk(ml)
+	walk(ml, "")
 	return want
 }
 
@@ -584,7 +592,7 @@ func checkEverySpecPath(t *testing.T, c *stack.Cluster, rules layout.LayoutRules
 	}
 	wantLayoutCRs := map[string]string{}
 	if rules.FluxPlacement == layout.FluxIntegratedPerLayout {
-		wantLayoutCRs = expectedLayoutCRs(ml)
+		wantLayoutCRs = expectedLayoutCRs(ml, ix)
 	}
 	if !mapsEqual(layoutCRs, wantLayoutCRs) {
 		t.Errorf("layout CRs = %v, want %v", layoutCRs, wantLayoutCRs)
@@ -690,7 +698,7 @@ func TestGenerateFromLayout_Order(t *testing.T) {
 		t.Errorf("PerLayout root CR order = %v, want %v", got, want)
 	}
 	unit := layoutAtPath(t, ml, "platform/platform")
-	if got, want := crNames(unit.Resources), []string{"chart", "svc"}; !slices.Equal(got, want) {
+	if got, want := crNames(unit.Resources), []string{"platform-chart", "svc"}; !slices.Equal(got, want) {
 		t.Errorf("PerLayout CR order in the root bundle's directory = %v, want %v", got, want)
 	}
 }
@@ -850,7 +858,7 @@ func TestIntegrateWithLayout_PerLayout_BundlelessNodeGetsLayoutCR(t *testing.T) 
 				return &stack.Cluster{Name: "demo", Node: &stack.Node{Children: []*stack.Node{web}}}
 			},
 			rules: perLayout(propertyGroupings["GroupByName"], "."),
-			want:  map[string]string{"web-node": "web", "web": "web/web", "web-app": "web/web/web-app"},
+			want:  map[string]string{"web-node": "web", "web": "web/web", "web-web-app": "web/web/web-app"},
 		},
 		{
 			name: "GroupByName node = bundle name, ClusterName prod",
@@ -859,7 +867,7 @@ func TestIntegrateWithLayout_PerLayout_BundlelessNodeGetsLayoutCR(t *testing.T) 
 				return &stack.Cluster{Name: "demo", Node: &stack.Node{Children: []*stack.Node{web}}}
 			},
 			rules: perLayout(propertyGroupings["GroupByName"], "prod"),
-			want:  map[string]string{"prod-web-node": "prod/web", "web": "prod/web/web", "web-app": "prod/web/web/web-app"},
+			want:  map[string]string{"prod-web-node": "prod/web", "web": "prod/web/web", "web-web-app": "prod/web/web/web-app"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -926,14 +934,29 @@ func TestIntegrateWithLayout_SameNameDifferentPathErrors(t *testing.T) {
 			t.Errorf("got %v, want an error naming web-bundle and the conflicting path", err)
 		}
 	})
-	t.Run("layout CR named like a bundle", func(t *testing.T) {
-		web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
-		c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform",
+	// An application layout's CR is "<unit>-<layout name>", here
+	// "platform-web": an application named like a bundle no longer takes that
+	// bundle's Kustomization name, a bundle named like the CR still does.
+	layoutCRAndBundle := func(bundleName string) *stack.Cluster {
+		web := &stack.Node{Name: "web", Bundle: srBundle(bundleName, cmApp("web-app"))}
+		return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform",
 			Bundle:   srBundle("platform", stack.NewApplication("web", "default", &hookAugmenter{app: "web"})),
 			Children: []*stack.Node{web}}}
-		_, err := integrator.CreateLayoutWithResources(c, rules)
-		if err == nil || !strings.Contains(err.Error(), `Flux Kustomization name "web"`) {
-			t.Errorf("got %v, want a CR name collision error", err)
+	}
+	t.Run("layout CR named like a bundle", func(t *testing.T) {
+		_, err := integrator.CreateLayoutWithResources(layoutCRAndBundle("platform-web"), rules)
+		if err == nil || !strings.Contains(err.Error(), `Flux Kustomization name "platform-web"`) ||
+			!strings.Contains(err.Error(), `bundle "platform-web"`) || !strings.Contains(err.Error(), `layout "platform/platform/web"`) {
+			t.Errorf("got %v, want a CR name collision error naming the bundle and the layout", err)
+		}
+	})
+	t.Run("application named like a bundle", func(t *testing.T) {
+		ml := integrated(t, layoutCRAndBundle("web"), rules)
+		got := kustomizationsByName(ml)
+		for _, name := range []string{"web", "platform-web"} {
+			if got[name] == nil {
+				t.Errorf("Kustomizations = %v, want %q among them", slices.Sorted(maps.Keys(got)), name)
+			}
 		}
 	})
 }

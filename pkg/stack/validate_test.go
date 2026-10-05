@@ -170,3 +170,31 @@ func TestValidateCluster_SharedNodeIsNotACycle(t *testing.T) {
 		t.Fatalf("shared node rejected as a cycle: %v", err)
 	}
 }
+
+// TestValidateCluster_NodeNamedDependsOn: a node's NamedDependsOn is held to
+// what a bundle's is: no empty and no repeated entry, the node named by its
+// path. The value of an entry is a caller-supplied reference and is not
+// checked.
+func TestValidateCluster_NodeNamedDependsOn(t *testing.T) {
+	cluster := func(entries ...string) *Cluster {
+		apps := &Node{Name: "apps", NamedDependsOn: entries}
+		return &Cluster{Name: "c", Node: &Node{Name: "prod", Children: []*Node{apps}}}
+	}
+	if err := ValidateCluster(cluster("platform", "Other_Cluster", strings.Repeat("x", KustomizationNameMaxLength+1))); err != nil {
+		t.Fatalf("ValidateCluster() = %v, want entries of any value accepted", err)
+	}
+	for name, tc := range map[string]struct {
+		entries []string
+		want    string
+	}{
+		"empty":    {[]string{"platform", ""}, "NamedDependsOn holds an empty name"},
+		"repeated": {[]string{"platform", "platform"}, `NamedDependsOn lists "platform" twice`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := ValidateCluster(cluster(tc.entries...))
+			if err == nil || !strings.Contains(err.Error(), `node "prod/apps"`) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("ValidateCluster() = %v, want node \"prod/apps\" refused: %s", err, tc.want)
+			}
+		})
+	}
+}

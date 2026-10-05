@@ -316,7 +316,7 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, g grouping)
 	// Unnamed root node: it has no directory of its own, so its content is
 	// rendered straight into the cluster directory.
 	if c.Node.Name == "" {
-		clusterLayout.origin = origin{nodes: []*stack.Node{c.Node}}
+		clusterLayout.setNode(c.Node)
 		if err := renderNodeContent(c.Node, clusterLayout, g, nil); err != nil {
 			return nil, err
 		}
@@ -335,7 +335,7 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, g grouping)
 		rootNamespace = filepath.Dir(rootNamespace)
 	}
 	rootLayout := g.newLayout(c.Node.Name, rootNamespace)
-	rootLayout.origin = origin{nodes: []*stack.Node{c.Node}}
+	rootLayout.setNode(c.Node)
 	if err := renderNodeContent(c.Node, rootLayout, g, nil); err != nil {
 		return nil, err
 	}
@@ -436,7 +436,7 @@ func walkNode(n *stack.Node, ancestors []string, g grouping, pkg *schema.GroupVe
 		return nil, nil
 	}
 	ml := g.newLayout(n.Name, filepath.Join(ancestors...))
-	ml.origin = origin{nodes: []*stack.Node{n}}
+	ml.setNode(n)
 	if err := renderNodeContent(n, ml, g, pkg); err != nil {
 		return nil, err
 	}

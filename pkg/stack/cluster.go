@@ -116,6 +116,38 @@ type Node struct {
 	PackageRef *schema.GroupVersionKind `yaml:"packageref,omitempty"`
 	// Bundle holds the applications that get deployed on this level
 	Bundle *Bundle `yaml:"bundle,omitempty"`
+	// KustomizationName names the node's own Flux Kustomization. A node has
+	// one only under the layout rule FluxPlacement FluxIntegratedPerLayout,
+	// and only when its directory renders no bundle: a group of nodes, or a
+	// node above its bundle's own directory (BundleGrouping GroupByName).
+	// Empty means the derived name, the node's directory path with "/"
+	// replaced by "-" and "-node" appended. Set on any other node (one whose
+	// directory renders its bundle, one NodeGrouping GroupFlat merges into
+	// its parent, the node whose directory is the top of the written tree)
+	// or under another placement, the field is refused, not ignored; so are
+	// DependsOn and NamedDependsOn. The name in effect, set or derived, must
+	// be one Flux can reconcile (ValidateKustomizationName): the Flux
+	// workflow refuses any other where it creates the Kustomization and does
+	// not shorten a derived name, so one that is too long is fixed by
+	// setting this field.
+	//
+	// The layout walker copies this field and NamedDependsOn onto the node's
+	// layout, and the Kustomization is built from the layout. Set them before
+	// the walk: a name or an entry the node has and its layout does not
+	// carry is refused, not ignored.
+	KustomizationName string `yaml:"kustomizationName,omitempty"`
+	// DependsOn lists nodes whose Kustomizations must be ready before this
+	// node's is applied. Each is written into spec.dependsOn under the
+	// target's Kustomization name in effect: its KustomizationName, or the
+	// derived name. A target without a Kustomization of its own is refused.
+	DependsOn []*Node `yaml:"-"`
+	// NamedDependsOn lists Kustomizations this node's depends on, by name.
+	// The names are written into spec.dependsOn as given, after DependsOn.
+	// An entry is a caller-supplied reference: it need not belong to a node
+	// of this cluster, and its value is not checked. An empty or a repeated
+	// entry is refused (ValidateCluster), and so is an entry that names the
+	// Kustomization of a node in DependsOn.
+	NamedDependsOn []string `yaml:"namedDependsOn,omitempty"`
 
 	// Internal fields for runtime hierarchy navigation (not serialized)
 	parent  *Node            `yaml:"-"` // Runtime parent reference for efficient traversal

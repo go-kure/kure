@@ -125,8 +125,9 @@ top of such a directory.
 
 - **Bootstrap not implemented**: `GenerateBootstrap` returns `nil, nil` when `config` is nil or disabled; returns an error when bootstrap is enabled. `SupportedBootstrapModes()` returns nil.
 - Applications are generated as `unstructured.Unstructured` objects; ArgoCD CRD types are not imported.
-- `IntegrateWithLayout` adds nothing (ArgoCD Applications reference external repos and do not require layout integration).
+- `IntegrateWithLayout` adds nothing to the layout (ArgoCD Applications reference external repos and do not require layout integration).
 - **No delivery intent**: an application that sets `Application.Delivery` (prune protection, force replace) is refused by `GenerateFromCluster`, `CreateLayoutWithResources` and `IntegrateWithLayout`, with an error naming the application; `IntegrateWithLayout` also reads the cluster it is given, so a hand-built layout does not get past it. This workflow has no mapping for the intent yet, and rendering the application without it would drop what it asked for. Leave `Delivery` unset, or use the Flux workflow.
+- **No Application for a node**: an Application is generated for a bundle only. A node that sets `KustomizationName`, `DependsOn` or `NamedDependsOn`, which name and order a node's own Flux Kustomization, is refused by `GenerateFromCluster`, `CreateLayoutWithResources` and `IntegrateWithLayout` rather than ignored; the error names the node and the fields. Name and order the node's bundles instead.
 
 ## Related Packages
 

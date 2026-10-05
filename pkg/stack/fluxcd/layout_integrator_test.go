@@ -787,9 +787,13 @@ func TestAugmenterChildrenGetFluxCRs(t *testing.T) {
 		t.Fatalf("IntegrateWithLayout: %v", err)
 	}
 
+	// Every layout CR is named "<unit>-<layout name>"; the unit is the
+	// Kustomization of bundle "apps", which the node layout renders.
+	const unit = "apps-"
+
 	// (a) nodeLayout.Resources must contain a CR for the direct child "myapp".
-	if !augHasCR(nodeLayout.Resources, "myapp") {
-		t.Error("expected CR for 'myapp' in nodeLayout.Resources (flat path)")
+	if !augHasCR(nodeLayout.Resources, unit+"myapp") {
+		t.Errorf("expected CR %q in nodeLayout.Resources (flat path)", unit+"myapp")
 	}
 
 	// (b) app.Resources must contain CRs for both augmenter sub-layouts.
@@ -797,17 +801,18 @@ func TestAugmenterChildrenGetFluxCRs(t *testing.T) {
 		t.Fatalf("expected 2 CRs in app.Resources, got %d", len(app.Resources))
 	}
 	k0 := augMustKustomization(t, app.Resources[0])
-	if k0.Name != preInstall.Name {
-		t.Errorf("unexpected first CR name: got %q, want %q", k0.Name, preInstall.Name)
+	if k0.Name != unit+preInstall.Name {
+		t.Errorf("unexpected first CR name: got %q, want %q", k0.Name, unit+preInstall.Name)
 	}
 	if len(k0.Spec.DependsOn) != 0 {
 		t.Errorf("expected no dependsOn on pre-install CR, got %v", k0.Spec.DependsOn)
 	}
 	k1 := augMustKustomization(t, app.Resources[1])
-	if k1.Name != hooks.Name {
-		t.Errorf("unexpected second CR name: got %q, want %q", k1.Name, hooks.Name)
+	if k1.Name != unit+hooks.Name {
+		t.Errorf("unexpected second CR name: got %q, want %q", k1.Name, unit+hooks.Name)
 	}
-	if len(k1.Spec.DependsOn) != 1 || k1.Spec.DependsOn[0].Name != preInstall.Name {
+	// hooks.DependsOn names its sibling layout; the CR names that sibling's CR.
+	if len(k1.Spec.DependsOn) != 1 || k1.Spec.DependsOn[0].Name != unit+preInstall.Name {
 		t.Errorf("unexpected dependsOn on hooks CR: %v", k1.Spec.DependsOn)
 	}
 	// spec.path must equal FullRepoPath().
@@ -834,11 +839,11 @@ func TestAugmenterChildrenNoDuplicateInKustomizationYAML(t *testing.T) {
 	}
 
 	// Node-level kustomization.yaml must reference "myapp" exactly once.
-	augAssertOnce(t, dir, nodeLayout.FullRepoPath(), "flux-system-kustomization-myapp.yaml")
+	augAssertOnce(t, dir, nodeLayout.FullRepoPath(), "flux-system-kustomization-apps-myapp.yaml")
 
 	// App-level kustomization.yaml must reference the pre-install CR exactly once.
 	augAssertOnce(t, dir, app.FullRepoPath(),
-		"flux-system-kustomization-"+preInstall.Name+".yaml")
+		"flux-system-kustomization-apps-"+preInstall.Name+".yaml")
 }
 
 // TestAugmenterChildrenWriteToTar verifies no duplicate entries in the tar
@@ -874,10 +879,10 @@ func TestAugmenterChildrenWriteToTar(t *testing.T) {
 	}
 
 	nodeKust := augFindKust(t, files, nodeLayout.FullRepoPath())
-	augAssertCount(t, nodeKust, "flux-system-kustomization-myapp.yaml", 1)
+	augAssertCount(t, nodeKust, "flux-system-kustomization-apps-myapp.yaml", 1)
 
 	appKust := augFindKust(t, files, app.FullRepoPath())
-	augAssertCount(t, appKust, "flux-system-kustomization-"+preInstall.Name+".yaml", 1)
+	augAssertCount(t, appKust, "flux-system-kustomization-apps-"+preInstall.Name+".yaml", 1)
 }
 
 // TestAugmenterChildrenPerBundleNoChildCRs verifies that FluxIntegratedPerBundle
@@ -943,7 +948,7 @@ func TestAugmenterChildrenPerBundleWriteToTarUsesDirRefs(t *testing.T) {
 
 	// App kustomization.yaml references the augmenter sub-layout as a directory.
 	appKust := augFindKust(t, files, app.FullRepoPath())
-	augAssertCount(t, appKust, "flux-system-kustomization-"+preInstall.Name+".yaml", 0)
+	augAssertCount(t, appKust, "flux-system-kustomization-apps-"+preInstall.Name+".yaml", 0)
 	augAssertCount(t, appKust, "- "+preInstall.Name+"\n", 1)
 }
 
@@ -1055,8 +1060,8 @@ func TestUmbrellaChildAugmenterSubLayoutGetFluxCR(t *testing.T) {
 		t.Fatalf("IntegrateWithLayout: %v", err)
 	}
 
-	if !augHasCR(platformApps.Resources, "redis") {
-		t.Errorf("expected Kustomization CR for 'redis' in platform-apps.Resources; got %d resources", len(platformApps.Resources))
+	if !augHasCR(platformApps.Resources, "platform-apps-redis") {
+		t.Errorf("expected Kustomization CR for 'platform-apps-redis' in platform-apps.Resources; got %d resources", len(platformApps.Resources))
 	}
 }
 
@@ -1075,8 +1080,8 @@ func TestUmbrellaChildAugmenterSubLayoutPerBundleNoCR(t *testing.T) {
 	}
 
 	// No per-child CR for the augmenter sub-layout.
-	if augHasCR(platformApps.Resources, "redis") {
-		t.Errorf("PerBundle: did not expect a Kustomization CR for 'redis' in platform-apps.Resources")
+	if augHasCR(platformApps.Resources, "platform-apps-redis") {
+		t.Errorf("PerBundle: did not expect a Kustomization CR for 'platform-apps-redis' in platform-apps.Resources")
 	}
 
 	dir := t.TempDir()
@@ -1169,13 +1174,13 @@ func TestUmbrellaChildAugmenterSubLayoutUsesChildSourceRef(t *testing.T) {
 
 	var redisCR *kustv1.Kustomization
 	for _, r := range platformApps.Resources {
-		if k, ok := r.(*kustv1.Kustomization); ok && k.Name == "redis" {
+		if k, ok := r.(*kustv1.Kustomization); ok && k.Name == "platform-apps-redis" {
 			redisCR = k
 			break
 		}
 	}
 	if redisCR == nil {
-		t.Fatal("Kustomization CR for 'redis' not found in platform-apps.Resources")
+		t.Fatal("Kustomization CR for 'platform-apps-redis' not found in platform-apps.Resources")
 	}
 	if redisCR.Spec.SourceRef.Name != "child-source" {
 		t.Errorf("redis CR sourceRef.name: got %q, want %q (child-source, not parent-source)",
@@ -1192,10 +1197,10 @@ func TestUmbrellaChildAugmenterSubLayoutUsesChildSourceRef(t *testing.T) {
 func TestAugmenterGrandchildErrorWhenNoSourceRef(t *testing.T) {
 	root, nodeLayout, app, preInstall, _, cluster := buildAugmenterTestTree(t, layout.FluxIntegratedPerLayout, nil)
 
-	// Pre-place a CR for "myapp" (same name and path) so the direct child is
+	// Pre-place the CR of "myapp" (same name and path) so the direct child is
 	// already served: only the grandchild still needs a new CR.
 	existingCR := &kustv1.Kustomization{}
-	existingCR.Name = "myapp"
+	existingCR.Name = "apps-myapp"
 	existingCR.Namespace = "flux-system"
 	existingCR.Spec.Path = app.FullRepoPath()
 	nodeLayout.Resources = append(nodeLayout.Resources, existingCR)
@@ -1363,11 +1368,16 @@ func TestIntegrateWithLayout_RulesFluxSeparate_NoDuplicateChildCRs(t *testing.T)
 
 	// FluxSeparate must not emit augmenter-child CRs into app.Resources
 	// (that emission only fires on the FluxIntegratedPerLayout code path).
-	if augHasCR(app.Resources, preInstall.Name) {
-		t.Errorf("FluxSeparate emitted a Kustomization CR for augmenter child %q at app.Resources; FluxIntegratedPerLayout leaked into the FluxSeparate path", preInstall.Name)
+	// Under FluxIntegratedPerLayout they are named "<unit>-<layout name>".
+	for _, child := range []*layout.ManifestLayout{preInstall, hooks} {
+		if name := "apps-" + child.Name; augHasCR(app.Resources, name) {
+			t.Errorf("FluxSeparate emitted Kustomization CR %q for augmenter child %q at app.Resources; FluxIntegratedPerLayout leaked into the FluxSeparate path", name, child.Name)
+		}
 	}
-	if augHasCR(app.Resources, hooks.Name) {
-		t.Errorf("FluxSeparate emitted a Kustomization CR for augmenter child %q at app.Resources; FluxIntegratedPerLayout leaked into the FluxSeparate path", hooks.Name)
+	for _, r := range app.Resources {
+		if k, ok := r.(*kustv1.Kustomization); ok {
+			t.Errorf("FluxSeparate placed Kustomization %q in the application layout, want none", k.Name)
+		}
 	}
 }
 

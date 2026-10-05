@@ -73,6 +73,10 @@ func kustomizationHealthChecks(k *kustv1.Kustomization) []string {
 // the same cluster gets without the field: the directory follows Name.
 func TestKustomizationName_NamesTheKustomizationAndItsReferences(t *testing.T) {
 	renamed := map[string]string{"shop": "apps-shop", "shop-db": "apps-shop-db"}
+	// Under FluxIntegratedPerLayout an application layout's Kustomization is
+	// named after the unit it belongs to, so it follows the rename.
+	inEffect := map[string]string{"shop-shop-app": "apps-shop-shop-app", "shop-db-shop-db-app": "apps-shop-db-shop-db-app"}
+	maps.Copy(inEffect, renamed)
 	for _, placement := range allPlacements {
 		t.Run(string(placement), func(t *testing.T) {
 			rules := propertyGroupings["GroupByName"]
@@ -85,13 +89,13 @@ func TestKustomizationName_NamesTheKustomizationAndItsReferences(t *testing.T) {
 					t.Errorf("a Kustomization is named %q, the bundle's Name, although the bundle sets KustomizationName", name)
 				}
 			}
-			if !slices.Equal(slices.Sorted(maps.Keys(got)), renamedKeys(baseline, renamed)) {
+			if !slices.Equal(slices.Sorted(maps.Keys(got)), renamedKeys(baseline, inEffect)) {
 				t.Fatalf("Kustomizations = %v, want those of the unnamed cluster %v with shop and shop-db renamed",
 					slices.Sorted(maps.Keys(got)), slices.Sorted(maps.Keys(baseline)))
 			}
 			for name, base := range baseline {
 				effective := name
-				if n := renamed[name]; n != "" {
+				if n := inEffect[name]; n != "" {
 					effective = n
 				}
 				if got[effective].Spec.Path != base.Spec.Path {

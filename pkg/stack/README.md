@@ -79,6 +79,13 @@ fmt.Println(node.Name, node.Children[0].Name, node.Bundle.Name)
 ```
 <!-- doc-example:end -->
 
+A node whose directory renders no bundle (a group of nodes, say) is applied by a Flux Kustomization
+of its own under the layout rule `FluxPlacement: FluxIntegratedPerLayout`. `KustomizationName` names
+it, instead of the name derived from the node's path, and `DependsOn` (nodes) and `NamedDependsOn`
+(Kustomization names) order it. On any other node, under another placement and under the ArgoCD
+workflow the three fields are refused rather than ignored. See
+[Flux Engine](/api-reference/flux-engine/#node-kustomizations).
+
 ### Bundle
 
 A deployment unit corresponding to a single GitOps resource (e.g., a Flux Kustomization). Bundles support dependency ordering via `DependsOn` (pointer-based) or `NamedDependsOn` (name-based, for cross-scope references).
@@ -203,6 +210,8 @@ caller chooses a valid name.
 | A bundle's `KustomizationName`, when set | a DNS-1123 subdomain | `Bundle.Validate` |
 | The name a bundle's Kustomization gets in the Flux workflow (`UnitName()`) | a Flux Kustomization name | the Flux generator, where it builds the Kustomization |
 | Node | a directory name, under every layout grouping; an unnamed root is allowed, it adds no path segment | `ValidateCluster` |
+| The name a node's own Kustomization gets in the Flux workflow (its `KustomizationName`, or the derived `<path>-node`) | a Flux Kustomization name | the Flux layout integrator, where it creates the Kustomization |
+| An entry of a node's `NamedDependsOn` | not empty and not repeated; its value is a caller-supplied reference and is not checked, as for a bundle's | `ValidateCluster` |
 | Application | a directory name, only where the layout rules give the application a directory | `layout.WalkCluster` |
 
 - **Bundle name**: a DNS-1123 subdomain, at most 253 characters: lower-case
@@ -255,7 +264,10 @@ a name from these fields can check the result with the same rule. The Flux
 generator's refusal of a Kustomization name over 63 characters names the
 bundle by `Bundle.GetPath`, which for an umbrella child of a walked cluster
 holds its umbrella's path (`platform/platform-infra`), and the field that
-holds the name (`name` or `kustomizationName`). Two Flux
+holds the name (`name` or `kustomizationName`). Its refusal of the name of a
+node's own Kustomization names the node by its path from the root and the
+field `kustomizationName`, also where the name was derived and the field is
+the one to set. Two Flux
 entry points take a bundle or a node that no cluster validation has seen and
 apply a rule themselves: the generator checks the whole Kustomization name
 rule on a bundle it is handed directly (`GenerateForBundle`), and the bootstrap

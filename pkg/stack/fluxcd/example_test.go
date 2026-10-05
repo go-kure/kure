@@ -160,6 +160,41 @@ func ExampleEngine_dirName() {
 	// shop-services apps/shop/10-services
 }
 
+func ExampleLayoutIntegrator_nodeKustomization() {
+	// Two groups of nodes, neither with a bundle of its own. Each group gets
+	// a Kustomization that applies its directory; the one for apps waits for
+	// the one for platform.
+	source := &stack.SourceRef{Kind: "GitRepository", Name: "flux-system", Namespace: "flux-system"}
+	platform := &stack.Node{Name: "platform", KustomizationName: "platform", Children: []*stack.Node{
+		{Name: "cert-manager", Bundle: &stack.Bundle{Name: "cert-manager", SourceRef: source}},
+	}}
+	apps := &stack.Node{Name: "apps", KustomizationName: "apps", DependsOn: []*stack.Node{platform}, Children: []*stack.Node{
+		{Name: "shop", Bundle: &stack.Bundle{Name: "shop", SourceRef: source}},
+	}}
+	cluster := &stack.Cluster{Name: "prod", Node: &stack.Node{Name: "prod", Children: []*stack.Node{platform, apps}}}
+
+	rules := layout.DefaultLayoutRules()
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	ml, err := fluxcd.NewLayoutIntegrator(fluxcd.NewResourceGenerator()).CreateLayoutWithResources(cluster, rules)
+	if err != nil {
+		panic(err)
+	}
+	for _, obj := range ml.Resources {
+		kust, ok := obj.(*kustv1.Kustomization)
+		if !ok {
+			continue
+		}
+		var waitsFor []string
+		for _, dep := range kust.Spec.DependsOn {
+			waitsFor = append(waitsFor, dep.Name)
+		}
+		fmt.Println(kust.Name, kust.Spec.Path, waitsFor)
+	}
+	// Output:
+	// platform prod/platform []
+	// apps prod/apps [platform]
+}
+
 func ExampleWorkflowEngine_CreateLayoutWithResources() {
 	cluster := exampleCluster()
 	engine := fluxcd.Engine()
