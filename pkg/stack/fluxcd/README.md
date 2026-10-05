@@ -680,7 +680,9 @@ and every grouping, on:
   field, is one object and carries the annotation itself. The written file decides: a typed
   object whose written form still holds an object without the annotation, because its Go value
   gives no access to it, is refused. An item held as raw JSON (`runtime.RawExtension.Raw`) is
-  such an object: it is written as it is, so it has to carry the annotation already. A `List`
+  such an object: it is written as it is, so it has to carry the annotation already. An object
+  the Go value holds that is not among the written items is not the application's and is left
+  as it is. A `List`
   among a typed List's items is opened whether or not it carries object metadata of its own
   (`metav1.List`, the core `v1` List as a Go value, has none), and the objects it holds as Go
   values are annotated like any other (go-kure/kure#1006);

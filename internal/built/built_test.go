@@ -194,7 +194,50 @@ func TestObjects(t *testing.T) {
 			},
 			[]described{{"ConfigMapList", "s", false}},
 		},
+		// An array written from another field than the one the Go value gives
+		// its items in is what is built: the objects are read from it.
+		"a typed List that writes other items than its Go value gives": {
+			&unwrittenItems{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMapList"},
+				Items:    []corev1.ConfigMap{*typedConfigMap("a")},
+				Written:  []corev1.ConfigMap{*typedConfigMap("b"), *typedConfigMap("c")},
+			},
+			[]described{{"ConfigMap", "b", true}, {"ConfigMap", "c", true}},
+		},
+		"a typed List that writes one item other than its Go value gives": {
+			&unwrittenItems{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMapList"},
+				Items:    []corev1.ConfigMap{*typedConfigMap("a"), *typedConfigMap("b")},
+				Written:  []corev1.ConfigMap{*typedConfigMap("a"), *typedConfigMap("c")},
+			},
+			[]described{{"ConfigMap", "a", true}, {"ConfigMap", "c", true}},
+		},
+		"a typed List that writes an empty array beside the items its Go value gives": {
+			&unwrittenItems{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMapList"},
+				Items:    []corev1.ConfigMap{*typedConfigMap("a")},
+				Written:  []corev1.ConfigMap{},
+			},
+			nil,
+		},
 		// One List, held twice, is opened twice: that is no List holding itself.
+		"a core List held twice by a core List": {
+			func() runtime.Object {
+				inner := coreList(runtime.RawExtension{Object: typedConfigMap("a")})
+				return coreList(runtime.RawExtension{Object: inner}, runtime.RawExtension{Object: inner})
+			}(),
+			[]described{{"ConfigMap", "a", false}, {"ConfigMap", "a", false}},
+		},
+		// The raw JSON is what is written, so the object beside it is not
+		// read, the List itself included.
+		"a core List item with raw JSON and the List itself as the object": {
+			func() runtime.Object {
+				l := coreList()
+				l.Items = []runtime.RawExtension{{Raw: []byte(rawConfigMap), Object: l}}
+				return l
+			}(),
+			[]described{{"ConfigMap", "raw", true}},
+		},
 		"an unstructured List held twice by a List": {
 			func() runtime.Object {
 				inner := listOf("List", configMap("a"))
@@ -373,9 +416,10 @@ func TestObjects_Errors(t *testing.T) {
 }
 
 // An unstructured List's items are read from its map, so one that holds
-// itself, directly or through another, has no end to read: it is refused. The
-// stack is kept small for the test, so that a reader that does not stop fails
-// here and not after a gigabyte of it.
+// itself, directly or through another, has no end to read: it is refused. So
+// is a typed List that holds itself as an item's object, which has no end to
+// marshal. The stack is kept small for the test, so that a reader that does
+// not stop fails here and not after a gigabyte of it.
 func TestObjects_ListThatHoldsItself(t *testing.T) {
 	defer debug.SetMaxStack(debug.SetMaxStack(32 << 20))
 	itself := listOf("List")
@@ -383,6 +427,11 @@ func TestObjects_ListThatHoldsItself(t *testing.T) {
 	first, second := listOf("List"), listOf("List")
 	first.Object["items"] = []any{second.Object}
 	second.Object["items"] = []any{configMap("a").Object, first.Object}
+	typed := coreList()
+	typed.Items = []runtime.RawExtension{{Object: typed}}
+	outer, inner := coreList(), coreList()
+	outer.Items = []runtime.RawExtension{{Object: inner}}
+	inner.Items = []runtime.RawExtension{{Object: typedConfigMap("a")}, {Object: outer}}
 	const holdsItself = "a List holds itself among its items"
 	for name, tc := range map[string]struct {
 		resource runtime.Object
@@ -395,6 +444,11 @@ func TestObjects_ListThatHoldsItself(t *testing.T) {
 		// A typed List is read from its written form, and marshalling it
 		// finds the unstructured List inside it first.
 		"such a List inside a core List": {coreList(runtime.RawExtension{Object: itself}), "encountered a cycle"},
+
+		"a core List among its own items":     {typed, holdsItself},
+		"two core Lists that hold each other": {outer, holdsItself},
+		"such a core List inside another":     {coreList(runtime.RawExtension{Object: typed}), holdsItself},
+		"such a core List behind an object":   {coreList(runtime.RawExtension{Object: typedConfigMap("a")}, runtime.RawExtension{Object: inner}), holdsItself},
 	} {
 		t.Run(name, func(t *testing.T) {
 			objs, err := Objects(tc.resource)

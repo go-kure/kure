@@ -106,30 +106,37 @@ func TestDeliveryIntent_ObjectInListWithoutObjectMetadataRestored(t *testing.T) 
 	}
 }
 
-// TestDeliveryIntent_ItemsWrittenAsNullAreNotAnnotated: what is written
-// decides what a typed List holds. One that writes its items as null holds
-// nothing for kustomize, so an object its Go value has beside that is not an
-// object of the application: the intent leaves it alone.
-func TestDeliveryIntent_ItemsWrittenAsNullAreNotAnnotated(t *testing.T) {
-	for _, placement := range placements {
-		t.Run(string(placement), func(t *testing.T) {
-			list := &typedSplitItems{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMapList"},
-				Items:    []corev1.ConfigMap{*heldConfigMap()},
-			}
-			c := listedCluster(list, cmApp("other"))
-			rules := recursiveRules("nodeOnly", placement)
-			ml, err := layout.WalkCluster(c, rules)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules); err != nil {
-				t.Fatalf("IntegrateWithLayout: %v", err)
-			}
-			if got := list.Items[0].GetAnnotations(); len(got) != 0 {
-				t.Errorf("an object that is not written has annotations %v", got)
-			}
-		})
+// TestDeliveryIntent_ItemsNotWrittenAreNotAnnotated: what is written decides
+// what a typed List holds. One that writes its items as null, or as an empty
+// array, holds nothing for kustomize, so an object its Go value has beside
+// that is not an object of the application: the intent leaves it alone.
+func TestDeliveryIntent_ItemsNotWrittenAreNotAnnotated(t *testing.T) {
+	written := map[string][]corev1.ConfigMap{
+		"items written as null":           nil,
+		"items written as an empty array": {},
+	}
+	for name, entries := range written {
+		for _, placement := range placements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				list := &typedSplitItems{
+					TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMapList"},
+					Items:    []corev1.ConfigMap{*heldConfigMap()},
+					Entries:  entries,
+				}
+				c := listedCluster(list, cmApp("other"))
+				rules := recursiveRules("nodeOnly", placement)
+				ml, err := layout.WalkCluster(c, rules)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules); err != nil {
+					t.Fatalf("IntegrateWithLayout: %v", err)
+				}
+				if got := list.Items[0].GetAnnotations(); len(got) != 0 {
+					t.Errorf("an object that is not written has annotations %v", got)
+				}
+			})
+		}
 	}
 }
 
