@@ -58,6 +58,49 @@ func TestTopDirectory(t *testing.T) {
 	}
 }
 
+// TestTopDirectory_RootNodeName: where the root node's name is the directory,
+// a name that is no directory name is refused, as WalkCluster refuses the
+// cluster, by an error that names the node and the field; nothing is returned
+// next to it. Under a ClusterName the name is no part of the directory, and
+// the cluster directory is returned for the same root nodes.
+func TestTopDirectory_RootNodeName(t *testing.T) {
+	for name, reason := range map[string]string{
+		"../prod": "path separator",
+		"a/b":     "path separator",
+		`a\b`:     "path separator",
+		".":       "not a directory name of its own",
+		"..":      "not a directory name of its own",
+	} {
+		root := &stack.Node{Name: name}
+		t.Run(name+"/no ClusterName", func(t *testing.T) {
+			dir, err := layout.TopDirectory(root, layout.LayoutRules{})
+			if err == nil {
+				t.Fatalf("TopDirectory = %q, want the root node's name refused", dir)
+			}
+			for _, want := range []string{"Node '" + name + "'", "field 'name'", reason} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("err = %v, want it to contain %q", err, want)
+				}
+			}
+			if dir != "" {
+				t.Errorf("TopDirectory returned %q with the error", dir)
+			}
+			if _, werr := layout.WalkCluster(&stack.Cluster{Name: "demo", Node: root}, layout.LayoutRules{}); werr == nil {
+				t.Error("WalkCluster builds a tree for a root node TopDirectory refuses")
+			}
+		})
+		t.Run(name+"/under a ClusterName", func(t *testing.T) {
+			dir, err := layout.TopDirectory(root, layout.LayoutRules{ClusterName: "clusters/eu"})
+			if err != nil {
+				t.Fatalf("TopDirectory: %v", err)
+			}
+			if dir != "clusters/eu" {
+				t.Errorf("TopDirectory = %q, want %q", dir, "clusters/eu")
+			}
+		})
+	}
+}
+
 // topDirectoryShapes are clusters whose walked tree has a different top, or a
 // top FlattenSingleTier could move: a root node with a bundle and a child node,
 // the same without a name, a root node that renders nothing, and one over a

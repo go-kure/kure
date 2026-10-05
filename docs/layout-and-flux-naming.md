@@ -1098,7 +1098,10 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      directory it writes to). `TopDirectory` returns it relative, with no leading slash: for a
      rooted `ClusterName` (`/prod`) the walk's own `FullRepoPath` keeps the slash and the writers
      resolve it under the directory they write to, which is the directory returned (`prod`), so a
-     caller hands Flux the path the bootstrap does. The rules are validated first, so invalid
+     caller hands Flux the path the bootstrap does. Where the root node's name is that
+     directory, `TopDirectory` refuses a name that is no directory name (`../prod`), as the walk
+     does; the bootstrap asks it for the directory only where it uses one, so what the bootstrap
+     refuses does not change (`validateRootName`). The rules are validated first, so invalid
      ones are an error whatever the `BootstrapConfig` is. The Flux engine refuses rules that are
      not a `layout.LayoutRules`, nil included, as item 3 does; the ArgoCD engine takes the rules
      and reads nothing from them. The generated Source's name and the bootstrap Kustomization's
@@ -1166,8 +1169,9 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
    - No longer refused: the kept layout Kustomization of the root node's directory below a
      `ClusterName` wrapper under `FluxIntegratedPerLayout`, with a patch or postBuild that
      changes a Source hosted there.
-   - Tests: `TestTopDirectory`, `TestTopDirectory_IsTheWalksTop` and
-     `TestTopDirectory_RefusesInvalidRules` in `pkg/stack/layout/top_directory_test.go`;
+   - Tests: `TestTopDirectory`, `TestTopDirectory_RootNodeName`,
+     `TestTopDirectory_IsTheWalksTop` and `TestTopDirectory_RefusesInvalidRules` in
+     `pkg/stack/layout/top_directory_test.go`;
      `TestBootstrapPathIsTheTopOfTheWrittenTree`, `TestBootstrap_RefusesInvalidRules`,
      `TestWorkflowEngine_GenerateBootstrap_RefusesRulesOfAnotherType` and
      `TestBootstrap_RootNodeNameIsNoSegmentUnderClusterName` in
