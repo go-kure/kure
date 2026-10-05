@@ -443,10 +443,9 @@ What changed, and what to do:
   on, the objects can be deleted by the outer owner and re-created by the inner Kustomization.
 - **A child node named like that directory is refused.** A child node of the root node whose name
   is the name of the root node's bundle's directory would render to the same path; the walk
-  refuses it, naming both, also when the names differ only in case or the node's name resolves to
-  that directory (`./web` for `web`). Rename one. A bundle name that resolves to the root node's
-  own directory (`.`, `/`), or to a directory a layout below a child node already takes (`web/api`
-  beside the nodes `web` and `api`), is refused as well.
+  refuses it, naming both, also when the names differ only in case (`WEB` for `web`). Rename one.
+  A name that is not one path segment is refused earlier, when the cluster is validated: a node
+  named `./web`, a bundle named `.`, `/` or `web/api`.
 - **A root node's bundle named `flux-system` is refused under `FluxSeparate`.** Without a
   `ClusterName` its directory would be the one the Flux resources are written to. Rename the
   bundle, or use an integrated placement. The ArgoCD engine refuses one named `argocd` the same
