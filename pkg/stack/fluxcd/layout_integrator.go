@@ -1089,7 +1089,8 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 // renders no bundle, go-kure/kure#979); the root node's layout and the layout
 // CRs below it that no other bundle encloses keep their source, as when the
 // bundles were rendered in the layout itself. Under BundleGrouping by name a
-// node's layout has no such directory, and no source of its own.
+// node's layout has no such directory; layoutSource gives it its node's
+// bundle's SourceRef where it finds no other (nodeBundleSource).
 func unitSource(l *layout.ManifestLayout) (kustv1.CrossNamespaceSourceReference, bool) {
 	unit := l.OriginUnit()
 	if unit == nil || len(unit.OriginBundles()) == 0 {
@@ -1102,7 +1103,15 @@ func unitSource(l *layout.ManifestLayout) (kustv1.CrossNamespaceSourceReference,
 // layoutSource returns the SourceRef of child's layout CR: the scope's (the
 // nearest bundle-rendering layout at or above the host), else the one of the
 // bundles merged into child's node (unitSource), else the one SourceRef the
-// URL-less bundles below child share.
+// URL-less bundles below child share, else the one of the bundle of child's
+// own node or, for a node without one, of the nearest node above
+// (nodeBundleSource).
+//
+// The last is what a node's layout takes where no layout renders its node's
+// bundle or one above it: under BundleGrouping by name every bundle has a
+// directory of its own, one level below its node's, so no bundle encloses a
+// node's layout (go-kure/kure#979). It comes last, so it gives a source only
+// to a layout that had none.
 //
 // When child is the root node's layout (below a ClusterName wrapper, which
 // hosts its CR) or, on a tree built by hand, a layout above it, its CR applies
@@ -1111,8 +1120,12 @@ func unitSource(l *layout.ManifestLayout) (kustv1.CrossNamespaceSourceReference,
 // (go-kure/kure#979). The Flux bootstrap applies the top of the written tree,
 // the wrapper (bootstrapDir); where nothing there delivers that Source, the CR
 // would wait for a Source that only its own apply creates. Such a reference is
-// passed over, whichever of the three it is, and when nothing else is left the
+// passed over, whichever of these it is, and when nothing else is left the
 // refusal names it.
+//
+// A layout left without a source is refused. The refusal says which
+// Kustomization it is and what would give it a source; where every SourceRef
+// below has a URL it does not say that one is missing.
 func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope sourceScope) (kustv1.CrossNamespaceSourceReference, error) {
 	delivers := holdsLayout(child, p.root)
 	var own *kustv1.CrossNamespaceSourceReference
@@ -1136,6 +1149,9 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 	// sourceRef. The first reference is emitted as written.
 	var refs []kustv1.CrossNamespaceSourceReference
 	seen := map[kustv1.CrossNamespaceSourceReference]bool{}
+	// urlBelow: a bundle below child has a SourceRef that was passed over
+	// for its URL alone.
+	urlBelow := false
 	var walk func(l *layout.ManifestLayout)
 	walk = func(l *layout.ManifestLayout) {
 		for _, b := range l.OriginBundles() {
@@ -1143,7 +1159,11 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 				continue
 			}
 			ref := sourceRefOf(b)
-			if delivered(ref) || b.SourceRef.URL != "" {
+			if delivered(ref) {
+				continue
+			}
+			if b.SourceRef.URL != "" {
+				urlBelow = true
 				continue
 			}
 			effective := ref
@@ -1166,18 +1186,51 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 	case 1:
 		return refs[0], nil
 	case 0:
-		if own != nil {
+		if ref, ok := p.nodeBundleSource(child, delivered); ok {
+			return ref, nil
+		}
+		name, owner := layoutCRName(child, scope.unit), p.layoutOwner(child)
+		switch {
+		case own != nil:
 			return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
 				fmt.Sprintf("%s; give a bundle a SourceRef without a URL, naming a Source that exists before the tree is applied, or use FluxIntegratedPerBundle, under which layout %q has no Kustomization of its own",
-					p.sourceInsideDelivery(layoutCRName(child, scope.unit), child.FullRepoPath(), *own), child.FullRepoPath()), nil)
+					p.sourceInsideDelivery(name, child.FullRepoPath(), *own), child.FullRepoPath()), nil)
+		case urlBelow:
+			// A SourceRef is set, below: what is missing is one this
+			// Kustomization can take.
+			return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
+				fmt.Sprintf("Flux Kustomization %q of %s (spec.path %q) has no source: no bundle encloses it, no node at or above it has a bundle with a SourceRef, and every SourceRef on the bundles below it has a URL, which a Kustomization above those bundles does not take; give a bundle below it a SourceRef without a URL, give a node at or above it a bundle with a SourceRef, or use FluxIntegratedPerBundle, under which %s has no Kustomization of its own",
+					name, owner, child.FullRepoPath(), owner), nil)
 		}
 		return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
 			"FluxIntegratedPerLayout mode requires a SourceRef with Kind and Name; "+
-				fmt.Sprintf("layout %q needs a Kustomization CR but no enclosing bundle and no bundle below it has one", child.FullRepoPath()), nil)
+				fmt.Sprintf("Flux Kustomization %q of %s (spec.path %q) has no source: no bundle at, below or above it has one", name, owner, child.FullRepoPath()), nil)
 	default:
 		return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
 			fmt.Sprintf("layout %q has no enclosing bundle and the bundles below it have different SourceRefs, so its Flux Kustomization has no single source", child.FullRepoPath()), nil)
 	}
+}
+
+// nodeBundleSource returns the SourceRef of the bundle of the nearest node, at
+// or above child, that has one, and whether child's layout CR can take it: it
+// names a source and is not one child's own apply delivers (delivered, see
+// layoutSource).
+//
+// A layout's own node is the first of its origin nodes: the ones a flat
+// NodeGrouping or a FlattenSingleTier collapse rendered into it follow. Only
+// that node's bundle is read, and only the nearest such bundle: with flat
+// bundles it is the one that encloses child, which is where the scope's
+// SourceRef comes from, and a bundle further up is not looked at there either.
+func (p *integratedPlacement) nodeBundleSource(child *layout.ManifestLayout, delivered func(kustv1.CrossNamespaceSourceReference) bool) (kustv1.CrossNamespaceSourceReference, bool) {
+	for l := child; l != nil; l = p.ix.Parent(l) {
+		nodes := l.OriginNodes()
+		if len(nodes) == 0 || nodes[0] == nil || nodes[0].Bundle == nil {
+			continue
+		}
+		ref := sourceRefOf(nodes[0].Bundle)
+		return ref, ref.Kind != "" && ref.Name != "" && !delivered(ref)
+	}
+	return kustv1.CrossNamespaceSourceReference{}, false
 }
 
 // sourceInsideDelivery words the refusal of a Kustomization that would take

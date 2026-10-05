@@ -885,8 +885,8 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      (`unitSource`, used by `integratedPlacement.place` and `integratedPlacement.layoutSource`),
      although the bundle now renders one directory lower (since item 2 the Kustomization of the
      root node's layout itself takes it only when it names no generated Source). Under `BundleGrouping: GroupByName`
-     the root node's layout never had a source of its own, and such a tree is refused as before.
-     Accepting it would be a change of its own.
+     the root node's layout never had a source of its own, and this item left such a tree refused.
+     Item 12 is the change that accepts it.
    - Breaking: the path of the root node's bundles moves one directory down, from `<root>` to
      `<root>/<first bundle name>` (that bundle's `DirName` when it sets one, go-kure/kure#972):
      the files, the Kustomization's `spec.path` and the ArgoCD
@@ -952,10 +952,10 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      it.) The check still refuses it below the root, and for a kept Kustomization; its error
      names no root bundle, so its wording stays, and the fluxcd README says what it still
      guards.
-   - Not changed: a bundle-less layout below the root node whose bundles all have a URL on
-     their `SourceRef` and that no bundle encloses is refused as before, with the error that
-     says no bundle below it has a `SourceRef`. Its Source is not inside what its Kustomization
-     applies; taking it would be a change of its own.
+   - Not changed by this item: a bundle-less layout below the root node whose bundles all have a
+     URL on their `SourceRef` and that no bundle encloses was still refused, with an error that
+     said no bundle below it has a `SourceRef`. Its Source is not inside what its Kustomization
+     applies; item 12 is the change that takes it.
    - Tests, in `pkg/stack/fluxcd/source_host_test.go`:
      `TestGeneratedSourceIsHostedBeforeItsKustomizations` renders eight shapes under the three
      placements, three groupings and four `ClusterName` values (none, `.`, one and two
@@ -1224,6 +1224,42 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
       `TestWriters_UnlistedDirectoryChildMayNest` and `TestWalkers_SameNameLevelsAreWritten` in
       `pkg/stack/layout/dirchild_test.go`; `TestCheckDirectoryChildEntries_AsksEachParentOnce` in
       `pkg/stack/layout/writerplan_test.go`.
+12. **`FluxIntegratedPerLayout` with a directory per bundle refused a node whose `SourceRef`s all
+    have a URL.** Shipped.
+    - Before: under `BundleGrouping: GroupByName` no node's layout renders a bundle (each bundle
+      has a directory one level below its node's), so every node's layout below the top has a
+      layout Kustomization, and no bundle encloses it. Its source was the one `SourceRef` without
+      a URL that the bundles below it share, and nothing else. A node whose bundles, at and below
+      it, all have a URL on their `SourceRef` was refused, and so was a node with no bundle at or
+      below it, with an error that said a `SourceRef` was missing. With `SourceRef`s without a
+      URL the combination worked. Every shape of item 2's render matrix has such a node, which is
+      how it was found.
+    - Now: where `integratedPlacement.layoutSource` finds no source, the layout takes the
+      `SourceRef` of the bundle of the nearest node, at or above its own, that has one
+      (`nodeBundleSource`). That is its own node's bundle, rendered one directory lower, or for a
+      node without a bundle the one of the nearest node above: the bundle that encloses it under
+      a flat grouping. A URL is no obstacle below the root node: every generated Source is hosted
+      in the root node's layout, which no Kustomization below it applies. It is never a Source
+      the layout's own apply delivers (item 2): below a `ClusterName` wrapper the root node's
+      layout with only `SourceRef`s that have a URL is refused as before, under either grouping.
+    - The fallback comes last, so it gives a source only to a layout that had none: no tree that
+      was integrated before changes a `sourceRef`. A layout below which two `SourceRef`s without
+      a URL differ is refused as before.
+    - Still refused, under both groupings: a node without a bundle, with no bundle on a node
+      above it, above bundles whose `SourceRef`s all have a URL (a group node under a root
+      without a bundle). The error names the Kustomization, the node and the `spec.path`, says
+      what is the case, and names three ways out: a `SourceRef` without a URL on a bundle below,
+      a bundle with a `SourceRef` on a node at or above, or `FluxIntegratedPerBundle`. It names
+      no grouping. Only where no bundle at, below or above the layout has a `SourceRef` does the
+      error still say that one is required.
+    - Not breaking: refusals become acceptances, and the text of two errors changes.
+    - Tests: `TestPerLayout_ByName_NodeLayoutTakesItsNodesBundleSource`,
+      `TestPerLayout_ByName_BundleLessNodeTakesTheNearestBundleAbove` and
+      `TestPerLayout_NodeLayoutWithoutASource_RefusalSaysWhatHelps` in
+      `pkg/stack/fluxcd/by_name_source_test.go`, on the files of every writer, disk equal to tar.
+      The matrices of items 2 and 9 no longer pin a refusal for this grouping
+      (`sourceHostRefusal`): they hold every such combination to the Source invariant and to the
+      bootstrap directory.
 
 **Acceptance.** Each target has a test rendering the input above and asserting the expected tree;
 the shipped items name theirs.

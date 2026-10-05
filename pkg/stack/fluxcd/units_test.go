@@ -534,9 +534,12 @@ func TestPerLayout_SharedSourceEffectiveNamespace(t *testing.T) {
 // BundleGrouping the root node's bundle renders one directory below the root
 // node's layout (go-kure/kure#979), and its SourceRef is still the source of
 // that layout's own Kustomization and of the layout Kustomizations below it
-// that no other bundle encloses. Under BundleGrouping by name the root node's
-// layout never rendered the bundle, has no source of its own, and the same
-// input is refused as before.
+// that no other bundle encloses. Under BundleGrouping by name no layout
+// encloses a node's: the bundle-less child node takes the root bundle's
+// SourceRef all the same, as the bundle of the nearest node above it (item 12),
+// and node web the one of its own bundle. Below a ClusterName wrapper the root
+// node's layout is asked first, finds two SourceRefs without a URL below it,
+// and is refused as before.
 func TestPerLayout_RootNodeLayoutKeepsTheRootBundlesSource(t *testing.T) {
 	build := func() *stack.Cluster {
 		ref := func(name string) *stack.SourceRef {
@@ -573,23 +576,32 @@ func TestPerLayout_RootNodeLayoutKeepsTheRootBundlesSource(t *testing.T) {
 		})
 	}
 
-	for clusterName, refusal := range map[string]string{
-		// Nothing below "empty" has a SourceRef.
-		"": `platform/empty" needs a Kustomization CR`,
+	t.Run(`by name/""`, func(t *testing.T) {
+		rules := propertyGroupings["GroupByName"]
+		rules.FluxPlacement = layout.FluxIntegratedPerLayout
+		// Nothing at or below "empty" has a SourceRef: the root bundle's.
+		want := map[string]string{
+			"platform/platform": "root-src", "platform/platform/core": "root-src",
+			"platform/empty": "root-src",
+			"platform/web":   "web-src", "platform/web/web": "web-src", "platform/web/web/web-app": "web-src",
+		}
+		if got := sources(integrated(t, build(), rules)); !reflect.DeepEqual(got, want) {
+			t.Errorf("sourceRef by spec.path = %v, want %v", got, want)
+		}
+	})
+
+	t.Run(`by name/"prod"`, func(t *testing.T) {
+		rules := propertyGroupings["GroupByName"]
+		rules.FluxPlacement = layout.FluxIntegratedPerLayout
+		rules.ClusterName = "prod"
 		// The root node's layout is asked first, and the two bundles below
 		// it name different sources.
-		"prod": `layout "prod/platform" has no enclosing bundle and the bundles below it have different SourceRefs`,
-	} {
-		t.Run(fmt.Sprintf("by name/%q", clusterName), func(t *testing.T) {
-			rules := propertyGroupings["GroupByName"]
-			rules.FluxPlacement = layout.FluxIntegratedPerLayout
-			rules.ClusterName = clusterName
-			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(build(), rules)
-			if err == nil || !strings.Contains(err.Error(), refusal) {
-				t.Errorf("got %v, want the no-source refusal %q", err, refusal)
-			}
-		})
-	}
+		refusal := `layout "prod/platform" has no enclosing bundle and the bundles below it have different SourceRefs`
+		_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(build(), rules)
+		if err == nil || !strings.Contains(err.Error(), refusal) {
+			t.Errorf("got %v, want the refusal %q", err, refusal)
+		}
+	})
 }
 
 // TestIntegrateWithLayout_RefusesATopThatRendersABundle: a Kustomization is
