@@ -78,8 +78,8 @@ func NewResourceGenerator() *ResourceGenerator {
 // application. The intent is annotations on the application's objects, which
 // the integrator sets on a layout; this call discards the layout it walks and
 // returns none of those objects, so the intent would be dropped without a
-// word: use CreateLayoutWithResources. GenerateFromLayout does not refuse it:
-// its caller holds the layout and may have integrated it.
+// word: use CreateLayoutWithResources. GenerateFromLayout does not refuse a
+// delivery intent: its caller holds the layout and may have integrated it.
 //
 // The walk renders every application and runs every LayoutAugmenter, so their
 // errors surface here.
@@ -113,7 +113,21 @@ func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.L
 // else. Each spec.path is that directory, relative to the writer's output
 // root; the bundles a grouping axis merged into it share the Kustomization
 // (see generateForUnit).
+//
+// A tree in which any layout carries FluxIntegratedPerLayout is refused,
+// before anything else and whatever c is. The writers list no directory child
+// of such a layout in its kustomization.yaml, and the Kustomizations that
+// apply those children (application, augmenter and bundle-less node
+// directories) are placed only by the integrator, so this list would leave
+// them applied by nothing: use LayoutIntegrator.CreateLayoutWithResources or
+// IntegrateWithLayout. The placement decides, not the tree's shape: a
+// per-layout tree without such a child is refused too, and so is one the
+// integrator already placed, which holds every Kustomization it needs. The
+// error names the first such layout in pre-order.
 func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, error) {
+	if l := perLayoutCarrier(root); l != nil {
+		return nil, errors.Errorf("GenerateFromLayout does not support FluxPlacement %q, which layout %q carries: the Kustomizations that apply a per-layout tree's child directories are placed only by the integrator; use LayoutIntegrator.CreateLayoutWithResources or IntegrateWithLayout", l.FluxPlacement, l.FullRepoPath())
+	}
 	if root == nil || c == nil || c.Node == nil {
 		return nil, nil
 	}
@@ -151,6 +165,25 @@ func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *s
 		return nil, err
 	}
 	return out, nil
+}
+
+// perLayoutCarrier returns the first layout of the tree, in pre-order, whose
+// FluxPlacement is FluxIntegratedPerLayout, or nil. The writers decide from
+// each layout's own placement whether it lists its directory children, so one
+// such layout anywhere in the tree is enough, whatever the root carries.
+func perLayoutCarrier(l *layout.ManifestLayout) *layout.ManifestLayout {
+	if l == nil {
+		return nil
+	}
+	if l.FluxPlacement == layout.FluxIntegratedPerLayout {
+		return l
+	}
+	for _, child := range l.Children {
+		if found := perLayoutCarrier(child); found != nil {
+			return found
+		}
+	}
+	return nil
 }
 
 // generateForUnit creates the one Kustomization (and Source) for layout l, a

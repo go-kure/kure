@@ -331,8 +331,11 @@ What changed, and what to do:
   go-kure/kure#979: see "The root node's bundle has its own directory" below). The Flux engine
   refuses rules with `FluxIntegratedPerLayout`: that tree's child
   directories are applied by Kustomizations only `CreateLayoutWithResources` places, so use that
-  entry point for the placement. Rules the walk refuses are an error from both engines, whatever
-  the cluster is: an absent or empty cluster returns nothing only with valid rules.
+  entry point for the placement. `ResourceGenerator.GenerateFromLayout` refuses a tree in which
+  any layout carries that placement, for the same reason: use `CreateLayoutWithResources`, or
+  `IntegrateWithLayout` on the tree you walked. Before, it returned the bundle directories'
+  Kustomizations only. Rules the walk refuses are an error from both engines, whatever the
+  cluster is: an absent or empty cluster returns nothing only with valid rules.
 - **Integrate walked layouts only.** `IntegrateWithLayout` refuses a layout `layout.WalkCluster`
   did not build from the same cluster — build the tree with `WalkCluster` instead of by hand.
 - **PerLayout hosts.** Under `FluxIntegratedPerLayout` a node bundle's CR now sits in the parent of
