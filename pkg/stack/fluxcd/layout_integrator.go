@@ -269,10 +269,13 @@ type integratedPlacement struct {
 	// It hosts every Source this pass derives (go-kure/kure#876).
 	root      *layout.ManifestLayout
 	perLayout bool
+	// nodes names the cluster's nodes and resolves a node to the layout
+	// whose per-layout Kustomization is its own.
+	nodes *nodeIndex
 	// names maps every Kustomization name this pass emitted to its
-	// spec.path: Flux Kustomizations share one namespace, so a name is an
-	// identity.
-	names map[string]string
+	// spec.path and to what it was generated for: Flux Kustomizations share
+	// one namespace, so a name is an identity.
+	names map[string]claimant
 	// existing maps every Kustomization already in the tree (an earlier
 	// integration's, or a caller's) to where it sits.
 	existing map[string]existingCR
@@ -310,14 +313,33 @@ type hostedObject struct {
 type existingCR struct {
 	host *layout.ManifestLayout
 	path string
+	// dependsOn holds its spec.dependsOn entries
+	// (fluxKustomizationDependsOn).
+	dependsOn []string
 }
 
-// sourceScope is the SourceRef a layout's subtree sources its layout CRs
-// from: that of the nearest layout (itself or an ancestor) rendering bundles,
-// the root node's layout counting as one through its bundles' directory
-// (unitSource).
+// sourceScope is what a layout's subtree takes from the nearest layout
+// (itself or an ancestor) rendering bundles: the SourceRef its layout CRs are
+// sourced from, and the unit name their default names start with. Both are
+// empty below no such layout. top is that layout, or the root of the tree
+// below none: the layouts below it, down to the next one rendering bundles,
+// are the ones a layout's DependsOn can name (layoutDependsOn).
+//
+// The root node's layout renders no bundle and still gives its subtree a
+// SourceRef, that of its bundles' directory (unitSource); it changes neither
+// unit nor top.
 type sourceScope struct {
-	ref kustv1.CrossNamespaceSourceReference
+	ref  kustv1.CrossNamespaceSourceReference
+	unit string
+	top  *layout.ManifestLayout
+}
+
+// claimant is what a Kustomization name was claimed for: the spec.path of the
+// Kustomization, and its owner as a message names it (bundle "<path>", node
+// "<path>" or layout "<directory>").
+type claimant struct {
+	path  string
+	owner string
 }
 
 // addIntegratedFluxToLayout places Flux Kustomizations alongside their target
@@ -337,7 +359,13 @@ type sourceScope struct {
 // node layouts) a CR in its parent, so the writer lists every child of a
 // PerLayout layout as a CR file. A bundle-less node layout's CR is named
 // <path with "/" replaced by "-">-node: with ClusterName "." node web's path is
-// "web", which is also the name of its bundle's CR.
+// "web", which is also the name of its bundle's CR. An application or
+// augmenter layout's is named <unit>-<layout name>, after the Kustomization
+// of the bundles it belongs to. Either default gives way to the layout's
+// KustomizationName, which the walker takes from Node.KustomizationName
+// (layoutCRName), and a node's CR depends on what the node's DependsOn and
+// NamedDependsOn say (layoutDependsOn). Those three node fields are refused
+// on a node that gets no CR of its own, and under PerBundle (checkFields).
 //
 // delivery is what applyDeliveryIntents recorded for the Sources of
 // applications with a delivery intent.
@@ -351,7 +379,8 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		ix:        ix,
 		root:      ix.NodeLayout(c.Node),
 		perLayout: perLayout,
-		names:     map[string]string{},
+		nodes:     newNodeIndex(ix, c),
+		names:     map[string]claimant{},
 		generated: map[string]bool{},
 		derived:   map[string]bool{},
 		placed:    map[client.Object]bool{},
@@ -363,12 +392,15 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		return err
 	}
 	p.existing = existing
+	if err := p.nodes.checkFields(perLayout); err != nil {
+		return err
+	}
 	sources, err := indexExistingSources(ml, nil)
 	if err != nil {
 		return err
 	}
 	p.sources = sources
-	if err := p.place(ml, sourceScope{}); err != nil {
+	if err := p.place(ml, sourceScope{top: ml}); err != nil {
 		return err
 	}
 	if err := p.hostSourcesOncePerBuild(ml); err != nil {
@@ -957,9 +989,11 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 	if len(bundles) > 0 {
 		// The bundles l renders share one Kustomization, so one SourceRef:
 		// generateForUnit refuses them otherwise.
-		scope = sourceScope{ref: sourceRefOf(bundles[0])}
+		scope = sourceScope{ref: sourceRefOf(bundles[0]), unit: p.ix.UnitName(bundles[0]), top: l}
 	} else if ref, ok := unitSource(l); ok {
-		scope = sourceScope{ref: ref}
+		// The root node's layout renders no bundle, so it starts no unit:
+		// only the source changes.
+		scope.ref = ref
 	}
 
 	// One Kustomization per directory that renders bundles: the bundles a
@@ -973,20 +1007,21 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 		// The CR is hosted by the parent of the layout that renders the
 		// bundles. Every unit has one: IntegrateWithLayout refuses a top
 		// that renders a bundle (go-kure/kure#979).
-		if err := p.add(p.ix.Parent(l), objs); err != nil {
+		if err := p.add(p.ix.Parent(l), objs, fmt.Sprintf("bundle %q", bundles[0].GetPath())); err != nil {
 			return err
 		}
 	}
 
 	if p.perLayout {
 		for _, child := range l.Children {
-			if child == nil || child.UmbrellaChild || child.ApplicationFileMode == layout.AppFileSingle || len(child.OriginBundles()) > 0 {
+			if !hasLayoutCR(child) {
 				continue
 			}
-			name := layoutCRName(child)
-			if err := stack.ValidateKustomizationName(name); err != nil {
-				return errors.ResourceValidationError("ManifestLayout", child.FullRepoPath(), "name", err.Error(), nil)
+			name := layoutCRName(child, scope.unit)
+			if err := p.checkLayoutCRName(child, name); err != nil {
+				return err
 			}
+			owner := p.layoutOwner(child)
 			// The CR applies child's directory, so child must be written as
 			// one: pinned here, a writer's Config-wide AppFileSingle cannot
 			// turn it into a file in its parent (the layout's own mode wins).
@@ -997,7 +1032,10 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 				// Placed by an earlier integration: kept as is, so its
 				// source need not be resolved again. It is still one of
 				// this integration's CRs for the reconcile-order check.
-				if err := p.claim(name, e.path); err != nil {
+				if err := p.claim(name, e.path, owner); err != nil {
+					return err
+				}
+				if err := p.checkKeptNodeCR(l, child, name, e, scope); err != nil {
 					return err
 				}
 				p.generated[crKey(p.gen.DefaultNamespace, name)] = true
@@ -1007,8 +1045,12 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 			if err != nil {
 				return err
 			}
-			cr := p.gen.createKustomizationForLayout(name, child, ref)
-			if err := p.add(l, []client.Object{cr}); err != nil {
+			deps, err := p.layoutDependsOn(l, child, scope)
+			if err != nil {
+				return err
+			}
+			cr := p.gen.createKustomizationForLayout(name, child, ref, deps)
+			if err := p.add(l, []client.Object{cr}, owner); err != nil {
 				return err
 			}
 		}
@@ -1110,7 +1152,7 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 		if own != nil {
 			return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
 				fmt.Sprintf("%s; give a bundle a SourceRef without a URL, naming a Source that exists before the tree is applied, or use FluxIntegratedPerBundle, under which layout %q has no Kustomization of its own",
-					p.sourceInsideDelivery(layoutCRName(child), child.FullRepoPath(), *own), child.FullRepoPath()), nil)
+					p.sourceInsideDelivery(layoutCRName(child, scope.unit), child.FullRepoPath(), *own), child.FullRepoPath()), nil)
 		}
 		return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
 			"FluxIntegratedPerLayout mode requires a SourceRef with Kind and Name; "+
@@ -1224,11 +1266,11 @@ func sourceRefKey(ref kustv1.CrossNamespaceSourceReference, defaultNS string) st
 // namespace, name, whatever the API version) anywhere in the tree, and every
 // one this pass placed: a different one is an error, wherever it sits; an
 // identical one in the root is kept once.
-func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Object) error {
+func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Object, owner string) error {
 	for _, obj := range objs {
 		to := host
 		if k, ok := obj.(*kustv1.Kustomization); ok {
-			if err := p.claim(k.Name, k.Spec.Path); err != nil {
+			if err := p.claim(k.Name, k.Spec.Path, owner); err != nil {
 				return err
 			}
 			p.generated[crKey(k.Namespace, k.Name)] = true
@@ -1310,7 +1352,7 @@ func indexExistingKustomizations(ml, skip *layout.ManifestLayout) (map[string]ex
 			if prev, dup := out[key]; dup {
 				return errors.Errorf("Flux Kustomization name %q is present twice (in layout %q with spec.path %q and in layout %q with spec.path %q): Kustomization names must be unique", r.GetName(), prev.host.FullRepoPath(), prev.path, l.FullRepoPath(), path)
 			}
-			out[key] = existingCR{host: l, path: path}
+			out[key] = existingCR{host: l, path: path, dependsOn: fluxKustomizationDependsOn(r)}
 		}
 		for _, c := range l.Children {
 			if err := walk(c); err != nil {
@@ -1476,6 +1518,42 @@ func fluxKustomizationPath(obj client.Object) (string, bool) {
 	return "", true
 }
 
+// fluxKustomizationDependsOn returns the entries of the spec.dependsOn of obj,
+// a Flux Kustomization as fluxKustomizationPath reads one, in order. An entry
+// in obj's own namespace (none given, or that one) is its name, as the
+// integrator writes one; an entry in another namespace is "<namespace>/<name>",
+// which no name the integrator asks for equals.
+func fluxKustomizationDependsOn(obj client.Object) []string {
+	var entries []string
+	add := func(namespace, name string) {
+		if namespace != "" && crKey(namespace, "") != crKey(obj.GetNamespace(), "") {
+			name = namespace + "/" + name
+		}
+		entries = append(entries, name)
+	}
+	if k, ok := obj.(*kustv1.Kustomization); ok {
+		for _, d := range k.Spec.DependsOn {
+			add(d.Namespace, d.Name)
+		}
+		return entries
+	}
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return nil
+	}
+	deps, _, _ := unstructured.NestedFieldNoCopy(u.Object, "spec", "dependsOn")
+	list, _ := deps.([]any)
+	for _, d := range list {
+		if m, ok := d.(map[string]any); ok {
+			if name, ok := m["name"].(string); ok {
+				namespace, _ := m["namespace"].(string)
+				add(namespace, name)
+			}
+		}
+	}
+	return entries
+}
+
 // crKey is a Kustomization's identity: Flux Kustomizations are namespaced,
 // and an omitted namespace is "default", as Kubernetes and the writers'
 // identity check read it.
@@ -1494,22 +1572,179 @@ func crKey(namespace, name string) string {
 // CR identity is its Bundle.UnitName (IndexOrigins refuses two with one).
 // Objects already in the tree may sit in other namespaces; those are keyed by
 // crKey in indexExistingKustomizations.
-func (p *integratedPlacement) claim(name, path string) error {
+//
+// owner says what the Kustomization was generated for (see claimant), so the
+// refusal names both: a node whose Kustomization name is a bundle's, say.
+func (p *integratedPlacement) claim(name, path, owner string) error {
 	if prev, dup := p.names[name]; dup {
-		return errors.Errorf("Flux Kustomization name %q is used twice (spec.path %q and %q): Kustomization names must be unique", name, prev, path)
+		return errors.Errorf("Flux Kustomization name %q is used twice, by %s (spec.path %q) and by %s (spec.path %q): Kustomization names must be unique; set KustomizationName on one of them",
+			name, prev.owner, prev.path, owner, path)
 	}
-	p.names[name] = path
+	p.names[name] = claimant{path: path, owner: owner}
 	return nil
 }
 
+// hasLayoutCR reports whether child, a child layout, gets a Kustomization of
+// its own under FluxIntegratedPerLayout: every child that is not an umbrella
+// child, not AppFileSingle and renders no bundle (see place).
+func hasLayoutCR(child *layout.ManifestLayout) bool {
+	return child != nil && !child.UmbrellaChild && child.ApplicationFileMode != layout.AppFileSingle && len(child.OriginBundles()) == 0
+}
+
 // layoutCRName names the PerLayout CR of a child layout that renders no
-// bundle: a node layout gets "<path with / replaced by ->-node" (see
-// addIntegratedFluxToLayout), any other layout its Name.
-func layoutCRName(l *layout.ManifestLayout) string {
-	if len(l.OriginNodes()) > 0 {
+// bundle. The layout's own KustomizationName wins: the walker copies a node's
+// there, an augmenter sets it on a layout it creates, and a caller on a walked
+// layout before integration. Without one, a node layout gets "<path with /
+// replaced by ->-node" (see addIntegratedFluxToLayout), and any other layout
+// "<unit>-<Name>", unit being the Kustomization name of the nearest layout at
+// or above its parent that renders bundles: an application named like its
+// bundle then does not take the bundle's Kustomization name. Below no such
+// layout (unit is empty) it is the layout's Name.
+func layoutCRName(l *layout.ManifestLayout, unit string) string {
+	switch {
+	case l.KustomizationName != "":
+		return l.KustomizationName
+	case len(l.OriginNodes()) > 0:
 		return strings.ReplaceAll(l.FullRepoPath(), "/", "-") + "-node"
+	case unit != "":
+		return unit + "-" + l.Name
 	}
 	return l.Name
+}
+
+// checkLayoutCRName refuses a name for l's per-layout CR that Flux cannot
+// reconcile (stack.ValidateKustomizationName), where the CR is created or
+// kept. The error names what the caller sets to change the name, which
+// depends on where layoutCRName took it from:
+//
+//   - a node's KustomizationName: the node and that field;
+//   - a KustomizationName set on the layout itself (by an augmenter, or by a
+//     caller on a walked layout): the layout and that field;
+//   - the name derived for a node, "<path>-node": the node, and
+//     Node.KustomizationName as the field to set;
+//   - the default of an application or augmenter layout, "<unit name>-<layout
+//     name>": the layout, and ManifestLayout.KustomizationName as the field
+//     to set.
+//
+// kure does not shorten or rewrite a name.
+func (p *integratedPlacement) checkLayoutCRName(l *layout.ManifestLayout, name string) error {
+	err := stack.ValidateKustomizationName(name)
+	if err == nil {
+		return nil
+	}
+	nodes := l.OriginNodes()
+	switch {
+	case l.KustomizationName != "" && len(nodes) > 0 && nodes[0].KustomizationName == l.KustomizationName:
+		return errors.ResourceValidationError("Node", p.nodes.path(nodes[0]), "kustomizationName", err.Error(), nil)
+	case l.KustomizationName != "":
+		return errors.ResourceValidationError("ManifestLayout", l.FullRepoPath(), "kustomizationName", err.Error(), nil)
+	case len(nodes) > 0:
+		return errors.ResourceValidationError("Node", p.nodes.path(nodes[0]), "kustomizationName",
+			fmt.Sprintf("the node sets no name for its Flux Kustomization, and the name derived from its directory %q cannot be used: %v; set Node.KustomizationName", l.FullRepoPath(), err), nil)
+	}
+	return errors.ResourceValidationError("ManifestLayout", l.FullRepoPath(), "kustomizationName",
+		fmt.Sprintf("the layout sets no name for its Flux Kustomization, and the default cannot be used: %v; set ManifestLayout.KustomizationName", err), nil)
+}
+
+// layoutOwner names a layout that gets a per-layout CR, for claim: the node
+// it is the own layout of, or else its directory.
+func (p *integratedPlacement) layoutOwner(l *layout.ManifestLayout) string {
+	if nodes := l.OriginNodes(); len(nodes) > 0 {
+		return fmt.Sprintf("node %q", p.nodes.path(nodes[0]))
+	}
+	return fmt.Sprintf("layout %q", l.FullRepoPath())
+}
+
+// layoutDependsOn returns the spec.dependsOn names of child's per-layout CR,
+// child being a child of host.
+//
+// A node layout's are the Kustomizations of the nodes its node depends on
+// (Node.DependsOn), then its DependsOn as given: the walker copies the node's
+// NamedDependsOn there, and those are Kustomization names.
+//
+// An application or augmenter layout's DependsOn lists layout names, and the
+// CR of a layout is not named like the layout (layoutCRName). An entry that
+// is the Name of a layout with a CR of its own in the same unit (below
+// scope.top, down to the next layout rendering bundles) is written as that
+// CR's name: a sibling first, then the one such layout elsewhere in the unit,
+// the parent or a child, say. Two of them elsewhere are refused, since the
+// entry does not say which. Any other entry is a Kustomization name and is
+// written as given.
+func (p *integratedPlacement) layoutDependsOn(host, child *layout.ManifestLayout, scope sourceScope) ([]string, error) {
+	if nodes := child.OriginNodes(); len(nodes) > 0 {
+		deps, err := p.nodes.dependencies(nodes[0])
+		if err != nil {
+			return nil, err
+		}
+		return append(deps, child.DependsOn...), nil
+	}
+	var deps []string
+	for _, dep := range child.DependsOn {
+		named := layoutsNamed(host.Children, dep, false)
+		if len(named) == 0 {
+			named = layoutsNamed(scope.top.Children, dep, true)
+		}
+		switch len(named) {
+		case 0:
+		case 1:
+			dep = layoutCRName(named[0], scope.unit)
+		default:
+			return nil, errors.Errorf("layout %q lists %q in DependsOn, which is the name of %d layouts with a Flux Kustomization of their own (%q and %q among them): set KustomizationName on the one meant and list that name",
+				child.FullRepoPath(), dep, len(named), named[0].FullRepoPath(), named[1].FullRepoPath())
+		}
+		deps = append(deps, dep)
+	}
+	return deps, nil
+}
+
+// checkKeptNodeCR refuses a node's Kustomization that is kept from the tree
+// (kept, named name, in host) when the node sets DependsOn or NamedDependsOn
+// and the kept spec.dependsOn lacks one of the Kustomizations they ask for:
+// keeping it would drop that dependency without a word. Order does not
+// matter, and what the kept one waits for besides is the caller's. A node
+// that sets neither field is not held to this, whatever its layout's
+// DependsOn says: such a tree was accepted before the fields existed. Nor is
+// a layout that is not a node's: its DependsOn is the layout's, not the
+// model's.
+func (p *integratedPlacement) checkKeptNodeCR(host, child *layout.ManifestLayout, name string, kept existingCR, scope sourceScope) error {
+	nodes := child.OriginNodes()
+	if len(nodes) == 0 || (len(nodes[0].DependsOn) == 0 && len(nodes[0].NamedDependsOn) == 0) {
+		return nil
+	}
+	deps, err := p.layoutDependsOn(host, child, scope)
+	if err != nil {
+		return err
+	}
+	var missing []string
+	for _, dep := range deps {
+		if !slices.Contains(kept.dependsOn, dep) {
+			missing = append(missing, dep)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return errors.Errorf("layout %q already has Flux Kustomization %q for node %q with spec.dependsOn %q, which lacks %q that the node's DependsOn and NamedDependsOn ask for: the kept Kustomization would not wait for them; remove it, or add them to it",
+		host.FullRepoPath(), name, p.nodes.path(nodes[0]), kept.dependsOn, missing)
+}
+
+// layoutsNamed returns the application and augmenter layouts among layouts
+// that are named name and get a CR of their own; with deep, also those below
+// them, not descending into a layout that renders bundles (another unit).
+func layoutsNamed(layouts []*layout.ManifestLayout, name string, deep bool) []*layout.ManifestLayout {
+	var found []*layout.ManifestLayout
+	for _, l := range layouts {
+		if l == nil {
+			continue
+		}
+		if hasLayoutCR(l) && len(l.OriginNodes()) == 0 && l.Name == name {
+			found = append(found, l)
+		}
+		if deep && len(l.OriginBundles()) == 0 {
+			found = append(found, layoutsNamed(l.Children, name, true)...)
+		}
+	}
+	return found
 }
 
 func sourceRefOf(b *stack.Bundle) kustv1.CrossNamespaceSourceReference {

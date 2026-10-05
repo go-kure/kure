@@ -1,6 +1,8 @@
 package argocd
 
 import (
+	"strings"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -95,6 +97,9 @@ func (w *WorkflowEngine) generateFromLayout(root *layout.ManifestLayout, c *stac
 	if err != nil {
 		return nil, err
 	}
+	if err := checkNodeKustomizationFields(c.Node, "", map[*stack.Node]bool{}); err != nil {
+		return nil, err
+	}
 	var objs []client.Object
 	for _, l := range ix.Units() {
 		bundles := l.OriginBundles()
@@ -122,6 +127,48 @@ func (w *WorkflowEngine) generateFromLayout(root *layout.ManifestLayout, c *stac
 		objs = append(objs, app)
 	}
 	return objs, nil
+}
+
+// checkNodeKustomizationFields refuses a node below n (n included) that sets
+// KustomizationName, DependsOn or NamedDependsOn: those name and order a
+// node's own Flux Kustomization, and this workflow generates an Application
+// per bundle and nothing for a node, so they would be ignored. The node is
+// named by the names from the root down to it; parent is that of n's parent.
+// seen holds the nodes already read, so a tree that loops back ends: this
+// runs in IntegrateWithLayout too, on a cluster no validation has seen.
+func checkNodeKustomizationFields(n *stack.Node, parent string, seen map[*stack.Node]bool) error {
+	if n == nil || seen[n] {
+		return nil
+	}
+	seen[n] = true
+	path := parent
+	switch {
+	case n.Name == "":
+	case parent == "":
+		path = n.Name
+	default:
+		path = parent + "/" + n.Name
+	}
+	var set []string
+	if n.KustomizationName != "" {
+		set = append(set, "KustomizationName")
+	}
+	if len(n.DependsOn) > 0 {
+		set = append(set, "DependsOn")
+	}
+	if len(n.NamedDependsOn) > 0 {
+		set = append(set, "NamedDependsOn")
+	}
+	if len(set) > 0 {
+		return errors.Errorf("node %q sets %s, but the ArgoCD workflow generates an Application for a bundle and none for a node: the fields would be ignored; name and order the node's bundles instead",
+			path, strings.Join(set, ", "))
+	}
+	for _, child := range n.Children {
+		if err := checkNodeKustomizationFields(child, path, seen); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // applicationForBundle creates an ArgoCD Application for b whose
@@ -178,16 +225,24 @@ func (w *WorkflowEngine) applicationForBundle(b *stack.Bundle, path string) (cli
 
 // IntegrateWithLayout adds ArgoCD Applications to an existing manifest layout.
 // For ArgoCD, this is typically not needed as Applications reference external repos.
-// It adds nothing, and refuses a delivery intent set by an application the
-// layout records (see refuseDeliveryIntent) or by one of c's applications: a
-// layout the caller built records none, so c is read as well.
+// It adds nothing to ml, and refuses what it would not honour: a delivery
+// intent set by an application the layout records (see refuseDeliveryIntent)
+// or by one of c's applications (a layout the caller built records none, so c
+// is read as well), and a node that sets KustomizationName, DependsOn or
+// NamedDependsOn, as in generation (checkNodeKustomizationFields).
 func (w *WorkflowEngine) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) error {
 	// ArgoCD Applications typically don't need layout integration
 	// as they reference external repositories
 	if err := refuseDeliveryIntent(ml); err != nil {
 		return err
 	}
-	return refuseClusterDeliveryIntent(c)
+	if err := refuseClusterDeliveryIntent(c); err != nil {
+		return err
+	}
+	if c == nil {
+		return nil
+	}
+	return checkNodeKustomizationFields(c.Node, "", map[*stack.Node]bool{})
 }
 
 // refuseClusterDeliveryIntent fails when an application of c — in a node's

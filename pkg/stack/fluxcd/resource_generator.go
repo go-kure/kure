@@ -135,6 +135,11 @@ func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *s
 	if err != nil {
 		return nil, err
 	}
+	// Only bundles get a Kustomization here: a node's name or dependencies
+	// would be dropped.
+	if err := newNodeIndex(ix, c).checkFields(false); err != nil {
+		return nil, err
+	}
 	var out []client.Object
 	var kusts []*kustv1.Kustomization
 	for _, l := range ix.Units() {
@@ -802,11 +807,15 @@ func parseBundleDuration(b *stack.Bundle, field, value string) (time.Duration, e
 
 // createKustomizationForLayout creates a Flux Kustomization CR named name for a
 // ManifestLayout child in FluxIntegratedPerLayout mode. spec.path is
-// ml.FullRepoPath(); spec.dependsOn is populated from ml.DependsOn.
+// ml.FullRepoPath(); spec.dependsOn is dependsOn, the Kustomization names the
+// layout integrator resolved from ml.DependsOn and, for a node layout, from
+// the node's DependsOn (layoutDependsOn). Interval and prune are the
+// generator's: a per-layout Kustomization has no settings of its own.
 func (g *ResourceGenerator) createKustomizationForLayout(
 	name string,
 	ml *layout.ManifestLayout,
 	sourceRef kustv1.CrossNamespaceSourceReference,
+	dependsOn []string,
 ) client.Object {
 	kust := &kustv1.Kustomization{
 		TypeMeta: metav1.TypeMeta{
@@ -824,7 +833,7 @@ func (g *ResourceGenerator) createKustomizationForLayout(
 			SourceRef: sourceRef,
 		},
 	}
-	for _, dep := range ml.DependsOn {
+	for _, dep := range dependsOn {
 		kust.Spec.DependsOn = append(kust.Spec.DependsOn,
 			kustv1.DependencyReference{Name: dep})
 	}

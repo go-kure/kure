@@ -17,11 +17,16 @@ import (
 // as it was before Bundle.KustomizationName existed. A cluster that does not
 // set the field must keep producing them byte for byte.
 //
-// merged.txt is the one file rewritten since: the root node's bundle got a
+// Two files were rewritten since. merged.txt: the root node's bundle got a
 // directory of its own (go-kure/kure#979), which moved the merged directory,
 // its files and each spec.path from platform to platform/platform, and left the
 // root kustomization.yaml referencing flux-system alone. No object name
 // changed.
+//
+// integrated.txt: the Kustomization of an application layout got the name
+// "<unit>-<layout name>" instead of the layout's (layoutCRName). Only those
+// five Kustomizations, their file names and the entries listing them differ;
+// every bundle and "-node" Kustomization in it is as it was.
 
 // unnamedCluster is platform -> {apps, ops}, and sets no KustomizationName.
 // apps holds the umbrella bundle shop with children shop-db and shop-api

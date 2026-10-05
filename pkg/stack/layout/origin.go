@@ -167,6 +167,17 @@ func (ml *ManifestLayout) hasNodeOrBundleOrigin() bool {
 	return len(ml.origin.nodes) > 0 || len(ml.origin.bundles) > 0
 }
 
+// setNode makes ml node n's own layout: n is its first origin node, and n's
+// Kustomization name and named dependencies are carried on the layout, where
+// the fluxcd layout integrator reads them. A node a grouping axis merges into
+// another node's layout has no layout of its own and carries nothing; the
+// integrator refuses the fields on such a node from the model.
+func (ml *ManifestLayout) setNode(n *stack.Node) {
+	ml.origin = origin{nodes: []*stack.Node{n}}
+	ml.KustomizationName = n.KustomizationName
+	ml.DependsOn = slices.Clone(n.NamedDependsOn)
+}
+
 // ownBundle returns the bundle whose own directory this layout is: the bundle
 // of a layout the walker made for an umbrella child, for a node's bundle
 // under BundleGrouping GroupByName, or for the root node's bundle under

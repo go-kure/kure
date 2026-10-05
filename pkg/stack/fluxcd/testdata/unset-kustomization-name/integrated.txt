@@ -42,20 +42,6 @@ spec:
     kind: GitRepository
     name: flux-system
     namespace: flux-system
-=== platform/apps/shop/flux-system-kustomization-shop-app.yaml ===
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: shop-app
-  namespace: flux-system
-spec:
-  interval: 1h0m0s
-  path: platform/apps/shop/shop-app
-  prune: false
-  sourceRef:
-    kind: GitRepository
-    name: flux-system
-    namespace: flux-system
 === platform/apps/shop/flux-system-kustomization-shop-db.yaml ===
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -70,18 +56,32 @@ spec:
     kind: GitRepository
     name: flux-system
     namespace: flux-system
+=== platform/apps/shop/flux-system-kustomization-shop-shop-app.yaml ===
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: shop-shop-app
+  namespace: flux-system
+spec:
+  interval: 1h0m0s
+  path: platform/apps/shop/shop-app
+  prune: false
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
 === platform/apps/shop/kustomization.yaml ===
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - flux-system-kustomization-shop-api.yaml
-  - flux-system-kustomization-shop-app.yaml
   - flux-system-kustomization-shop-db.yaml
-=== platform/apps/shop/shop-api/flux-system-kustomization-shop-api-app.yaml ===
+  - flux-system-kustomization-shop-shop-app.yaml
+=== platform/apps/shop/shop-api/flux-system-kustomization-shop-api-shop-api-app.yaml ===
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: shop-api-app
+  name: shop-api-shop-api-app
   namespace: flux-system
 spec:
   interval: 1h0m0s
@@ -95,7 +95,7 @@ spec:
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - flux-system-kustomization-shop-api-app.yaml
+  - flux-system-kustomization-shop-api-shop-api-app.yaml
 === platform/apps/shop/shop-api/shop-api-app/default-configmap-shop-api-app-cm.yaml ===
 apiVersion: v1
 kind: ConfigMap
@@ -118,11 +118,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - default-configmap-shop-app-cm.yaml
-=== platform/apps/shop/shop-db/flux-system-kustomization-shop-db-app.yaml ===
+=== platform/apps/shop/shop-db/flux-system-kustomization-shop-db-shop-db-app.yaml ===
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: shop-db-app
+  name: shop-db-shop-db-app
   namespace: flux-system
 spec:
   interval: 1h0m0s
@@ -136,7 +136,7 @@ spec:
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - flux-system-kustomization-shop-db-app.yaml
+  - flux-system-kustomization-shop-db-shop-db-app.yaml
 === platform/apps/shop/shop-db/shop-db-app/default-configmap-shop-db-app-cm.yaml ===
 apiVersion: v1
 kind: ConfigMap
@@ -220,11 +220,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - flux-system-kustomization-monitoring.yaml
-=== platform/ops/monitoring/flux-system-kustomization-monitoring-app.yaml ===
+=== platform/ops/monitoring/flux-system-kustomization-monitoring-monitoring-app.yaml ===
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: monitoring-app
+  name: monitoring-monitoring-app
   namespace: flux-system
 spec:
   interval: 1h0m0s
@@ -238,7 +238,7 @@ spec:
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - flux-system-kustomization-monitoring-app.yaml
+  - flux-system-kustomization-monitoring-monitoring-app.yaml
 === platform/ops/monitoring/monitoring-app/default-configmap-monitoring-app-cm.yaml ===
 apiVersion: v1
 kind: ConfigMap
@@ -250,11 +250,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - default-configmap-monitoring-app-cm.yaml
-=== platform/platform/flux-system-kustomization-platform-app.yaml ===
+=== platform/platform/flux-system-kustomization-platform-platform-app.yaml ===
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: platform-app
+  name: platform-platform-app
   namespace: flux-system
 spec:
   interval: 1h0m0s
@@ -268,7 +268,7 @@ spec:
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - flux-system-kustomization-platform-app.yaml
+  - flux-system-kustomization-platform-platform-app.yaml
 === platform/platform/platform-app/default-configmap-platform-app-cm.yaml ===
 apiVersion: v1
 kind: ConfigMap

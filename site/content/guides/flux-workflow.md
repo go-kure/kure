@@ -533,6 +533,88 @@ directory are refused, and the error names both. Name the directory on the bundl
 layout renamed after `WalkCluster` is refused by `IntegrateWithLayout`. See the
 [Flux Engine reference](/api-reference/flux-engine/#directory-names).
 
+### Node Kustomizations
+
+Under `FluxIntegratedPerLayout` a node whose directory renders no bundle, such as a group of
+nodes, is applied by a Kustomization of its own. `Node.KustomizationName` names it, and
+`Node.DependsOn` and `Node.NamedDependsOn` order it:
+
+<!-- doc-example: pkg/stack/fluxcd ExampleLayoutIntegrator_nodeKustomization -->
+```go
+// Two groups of nodes, neither with a bundle of its own. Each group gets
+// a Kustomization that applies its directory; the one for apps waits for
+// the one for platform.
+source := &stack.SourceRef{Kind: "GitRepository", Name: "flux-system", Namespace: "flux-system"}
+platform := &stack.Node{Name: "platform", KustomizationName: "platform", Children: []*stack.Node{
+    {Name: "cert-manager", Bundle: &stack.Bundle{Name: "cert-manager", SourceRef: source}},
+}}
+apps := &stack.Node{Name: "apps", KustomizationName: "apps", DependsOn: []*stack.Node{platform}, Children: []*stack.Node{
+    {Name: "shop", Bundle: &stack.Bundle{Name: "shop", SourceRef: source}},
+}}
+cluster := &stack.Cluster{Name: "prod", Node: &stack.Node{Name: "prod", Children: []*stack.Node{platform, apps}}}
+
+rules := layout.DefaultLayoutRules()
+rules.FluxPlacement = layout.FluxIntegratedPerLayout
+ml, err := fluxcd.NewLayoutIntegrator(fluxcd.NewResourceGenerator()).CreateLayoutWithResources(cluster, rules)
+if err != nil {
+    panic(err)
+}
+for _, obj := range ml.Resources {
+    kust, ok := obj.(*kustv1.Kustomization)
+    if !ok {
+        continue
+    }
+    var waitsFor []string
+    for _, dep := range kust.Spec.DependsOn {
+        waitsFor = append(waitsFor, dep.Name)
+    }
+    fmt.Println(kust.Name, kust.Spec.Path, waitsFor)
+}
+```
+<!-- doc-example:end -->
+
+It prints `platform prod/platform []` and `apps prod/apps [platform]`. Without the field the two
+would be named `prod-platform-node` and `prod-apps-node`, after their paths, and a `DependsOn`
+entry names its target either way. The fields are refused, not ignored, on a node that has no
+Kustomization of its own (its directory renders a bundle, a grouping rule merged it into another
+node's directory, or it is the top of the tree) and under every other placement. Set the name and
+the named dependencies before the cluster is walked: the walker copies them onto the node's
+layout, and a value the node gets after the walk is refused too. See the
+[Flux Engine reference](/api-reference/flux-engine/#node-kustomizations).
+
+### Application layout Kustomizations are named after their unit (breaking change)
+
+Under `FluxIntegratedPerLayout` the Kustomization of an application layout or of an augmenter's
+child layout is now named `<unit name>-<layout name>`, the unit being the Kustomization of the
+bundle it belongs to. It used to be the layout's name alone, so an application named like its
+bundle gave two Kustomizations one name and was refused. What to do:
+
+- **Expect the rename on upgrade.** The application `web-app` of the bundle `web` is now applied
+  by the Kustomization `web-web-app`. With pruning on, Flux removes the old Kustomization once the
+  parent no longer lists it; with pruning off, delete it. A Kustomization that prunes deletes
+  what it applied when it is removed, so the layout's objects can be deleted and applied again
+  under the new one: keep the old name (last point) where that is not acceptable.
+- **`ManifestLayout.DependsOn` keeps working for layout names.** An entry that names a layout of
+  the same bundle is written as that layout's new Kustomization name.
+- **A Kustomization name written out by hand changes.** A `NamedDependsOn` entry, or a
+  `ManifestLayout.DependsOn` entry that names an application layout of another bundle, has to
+  carry the new name.
+- **A Kustomization you placed yourself under the old name stays.** A tree that already holds a
+  Kustomization named `<layout name>` for the layout's directory gets the new one beside it, and
+  both apply that directory until you remove the old one or set
+  `ManifestLayout.KustomizationName` on the layout to the old name, which keeps yours and
+  generates no second one.
+- **A new name over 63 characters is refused.** The new name is longer than the old one by the
+  unit name, and Flux cannot reconcile a Kustomization whose name is over 63 characters, so the
+  integration refuses it and names the layout. Set `ManifestLayout.KustomizationName` on that
+  layout; kure shortens nothing.
+- **A new name another Kustomization already has is refused.** The application `web` of the
+  bundle `platform` is now applied by `platform-web`. If a bundle, a node or another layout
+  already has a Kustomization of that name, the integration refuses the tree and names both,
+  where the old name `web` was free. Set `ManifestLayout.KustomizationName` on the layout, or
+  `KustomizationName` on the other owner.
+- **Keep an old name** by setting `ManifestLayout.KustomizationName` on the layout.
+
 ## Umbrella Bundles — Readiness Aggregation
 
 A bundle with non-empty `Children` becomes an **umbrella**: Flux will only mark
@@ -649,7 +731,7 @@ A child layout receives a CR when:
 
 ### Ordered reconciliation with DependsOn
 
-Set `ManifestLayout.DependsOn` to the names of the sibling layouts' CRs to express reconciliation order between hook groups; a hook-group layout's CR is named after the layout. The integrator copies the entries verbatim into `spec.dependsOn` on the emitted CR, and only under `FluxIntegratedPerLayout`:
+Set `ManifestLayout.DependsOn` to the names of the sibling layouts to express reconciliation order between hook groups. A hook-group layout's CR is named `<unit name>-<layout name>` (or by its `KustomizationName`), and the integrator writes that name into `spec.dependsOn` for an entry that names a layout of the same unit: a sibling first, else the one layout of that name below the unit's directory. Any other entry is a Kustomization name and is written as given. This happens only under `FluxIntegratedPerLayout`:
 
 <!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowDependsOn -->
 ```go
@@ -666,19 +748,23 @@ fmt.Println(hooks.Name, "after", hooks.DependsOn[0] == preInstall.Name)
 ```
 <!-- doc-example:end -->
 
-This produces a `nginx-01-hooks` Kustomization CR with:
+Each layout's CR is named `<unit name>-<layout name>`, and the entry is written as the CR name of
+the layout it names. Below the bundle `web` this produces a `web-nginx-01-hooks` Kustomization CR
+with:
 
 ```yaml
 spec:
   dependsOn:
-    - name: nginx-00-pre-install
+    - name: web-nginx-00-pre-install
 ```
 
-Flux reconciles `nginx-01-hooks` only after `nginx-00-pre-install` is healthy.
+Flux reconciles `web-nginx-01-hooks` only after `web-nginx-00-pre-install` is healthy. An entry
+may also name another layout of the same bundle, the parent application layout for instance. An
+entry that names no such layout is written as given, as the name of a Kustomization.
 
 ### Naming uniqueness
 
-The child layout `Name` becomes the Flux `Kustomization` CR's `metadata.name`. Since all `Kustomization` CRs live in the `flux-system` namespace, names must be **globally unique across the cluster**. The recommended convention is `{appName}-{hookGroupDir}` (e.g. `nginx-00-pre-install`, `nginx-01-hooks`). Augmenters are responsible for enforcing this uniqueness.
+The Flux `Kustomization` CR's `metadata.name` is `<unit name>-<child layout Name>`, or the child's `KustomizationName` when the augmenter sets one. Since all `Kustomization` CRs live in the `flux-system` namespace, names must be **globally unique across the cluster**. The recommended convention for the layout name is `{appName}-{hookGroupDir}` (e.g. `nginx-00-pre-install`, `nginx-01-hooks`). Augmenters are responsible for enforcing this uniqueness within their bundle.
 
 ### Extra files an augmenter attaches
 
@@ -693,13 +779,15 @@ extra file replace a generated manifest. `ConfigMapGenerators` need the layout's
 
 ### Disk layout
 
+With the application `nginx` in the bundle `web`, each CR and its file carry the unit name:
+
 ```
 clusters/production/prod/
-  flux-system-kustomization-nginx.yaml      # app CR (placed at node level)
+  flux-system-kustomization-web-nginx.yaml  # app CR (placed at node level)
   kustomization.yaml                        # references nginx CR
   nginx/
-    flux-system-kustomization-nginx-00-pre-install.yaml
-    flux-system-kustomization-nginx-01-hooks.yaml
+    flux-system-kustomization-web-nginx-00-pre-install.yaml
+    flux-system-kustomization-web-nginx-01-hooks.yaml
     kustomization.yaml                      # references hook CRs
     nginx-00-pre-install/
       workload-*.yaml

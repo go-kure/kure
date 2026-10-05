@@ -45,14 +45,21 @@ type ManifestLayout struct {
 	// in flux-system (separate placement), with spec.path = this layout's
 	// directory.
 	UmbrellaChild bool
-	// DependsOn lists the names of the Flux Kustomization CRs that must
-	// reconcile before this layout's CR. Augmenters (LayoutAugmenter) set this
-	// field. The Flux layout integrator copies each entry verbatim into
-	// spec.dependsOn; it does not resolve a layout to its CR. An application
-	// or augmenter layout's CR is named after the layout, so a sibling's
-	// layout name is its CR name; the CR of a node layout that renders no
-	// bundle is named "<path with / replaced by ->-node" instead, and that is
-	// the name to list.
+	// DependsOn lists what this layout's Flux Kustomization CR waits for.
+	// Augmenters (LayoutAugmenter) set this field; on a node's own layout the
+	// walker fills it from Node.NamedDependsOn.
+	//
+	// On an application or augmenter layout an entry is read as a layout name
+	// first: that of a sibling, or of another layout below the same bundle's
+	// directory. The Flux layout integrator then writes the name of that
+	// layout's CR, which is not the layout's ("<unit>-<layout name>", or its
+	// KustomizationName). An entry that names no such layout is written as
+	// given, as a Kustomization name: the CR of a node layout that renders no
+	// bundle is named "<path with / replaced by ->-node" unless the node names
+	// it, and that is the name to list. On a node's own layout every entry is
+	// a Kustomization name and is written as given; an entry the node lists
+	// in NamedDependsOn and this field lacks (the node got it after the walk)
+	// is refused by the integrator.
 	//
 	// The integrator writes spec.dependsOn only on the Kustomization CR it
 	// generates for this layout itself, which it does only under
@@ -60,8 +67,24 @@ type ManifestLayout struct {
 	// umbrella child, is not AppFileSingle and renders no bundle. In every
 	// other case the field is dropped without an error: under
 	// FluxIntegratedPerBundle and FluxSeparate an augmenter's ordering
-	// produces nothing.
+	// produces nothing. (What a node sets is refused there instead, on the
+	// node's own fields.)
 	DependsOn []string
+	// KustomizationName names the Flux Kustomization the layout integrator
+	// generates for this layout in FluxIntegratedPerLayout mode, instead of
+	// the default: "<unit>-<layout name>" for an application or augmenter
+	// layout, the "-node" name for a node's own layout. An augmenter sets it
+	// on a layout it creates; the walker fills it from Node.KustomizationName
+	// on a node's own layout. A name a caller sets on a walked node layout
+	// wins over the node's; a node that has a name while its layout carries
+	// none (the node got it after the walk) is refused by the integrator.
+	// Like DependsOn it is read only where the
+	// layout gets a Kustomization of its own. The name in effect, set or
+	// default, must be one Flux can reconcile
+	// (stack.ValidateKustomizationName): the integrator refuses any other
+	// where it creates the Kustomization and does not shorten a default, so
+	// a default that is too long is fixed by setting this field.
+	KustomizationName string
 	// origin records the stack objects this layout renders (see origin.go).
 	// Set only by the walkers and FlattenSingleTier; never serialised.
 	origin origin

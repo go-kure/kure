@@ -11,10 +11,10 @@ import (
 
 // TestFluxWorkflow_PerLayoutKustomizationName: under FluxIntegratedPerLayout a
 // directory that renders no bundle gets a Kustomization of its own, named
-// after the layout: an application directory by its name, a bundle-less node
-// by its path. The name is checked where that Kustomization is created, so
-// one Flux cannot reconcile is refused with the layout's path instead of
-// being written.
+// after the layout: an application directory by its name behind the name of
+// its bundle's Kustomization, a bundle-less node by its path. The name is
+// checked where that Kustomization is created, so one Flux cannot reconcile
+// is refused with the layout's path instead of being written.
 func TestFluxWorkflow_PerLayoutKustomizationName(t *testing.T) {
 	integrate := func(root *stack.Node, rules layout.LayoutRules) (*layout.ManifestLayout, error) {
 		rules.FluxPlacement = layout.FluxIntegratedPerLayout
@@ -40,8 +40,8 @@ func TestFluxWorkflow_PerLayoutKustomizationName(t *testing.T) {
 		}
 		got := map[string]string{}
 		collectKustPaths(ml, got)
-		if _, ok := got["my-app"]; !ok {
-			t.Fatalf("Kustomizations = %v, want one named after the application directory", got)
+		if _, ok := got["web-my-app"]; !ok {
+			t.Fatalf("Kustomizations = %v, want web-my-app, named after the bundle's and the application directory", got)
 		}
 
 		ml, err = integrate(appDir("My_App"), byName)
@@ -51,7 +51,7 @@ func TestFluxWorkflow_PerLayoutKustomizationName(t *testing.T) {
 		if ml != nil {
 			t.Errorf("returned a layout next to the error, want nothing to write")
 		}
-		for _, want := range []string{"My_App'", `"My_App" is not a valid Flux Kustomization name`} {
+		for _, want := range []string{"My_App'", `"web-My_App" is not a valid Flux Kustomization name`} {
 			if !strings.Contains(err.Error(), want) {
 				t.Errorf("error = %v, want it to contain %q", err, want)
 			}

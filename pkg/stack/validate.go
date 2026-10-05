@@ -19,7 +19,9 @@ import (
 //     umbrella Children subtrees including cycle detection and the name of
 //     each bundle), and every node name passes ValidateDirectoryName, under
 //     every layout grouping: the name is a segment of the node's path. A root
-//     node without a name is the one exception: it adds no segment.
+//     node without a name is the one exception: it adds no segment. A
+//     node's NamedDependsOn holds no empty and no repeated entry, as a
+//     bundle's (validateNodeNamedDependsOn).
 //  2. Disjointness: a bundle pointer appearing inside any umbrella Children
 //     subtree must NOT also be attached as the Bundle of any stack.Node.
 //  3. No umbrella child pointer is shared by two distinct umbrella parents.
@@ -76,6 +78,10 @@ func ValidateCluster(c *Cluster) error {
 				return errors.ResourceValidationError("Cluster", c.Name, "nodes",
 					fmt.Sprintf("node %q: %v", path, err), nil)
 			}
+		}
+		if err := validateNodeNamedDependsOn(n.NamedDependsOn); err != nil {
+			return errors.ResourceValidationError("Cluster", c.Name, "nodes",
+				fmt.Sprintf("node %q: %v", path, err), nil)
 		}
 		nodePaths[n] = path
 		if n.Bundle != nil {
@@ -159,6 +165,24 @@ func ValidateCluster(c *Cluster) error {
 		}
 	}
 
+	return nil
+}
+
+// validateNodeNamedDependsOn refuses an empty or a repeated entry in a node's
+// NamedDependsOn, as Bundle.Validate does in a bundle's. The value of an entry
+// is not checked: it is a caller-supplied reference to a Kustomization, which
+// need not be one kure builds.
+func validateNodeNamedDependsOn(names []string) error {
+	seen := make(map[string]bool, len(names))
+	for _, name := range names {
+		if name == "" {
+			return errors.New("NamedDependsOn holds an empty name")
+		}
+		if seen[name] {
+			return errors.Errorf("NamedDependsOn lists %q twice", name)
+		}
+		seen[name] = true
+	}
 	return nil
 }
 

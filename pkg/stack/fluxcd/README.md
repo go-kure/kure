@@ -897,7 +897,7 @@ README.
 Controls where Flux Kustomization resources are placed:
 
 - `FluxSeparate` - Flux resources collected in a separate `flux-system/` directory inside the root layout's own directory (where the root's `kustomization.yaml` references it); children referenced as directories, except those that render bundles, which their own CRs apply. `WriteToDisk` and `WriteToTar` name its files by `LayoutRules.FileNaming`, like the rest of the tree: `flux-system-kustomization-<name>.yaml` by default, `kustomization-<name>.yaml` with `FileNamingKindName` (go-kure/kure#976; before, always the default pattern). Rules passed to `IntegrateWithLayout` that leave `FileNaming` unset take the root layout's. The directory must be free: a root node's bundle or a child node rendered to it (named `flux-system` in whatever case, or a name that resolves to it such as `./flux-system`; `ManifestLayout.SameDirectory` in the layout package) is refused, naming the bundle or node. Rename it (for a bundle, its directory: its `DirName`, or its `Name` without one), or use an integrated placement. Since go-kure/kure#979 the root node's bundle has a directory named after it there; before, such a bundle was written into the root node's directory.
-- `FluxIntegratedPerLayout` - a Flux Kustomization CR for every layout that renders bundles (bundles a `GroupFlat` merge puts in one directory share one CR, named after the first) and for every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle (augmenter-added child layouts included), hosted in its parent layout (the top of the tree `layout.WalkCluster` returns renders no bundle and gets no CR, go-kure/kure#979); the parent's `kustomization.yaml` lists those CR files as its own resources and references no child directory. Not literally every layout: a layout whose CR name another generated CR already uses, such as an augmenter application named like its bundle, is refused instead (see [Non-Bundle Child Layout CRs](#non-bundle-child-layout-crs)). A Kustomization already in the tree with that name, in the namespace of the generated CRs, is kept in place of a generated one when it sits in the layout that would host it and has the same `spec.path`, and is refused otherwise. Finest granularity.
+- `FluxIntegratedPerLayout` - a Flux Kustomization CR for every layout that renders bundles (bundles a `GroupFlat` merge puts in one directory share one CR, named after the first) and for every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle (augmenter-added child layouts included), hosted in its parent layout (the top of the tree `layout.WalkCluster` returns renders no bundle and gets no CR, go-kure/kure#979); the parent's `kustomization.yaml` lists those CR files as its own resources and references no child directory. Not literally every layout: a layout whose CR name another generated CR already uses, such as the application `web` of the bundle `platform` beside a bundle named `platform-web`, is refused instead (see [Non-Bundle Child Layout CRs](#non-bundle-child-layout-crs)). A Kustomization already in the tree with that name, in the namespace of the generated CRs, is kept in place of a generated one when it sits in the layout that would host it and has the same `spec.path`, and is refused otherwise. Finest granularity.
 - `FluxIntegratedPerBundle` - Flux Kustomization CRs at **bundle boundaries only**, each hosted in its parent layout; a bundle's interior (application and augmenter-added child layouts) is a single kustomize build, with those children referenced as directories. A child that renders bundles is not referenced: its own CR applies it. Coarser: Flux reconciles per bundle, kustomize handles the interior.
 
 External augmenters may add child layouts that are not represented in the bundle model; integrated placement discovers those layouts and emits the required Flux resources.
@@ -1016,13 +1016,92 @@ Flux does not double-apply the child's resources.
 
 ## Non-Bundle Child Layout CRs
 
-In `FluxIntegratedPerLayout` mode every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle gets a `Kustomization` CR in its parent's `Resources`, with `spec.path` set to `child.FullRepoPath()`. (A child that renders a bundle already has that bundle's CR there.) The CR's name is checked with `stack.ValidateKustomizationName` where the CR is created: a layout whose name gives one that is not a DNS-1123 subdomain of at most 63 characters is refused with the layout's path. This covers:
+In `FluxIntegratedPerLayout` mode every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle gets a `Kustomization` CR in its parent's `Resources`, with `spec.path` set to `child.FullRepoPath()`. (A child that renders a bundle already has that bundle's CR there.) The CR's name is checked with `stack.ValidateKustomizationName` where the CR is created: one that is not a DNS-1123 subdomain of at most 63 characters is refused, and the error names what to set to change it (see [Per-layout name rule](#per-layout-name-rule)). This covers:
 
-- **Application layouts** — per-app layouts (`ApplicationGrouping: GroupByName`, or augmenter apps, which keep a directory under `GroupFlat`). The CR is named after the layout.
-- **Augmenter sub-layouts** — hook-group child layouts added by a `LayoutAugmenter` are children of an app layout. `spec.dependsOn` is populated from `ManifestLayout.DependsOn`, enabling ordered reconciliation between hook groups.
-- **Bundle-less node layouts** — a GroupByName node layout above its bundle layout, or a node without a bundle. The CR is named `<path with "/" replaced by "-">-node` (with `ClusterName: "."`, node `web`'s path is `web`, which is also its bundle's CR name when the bundle sets no `KustomizationName`).
+- **Application layouts** — per-app layouts (`ApplicationGrouping: GroupByName`, or augmenter apps, which keep a directory under `GroupFlat`). The CR is named `<unit name>-<layout name>`.
+- **Augmenter sub-layouts** — hook-group child layouts added by a `LayoutAugmenter` are children of an app layout. They are named `<unit name>-<layout name>` as well, and `spec.dependsOn` is populated from `ManifestLayout.DependsOn`, enabling ordered reconciliation between hook groups.
+- **Bundle-less node layouts** — a GroupByName node layout above its bundle layout, or a node without a bundle. The CR is named `<path with "/" replaced by "-">-node` (with `ClusterName: "."`, node `web`'s path is `web`, which is also its bundle's CR name when the bundle sets no `KustomizationName`), unless the node names it: see [Node Kustomizations](#node-kustomizations).
 
-The integrator applies this rule at any depth. The CR's `spec.sourceRef` is the `SourceRef` of the nearest layout at or above the host that renders bundles; with `BundleGrouping: GroupFlat` the root node's layout renders none and counts with the `SourceRef` of its own bundle, rendered in the directory inside it (`OriginUnit`, go-kure/kure#979), so a bundle-less child node of the root still takes the root bundle's source (with `GroupByName` no node's layout renders a bundle, the root's included, and none counts); with none, the one `SourceRef` the URL-less bundles below the child share. The CR of the root node's layout (below a `ClusterName` wrapper; on a tree built by hand, that of any layout above it too) takes no Source the integration generates, whichever of these would give it one (see [Layout Integration](#layout-integration): no Kustomization takes its source from inside what it applies). A missing, incomplete or ambiguous source is a hard error — a `Kustomization` without a valid `spec.sourceRef` is rejected by Flux and must not be emitted silently — and so is a layout whose bundles have different `SourceRef`s (a `NodeGrouping: GroupFlat` merge) hosting a layout CR. A CR name used twice (a layout named like a bundle's Kustomization, say, which without a `KustomizationName` is the bundle's own name) is an error, not a silent skip: Flux Kustomizations share one namespace.
+The unit name is the name in effect of the Kustomization that applies the bundles the layout belongs to: the nearest layout at or above its parent that renders bundles (`Bundle.KustomizationName`, or the bundle's `Name`; the first bundle's when a grouping axis merged several into one directory). The application `web` of the bundle `web` therefore gets the Kustomization `web-web`, not a second `web`. `ManifestLayout.KustomizationName` replaces the default name: an augmenter sets it on a layout it creates, and a caller may set it on a walked layout before integration.
+
+### Per-layout name rule
+
+The name in effect of a per-layout CR is a Flux Kustomization name: a DNS-1123 subdomain of at most 63 characters (`stack.ValidateKustomizationName`). It is checked where the CR is created, so nothing is written for a tree with a name Flux could not reconcile. kure does not shorten a name: the error names the object and the field that changes it.
+
+| Where the name comes from | The error names |
+|---|---|
+| `Node.KustomizationName` | the node by its path (`Node 'prod/apps'`) and the field `kustomizationName` |
+| the name derived for a node, `<path>-node` | the node, and `Node.KustomizationName` as the field to set |
+| `ManifestLayout.KustomizationName`, set by an augmenter or on a walked layout | the layout by its directory (`ManifestLayout 'prod/web/api'`) and the field `kustomizationName` |
+| the default of an application or augmenter layout, `<unit name>-<layout name>` | the layout, and `ManifestLayout.KustomizationName` as the field to set |
+
+The default of an application or augmenter layout is longer than the layout's own name by the unit name, so a directory name within the limit can give a default over it: the application `checkout-service-payments-reconciler-worker` (43 characters) of the bundle `platform-services-payments` (26) gets a default of 70 characters and is refused until its layout sets a `KustomizationName`.
+
+A `ManifestLayout.DependsOn` entry on an application or augmenter layout is a layout name. Where it names a layout of the same unit that has a CR of its own, the entry is written as that layout's CR name: a sibling first, else the one layout with that name elsewhere below the unit's directory (the parent application layout of a hook group, for instance). Two such layouts with no sibling among them are refused, since the entry does not say which: set `KustomizationName` on the one meant and list that name. Any other entry is written as given, as the name of a Kustomization.
+
+The integrator applies this rule at any depth. The CR's `spec.sourceRef` is the `SourceRef` of the nearest layout at or above the host that renders bundles; with `BundleGrouping: GroupFlat` the root node's layout renders none and counts with the `SourceRef` of its own bundle, rendered in the directory inside it (`OriginUnit`, go-kure/kure#979), so a bundle-less child node of the root still takes the root bundle's source (with `GroupByName` no node's layout renders a bundle, the root's included, and none counts); with none, the one `SourceRef` the URL-less bundles below the child share. The CR of the root node's layout (below a `ClusterName` wrapper; on a tree built by hand, that of any layout above it too) takes no Source the integration generates, whichever of these would give it one (see [Layout Integration](#layout-integration): no Kustomization takes its source from inside what it applies). A missing, incomplete or ambiguous source is a hard error — a `Kustomization` without a valid `spec.sourceRef` is rejected by Flux and must not be emitted silently — and so is a layout whose bundles have different `SourceRef`s (a `NodeGrouping: GroupFlat` merge) hosting a layout CR. A CR name used twice (a node whose `KustomizationName` is also a bundle's Kustomization name, say) is an error, not a silent skip: Flux Kustomizations share one namespace. When this integration generates both, the error names both owners, each as `bundle "<path>"`, `node "<path>"` or `layout "<directory>"`; a clash with a Kustomization already in the tree names the two layouts that hold them.
+
+### Node Kustomizations
+
+A node whose directory renders no bundle (a group of nodes, or a node above its bundle's own directory under `BundleGrouping: GroupByName`) is applied by a Kustomization of its own. Three fields of `stack.Node` name and order it:
+
+<!-- doc-example: pkg/stack/fluxcd ExampleLayoutIntegrator_nodeKustomization -->
+```go
+// Two groups of nodes, neither with a bundle of its own. Each group gets
+// a Kustomization that applies its directory; the one for apps waits for
+// the one for platform.
+source := &stack.SourceRef{Kind: "GitRepository", Name: "flux-system", Namespace: "flux-system"}
+platform := &stack.Node{Name: "platform", KustomizationName: "platform", Children: []*stack.Node{
+    {Name: "cert-manager", Bundle: &stack.Bundle{Name: "cert-manager", SourceRef: source}},
+}}
+apps := &stack.Node{Name: "apps", KustomizationName: "apps", DependsOn: []*stack.Node{platform}, Children: []*stack.Node{
+    {Name: "shop", Bundle: &stack.Bundle{Name: "shop", SourceRef: source}},
+}}
+cluster := &stack.Cluster{Name: "prod", Node: &stack.Node{Name: "prod", Children: []*stack.Node{platform, apps}}}
+
+rules := layout.DefaultLayoutRules()
+rules.FluxPlacement = layout.FluxIntegratedPerLayout
+ml, err := fluxcd.NewLayoutIntegrator(fluxcd.NewResourceGenerator()).CreateLayoutWithResources(cluster, rules)
+if err != nil {
+    panic(err)
+}
+for _, obj := range ml.Resources {
+    kust, ok := obj.(*kustv1.Kustomization)
+    if !ok {
+        continue
+    }
+    var waitsFor []string
+    for _, dep := range kust.Spec.DependsOn {
+        waitsFor = append(waitsFor, dep.Name)
+    }
+    fmt.Println(kust.Name, kust.Spec.Path, waitsFor)
+}
+```
+<!-- doc-example:end -->
+
+It prints `platform prod/platform []` and `apps prod/apps [platform]`: each group's Kustomization has the name set on the node and applies the node's directory, which the field does not move.
+
+| Field | Effect |
+|---|---|
+| `KustomizationName` | names the node's Kustomization instead of the derived `-node` name. The name in effect, set or derived, is held to the [per-layout name rule](#per-layout-name-rule): a derived name over 63 characters is refused until the node sets this field |
+| `DependsOn` | nodes whose Kustomizations this one waits for. Each is written into `spec.dependsOn` under the target's name in effect: its `KustomizationName`, or its derived `-node` name. A target that has no Kustomization of its own is refused, and the error names both nodes |
+| `NamedDependsOn` | Kustomization names, written as given after the `DependsOn` entries. An entry is a caller-supplied reference: it need not belong to this cluster and its value is not checked, as for a bundle's. An empty entry, a repeated one, and one that names the Kustomization of a node in `DependsOn` are refused, the node named by its path |
+
+The three fields are refused, not ignored, wherever the node has no Kustomization of its own. The error names the node by its path from the root (`node "prod/apps"`) and the fields it sets:
+
+- under `FluxSeparate` or `FluxIntegratedPerBundle`, and in `GenerateFromCluster` and `GenerateFromLayout`: only bundles get a Kustomization there;
+- on a node that `NodeGrouping: GroupFlat`, or a `FlattenSingleTier` collapse, renders into another node's directory;
+- on a node whose directory renders a bundle: that bundle's Kustomization applies the directory, so name and order the bundle (`Bundle.KustomizationName`, `Bundle.DependsOn`);
+- on the node whose directory is the top of the written tree, which the Flux bootstrap applies;
+- on a node whose layout a caller marked `UmbrellaChild` after the walk.
+
+The ArgoCD workflow generates nothing for a node and refuses the fields as well. A cycle through node dependencies is refused by the reconcile-order check, like any other.
+
+Set `KustomizationName` and `NamedDependsOn` before the cluster is walked. The walker copies both onto the node's layout (`ManifestLayout.KustomizationName`, `ManifestLayout.DependsOn`) and the Kustomization is built from the layout, so a name or an entry the node gets between `WalkCluster` and `IntegrateWithLayout`, or before a second integration, is not there. That is refused, naming the node and its layout: walk the cluster again, or put the value on the layout. A name a caller sets on the walked layout wins over the node's. `DependsOn` is read from the node at integration.
+
+A second integration of the same tree keeps the node Kustomization the first one placed. If the node sets `DependsOn` or `NamedDependsOn` and that Kustomization's `spec.dependsOn` lacks one of the Kustomizations they ask for (in the Kustomization's own namespace), the integration is refused rather than dropping the dependency: remove the kept Kustomization, add the entry to it, or walk the cluster again.
+
+A node Kustomization has no reconciliation settings of its own. `spec.interval` and `spec.prune` are the generator's (`ResourceGenerator.DefaultInterval` and `Prune`), as for every per-layout Kustomization, and `spec.wait`, `spec.timeout` and `spec.retryInterval` are left unset. What a group node applies is the Kustomizations of the nodes below it; the settings of the workloads stay on their bundles.
 
 ## Validation
 

@@ -26,6 +26,8 @@ An organizational grouping within a cluster. Nodes form a tree structure — for
 
 Nodes map to **directory structures** in the GitOps repository. Each node can also reference a source (Git repository, OCI registry, S3 bucket) for multi-source deployments.
 
+A node without a bundle in its directory, such as a group of nodes, can be applied by a Flux Kustomization of its own (layout rule `FluxPlacement: FluxIntegratedPerLayout`). `KustomizationName` names that Kustomization, and `DependsOn` and `NamedDependsOn` make it wait for other nodes' Kustomizations or for Kustomizations named directly. A node that has no Kustomization of its own may not set them: the fields are refused, not ignored.
+
 `stack.ValidateCluster` rejects a cycle in the node graph (a `Node` reached again from one of its own descendants), naming the node where the cycle closes. It does not reject a node shared by two parents, but such a node is walked once under each parent, and Flux and ArgoCD generation refuse the result (`layout.IndexOrigins`: a node or bundle rendered by two layouts has no single path) — keep the graph a tree.
 
 `stack.ValidateCluster` also checks names, so a name that could never work is refused before anything is written, and nothing is shortened or rewritten:

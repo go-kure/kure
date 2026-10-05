@@ -3,6 +3,7 @@ package stack
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -81,31 +82,53 @@ func deepCopyCluster(c *Cluster) *Cluster {
 		GitOps: c.GitOps, // shared; GitOps is set-once, not mutated
 	}
 	if c.Node != nil {
-		newCluster.Node = deepCopyNode(c.Node)
+		copies := map[*Node]*Node{}
+		newCluster.Node = deepCopyNode(c.Node, copies)
+		remapNodeDependsOn(copies)
 	}
 	return newCluster
 }
 
-// deepCopyNode creates a deep copy of a Node and its subtree.
-func deepCopyNode(n *Node) *Node {
+// deepCopyNode creates a deep copy of a Node and its subtree, and records
+// every node it copied in copies (original -> copy). The copy's DependsOn
+// still holds the original's pointers: remapNodeDependsOn replaces them once
+// the whole tree is copied.
+func deepCopyNode(n *Node, copies map[*Node]*Node) *Node {
 	if n == nil {
 		return nil
 	}
 	newNode := &Node{
-		Name:       n.Name,
-		ParentPath: n.ParentPath,
-		PackageRef: n.PackageRef, // GVK is effectively immutable
+		Name:              n.Name,
+		ParentPath:        n.ParentPath,
+		PackageRef:        n.PackageRef, // GVK is effectively immutable
+		KustomizationName: n.KustomizationName,
+		DependsOn:         slices.Clone(n.DependsOn),
+		NamedDependsOn:    slices.Clone(n.NamedDependsOn),
 	}
+	copies[n] = newNode
 	if n.Bundle != nil {
 		newNode.Bundle = deepCopyBundle(n.Bundle)
 	}
 	if n.Children != nil {
 		newNode.Children = make([]*Node, len(n.Children))
 		for i, child := range n.Children {
-			newNode.Children[i] = deepCopyNode(child)
+			newNode.Children[i] = deepCopyNode(child, copies)
 		}
 	}
 	return newNode
+}
+
+// remapNodeDependsOn points each copied node's DependsOn at the copies of
+// the nodes it names, so the copied tree depends on its own nodes. A node
+// outside the copied tree is kept as it is.
+func remapNodeDependsOn(copies map[*Node]*Node) {
+	for _, n := range copies {
+		for i, dep := range n.DependsOn {
+			if c, ok := copies[dep]; ok {
+				n.DependsOn[i] = c
+			}
+		}
+	}
 }
 
 // deepCopyBundle creates a copy of a Bundle with a new slice header for each
