@@ -107,12 +107,13 @@
 // object, an int64 in an unstructured one. That holds in both field orders and
 // up to the largest uint64.
 //
-// A float64 is not an integer to the encoders, also when its value is one.
-// Between -2^63 and 2^64, both excluded, it is written with the digits of its
-// JSON form, the shortest that read back as the same float64, in both field
-// orders. Above 2^53 those are not always its exact expansion: the float64
-// 2^62 is written 4611686018427388000, not 4611686018427387904. Hold a large
-// integer as an integer to have it written exactly.
+// A float64 is not an integer to the encoders, also when its value is one. A
+// float64 that holds an integer between -2^63 and 2^64, both excluded, is
+// written with the digits of its JSON form, the shortest that read back as
+// the same float64, in both field orders. Above 2^53 those are not always its
+// exact expansion: the float64 2^62 is written 4611686018427388000, not
+// 4611686018427387904. Hold a large integer as an integer to have it written
+// exactly.
 //
 // Any other finite number, the float64 -2^63 among them, passes through a
 // float64 and is written with that precision.
