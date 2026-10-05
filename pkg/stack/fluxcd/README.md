@@ -595,7 +595,8 @@ applies the root node's directory is that directory's layout Kustomization below
 wrapper under `FluxIntegratedPerLayout`, hosted in the wrapper. It takes no
 generated Source: the `SourceRef` of the root node's bundle is passed over when it has a URL or
 names a Source another `SourceRef` generates, and its source is the one `SourceRef` the other
-URL-less bundles below share. When nothing is left (every `SourceRef` in the tree has a URL, say)
+URL-less bundles below share, or, where those differ, the root node's own bundle's when it was
+not passed over. When nothing is left (every `SourceRef` in the tree has a URL, say)
 the integration is refused, naming the Kustomization, its `spec.path`, the Source and the
 directory that hosts it. Give a bundle a `SourceRef` without a URL, naming a Source that exists
 before the tree is applied (the one the bootstrap creates, for one), or use
