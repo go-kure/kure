@@ -1292,15 +1292,20 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
         `FluxIntegratedPerLayout` the node or the layout that gets a Kustomization of its own;
       - the way out (`nameApart`): the field that names the generated one, on its owner
         (`Bundle.KustomizationName`, `Node.KustomizationName` or
-        `ManifestLayout.KustomizationName`), or another name for the one in the tree.
+        `ManifestLayout.KustomizationName`), or another name for the one in the tree. For a
+        per-layout Kustomization the owner and field follow the cases of `checkLayoutCRName`
+        (`layoutNamed`): a node whose walked layout carries a name the node does not set is
+        named as that layout, with the layout's field, since that name is the one in effect.
     - Not changed: the refusal of one name present twice in the tree before integration, and
       that of one name claimed twice by generated Kustomizations, which names both owners.
     - Not breaking: error text only.
     - Tests: `TestKustomizationClash_AuthoredKustomizationNamedLikeItsBundle` (the three
       placements, with the authored object in the bundle's directory and in the application's
       own, and the control with `KustomizationName` set),
-      `TestKustomizationClash_NodeAndLayoutKustomizations` and
-      `TestKustomizationClash_KustomizationNoApplicationHolds` in
+      `TestKustomizationClash_NodeAndLayoutKustomizations`,
+      `TestKustomizationClash_KustomizationNoApplicationHolds` and
+      `TestKustomizationClash_RecordWithoutApplication` (a walk record whose application was
+      cleared names none, and the refusal still comes back) in
       `pkg/stack/fluxcd/kustomization_clash_test.go`.
 
 **Acceptance.** Each target has a test rendering the input above and asserting the expected tree;
