@@ -1343,7 +1343,11 @@ empty list yields nothing; an item of a generic `List` whose kind is not registe
 is an error naming its position and the items beside it are still returned. A list may sit inside
 eight generic Lists; one nested deeper is refused. Both shapes used to be refused with "does not implement client.Object", so a
 caller that relied on that refusal, for instance to reject list documents in its input, now gets
-the objects and has to check for lists itself before parsing.
+the objects and has to check for lists itself before parsing. Later (go-kure/kure#1006) a list
+became refused as a whole when its own metadata carries labels or annotations, the list of an
+unregistered kind came under the same item handling and nesting bound, and a key that is
+`apiVersion`, `kind` or a list's `items` only after case folding became an error;
+`pkg/io/README.md` states the rules.
 
 **Shipped: the Flux image kinds.** `ImageRepository` and `ImagePolicy`
 (image.toolkit.fluxcd.io/v1, namespaced) have a generated constructor in `pkg/kubernetes/fluxcd`.

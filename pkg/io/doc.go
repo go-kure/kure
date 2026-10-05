@@ -84,6 +84,25 @@
 //	    }
 //	}
 //
+// # List documents
+//
+// A list document is flattened into its items and is never returned itself: a
+// typed list of a registered kind (DeploymentList), the v1 List, and with
+// AllowUnstructured the list of an unregistered kind, which is a kind that
+// ends in List and states items. Each item is decoded by itself; one that
+// fails is an error naming its position, beside the items that decoded.
+//
+// A list is refused as a whole when its own metadata carries labels or
+// annotations, which its items cannot keep, and when it is nested more than
+// eight lists deep.
+//
+// A document has one reading. A top-level key that equals apiVersion or kind
+// only after case folding (Kind, APIVersion) is refused on every document and
+// every item of a list. One that equals items is refused on every list of a
+// registered kind and, with AllowUnstructured, on every unregistered kind that
+// ends in List. The error names the key. The package README states these rules
+// in full.
+//
 // # Resource printing
 //
 // The io package includes comprehensive resource printing capabilities compatible

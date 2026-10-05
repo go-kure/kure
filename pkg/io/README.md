@@ -103,15 +103,55 @@ multi-document stream, and an empty list yields nothing.
   the list holds.
 - A generic `v1` `List` is read item by item, each as a document of its own: a
   registered kind comes back typed, an unregistered one follows `AllowUnstructured`,
-  and a list inside the list is flattened where it stands. A list may sit inside
-  eight Lists; one nested deeper is refused.
-- A `<Kind>List` of a kind that is not registered is refused by a strict parse and
-  flattened into unstructured items with `AllowUnstructured`.
+  and a list inside the list is flattened where it stands.
+- A `<Kind>List` of a kind that is not registered is refused by a strict parse. With
+  `AllowUnstructured` it is a list when it states `items`, and is read item by item
+  like the `v1` `List`: an item of a registered kind comes back typed, one of an
+  unregistered kind unstructured, and a list among the items is flattened where it
+  stands. An item that leaves `apiVersion` or `kind` out is given the list's: its
+  `apiVersion`, and its kind without the `List`.
 
-Each item is decoded by itself, in both list shapes. An item that cannot be decoded,
+A kind that is not registered and does not end in `List` is one object, whatever
+fields it has: with `AllowUnstructured`, a field named `items` stays part of its
+content. A kind that ends in `List` and states no `items` is one object too, unless
+it states them under a key in another case (`Items`): that document is refused, see
+below.
+
+Each item is decoded by itself, in every list shape. An item that cannot be decoded,
 a `null` among them, is reported with its position (`item 1 of List`,
 `item 1 of DeploymentList`), and the items beside it are still returned, as the
-documents of a stream are. Only the items are read: the list's own `metadata` is not.
+documents of a stream are.
+
+A list is refused as a whole, with no item returned, in three cases:
+
+- It is nested too deep. A list may sit inside eight lists whose items are documents
+  of their own, the `v1` `List` and the list of an unregistered kind; one nested
+  deeper is refused, whatever its kind.
+- Its own `metadata` carries labels or annotations. The items are all a parse
+  returns of a list, and they cannot keep what the list says about itself; a
+  `helm.sh/hook` annotation on a list is the known case. The error names what the
+  list carries. Metadata that cannot be read is refused as well. What describes the
+  response a list came in (`resourceVersion`, `continue`, `selfLink`,
+  `remainingItemCount`) is ignored, and so is a name on a list.
+- It states its items under a key in another case (`Items`); see below.
+
+```text
+parse error in Kubernetes object: List has metadata of its own that its items cannot keep: annotations helm.sh/hook
+```
+
+A document has one reading. The Kubernetes decoder finds `apiVersion` and `kind`
+under those keys in any case, while a list is recognised, and its items are read,
+under the exact keys. A top-level key that equals `apiVersion` or `kind` only after
+case folding (`Kind`, `APIVersion`) is therefore refused, on every document and on
+every item of a list. One that equals `items` is refused on every list of a
+registered kind and, with `AllowUnstructured`, on every unregistered kind that ends
+in `List`, whether or not it states `items` as well. The error names the key:
+
+```text
+parse error in Kubernetes object: the key "Kind" equals "kind" only after case folding; write it "kind" or remove it
+```
+
+On any other document, `Items` is a field like any other.
 
 The fallback in use:
 

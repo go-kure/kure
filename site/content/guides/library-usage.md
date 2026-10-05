@@ -71,7 +71,18 @@ type. That changes what a parse returns when kure starts registering a kind: a
 `*schedulingv1.PriorityClass`. A list document follows its items: a
 `PriorityClassList`, a `DeploymentList` or a generic `List` is flattened into its
 items, typed where the kind is registered, in the list's order and in the list's
-place in the stream. The [IO reference](/api-reference/io) states the rules.
+place in the stream. A list whose own metadata carries labels or annotations is
+refused, since its items cannot keep them, and so is a document that states
+`apiVersion`, `kind` or a list's `items` under a key in another case (`Kind`,
+`Items`).
+
+A parse returns the objects that decoded beside the errors of the documents and
+list items that did not: check the error and still use the objects. Where the
+decoder cannot move past a place in the stream, the parse ends there with one
+error, and the objects decoded before it are returned. Malformed JSON after two
+JSON objects that open the stream, one after the other with no `---` line
+between them, is such a place. The [IO reference](/api-reference/io) states the
+rules.
 
 One kind is registered at two versions. MetalLB serves `BGPPeer` at
 `metallb.io/v1beta1`, which it deprecates, and at `metallb.io/v1beta2`, which it
