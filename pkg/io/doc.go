@@ -45,6 +45,12 @@
 //	    }
 //	}
 //
+// A place where the stream itself cannot be read is one of those errors too.
+// A YAML document that does not parse costs only itself: the documents after
+// it are read. Where the decoder cannot go on, as after malformed JSON in a
+// stream of JSON documents, the parse ends there with one error for the place,
+// beside the objects decoded before it; what follows is not read.
+//
 // A registered kind is decoded into its upstream Go type, so that type's own
 // UnmarshalJSON runs inside the parse. One that panics does not take the
 // caller down: the document, or the list item, becomes one of those errors. It
