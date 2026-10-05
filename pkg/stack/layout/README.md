@@ -286,21 +286,24 @@ bundle into `<ClusterName>/<bundle>`. Every writer writes the `ClusterName` dire
 `kustomization.yaml`, also when the directory holds no resource of its own. Without it, a Flux
 Kustomization that builds the directory would take in every file below it, each bundle's included.
 
-**Breaking change (go-kure/kure#979).** `WriteManifest` used to write no `kustomization.yaml`
-into a one-segment `ClusterName` directory (`prod`, not `clusters/prod`) that held no resource
-file, no bundle and no `AppFileSingle` child's file; `WriteToDisk` and `WriteToTar` always wrote
-one. It now writes it too, so a tree
-written with `WriteManifest` has one more file at its top. That file is created like every other
-one the writer writes: a file of that name already in the directory is replaced, and a caller
-that writes its own there afterwards replaces kure's. The file lists the directory's children, so
-`WriteManifest` now holds the build it starts to every check a directory with a
-`kustomization.yaml` gets, as the other two writers do. Three hand-built trees it used to write
-are refused: an unnamed root whose directory child is nested below its own name (`Namespace` set
-to the child's own path, see "Layout paths"), one whose listed children hold one object twice
-(kustomize refuses that in a build), and one that lists a `KustomizationRecursive` child, which
-has no `kustomization.yaml` for the entry to name. A walked tree has none of the three. One tree
-a walk does give is refused as well: a root node named `kustomization.yaml` below a `ClusterName`,
-whose directory is the path of the file now written.
+**Breaking change (go-kure/kure#979).** `WriteManifest` used to make one exception: it wrote no
+`kustomization.yaml` for a layout with no `Name` and a one-segment `Namespace` that held no
+resource file and no `AppFileSingle` child's file and rendered no bundle, neither itself nor in
+a directory inside it (`OriginUnit()`). A walk gives that shape as a one-segment `ClusterName`
+directory (`prod`, not `clusters/prod`); a caller or an application's `AugmentLayout` can set it
+anywhere in a tree. `WriteToDisk` and `WriteToTar` never made that exception. It is gone:
+`WriteManifest` writes such a layout's `kustomization.yaml` under
+the same rules as any other layout's (none for a `KustomizationRecursive` layout; for an
+`AppFileSingle` one only at the root of the written tree, when it has resources or children). A
+tree written with `WriteManifest` can so have one more file, at its top when the layout is the
+`ClusterName` directory. That file is created like every other one the writer writes: a file of
+that name already in the directory is replaced, and a caller that writes its own there afterwards
+replaces kure's. The file lists the directory's children, so `WriteManifest` now holds the build
+it starts to every check a directory with a `kustomization.yaml` gets, as the other two writers
+do, and refuses a tree it used to write when that directory fails one of them. Two examples, not
+a complete list: a child directory named `kustomization.yaml`, the path of the file now written
+(a walk gives it for a root node of that name below a `ClusterName`), and listed children that
+hold one object twice, which kustomize refuses in a build.
 
 **Breaking change (go-kure/kure#979).** Before, the root node's bundles rendered in the root
 node's directory. Their files, the Flux Kustomization's `spec.path` and the ArgoCD Application's

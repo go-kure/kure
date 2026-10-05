@@ -102,8 +102,8 @@ func TestWriters_ClusterRootGeneratesConfigMap(t *testing.T) {
 // lists its children, so every writer holds the build that file starts to the
 // checks every other directory with one gets. WriteManifest used to write no
 // file into a cluster root that held nothing itself, and so wrote these trees
-// (go-kure/kure#979); WriteToDisk and WriteToTar refused them. All but the last
-// are built by hand; the last is walked.
+// (go-kure/kure#979); WriteToDisk and WriteToTar refused them. The first three
+// are built by hand; the others are walked.
 func TestWriters_ClusterRootBuildIsChecked(t *testing.T) {
 	root := func(children ...*layout.ManifestLayout) *layout.ManifestLayout {
 		return &layout.ManifestLayout{Name: "", Namespace: "demo", Children: children}
@@ -149,6 +149,60 @@ func TestWriters_ClusterRootBuildIsChecked(t *testing.T) {
 				rules := layout.DefaultLayoutRules()
 				rules.ClusterName = "demo"
 				ml, err := layout.WalkCluster(&stack.Cluster{Name: "demo", Node: &stack.Node{Name: "kustomization.yaml"}}, rules)
+				if err != nil {
+					t.Fatalf("WalkCluster: %v", err)
+				}
+				return ml
+			},
+			want: `the directory of layout "demo/kustomization.yaml" would replace the kustomization.yaml of layout "demo"`,
+		},
+		// A walk gives it without a root of that name too: an unnamed root
+		// node without a bundle is rendered into the ClusterName directory,
+		// so its child of that name is the directory at that file's path.
+		"child named kustomization.yaml of an unnamed root node, walked": {
+			tree: func(t *testing.T) *layout.ManifestLayout {
+				t.Helper()
+				rules := layout.DefaultLayoutRules()
+				rules.ClusterName = "demo"
+				node := &stack.Node{Children: []*stack.Node{{Name: "kustomization.yaml"}}}
+				ml, err := layout.WalkCluster(&stack.Cluster{Name: "demo", Node: node}, rules)
+				if err != nil {
+					t.Fatalf("WalkCluster: %v", err)
+				}
+				return ml
+			},
+			want: `the directory of layout "demo/kustomization.yaml" would replace the kustomization.yaml of layout "demo"`,
+		},
+		// With bundles grouped by name the unnamed root node's bundle gets a
+		// directory of its own, and the ClusterName directory still holds
+		// nothing itself: the child is that same directory.
+		"child named kustomization.yaml of an unnamed root node with a by-name bundle, walked": {
+			tree: func(t *testing.T) *layout.ManifestLayout {
+				t.Helper()
+				rules := layout.DefaultLayoutRules()
+				rules.ClusterName = "demo"
+				rules.BundleGrouping = layout.GroupByName
+				node := &stack.Node{
+					Bundle:   &stack.Bundle{Name: "core"},
+					Children: []*stack.Node{{Name: "kustomization.yaml"}},
+				}
+				ml, err := layout.WalkCluster(&stack.Cluster{Name: "demo", Node: node}, rules)
+				if err != nil {
+					t.Fatalf("WalkCluster: %v", err)
+				}
+				return ml
+			},
+			want: `the directory of layout "demo/kustomization.yaml" would replace the kustomization.yaml of layout "demo"`,
+		},
+		// And the bundle's own directory can be the one of that name.
+		"by-name bundle named kustomization.yaml of an unnamed root node, walked": {
+			tree: func(t *testing.T) *layout.ManifestLayout {
+				t.Helper()
+				rules := layout.DefaultLayoutRules()
+				rules.ClusterName = "demo"
+				rules.BundleGrouping = layout.GroupByName
+				node := &stack.Node{Bundle: &stack.Bundle{Name: "kustomization.yaml"}}
+				ml, err := layout.WalkCluster(&stack.Cluster{Name: "demo", Node: node}, rules)
 				if err != nil {
 					t.Fatalf("WalkCluster: %v", err)
 				}
