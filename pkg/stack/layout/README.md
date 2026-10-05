@@ -76,7 +76,9 @@ is the root's `Namespace`.
 parent entry that named a directory without a `kustomization.yaml`. It is now refused.
 
 Every writer (`WriteToDisk`, `WriteToTar`, `WriteManifest`) checks the whole tree before writing
-anything, and refuses two layouts that resolve to the same directory, or two `AppFileSingle`
+anything, and refuses two layouts that resolve to the same directory (when one of them is a
+bundle's own directory, the error names the bundle by its path, so two bundles that take one
+directory name are told apart), or two `AppFileSingle`
 layouts that resolve to the same file, or an `AppFileSingle` child with children of its own or
 with `ConfigMapGenerators`, or any other layout it writes no `kustomization.yaml` for that has
 `ConfigMapGenerators`.
@@ -186,6 +188,20 @@ augmenter application that takes its own layout under either grouping. An applic
 into its bundle's directory keeps any name. The check runs on the tree the walk returns, which
 holds every application directory: `FlattenSingleTier` collapses none. The
 error names the application and the directory it would have been created in.
+
+Wherever a bundle's name becomes a directory, the directory is named by `Bundle.DirName`, or by
+`Bundle.Name` when that is empty: an umbrella child's directory, a node's bundle's under
+`BundleGrouping: GroupByName`, and the one the root node's bundles get inside the root node's
+under `GroupFlat` (see [The root node's bundles](#the-root-nodes-bundles)). The name of the
+bundle's Flux Kustomization or ArgoCD Application is not affected, and its path follows the
+directory: a child with `Name: "shop-infra"` and `DirName: "00-infra"` is written to
+`<umbrella>/00-infra` and applied by the Kustomization `shop-infra`. Under `BundleGrouping:
+GroupFlat` below the root a node's bundle is rendered in its node's directory and its `DirName`
+has no effect. A `DirName` is checked like a name that becomes a directory, by
+`stack.ValidateCluster` before the walk, whether or not the rules give the bundle a directory;
+it is no object name, so nothing else is asked of it. The directory is named on the bundle:
+`IndexOrigins` refuses a bundle's own layout that was renamed after the walk.
+
 - **FilePer**: How resources are written (FilePerResource vs FilePerKind)
 - **FluxPlacement**: Where/at what granularity Flux Kustomizations go — `FluxSeparate`, `FluxIntegratedPerLayout` (a CR per layout node), or `FluxIntegratedPerBundle` (CRs at bundle boundaries; application children included as directories)
 - **FileNaming**: Resource file naming pattern (see [File Naming Modes](#file-naming-modes))
@@ -232,7 +248,8 @@ rendered into one directory inside it, named after the first of them:
 | `platform` | `core` | `GroupByName` | `platform/core`, as for every node |
 
 They stay one unit: one directory and one Flux Kustomization or ArgoCD Application, named after
-the first bundle. The directory takes that bundle's `Name`; its `KustomizationName`, when it sets
+the first bundle. The directory takes that bundle's `DirName`, or its `Name` without one (a
+`DirName` on a bundle merged into it later has no effect); its `KustomizationName`, when it sets
 one, names the Kustomization or Application alone. `ManifestLayout.OriginUnit()` on the root node's layout returns that directory's
 layout. Every other node is unchanged: its bundle renders in the node's directory. Both walkers do
 this, `WalkClusterByPackage` in the tree of the package the root node is in. The unnamed wrapper `WalkClusterByPackage` builds for a package the root node is not in is
@@ -245,7 +262,9 @@ two directories are compared as the writers compare them (`ManifestLayout.SameDi
 path resolved under the output directory and cleaned, without regard to case; it compares
 directories, says nothing about an `AppFileSingle` layout, which is a file, and does not
 describe `WriteToDisk("")`, which writes a rooted path as an absolute one), so a node name that
-differs only in case (`WEB` beside the bundle `web`) is refused too. Rename one of them. A name
+differs only in case (`WEB` beside the bundle `web`) is refused too. Rename one of them, or give
+the bundle's directory another name with `DirName`: the check compares the directory the bundle
+gets, so it follows a `DirName`, and names the bundle by its `Name`. A name
 that is not one path segment does not reach the walk: `stack.ValidateCluster` refuses a node
 named `/web` or `./web`, and a bundle named `.`, `/` or `web/api`, before it. The bundle's
 directory is therefore always one inside the root node's. A layout below a child node can still
@@ -256,8 +275,11 @@ there, the walk does not check it, and the writers refuse the tree.
 
 The workflow engines add a directory of their own to the top of the tree: `flux-system` (Flux,
 `FluxSeparate`) and `argocd` (ArgoCD). When the top is the root node's directory, a root node's
-bundle or a child node with that name would share it, and the engine refuses the tree, naming the
-bundle or node and the directory.
+bundle whose directory has that name (its `DirName`, or its `Name` without one) or a child node
+with that name would share it, and the engine refuses the tree, naming the bundle or node and the
+directory. A bundle named `flux-system` whose `DirName` is another name is accepted. In the path
+patterns below, `<bundle>` is that directory name too: the bundle's `DirName`, or its `Name`
+without one.
 
 An unnamed root node under a `ClusterName` is rendered into the `ClusterName` directory, and its
 bundle into `<ClusterName>/<bundle>`. `WriteManifest` writes no `kustomization.yaml` into an empty
@@ -267,7 +289,8 @@ bundle's included.
 
 **Breaking change (go-kure/kure#979).** Before, the root node's bundles rendered in the root
 node's directory. Their files, the Flux Kustomization's `spec.path` and the ArgoCD Application's
-`source.path` move one directory down, from `<root>` to `<root>/<first bundle name>`. On a
+`source.path` move one directory down, from `<root>` to `<root>/<first bundle name>` (that
+bundle's `DirName` when it sets one, go-kure/kure#972). On a
 deployed tree with `prune` on, the objects can be deleted by the outer owner and re-created by the
 inner Kustomization.
 
@@ -533,7 +556,12 @@ Kustomization and ArgoCD Application kure emits for a bundle uses. It refuses a 
 resolve: an object rendered twice, a rendered set that differs from what the cluster reaches
 (hand-built, partial or other-cluster trees), two bundles with one name, two bundles whose
 Kustomization or Application would get one name (`Bundle.UnitName`), a node or bundle
-layout set to `AppFileSingle` mode, and a dependency cycle between units. `WriteManifest` refuses a
+layout set to `AppFileSingle` mode, a layout that is a bundle's own directory (an umbrella child's,
+a node's bundle's under `GroupByName`, or the root node's bundle's under `GroupFlat` when no
+other bundle is merged with it) and is not named by the bundle's `DirName` or else its
+`Name`, two bundles whose own directories are one (compared as the writers compare them, so two
+`DirName`s that differ in case only are one; named by their paths, as the writers name
+them), and a dependency cycle between units. `WriteManifest` refuses a
 node or bundle layout whose own `ApplicationFileMode` is `AppFileSingle` too: its files would go
 into its `Namespace`, so no directory would exist at its path. `Config.ApplicationFileMode` is only
 the default for application (and hand-built) layouts, so `ArgoProfile`'s `AppFileSingle` writes one
@@ -671,7 +699,7 @@ A directory that renders a bundle is applied by its own Flux Kustomization, whic
 
 What it still collapses in a walked tree is a single child directory that renders no bundle and has no directory below it: a node that has neither a bundle nor child nodes, or, under `NodeGrouping: GroupFlat`, a node with the bundle-less nodes below it merged into its directory. That is a `ClusterName` directory over such a root node, or a root node over one such child. The absorbing layout takes over the collapsed layout's origin nodes (see [Layout origins](#layout-origins)). A hand-built tree, which carries no origins, collapses as before. Nothing is rewritten after generation: a Flux CR a caller adds to the walked tree keeps the `spec.path` it was given.
 
-**Breaking change (go-kure/kure#979).** Before, a single child that rendered a bundle was collapsed too: a root node `apps` with one bundle under `ClusterName: cluster-name` was written to `cluster-name/`. It is now written to `cluster-name/apps/<bundle>/` with or without the flag (see [The root node's bundles](#the-root-nodes-bundles)).
+**Breaking change (go-kure/kure#979).** Before, a single child that rendered a bundle was collapsed too: a root node `apps` with one bundle under `ClusterName: cluster-name` was written to `cluster-name/`. It is now written to `cluster-name/apps/<bundle>/` (the bundle's `DirName`, or its `Name` without one) with or without the flag (see [The root node's bundles](#the-root-nodes-bundles)).
 
 Scoped to `WalkCluster`. `WalkClusterByPackage` is unaffected — its synthetic unnamed wrappers express package boundaries that the flatten helper would otherwise erroneously collapse.
 

@@ -1615,8 +1615,9 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		}
 	}
 	// The directory must be free. The root node's bundle is rendered in a
-	// directory named after it (go-kure/kure#979), and a child node in one
-	// named after the node: either of them named like the Flux directory
+	// directory named after it (go-kure/kure#979; by its DirName when it
+	// sets one), and a child node in one named after the node: either of
+	// them named like the Flux directory
 	// would share it with the Flux resources, which the writers refuse only
 	// when the tree is written. The directories are compared as the writers
 	// compare them (SameDirectory): resolved under the output directory,
@@ -1632,7 +1633,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 			return errors.Errorf("node %q is rendered to %q, the directory the Flux resources are written to under FluxSeparate: rename the node, or use an integrated placement",
 				child.OriginNodes()[0].Name, child.FullRepoPath())
 		case len(child.OriginBundles()) > 0:
-			return errors.Errorf("bundle %q is rendered to %q, the directory the Flux resources are written to under FluxSeparate: rename the bundle, or use an integrated placement",
+			return errors.Errorf("bundle %q is rendered to %q, the directory the Flux resources are written to under FluxSeparate: give the bundle's directory another name (its DirName, or its Name without one), or use an integrated placement",
 				child.OriginBundles()[0].Name, child.FullRepoPath())
 		}
 	}

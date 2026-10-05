@@ -226,6 +226,7 @@ Deployment units typically corresponding to single GitOps resources:
 type Bundle struct {
     Name              string
     KustomizationName string
+    DirName           string
     ParentPath        string
     DependsOn         []*Bundle
     NamedDependsOn    []string
@@ -691,7 +692,8 @@ platform/                                 platform/
 ```
 
 The root node is the one exception: its directory renders no bundle, so with a flat
-`BundleGrouping` its bundle keeps a directory inside it, named after the bundle
+`BundleGrouping` its bundle keeps a directory inside it, named after the bundle,
+by its `DirName` when it sets one
 (go-kure/kure#979; "The root node's bundles" in `pkg/stack/layout/README.md`).
 
 ### GitOps Integration

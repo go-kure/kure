@@ -281,8 +281,9 @@ func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterf
 
 	if len(apps) > 0 {
 		// The directory must be free. The root node's bundle is rendered in
-		// a directory named after it (go-kure/kure#979), and a child node in
-		// one named after the node: either of them named like the
+		// a directory named after it (go-kure/kure#979; by its DirName when
+		// it sets one), and a child node in one named after the node: either
+		// of them named like the
 		// Applications' directory would share it with them, which the
 		// writers refuse only when the tree is written. The directories are
 		// compared as the writers compare them (SameDirectory): resolved
@@ -298,7 +299,7 @@ func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterf
 				return nil, errors.Errorf("node %q is rendered to %q, the directory the ArgoCD Applications are written to: rename the node",
 					child.OriginNodes()[0].Name, child.FullRepoPath())
 			case len(child.OriginBundles()) > 0:
-				return nil, errors.Errorf("bundle %q is rendered to %q, the directory the ArgoCD Applications are written to: rename the bundle",
+				return nil, errors.Errorf("bundle %q is rendered to %q, the directory the ArgoCD Applications are written to: give the bundle's directory another name (its DirName, or its Name without one)",
 					child.OriginBundles()[0].Name, child.FullRepoPath())
 			}
 		}

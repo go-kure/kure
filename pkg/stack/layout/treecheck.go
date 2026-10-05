@@ -15,13 +15,16 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/resid"
 
 	"github.com/go-kure/kure/pkg/errors"
+	"github.com/go-kure/kure/pkg/stack"
 )
 
 // checkLayoutTree refuses, before anything is written, a tree in which:
 //   - two layouts resolve to the same directory, or, for AppFileSingle
 //     layouts, the same file (go-kure/kure#771): each writes its own files
 //     there, and the later kustomization.yaml silently replaces the earlier
-//     one, dropping its resources from the kustomize graph;
+//     one, dropping its resources from the kustomize graph. Two bundles that
+//     take one directory name under one parent are refused here, named by
+//     their paths (see sameDirectory);
 //   - an AppFileSingle child has children (see checkSingleChildLeaf) or
 //     ConfigMapGenerators (see checkSingleChildGenerators);
 //   - any other layout the writer writes no kustomization.yaml for has
@@ -80,8 +83,7 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 		} else {
 			key := normDir(dir)
 			if other, ok := dirs[key]; ok {
-				return errors.NewFileError("write", dir,
-					fmt.Sprintf("layouts %q and %q resolve to the same directory", other.FullRepoPath(), l.FullRepoPath()), nil)
+				return errors.NewFileError("write", dir, sameDirectory(other, l), nil)
 			}
 			dirs[key] = l
 		}
@@ -140,6 +142,29 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 		return err
 	}
 	return checkUnappliedLayouts(root, plan)
+}
+
+// sameDirectory words the refusal of two layouts that resolve to one
+// directory. Two layouts with one parent and one name have one FullRepoPath,
+// so a layout that is a bundle's own directory (see ownBundle) is named by
+// its bundle's path instead: two umbrella children, or two bundles under
+// BundleGrouping GroupByName, that take one directory name are told apart.
+func sameDirectory(a, b *ManifestLayout) string {
+	ownA, ownB := a.ownBundle(), b.ownBundle()
+	if ownA == nil && ownB == nil {
+		return fmt.Sprintf("layouts %q and %q resolve to the same directory", a.FullRepoPath(), b.FullRepoPath())
+	}
+	const rule = "a bundle's directory is named by its DirName, or by its Name without one, and must be the only one of that name in the directory above it"
+	if ownA != nil && ownB != nil {
+		return fmt.Sprintf("bundles %q and %q resolve to the same directory %q: %s", ownA.GetPath(), ownB.GetPath(), b.FullRepoPath(), rule)
+	}
+	claimant := func(l *ManifestLayout, own *stack.Bundle) string {
+		if own != nil {
+			return fmt.Sprintf("bundle %q", own.GetPath())
+		}
+		return fmt.Sprintf("layout %q", l.FullRepoPath())
+	}
+	return fmt.Sprintf("%s and %s resolve to the same directory: %s", claimant(a, ownA), claimant(b, ownB), rule)
 }
 
 // fluxKustomizationGroup and fluxKustomizationKind identify a Flux

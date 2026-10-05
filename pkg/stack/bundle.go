@@ -35,11 +35,30 @@ type Bundle struct {
 	// entries of bundles that depend on this one, and an umbrella's health
 	// check on this child. Empty means Name. Under the ArgoCD workflow the
 	// same value names the Application and its spec.dependencies entries.
-	// Name stays the bundle's identity and its directory; UnitName returns
-	// the name in effect. A value set here must be a DNS-1123 subdomain
-	// (Validate); the Flux workflow also limits the name in effect to 63
-	// characters (ValidateKustomizationName).
+	// Name stays the bundle's identity and, unless DirName is set, its
+	// directory; UnitName returns the name in effect. A value set here must
+	// be a DNS-1123 subdomain (Validate); the Flux workflow also limits the
+	// name in effect to 63 characters (ValidateKustomizationName).
 	KustomizationName string
+	// DirName names the bundle's directory in the rendered tree, wherever the
+	// bundle's name becomes one. Empty means Name. That is the case for an
+	// umbrella child, for a node's bundle under the layout rule
+	// BundleGrouping GroupByName, and for the root node's bundle under
+	// GroupFlat, which has a directory inside the root node's. Under
+	// GroupFlat below the root a node's bundle is rendered in its node's
+	// directory, which the node names, and DirName has no effect on it. When
+	// a flat NodeGrouping merges several bundles into the root node they
+	// share one directory there: it takes the first merged bundle's DirName,
+	// or its Name without one, and a DirName on a later bundle of that
+	// directory has no effect.
+	//
+	// The path the bundle's Flux Kustomization or ArgoCD Application applies
+	// follows the directory; that object's name does not (see
+	// KustomizationName), and Name stays the bundle's identity. A value set
+	// here must be one path segment (ValidateDirectoryName, checked by
+	// Validate): not "." or "..", and without "/", "\" or a NUL byte. It is
+	// no object name, so it need not be a DNS-1123 subdomain.
+	DirName string
 	// ParentPath is the hierarchical path to the parent bundle (e.g., "cluster/infrastructure")
 	// Empty for root bundles. This avoids circular references while maintaining hierarchy.
 	ParentPath string
@@ -227,7 +246,11 @@ func (a *Bundle) Validate() error {
 // DNS-1123 subdomain, and, under layout.GroupByName, of its directory. A
 // KustomizationName, when set, names that object instead and is checked as a
 // DNS-1123 subdomain too; Name is checked as before, being still the bundle's
-// identity and its directory. The
+// identity and, without a DirName, its directory. A DirName, when set, names
+// that directory instead and is checked as a directory name
+// (ValidateDirectoryName) only: it is no object's name, so it is no DNS-1123
+// subdomain and may hold upper case. It is checked whether or not the layout
+// rules give the bundle a directory, as a name is. The
 // 63-character limit of a Flux Kustomization name is Flux's and is checked by
 // the Flux workflow where it builds the Kustomization, on the name in effect
 // (UnitName), not here: a longer name is valid for the ArgoCD workflow.
@@ -250,6 +273,11 @@ func (a *Bundle) validateNames(path string, seen map[*Bundle]bool) error {
 	if a.KustomizationName != "" {
 		if err := validateKustomizationNameField(a.KustomizationName); err != nil {
 			return errors.ResourceValidationError("Bundle", path, "kustomizationName", err.Error(), nil)
+		}
+	}
+	if a.DirName != "" {
+		if err := ValidateDirectoryName(a.DirName); err != nil {
+			return errors.ResourceValidationError("Bundle", path, "dirName", err.Error(), nil)
 		}
 	}
 	for _, c := range a.Children {

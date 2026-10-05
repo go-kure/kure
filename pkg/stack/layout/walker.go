@@ -70,12 +70,27 @@ type grouping struct {
 // build it applies. With BundleGrouping flat, the bundles that would be
 // rendered into the root node's layout (the root's own, and under a flat
 // NodeGrouping every absorbed node's) are therefore rendered into one directory
-// inside it, named after the first of them. They stay one unit: one directory,
-// one Kustomization.
+// inside it, named after the first of them: by its DirName, or by its Name
+// without one (bundleDirName). They stay one unit: one directory, one
+// Kustomization.
 type rootUnit struct {
 	node   *stack.Node
 	layout *ManifestLayout
 	unit   *ManifestLayout
+}
+
+// bundleName is the Name of the bundle that names the unit's directory, the
+// first rendered there. An error names the bundle by it: the directory's name
+// is the bundle's DirName when it sets one.
+func (r *rootUnit) bundleName() string { return r.unit.origin.bundles[0].Name }
+
+// bundleDirField is the field of that bundle the directory's name comes from,
+// as a validation error names it.
+func (r *rootUnit) bundleDirField() string {
+	if r.unit.origin.bundles[0].DirName != "" {
+		return "dirName"
+	}
+	return "name"
 }
 
 // checkRootUnitName refuses a child node of the root that is named like the
@@ -88,9 +103,10 @@ type rootUnit struct {
 // same way: see checkBelow.
 //
 // The bundle's own directory needs no check against the root node's: its name
-// is a bundle's, which stack.ValidateCluster has checked before the walk, so
-// it is one plain path segment (never ".", "..", or a name with a separator),
-// and the root node's directory joined with one is a directory inside it.
+// is a bundle's Name or DirName, which stack.ValidateCluster has checked
+// before the walk, so it is one plain path segment (never ".", "..", or a name
+// with a separator), and the root node's directory joined with one is a
+// directory inside it.
 func (r *rootUnit) checkRootUnitName() error {
 	if r == nil || r.unit == nil {
 		return nil
@@ -98,8 +114,8 @@ func (r *rootUnit) checkRootUnitName() error {
 	for _, child := range r.layout.Children {
 		if child != r.unit && child.SameDirectory(r.unit) {
 			return errors.ResourceValidationError("Node", child.Name, "name",
-				fmt.Sprintf("node %q and bundle %q are both rendered to directory %q: the root node's bundle has a directory named after it, so no child node of the root may carry that name",
-					child.Name, r.unit.Name, r.unit.FullRepoPath()), nil)
+				fmt.Sprintf("node %q and bundle %q are both rendered to directory %q: the root node's bundle has a directory named by its DirName, or by its Name without one, so no child node of the root may carry that name",
+					child.Name, r.bundleName(), r.unit.FullRepoPath()), nil)
 		}
 	}
 	for _, child := range r.layout.Children {
@@ -128,9 +144,9 @@ func (r *rootUnit) checkBelow(l *ManifestLayout) error {
 			continue
 		}
 		if child.SameDirectory(r.unit) {
-			return errors.ResourceValidationError("Bundle", r.unit.Name, "name",
-				fmt.Sprintf("bundle %q would be rendered to directory %q, which %s further down the tree already takes: the root node's bundle has a directory named after it inside the root node's directory, so its name must name a directory nothing else is rendered to",
-					r.unit.Name, r.unit.FullRepoPath(), child.origin.describe(child)), nil)
+			return errors.ResourceValidationError("Bundle", r.bundleName(), r.bundleDirField(),
+				fmt.Sprintf("bundle %q would be rendered to directory %q, which %s further down the tree already takes: the root node's bundle has a directory inside the root node's directory, named by its DirName or by its Name without one, and that must name a directory nothing else is rendered to",
+					r.bundleName(), r.unit.FullRepoPath(), child.origin.describe(child)), nil)
 		}
 		if err := r.checkBelow(child); err != nil {
 			return err
@@ -473,12 +489,24 @@ func renderChildren(children []*stack.Node, into *ManifestLayout, g grouping, pk
 	return nil
 }
 
+// bundleDirName is the name of bundle b's own directory: its DirName, or its
+// Name without one.
+func bundleDirName(b *stack.Bundle) string {
+	if b.DirName != "" {
+		return b.DirName
+	}
+	return b.Name
+}
+
 // renderBundle renders bundle b into into. With BundleGrouping flat the
 // bundle's applications and umbrella children are rendered into into itself,
-// which then renders b; otherwise b gets its own directory inside into's. The
-// root node's layout is the exception to the flat case: it renders no bundle,
-// so b goes into the one directory inside it that the bundles merged there
-// share (see rootUnit).
+// which then renders b, and b's DirName has no effect; otherwise b gets its
+// own directory inside into's, named by bundleDirName. The root node's layout
+// is the exception to the flat case: it renders no bundle, so b goes into the
+// one directory inside it that the bundles merged there share (see rootUnit).
+// The first bundle rendered there names that directory, by bundleDirName; the
+// DirName of a bundle merged into it later has no effect, as its Name has
+// none.
 func renderBundle(b *stack.Bundle, into *ManifestLayout, g grouping) error {
 	target := into
 	switch {
@@ -486,7 +514,7 @@ func renderBundle(b *stack.Bundle, into *ManifestLayout, g grouping) error {
 		if g.root.unit == nil {
 			// Explicit, as a bundle directory below: it can host Flux CRs
 			// whose targets are directories inside it.
-			g.root.unit = g.newLayout(b.Name, into.FullRepoPath())
+			g.root.unit = g.newLayout(bundleDirName(b), into.FullRepoPath())
 			g.root.unit.Mode = KustomizationExplicit
 			into.Children = append(into.Children, g.root.unit)
 			into.origin.unit = g.root.unit
@@ -501,7 +529,7 @@ func renderBundle(b *stack.Bundle, into *ManifestLayout, g grouping) error {
 		// this one, and the writers refuse a Recursive build that would
 		// include that target. The layout has no own workloads, so the
 		// listing is otherwise unchanged.
-		target = g.newLayout(b.Name, into.FullRepoPath())
+		target = g.newLayout(bundleDirName(b), into.FullRepoPath())
 		target.Mode = KustomizationExplicit
 		target.origin = origin{bundles: []*stack.Bundle{b}}
 		into.Children = append(into.Children, target)
@@ -521,7 +549,8 @@ func renderBundle(b *stack.Bundle, into *ManifestLayout, g grouping) error {
 }
 
 // renderUmbrellaChildren renders umbrella child bundles as directories inside
-// parent's. Each carries UmbrellaChild=true: the parent's kustomization.yaml
+// parent's, each named by bundleDirName whatever the grouping axes say. Each
+// carries UmbrellaChild=true: the parent's kustomization.yaml
 // does not list it, because the child is applied by its own Flux
 // Kustomization (hosted in the parent under integrated placement, in
 // flux-system under separate placement), whose spec.path is the child's
@@ -532,7 +561,7 @@ func renderUmbrellaChildren(children []*stack.Bundle, parent *ManifestLayout, g 
 		if cb == nil {
 			continue
 		}
-		ml := g.newLayout(cb.Name, parent.FullRepoPath())
+		ml := g.newLayout(bundleDirName(cb), parent.FullRepoPath())
 		ml.Mode = KustomizationExplicit
 		ml.UmbrellaChild = true
 		ml.origin = origin{bundles: []*stack.Bundle{cb}}

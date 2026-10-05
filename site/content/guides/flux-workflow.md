@@ -446,7 +446,8 @@ The root node's directory renders no bundle. With a flat `BundleGrouping` (the d
 node's bundle used to render in the root node's directory, the one the bootstrap applies, and the
 Flux Kustomization that applied that directory was hosted inside it: it was part of the build it
 applied. The bundle now has a directory inside the root node's, named after the bundle
-(`platform/platform-bundle` for root node `platform` with bundle `platform-bundle`), and its
+(`platform/platform-bundle` for root node `platform` with bundle `platform-bundle`) or by the
+bundle's `DirName` when it sets one (see [Directory names](#directory-names)), and its
 Kustomization sits in the root node's directory under the integrated placements, and in the
 `flux-system/` directory at the top of the tree under `FluxSeparate`. Bundles that a flat `NodeGrouping` merges into the root node share that directory, named
 after the first of them. With `BundleGrouping: GroupByName` nothing changes: the bundle already
@@ -462,13 +463,15 @@ What changed, and what to do:
   on, the objects can be deleted by the outer owner and re-created by the inner Kustomization.
 - **A child node named like that directory is refused.** A child node of the root node whose name
   is the name of the root node's bundle's directory would render to the same path; the walk
-  refuses it, naming both, also when the names differ only in case (`WEB` for `web`). Rename one.
+  refuses it, naming both, also when the names differ only in case (`WEB` for `web`). Rename the
+  node, or give the bundle's directory another name (its `DirName`, or its `Name` without one).
   A name that is not one path segment is refused earlier, when the cluster is validated: a node
   named `./web`, a bundle named `.`, `/` or `web/api`.
-- **A root node's bundle named `flux-system` is refused under `FluxSeparate`.** Without a
-  `ClusterName` its directory would be the one the Flux resources are written to. Rename the
-  bundle, or use an integrated placement. The ArgoCD engine refuses one named `argocd` the same
-  way.
+- **A root node's bundle whose directory is `flux-system` is refused under `FluxSeparate`.** That
+  is a bundle with `DirName: "flux-system"`, or one named `flux-system` without a `DirName`.
+  Without a `ClusterName` its directory would be the one the Flux resources are written to. Give
+  the bundle's directory another name, or use an integrated placement. The ArgoCD engine refuses
+  the directory `argocd` the same way.
 - **`FlattenSingleTier` collapses no directory that renders a bundle.** A collapsed directory's
   Kustomization would have no parent to sit in. On a walked tree the option now only collapses a
   single child directory that renders no bundle and has no directory below it (a node with neither
@@ -484,6 +487,48 @@ root node's directory itself takes it only when it has no URL, see "Refusals" ab
 cannot depend on a child node's bundle under the integrated placements, except the root node's
 bundle, whose directory no longer holds the child's Kustomization. See
 [The root node's bundles](/api-reference/layout/#the-root-nodes-bundles) for the rule.
+
+### Directory names
+
+A bundle's directory is named after the bundle too. Set `Bundle.DirName` to give it another
+name, an ordering prefix for example, without renaming the bundle or its Kustomization:
+
+<!-- doc-example: pkg/stack/fluxcd ExampleEngine_dirName -->
+```go
+// The children's directories get the names set here; the bundles and
+// their Kustomizations keep theirs.
+infra := &stack.Bundle{Name: "shop-infra", DirName: "00-infra"}
+services := &stack.Bundle{Name: "shop-services", DirName: "10-services", DependsOn: []*stack.Bundle{infra}}
+shop := &stack.Bundle{Name: "shop", Children: []*stack.Bundle{infra, services}}
+cluster := &stack.Cluster{Name: "prod", Node: &stack.Node{Name: "apps", Bundle: shop}}
+
+objects, err := fluxcd.Engine().GenerateFromCluster(cluster, layout.DefaultLayoutRules())
+if err != nil {
+    panic(err)
+}
+for _, obj := range objects {
+    kust := obj.(*kustv1.Kustomization)
+    fmt.Println(kust.Name, kust.Spec.Path)
+}
+```
+<!-- doc-example:end -->
+
+It prints `shop apps/shop`, `shop-infra apps/shop/00-infra` and `shop-services
+apps/shop/10-services`: the children are written to `apps/shop/00-infra` and
+`apps/shop/10-services`, their Kustomizations are still `shop-infra` and `shop-services` with
+`spec.path` at those directories, and the `dependsOn` entry and the umbrella's health checks keep
+naming the Kustomizations. The disk and tar writers produce the same tree. (`shop` is the root
+node's bundle here, so it has its directory inside `apps`; a `DirName` on it would name that one.)
+
+The field applies wherever a bundle's name becomes a directory: for an umbrella child, for a node's
+bundle under `BundleGrouping: GroupByName`, and for the root node's bundle under the default rules.
+Below the root the default rules render a node's bundle in its node's directory, and `DirName` has
+no effect on it. Bundles a flat `NodeGrouping` merges into the root node share one directory: it
+takes the first merged bundle's `DirName`, and one on a later bundle has no effect. A `DirName` must
+be one path segment; it is no object name, so `00_Infra` is valid. Two bundles that would get one
+directory are refused, and the error names both. Name the directory on the bundle: a bundle's
+layout renamed after `WalkCluster` is refused by `IntegrateWithLayout`. See the
+[Flux Engine reference](/api-reference/flux-engine/#directory-names).
 
 ## Umbrella Bundles — Readiness Aggregation
 
