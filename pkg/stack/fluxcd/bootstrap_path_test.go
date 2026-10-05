@@ -24,11 +24,13 @@ import (
 // bootstrapPaths returns the gotk bootstrap Kustomization's spec.path and the
 // FluxInstance's sync.path for root under rules. gotk builds from the vendored
 // bundle (GotkVersion), so neither call touches the network.
+//
+// The gotk call builds and parses the whole component bundle, whatever the
+// path is: about a second under the race detector. A test over many inputs
+// reads the path from fluxInstanceSyncPath, which builds nothing.
 func bootstrapPaths(t *testing.T, root *stack.Node, rules layout.LayoutRules) (gotk, sync string) {
 	t.Helper()
-	bg := fluxstack.NewBootstrapGenerator()
-
-	objs, err := bg.GenerateBootstrap(&stack.BootstrapConfig{
+	objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(&stack.BootstrapConfig{
 		Enabled:     true,
 		FluxMode:    fluxstack.ModeGotk,
 		FluxVersion: fluxstack.GotkVersion,
@@ -49,8 +51,14 @@ func bootstrapPaths(t *testing.T, root *stack.Node, rules layout.LayoutRules) (g
 	if kust == nil {
 		t.Fatal("gotk bootstrap emitted no Kustomization")
 	}
+	return kust.Spec.Path, fluxInstanceSyncPath(t, root, rules)
+}
 
-	fi, err := bg.GenerateFluxInstance(&stack.BootstrapConfig{
+// fluxInstanceSyncPath returns the FluxInstance's sync.path for root under
+// rules. It builds no bundle.
+func fluxInstanceSyncPath(t *testing.T, root *stack.Node, rules layout.LayoutRules) string {
+	t.Helper()
+	fi, err := fluxstack.NewBootstrapGenerator().GenerateFluxInstance(&stack.BootstrapConfig{
 		Enabled:     true,
 		FluxVersion: "v2.8.2",
 		Registry:    "ghcr.io/fluxcd",
@@ -62,7 +70,7 @@ func bootstrapPaths(t *testing.T, root *stack.Node, rules layout.LayoutRules) (g
 	if fi.Spec.Sync == nil {
 		t.Fatal("FluxInstance has no sync block")
 	}
-	return kust.Spec.Path, fi.Spec.Sync.Path
+	return fi.Spec.Sync.Path
 }
 
 // TestBootstrapModesNameTheSameDirectory pins both spellings and that they are
@@ -230,16 +238,33 @@ func TestBootstrap_RootNodeNameIsNoSegmentUnderClusterName(t *testing.T) {
 	}
 }
 
+// bootstrapClusterNames are the ClusterName values the bootstrap path is held
+// to the written tree under: none, the root of the source, one and two
+// segments, the root node's own name and a rooted one.
+var bootstrapClusterNames = []string{"", ".", "prod", "env/prod", "platform", "/rooted"}
+
 // TestBootstrapPathIsTheTopOfTheWrittenTree renders the shapes of the Source
 // invariant's matrix (sourceHostShapes) under every placement, grouping and
 // ClusterName and holds the bootstrap to the walk: layout.TopDirectory is the
 // directory of the tree the walk returns, with and without the integration,
-// and in every writer's output the directory each bootstrap mode names is the
-// one that holds the tree's first kustomization.yaml. Which combinations the
+// and in every writer's output the directory the bootstrap names is the one
+// that holds the tree's first kustomization.yaml. Which combinations the
 // integration refuses is pinned (sourceHostRefusal): any other error fails,
 // and of a refused combination the walked tree is written instead.
+//
+// The bootstrap's directory is read from the FluxInstance's sync.path here,
+// and the gotk mode is held to the same directory by
+// TestGotkBootstrapPathIsTheTopOfTheWrittenTree, over the ClusterNames and the
+// root nodes only. Do not build the gotk bootstrap in this matrix: each build
+// renders and parses the whole component bundle, about a second under the
+// race detector, so one per combination took the package past the limit of
+// the CI test job. Nothing the code can vary on is lost by the split: both
+// modes take the one directory GenerateBootstrap computes before it looks at
+// the mode (bootstrapDir), and layout.TopDirectory, which gives it, takes the
+// directory from the root node and the ClusterName and from nothing else of
+// the rules.
 func TestBootstrapPathIsTheTopOfTheWrittenTree(t *testing.T) {
-	clusterNames := []string{"", ".", "prod", "env/prod", "platform", "/rooted"}
+	clusterNames := bootstrapClusterNames
 	shapes := make([]string, 0, len(sourceHostShapes))
 	for s := range sourceHostShapes {
 		shapes = append(shapes, s)
@@ -268,9 +293,9 @@ func TestBootstrapPathIsTheTopOfTheWrittenTree(t *testing.T) {
 							t.Fatalf("the walk's top is %q, TopDirectory says %q", got, top)
 						}
 
-						gotk, sync := bootstrapPaths(t, c.Node, rules)
-						if want := strings.TrimLeft(top, "/"); path.Clean(gotk) != path.Clean(want) || path.Clean(sync) != path.Clean(want) {
-							t.Fatalf("gotk spec.path %q and FluxInstance sync.path %q, want the directory %q", gotk, sync, want)
+						sync := fluxInstanceSyncPath(t, c.Node, rules)
+						if want := strings.TrimLeft(top, "/"); path.Clean(sync) != path.Clean(want) {
+							t.Fatalf("FluxInstance sync.path %q, want the directory %q", sync, want)
 						}
 
 						refusal := sourceHostRefusal(placement, grouping, clusterName, shape)
@@ -290,11 +315,9 @@ func TestBootstrapPathIsTheTopOfTheWrittenTree(t *testing.T) {
 							ml = walked
 						}
 						for writer, tree := range writeAll(t, ml) {
-							for mode, p := range map[string]string{"gotk spec.path": gotk, "FluxInstance sync.path": sync} {
-								file := filepath.Join(tree.root, filepath.FromSlash(p), "kustomization.yaml")
-								if _, err := os.Stat(file); err != nil {
-									t.Errorf("%s: %s %q names no directory with a kustomization.yaml: %v", writer, mode, p, err)
-								}
+							file := filepath.Join(tree.root, filepath.FromSlash(sync), "kustomization.yaml")
+							if _, err := os.Stat(file); err != nil {
+								t.Errorf("%s: FluxInstance sync.path %q names no directory with a kustomization.yaml: %v", writer, sync, err)
 							}
 						}
 					})
@@ -307,6 +330,76 @@ func TestBootstrapPathIsTheTopOfTheWrittenTree(t *testing.T) {
 			if key := fmt.Sprintf("%s under ClusterName %q", placement, clusterName); integratedTrees[key] == 0 {
 				t.Errorf("%s: no shape was integrated, so the bootstrap path was checked on no integrated tree", key)
 			}
+		}
+	}
+}
+
+// TestGotkBootstrapPathIsTheTopOfTheWrittenTree holds the gotk mode to the
+// directory TestBootstrapPathIsTheTopOfTheWrittenTree holds the FluxInstance
+// to. The gotk bootstrap Kustomization's spec.path is layout.TopDirectory, it
+// names the directory the FluxInstance's sync.path names for the same input,
+// and in every writer's output of the walked tree that directory holds the
+// first kustomization.yaml.
+//
+// It runs once per ClusterName and per distinct root node of the matrix's
+// shapes (a named one and an unnamed one), which is every input the directory
+// is computed from; see the matrix for why the gotk bootstrap is not built
+// once per combination there.
+func TestGotkBootstrapPathIsTheTopOfTheWrittenTree(t *testing.T) {
+	// One shape per distinct root node name, the first in name order.
+	shapes := make([]string, 0, len(sourceHostShapes))
+	for s := range sourceHostShapes {
+		shapes = append(shapes, s)
+	}
+	slices.Sort(shapes)
+	rootShapes := map[string]string{}
+	var rootNames []string
+	for _, shape := range shapes {
+		name := sourceHostShapes[shape]().Node.Name
+		if _, ok := rootShapes[name]; !ok {
+			rootShapes[name] = shape
+			rootNames = append(rootNames, name)
+		}
+	}
+	if !slices.Contains(rootNames, "") || len(rootNames) < 2 {
+		t.Fatalf("the shapes have the root node names %q, want a named and an unnamed root node", rootNames)
+	}
+
+	for _, clusterName := range bootstrapClusterNames {
+		for _, rootName := range rootNames {
+			shape := rootShapes[rootName]
+			t.Run(fmt.Sprintf("ClusterName=%q/root=%q/%s", clusterName, rootName, shape), func(t *testing.T) {
+				rules := propertyGroupings["nodeOnly"]
+				rules.FluxPlacement = layout.FluxSeparate
+				rules.ClusterName = clusterName
+				c := sourceHostShapes[shape]()
+
+				top, err := layout.TopDirectory(c.Node, rules)
+				if err != nil {
+					t.Fatalf("TopDirectory: %v", err)
+				}
+				gotk, sync := bootstrapPaths(t, c.Node, rules)
+				if want := strings.TrimLeft(top, "/"); path.Clean(gotk) != path.Clean(want) {
+					t.Fatalf("gotk spec.path %q, want the directory %q", gotk, want)
+				}
+				if g, s := path.Clean(gotk), path.Clean(sync); g != s {
+					t.Fatalf("the two modes name different directories: gotk %q, FluxInstance %q", g, s)
+				}
+
+				walked, err := layout.WalkCluster(c, rules)
+				if err != nil {
+					t.Fatalf("WalkCluster: %v", err)
+				}
+				if got := walked.FullRepoPath(); got != top {
+					t.Fatalf("the walk's top is %q, TopDirectory says %q", got, top)
+				}
+				for writer, tree := range writeAll(t, walked) {
+					file := filepath.Join(tree.root, filepath.FromSlash(gotk), "kustomization.yaml")
+					if _, err := os.Stat(file); err != nil {
+						t.Errorf("%s: gotk spec.path %q names no directory with a kustomization.yaml: %v", writer, gotk, err)
+					}
+				}
+			})
 		}
 	}
 }
