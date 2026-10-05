@@ -4,6 +4,7 @@ import (
 	stderrors "errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	goruntime "runtime"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/errors"
+	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
 // ciliumPolicy is a CiliumNetworkPolicy with one ICMP field. A field that has
@@ -233,12 +235,20 @@ func TestDecodeRegistered_PanicReturnsTheErrorAlone(t *testing.T) {
 				t.Errorf("a kind is returned beside the error: %v", actual)
 			}
 
-			obj, actual, err = decodeRegistered([]byte(ciliumPolicy("p", icmpTyped)), tc.kind)
+			typed := []byte(ciliumPolicy("p", icmpTyped))
+			wantObj, wantKind, err := kubernetes.Codecs.UniversalDeserializer().Decode(typed, tc.kind, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if obj == nil || actual == nil || *actual != policyKind {
-				t.Errorf("want the policy and its kind, got %T and %v", obj, actual)
+			if wantKind == nil || *wantKind != policyKind || wantObj.(client.Object).GetName() != "p" {
+				t.Fatalf("the deserializer returned %T and %v, not the policy", wantObj, wantKind)
+			}
+			obj, actual, err = decodeRegistered(typed, tc.kind)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(obj, wantObj) || !reflect.DeepEqual(actual, wantKind) {
+				t.Errorf("got  %#v and %v\nwant %#v and %v, what the deserializer returns", obj, actual, wantObj, wantKind)
 			}
 		})
 	}
