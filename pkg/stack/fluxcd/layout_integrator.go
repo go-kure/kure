@@ -1023,7 +1023,7 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 		// The CR is hosted by the parent of the layout that renders the
 		// bundles. Every unit has one: IntegrateWithLayout refuses a top
 		// that renders a bundle (go-kure/kure#979).
-		if err := p.add(p.ix.Parent(l), objs, bundleOwner(bundles[0]), bundleNameField); err != nil {
+		if err := p.add(p.ix.Parent(l), objs, bundleOwner(bundles[0]), bundleNamed(bundles[0])); err != nil {
 			return err
 		}
 	}
@@ -1066,7 +1066,7 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 				return err
 			}
 			cr := p.gen.createKustomizationForLayout(name, child, ref, deps)
-			if err := p.add(l, []client.Object{cr}, owner, layoutNameField(child)); err != nil {
+			if err := p.add(l, []client.Object{cr}, owner, p.layoutNamed(child)); err != nil {
 				return err
 			}
 		}
@@ -1359,9 +1359,9 @@ func sourceRefKey(ref kustv1.CrossNamespaceSourceReference, defaultNS string) st
 // anywhere in the tree, and every one this pass placed: a different one is an
 // error, wherever it sits; an identical one in the root is kept once.
 //
-// owner says what objs are generated for (see claimant), and field is the
-// field that names its Kustomization: bundleNameField, or layoutNameField's.
-func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Object, owner, field string) error {
+// owner says what objs are generated for (see claimant), and by what names
+// its Kustomization, for the refusal: bundleNamed, or layoutNamed's.
+func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Object, owner string, by nameField) error {
 	for _, obj := range objs {
 		to := host
 		if k, ok := obj.(*kustv1.Kustomization); ok {
@@ -1375,7 +1375,7 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 					continue
 				}
 				return errors.Errorf("layout %q already has Flux Kustomization %q with spec.path %q%s; this integration generates one of that name for %s, with spec.path %q in layout %q: %s",
-					e.host.FullRepoPath(), k.Name, e.path, heldBy(p.ix, key), owner, k.Spec.Path, host.FullRepoPath(), nameApart(field, owner))
+					e.host.FullRepoPath(), k.Name, e.path, heldBy(p.ix, key), by.owner, k.Spec.Path, host.FullRepoPath(), nameApart(by.field, by.owner))
 			}
 		} else if key, ok := sourceKey(obj); ok {
 			// One identity, one object: an identical Source (a repeated
@@ -1763,14 +1763,26 @@ func bundleOwner(b *stack.Bundle) string {
 // bundleNameField is the field that names a bundle's Kustomization.
 const bundleNameField = "Bundle.KustomizationName"
 
-// layoutNameField is the field that names the Kustomization of a layout with
-// a per-layout CR, as checkLayoutCRName names it: the node's for a node's own
-// layout (the walker copies it to the layout), the layout's for any other.
-func layoutNameField(l *layout.ManifestLayout) string {
-	if len(l.OriginNodes()) > 0 {
-		return "Node.KustomizationName"
+// nameField is what names a generated Kustomization: field, set on owner.
+type nameField struct{ field, owner string }
+
+// bundleNamed is what names the Kustomization generated for b's unit.
+func bundleNamed(b *stack.Bundle) nameField {
+	return nameField{field: bundleNameField, owner: bundleOwner(b)}
+}
+
+// layoutNamed is what names the Kustomization of a layout with a per-layout
+// CR, by the cases of checkLayoutCRName: the node and its field for a node's
+// own layout whose name is the node's (the walker copies it to the layout) or
+// derived from its directory; the layout and its own field where the layout
+// sets a name the node does not (layoutCRName takes that one first), and for
+// any other layout.
+func (p *integratedPlacement) layoutNamed(l *layout.ManifestLayout) nameField {
+	nodes := l.OriginNodes()
+	if len(nodes) > 0 && (l.KustomizationName == "" || nodes[0].KustomizationName == l.KustomizationName) {
+		return nameField{field: "Node.KustomizationName", owner: fmt.Sprintf("node %q", p.nodes.path(nodes[0]))}
 	}
-	return "ManifestLayout.KustomizationName"
+	return nameField{field: "ManifestLayout.KustomizationName", owner: fmt.Sprintf("layout %q", l.FullRepoPath())}
 }
 
 // heldBy says whose a Flux Kustomization already in the tree is, for the
@@ -1779,10 +1791,14 @@ func layoutNameField(l *layout.ManifestLayout) string {
 // and that application's bundle. Those objects are read as kustomize builds
 // them, a List's items included (resourceItems). It says nothing when no
 // application's record holds one: an earlier integration's Kustomization, or
-// one a caller added to a layout, which the tree does not tell apart.
+// one a caller added to a layout, which the tree does not tell apart. A record
+// without an application names none, as in applyDeliveryIntents.
 func heldBy(ix *layout.OriginIndex, key string) string {
 	for _, unit := range ix.Units() {
 		for _, rec := range unit.OriginApplicationObjects() {
+			if rec.Application == nil {
+				continue
+			}
 			// A List that cannot be read holds nothing to name here, and is
 			// unreadable where it sits too: indexExistingKustomizations has
 			// refused such a tree before any identity is compared.

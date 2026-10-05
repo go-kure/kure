@@ -106,6 +106,51 @@ func TestKustomizationClash_NodeAndLayoutKustomizations(t *testing.T) {
 		}
 	})
 
+	t.Run("a node's Kustomization named by the node", func(t *testing.T) {
+		_, err := li.CreateLayoutWithResources(cluster("group", "group"), perLayoutNodeOnly())
+		mustContainAll(t, err,
+			`already has Flux Kustomization "group"`,
+			`for node "platform/group"`,
+			`set Node.KustomizationName on node "platform/group" to name the generated one`,
+		)
+	})
+
+	// A name the caller sets on the node's walked layout is the one in effect,
+	// whatever the node sets: the layout's field is the one that helps.
+	t.Run("a node's Kustomization named on its layout", func(t *testing.T) {
+		rules := perLayoutNodeOnly()
+		walked := func(layoutName string) (*layout.ManifestLayout, *stack.Cluster) {
+			c := cluster("delivery", "group")
+			ml, err := layout.WalkCluster(c, rules)
+			if err != nil {
+				t.Fatalf("WalkCluster: %v", err)
+			}
+			layoutAtPath(t, ml, "platform/group").KustomizationName = layoutName
+			return ml, c
+		}
+
+		ml, c := walked("delivery")
+		err := li.IntegrateWithLayout(ml, c, rules)
+		mustContainAll(t, err,
+			`already has Flux Kustomization "delivery"`,
+			`an object of application "delivery" of bundle "web"`,
+			`for layout "platform/group"`,
+			`set ManifestLayout.KustomizationName on layout "platform/group" to name the generated one`,
+			`or give the one already there another name`,
+		)
+		if strings.Contains(err.Error(), "Node.KustomizationName") {
+			t.Errorf("the error names the node's field, which does not name this Kustomization:\n%v", err)
+		}
+
+		ml, c = walked("group-own")
+		if err := li.IntegrateWithLayout(ml, c, rules); err != nil {
+			t.Fatalf("IntegrateWithLayout with the layout's KustomizationName set: %v", err)
+		}
+		if _, ok := kustomizationsByName(ml)["group-own"]; !ok {
+			t.Errorf("generated Kustomizations = %v, want group-own among them", slices.Sorted(maps.Keys(kustomizationsByName(ml))))
+		}
+	})
+
 	t.Run("an application layout's Kustomization", func(t *testing.T) {
 		rules := placed(propertyGroupings["GroupByName"], layout.FluxIntegratedPerLayout)
 		_, err := li.CreateLayoutWithResources(cluster("web-delivery", ""), rules)
@@ -155,6 +200,57 @@ func TestKustomizationClash_KustomizationNoApplicationHolds(t *testing.T) {
 			)
 			if strings.Contains(err.Error(), "an object of application") {
 				t.Errorf("the error names an application for a Kustomization no application holds:\n%v", err)
+			}
+		})
+	}
+}
+
+// TestKustomizationClash_RecordWithoutApplication: a walk record whose
+// application a caller has cleared names no application. The refusal still
+// comes back, as it does for any other Kustomization no application holds,
+// also where the bundle lists a nil application the cleared record would
+// match.
+func TestKustomizationClash_RecordWithoutApplication(t *testing.T) {
+	var clearRecords func(l *layout.ManifestLayout) int
+	clearRecords = func(l *layout.ManifestLayout) int {
+		n := 0
+		recs := l.OriginApplicationObjects()
+		for i := range recs {
+			if recs[i].Application != nil && recs[i].Application.Name == "delivery" {
+				recs[i].Application = nil
+				n++
+			}
+		}
+		for _, child := range l.Children {
+			n += clearRecords(child)
+		}
+		return n
+	}
+	for _, placement := range allPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			rules := placed(propertyGroupings["nodeOnly"], placement)
+			shop := srBundle("shop", authoredApp("delivery", "shop"))
+			apps := &stack.Node{Name: "apps", Bundle: shop}
+			root := &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("core")), Children: []*stack.Node{apps}}
+			apps.SetParent(root)
+			c := &stack.Cluster{Name: "demo", Node: root}
+			ml, err := layout.WalkCluster(c, rules)
+			if err != nil {
+				t.Fatalf("WalkCluster: %v", err)
+			}
+			if n := clearRecords(ml); n != 1 {
+				t.Fatalf("cleared %d records of application delivery, want 1", n)
+			}
+			shop.Applications = append(shop.Applications, nil)
+
+			err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+			mustContainAll(t, err,
+				`already has Flux Kustomization "shop"`,
+				`for bundle "shop"`,
+				`set Bundle.KustomizationName on bundle "shop" to name the generated one`,
+			)
+			if strings.Contains(err.Error(), "an object of application") {
+				t.Errorf("the error names an application for a record that has none:\n%v", err)
 			}
 		})
 	}
