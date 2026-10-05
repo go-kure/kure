@@ -542,7 +542,11 @@ directory that hosts it. Give a bundle a `SourceRef` without a URL, naming a Sou
 before the tree is applied (the one the bootstrap creates, for one), or use
 `FluxIntegratedPerBundle`, under which those directories have no Kustomization of their own.
 Without a `ClusterName` wrapper the root node's directory has no Kustomization and nothing
-changes.
+changes. A URL on a kind the integration generates no Source for (anything but `GitRepository`
+and `OCIRepository`) stays the generator's own error. The rule is held for the Kustomizations
+the integration generates or keeps and the directories they apply: a Kustomization of your own
+placed inside one of them and pointing back up the tree is not followed (see below, the builds
+kure answers for).
 
 A Kustomization whose `spec.path` build holds that directory applies it beside the
 bootstrap: both hold the same objects, so neither prunes what the other keeps, but the

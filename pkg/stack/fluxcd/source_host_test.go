@@ -63,7 +63,8 @@ var sourceHostShapes = map[string]func() *stack.Cluster{
 	},
 }
 
-// fluxDoc is what the Source invariant reads of one written document.
+// fluxDoc is what the Source invariant reads of one written document, and of
+// each item of a List.
 type fluxDoc struct {
 	APIVersion string `json:"apiVersion"`
 	Kind       string `json:"kind"`
@@ -79,6 +80,7 @@ type fluxDoc struct {
 			Namespace string `json:"namespace"`
 		} `json:"sourceRef"`
 	} `json:"spec"`
+	Items []fluxDoc `json:"items"`
 }
 
 // writtenCR is a Flux Kustomization as written: the file that holds it, the
@@ -88,11 +90,31 @@ type writtenCR struct {
 }
 
 // readFluxObjects returns the Flux Kustomizations written below root, and the
-// files that hold each Flux Source, keyed kind/namespace/name.
+// files that hold each Flux Source, keyed kind/namespace/name. The items of a
+// List count as objects of the file that holds the List, as kustomize builds
+// them.
 func readFluxObjects(t *testing.T, root string) ([]writtenCR, map[string][]string) {
 	t.Helper()
 	var crs []writtenCR
 	sources := map[string][]string{}
+	var read func(p string, obj fluxDoc)
+	read = func(p string, obj fluxDoc) {
+		switch {
+		case obj.Kind == "Kustomization" && strings.HasPrefix(obj.APIVersion, "kustomize.toolkit.fluxcd.io/"):
+			ns := obj.Spec.SourceRef.Namespace
+			if ns == "" {
+				ns = obj.Metadata.Namespace
+			}
+			crs = append(crs, writtenCR{file: p, name: obj.Metadata.Name, path: obj.Spec.Path,
+				source: obj.Spec.SourceRef.Kind + "/" + ns + "/" + obj.Spec.SourceRef.Name})
+		case strings.HasPrefix(obj.APIVersion, "source.toolkit.fluxcd.io/"):
+			key := obj.Kind + "/" + obj.Metadata.Namespace + "/" + obj.Metadata.Name
+			sources[key] = append(sources[key], p)
+		}
+		for _, item := range obj.Items {
+			read(p, item)
+		}
+	}
 	err := filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || info.Name() == "kustomization.yaml" || filepath.Ext(p) != ".yaml" {
 			return err
@@ -106,18 +128,7 @@ func readFluxObjects(t *testing.T, root string) ([]writtenCR, map[string][]strin
 			if err := yaml.Unmarshal([]byte(doc), &obj); err != nil {
 				return fmt.Errorf("parse %s: %w", p, err)
 			}
-			switch {
-			case obj.Kind == "Kustomization" && strings.HasPrefix(obj.APIVersion, "kustomize.toolkit.fluxcd.io/"):
-				ns := obj.Spec.SourceRef.Namespace
-				if ns == "" {
-					ns = obj.Metadata.Namespace
-				}
-				crs = append(crs, writtenCR{file: p, name: obj.Metadata.Name, path: obj.Spec.Path,
-					source: obj.Spec.SourceRef.Kind + "/" + ns + "/" + obj.Spec.SourceRef.Name})
-			case strings.HasPrefix(obj.APIVersion, "source.toolkit.fluxcd.io/"):
-				key := obj.Kind + "/" + obj.Metadata.Namespace + "/" + obj.Metadata.Name
-				sources[key] = append(sources[key], p)
-			}
+			read(p, obj)
 		}
 		return nil
 	})
@@ -138,6 +149,19 @@ func readFluxObjects(t *testing.T, root string) ([]writtenCR, map[string][]strin
 //   - some build takes in a file holding the Source and delivers the
 //     Kustomization, so the Source is applied with it or before it.
 func checkSourceHosts(t *testing.T, writer string, w writtenTree) {
+	t.Helper()
+	violations, checked := sourceHostViolations(t, w)
+	for _, v := range violations {
+		t.Errorf("%s: %s", writer, v)
+	}
+	if checked == 0 {
+		t.Errorf("%s: no Kustomization names a Source the tree holds: the check met nothing", writer)
+	}
+}
+
+// sourceHostViolations returns what in w breaks the Source invariant
+// (checkSourceHosts), and how many Kustomizations it was checked on.
+func sourceHostViolations(t *testing.T, w writtenTree) (violations []string, checked int) {
 	t.Helper()
 	crs, sources := readFluxObjects(t, w.root)
 	rel := func(p string) string {
@@ -180,7 +204,6 @@ func checkSourceHosts(t *testing.T, writer string, w writtenTree) {
 	}
 	slices.Sort(builds)
 
-	checked := 0
 	for _, cr := range crs {
 		files := sources[cr.source]
 		if len(files) == 0 {
@@ -190,7 +213,7 @@ func checkSourceHosts(t *testing.T, writer string, w writtenTree) {
 		own := delivers("Kustomization " + cr.name)
 		for _, f := range files {
 			if own[f] {
-				t.Errorf("%s: Kustomization %q (spec.path %q) takes its source from %s, which %s holds: a file the Kustomization itself delivers", writer, cr.name, cr.path, cr.source, rel(f))
+				violations = append(violations, fmt.Sprintf("Kustomization %q (spec.path %q) takes its source from %s, which %s holds: a file the Kustomization itself delivers", cr.name, cr.path, cr.source, rel(f)))
 			}
 		}
 		before := false
@@ -204,11 +227,121 @@ func checkSourceHosts(t *testing.T, writer string, w writtenTree) {
 			}
 		}
 		if !before {
-			t.Errorf("%s: no build holds %s and delivers Kustomization %q (in %s), which takes its source from it", writer, cr.source, cr.name, rel(cr.file))
+			violations = append(violations, fmt.Sprintf("no build holds %s and delivers Kustomization %q (in %s), which takes its source from it", cr.source, cr.name, rel(cr.file)))
 		}
 	}
-	if checked == 0 {
-		t.Errorf("%s: no Kustomization names a Source the tree holds: the check met nothing", writer)
+	return violations, checked
+}
+
+// TestCheckSourceHosts_SeesWhatBreaksTheInvariant is the control of
+// checkSourceHosts, on trees written by hand: a Kustomization whose build
+// holds its own Source is reported, as an object of its own and inside a List,
+// and so is one whose Source no build delivers with it; a Source in the build
+// that also holds the Kustomization is not.
+func TestCheckSourceHosts_SeesWhatBreaksTheInvariant(t *testing.T) {
+	const source = `apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: shared
+  namespace: flux-system
+`
+	cr := func(indent, specPath string) string {
+		lines := []string{
+			"apiVersion: kustomize.toolkit.fluxcd.io/v1",
+			"kind: Kustomization",
+			"metadata:",
+			"  name: core",
+			"  namespace: flux-system",
+			"spec:",
+			"  path: " + specPath,
+			"  sourceRef:",
+			"    kind: GitRepository",
+			"    name: shared",
+		}
+		return indent + strings.Join(lines, "\n"+indent) + "\n"
+	}
+	asList := func(specPath string) string {
+		return "apiVersion: v1\nkind: List\nitems:\n- " + strings.TrimPrefix(cr("  ", specPath), "  ")
+	}
+	// A kustomization.yaml in the form the writers emit, which buildFiles
+	// reads.
+	lists := func(names ...string) string {
+		out := "resources:\n"
+		for _, n := range names {
+			out += "  - " + n + "\n"
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name  string
+		files map[string]string
+		want  string
+	}{
+		{
+			name: "the Source beside the Kustomization, which applies a directory below",
+			files: map[string]string{
+				"kustomization.yaml":               lists("source.yaml", "cr.yaml"),
+				"source.yaml":                      source,
+				"cr.yaml":                          cr("", "platform/core"),
+				"platform/core/kustomization.yaml": lists(),
+			},
+		},
+		{
+			name: "the Source in the directory the Kustomization applies",
+			files: map[string]string{
+				"kustomization.yaml":          lists("cr.yaml"),
+				"cr.yaml":                     cr("", "platform"),
+				"platform/kustomization.yaml": lists("source.yaml"),
+				"platform/source.yaml":        source,
+			},
+			want: "a file the Kustomization itself delivers",
+		},
+		{
+			name: "the same, the Kustomization inside a List",
+			files: map[string]string{
+				"kustomization.yaml":          lists("cr.yaml"),
+				"cr.yaml":                     asList("platform"),
+				"platform/kustomization.yaml": lists("source.yaml"),
+				"platform/source.yaml":        source,
+			},
+			want: "a file the Kustomization itself delivers",
+		},
+		{
+			name: "the Source in a directory no build takes in",
+			files: map[string]string{
+				"kustomization.yaml":               lists("cr.yaml"),
+				"cr.yaml":                          cr("", "platform/core"),
+				"platform/core/kustomization.yaml": lists(),
+				"elsewhere/source.yaml":            source,
+			},
+			want: "no build holds GitRepository/flux-system/shared and delivers Kustomization \"core\"",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			for name, content := range tc.files {
+				p := filepath.Join(root, name)
+				if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			violations, checked := sourceHostViolations(t, writtenTree{root: root, tops: []string{filepath.Join(root, "kustomization.yaml")}})
+			if checked != 1 {
+				t.Fatalf("checked %d Kustomizations, want 1", checked)
+			}
+			if tc.want == "" {
+				if len(violations) != 0 {
+					t.Errorf("got %q, want no violation", violations)
+				}
+				return
+			}
+			if !slices.ContainsFunc(violations, func(v string) bool { return strings.Contains(v, tc.want) }) {
+				t.Errorf("got %q, want a violation that says %q", violations, tc.want)
+			}
+		})
 	}
 }
 
@@ -232,10 +365,28 @@ func TestGeneratedSourceIsHostedBeforeItsKustomizations(t *testing.T) {
 		shapes = append(shapes, s)
 	}
 	slices.Sort(shapes)
-	// The refusals that are not this invariant's: bundles merged into one
-	// directory with different SourceRefs, and a layout Kustomization with no
-	// source to take (a SourceRef with a URL is not taken from a bundle below).
-	otherRefusals := []string{"sourceRef differ", "needs a Kustomization CR but no enclosing bundle", "have different SourceRefs"}
+	const urlLess = "bundle-less root, one URL-less SourceRef"
+	// wantRefusal is what the refusal of a combination says, "" when the
+	// tree is integrated. Every combination is one or the other.
+	wantRefusal := func(placement layout.FluxPlacement, grouping, clusterName, shape string) string {
+		perLayout := placement == layout.FluxIntegratedPerLayout
+		switch {
+		// The root node's layout has a Kustomization of its own, hosted in
+		// the ClusterName directory above it, and every SourceRef has a URL.
+		case perLayout && clusterName != "" && !strings.HasPrefix(shape, "unnamed") && shape != urlLess:
+			return ownSourceRefusal
+		// Not this invariant's: a flat NodeGrouping merges bundles with
+		// different SourceRefs into one Kustomization.
+		case grouping == "nodeFlat" && (shape == urlLess || shape == "root bundle and child node, a Source each"):
+			return "sourceRef differ"
+		// Not this invariant's: with a directory per bundle no node's layout
+		// renders one, and a SourceRef with a URL is not taken from a bundle
+		// below, so a node's layout Kustomization has no source.
+		case perLayout && grouping == "GroupByName":
+			return "needs a Kustomization CR but no enclosing bundle"
+		}
+		return ""
+	}
 	accepted := map[string]int{}
 	for _, placement := range placements {
 		for _, grouping := range []string{"nodeOnly", "GroupByName", "nodeFlat"} {
@@ -245,23 +396,16 @@ func TestGeneratedSourceIsHostedBeforeItsKustomizations(t *testing.T) {
 						rules := propertyGroupings[grouping]
 						rules.FluxPlacement = placement
 						rules.ClusterName = clusterName
-						// wrapped: the root node's layout has a Kustomization of
-						// its own, hosted in the ClusterName directory above it.
-						wrapped := placement == layout.FluxIntegratedPerLayout && clusterName != "" && !strings.HasPrefix(shape, "unnamed")
+						want := wantRefusal(placement, grouping, clusterName, shape)
 						ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(sourceHostShapes[shape](), rules)
-						if err != nil {
-							switch {
-							case strings.Contains(err.Error(), ownSourceRefusal):
-								if !wrapped {
-									t.Errorf("refused for a Source inside what a Kustomization applies, which only the root node's layout Kustomization can meet: %v", err)
-								}
-							case !slices.ContainsFunc(otherRefusals, func(s string) bool { return strings.Contains(err.Error(), s) }):
-								t.Errorf("unexpected refusal: %v", err)
+						if want != "" {
+							if err == nil || !strings.Contains(err.Error(), want) {
+								t.Errorf("got %v, want a refusal that says %q", err, want)
 							}
 							return
 						}
-						if wrapped && shape != "bundle-less root, one URL-less SourceRef" {
-							t.Errorf("accepted, although every SourceRef has a URL and the root node's layout Kustomization applies the directory that hosts their Sources")
+						if err != nil {
+							t.Fatalf("refused, want the tree integrated: %v", err)
 						}
 						accepted[fmt.Sprintf("%s under ClusterName %q", placement, clusterName)]++
 						trees := writeAll(t, ml)
@@ -351,6 +495,21 @@ func TestPerLayout_RootNodeLayoutTakesNoGeneratedSource(t *testing.T) {
 			}
 		}
 	}
+
+	// A URL on a kind no Source is generated for is the generator's own
+	// error: nothing is hosted for it, so it is not passed over and the
+	// refusal does not claim a Source the integration never generates.
+	t.Run("a kind no Source is generated for", func(t *testing.T) {
+		c := onlyURLs()
+		c.Node.Bundle.SourceRef.Kind = "Bucket"
+		rules := propertyGroupings["nodeOnly"]
+		rules.FluxPlacement = layout.FluxIntegratedPerLayout
+		rules.ClusterName = "prod"
+		_, err := integrator().CreateLayoutWithResources(c, rules)
+		if err == nil || !strings.Contains(err.Error(), "Bucket") || strings.Contains(err.Error(), ownSourceRefusal) {
+			t.Errorf("got %v, want the generator's refusal of the kind Bucket", err)
+		}
+	})
 
 	// One Kustomization applies the root node's directory, however many
 	// segments the ClusterName has: the wrapper is one layout.
