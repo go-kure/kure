@@ -188,10 +188,10 @@ fmt.Print(string(jsonData))
 
 ### Numbers
 
-The YAML encoders write an integer that fits an int64 as that integer, whatever its size:
-`9007199254740993` is written as `9007199254740993`, for a typed and an unstructured object and
-in both field orders. A number that does not fit an int64 passes through a float64 and is written
-with that precision.
+The YAML encoders write an integer that fits an int64 or a uint64 as that integer, whatever its
+size: `9007199254740993` is written as `9007199254740993`, for a typed and an unstructured object
+and in both field orders. Any other number passes through a float64 and is written with that
+precision.
 
 ### Deterministic Field Ordering
 

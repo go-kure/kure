@@ -103,9 +103,8 @@
 // # Numbers
 //
 // [EncodeObjectsToYAML] and [EncodeObjectsToYAMLWithOptions] write an integer
-// that fits an int64 as that integer, whatever its size. A number that does
-// not fit an int64 passes through a float64 and is written with that
-// precision.
+// that fits an int64 or a uint64 as that integer, whatever its size. Any
+// other number passes through a float64 and is written with that precision.
 //
 // # Server-set field stripping
 //

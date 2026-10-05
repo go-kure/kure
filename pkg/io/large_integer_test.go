@@ -103,10 +103,10 @@ func TestEncodeObjectsToYAML_KeepsLargeIntegers(t *testing.T) {
 	})
 }
 
-// The bounds of the integer case, and what it leaves alone: a number that is
-// not an integer, and one too large for an int64, are written as they were.
-// The two field orders already differ for a float beyond the int64 range; that
-// is recorded here, not changed.
+// The bounds of the integer cases, and what they leave alone: a number that is
+// not an integer, and one too large for a uint64, are written as they were.
+// The two field orders already differ for a float beyond the uint64 range;
+// that is recorded here, not changed.
 func TestEncodeObjectsToYAML_OtherNumbers(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
@@ -120,7 +120,10 @@ func TestEncodeObjectsToYAML_OtherNumbers(t *testing.T) {
 		{"fraction", 0.5, "serial: 0.5\n", "serial: 0.5\n"},
 		{"largest int64", int64(9223372036854775807), "serial: 9223372036854775807\n", "serial: 9223372036854775807\n"},
 		{"smallest int64", int64(-9223372036854775808), "serial: -9223372036854775808\n", "serial: -9223372036854775808\n"},
-		{"float beyond int64", float64(1e20), "serial: 1e+20\n", "serial: !!int 100000000000000000000\n"},
+		{"first integer above int64", uint64(9223372036854775808), "serial: 9223372036854775808\n", "serial: 9223372036854775808\n"},
+		{"largest uint64", uint64(18446744073709551615), "serial: 18446744073709551615\n", "serial: 18446744073709551615\n"},
+		{"float between int64 and uint64", float64(1e19), "serial: 10000000000000000000\n", "serial: 10000000000000000000\n"},
+		{"float beyond uint64", float64(1e20), "serial: 1e+20\n", "serial: !!int 100000000000000000000\n"},
 		{"float with an exponent", float64(1e21), "serial: 1e+21\n", "serial: !!int 1000000000000000000000\n"},
 		// JSON writes negative zero as -0, which reads back as the integer 0.
 		{"negative zero", math.Copysign(0, -1), "serial: 0\n", "serial: 0\n"},
