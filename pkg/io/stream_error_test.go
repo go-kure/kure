@@ -158,10 +158,19 @@ var streamCases = []struct {
 		wantErrs: [][]string{{"yaml:"}},
 	},
 	{
-		// JSON documents with a separator line between them are YAML
-		// documents to the decoder, and so is the malformed one.
+		// JSON documents with a separator line between them are read one
+		// by one: the first as JSON, the ones after the first separator
+		// line by the YAML reader, which splits the malformed one off.
 		name:     "malformed JSON among JSON documents with a separator line between them",
 		doc:      configMapDoc("a") + "\n---\n" + configMapDoc("b") + "\n---\n" + malformedJSON + "---\n" + configMapDoc("c") + "\n",
+		want:     []string{"a", "b", "c"},
+		wantErrs: [][]string{{"yaml:"}},
+	},
+	{
+		// The same stream after a separator line: the YAML reader reads
+		// all of it.
+		name:     "a separator line, then malformed JSON among JSON documents with a separator line between them",
+		doc:      "---\n" + configMapDoc("a") + "\n---\n" + configMapDoc("b") + "\n---\n" + malformedJSON + "---\n" + configMapDoc("c") + "\n",
 		want:     []string{"a", "b", "c"},
 		wantErrs: [][]string{{"yaml:"}},
 	},
