@@ -40,6 +40,27 @@ for _, obj := range append(objects, more...) {
 ```
 <!-- doc-example:end -->
 
+### Parse Errors
+
+A parse reads every document of the stream. Each one that does not decode is an
+error in the `ParseErrors` value the parse returns, a type of the
+[errors](/api-reference/errors/) package, and the objects that did decode are
+returned beside it.
+
+A registered kind is decoded into its upstream Go type, so that type's own
+`UnmarshalJSON` runs inside the parse. One that panics does not take the caller
+down. The document, or the list item, becomes a parse error that names the object
+and carries the panic's value, and the documents and items beside it are still
+returned:
+
+```text
+parse error in Kubernetes object: failed to decode object: the decoder panicked on CiliumNetworkPolicy "default/p": runtime error: invalid memory address or nil pointer dereference
+```
+
+A panic whose value is an error keeps it in the chain, for `errors.As`. The
+panic's stack trace is not kept. A known case is a `CiliumNetworkPolicy` whose ICMP
+field has no `type`, or `type: null`: the upstream type dereferences a nil pointer.
+
 ### Unstructured Fallback
 
 By default, only GVKs registered in the kure scheme are accepted. To parse

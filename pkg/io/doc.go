@@ -45,6 +45,16 @@
 //	    }
 //	}
 //
+// A registered kind is decoded into its upstream Go type, so that type's own
+// UnmarshalJSON runs inside the parse. One that panics does not take the
+// caller down: the document, or the list item, becomes one of those errors. It
+// names the object and carries the panic's value, as in
+//
+//	the decoder panicked on CiliumNetworkPolicy "default/p": runtime error: invalid memory address or nil pointer dereference
+//
+// and the documents and items beside it are still returned. A panic whose
+// value is an error keeps it in the chain; the stack trace is not kept.
+//
 // # Unstructured fallback
 //
 // By default the parser rejects objects whose GroupVersionKind is not
