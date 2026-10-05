@@ -583,7 +583,9 @@ func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]c
 // RetryInterval leaves the field unset; a non-empty value that does not parse
 // is an error, never a silent fallback. Bundle.Validate reports the same
 // error earlier; checking here as well covers callers that generate without
-// validating first.
+// validating first. A value that parses and that Flux does not take, and a
+// DefaultInterval of that kind, is refused here alone (parseBundleDuration,
+// checkDefaultInterval).
 //
 // With checkNames, the names this Kustomization is written with are checked
 // with stack.ValidateKustomizationName (checkKustomizationName): the bundle's
@@ -615,6 +617,8 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string,
 			return nil, err
 		}
 		interval = d
+	} else if err := checkDefaultInterval("ResourceGenerator", g.DefaultInterval); err != nil {
+		return nil, err
 	}
 
 	// Prune is a declared tri-state input, passed through untouched. An unset
@@ -803,12 +807,21 @@ func rendersBundleNamed(ix *layout.OriginIndex, name string) bool {
 }
 
 // parseBundleDuration parses one of a bundle's duration fields, returning a
-// validation error that names the field and the rejected value.
+// validation error that names the field and the rejected value. A value that
+// parses is then held to what Flux takes in a Kustomization (fluxDuration):
+// a negative one, or one under a millisecond, is refused here, naming the
+// bundle by its path, where the API server would refuse the Kustomization.
+// Bundle.Validate does not make that second check: it is Flux's rule, and
+// another engine refuses nothing for it.
 func parseBundleDuration(b *stack.Bundle, field, value string) (time.Duration, error) {
 	d, err := time.ParseDuration(value)
 	if err != nil {
 		return 0, errors.ResourceValidationError("Bundle", b.Name, field,
 			fmt.Sprintf("%s %q is not a valid duration: %v", field, value, err), err)
+	}
+	if written, ok := fluxDuration(d); !ok {
+		return 0, errors.ResourceValidationError("Bundle", b.GetPath(), field,
+			durationRefusal(field, value, "", written), nil)
 	}
 	return d, nil
 }
@@ -878,8 +891,13 @@ func (g *ResourceGenerator) createSource(ref *stack.SourceRef, name string) (cli
 		namespace = g.DefaultNamespace
 	}
 
+	// A generated source's interval is the generator's, held to what Flux
+	// takes like every interval this package writes (checkDefaultInterval).
 	switch ref.Kind {
 	case "GitRepository":
+		if err := checkDefaultInterval("ResourceGenerator", g.DefaultInterval); err != nil {
+			return nil, err
+		}
 		gr := pubfluxcd.CreateGitRepository(ref.Name, namespace)
 		gr.Spec.URL = ref.URL
 		gr.Spec.Interval = metav1.Duration{Duration: g.DefaultInterval}
@@ -890,6 +908,9 @@ func (g *ResourceGenerator) createSource(ref *stack.SourceRef, name string) (cli
 		}
 		return gr, nil
 	case "OCIRepository":
+		if err := checkDefaultInterval("ResourceGenerator", g.DefaultInterval); err != nil {
+			return nil, err
+		}
 		or := pubfluxcd.CreateOCIRepository(ref.Name, namespace)
 		or.Spec.URL = ref.URL
 		or.Spec.Interval = metav1.Duration{Duration: g.DefaultInterval}

@@ -1464,10 +1464,25 @@ layout. Readiness passes through the chain of Kustomizations a bundle with `Wait
   a node's Kustomization is Ready once the Kustomization objects below it are applied, so a
   dependency on it does not wait for the workloads.
 - **Refusals:** where the Kustomization is created, a timeout or retry interval that is no Go
-  duration, and a label or annotation in effect that the apimachinery validators refuse, the
+  duration or not one Flux takes (next item), and a label or annotation in effect that the apimachinery validators refuse, the
   annotations' total size included. The error names the layout by its directory and, for an
   inherited entry, the bundle (`layoutDuration`, `layoutMetadata`). `Bundle.Validate` is
   unchanged: a bundle's own Kustomization carries the bundle's labels and annotations unchecked.
+- **Durations Flux takes:** every duration the Flux workflow writes into an object it generates
+  is held to the pattern the Flux API holds the field to, `^([0-9]+(\.[0-9]+)?(ms|s|m|h))+$`,
+  where the object is created and in the form it is written in (`fluxDuration` in
+  `durations.go`): a bundle's interval, timeout and retry interval on its Kustomization
+  (`parseBundleDuration`), the timeout and retry interval in effect on a per-layout one
+  (`layoutDuration`), and a generator's `DefaultInterval` at each place it is written
+  (`checkDefaultInterval`): a bundle's Kustomization without an interval, a per-layout
+  Kustomization, the gotk bootstrap Kustomization, a generated `GitRepository` or
+  `OCIRepository` and the `FluxInstance` sync. Go's duration syntax is wider than the pattern,
+  so a negative duration and one under a millisecond parse and are refused here; a day unit
+  does not parse and is refused as before. `Bundle.Validate` is unchanged, so no other workflow
+  refuses anything new. A `SourceRef` has no duration, so a bundle's reach no source. The check
+  came out of the review of this change: without it a bundle's `-1s`, which its own
+  Kustomization already carried into a manifest the API refuses, would have been inherited by
+  every Kustomization below it.
 - **A second integration** keeps a per-layout Kustomization the first one placed and does not
   write its settings again.
 - **What does not reach an application's directory:** `Bundle.Prune`, `Interval`, `Force`,
@@ -1486,7 +1501,7 @@ layout. Readiness passes through the chain of Kustomizations a bundle with `Wait
   Kustomization object can be read as Ready before the Kustomization below applied it, and a
   health check runs under its own Kustomization's timeout, so one timeout inherited on every
   level is too tight for a chain. The layout's `Timeout` is how the layouts below get a shorter
-  one.
+  one, down to the 30 seconds Flux raises any shorter timeout to.
 
 **Breaking.** Every tree under `FluxIntegratedPerLayout` whose bundle sets `Wait`, `Timeout`,
 `RetryInterval`, `Labels` or `Annotations` gains them on the Kustomizations of its application
@@ -1495,11 +1510,19 @@ or annotation the Kubernetes API does not accept is refused where a per-layout K
 inherits it. And a layout that depends on the application layout above it is refused by the
 reconcile-order check once the bundle sets `Wait`, since that layout's Kustomization now waits
 for the one that depends on it: set `Wait` to a pointer to false on the application's layout. A
-tree that sets none of the five renders byte for byte as before.
+tree that sets none of the five renders byte for byte as before. A third refusal reaches every
+placement and the bootstrap: a duration Flux's API does not take is refused when the Flux
+workflow generates the object that carries it. It is breaking only for a value that never
+produced an object the API takes.
 
 **Tests.** `pkg/stack/fluxcd/layout_settings_test.go` renders to disk and to tar and covers the
 inherited settings with the whole file of one per-layout Kustomization, the tree that sets none,
 each layout field against its sibling, the other two placements, every refusal with the layout
 and the bundle named, the merged directory, an umbrella child, a node's layout, a layout outside an application, the
 bundle settings that do not reach an application's directory, and wait beside a dependency on the
-layout above.
+layout above. `duration_validation_test.go` and `durations_test.go` cover the durations: `-1s`,
+`1us`, `1d` and `1h30m` on a bundle and on a layout, own and inherited, the bundle named by its
+path on every generation path, the `DefaultInterval` at each place it is written, the pattern
+against the vendored CRDs, and the written form against what a `metav1.Duration` marshals to;
+the controls are `Bundle.Validate` (`bundle_test.go`) and the Argo CD workflow (`argo_test.go`),
+which take the same values as before.

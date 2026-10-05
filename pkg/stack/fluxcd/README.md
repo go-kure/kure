@@ -394,7 +394,7 @@ for the identifier to find every place its value can reach emitted YAML.
 
 | Identifier | Value | Applies when | Override by |
 |---|---|---|---|
-| `DefaultInterval` | `60m` | the caller names no interval (a non-empty `Bundle.Interval` that does not parse is a validation error, not a fallback) | assigning `.DefaultInterval` on either generator |
+| `DefaultInterval` | `60m` | the caller names no interval (a non-empty `Bundle.Interval` that does not parse is a validation error, not a fallback; see [Durations](#durations) for the values Flux does not take) | assigning `.DefaultInterval` on either generator |
 | `DefaultNamespace` | `flux-system` | generated resources need a namespace | assigning `.DefaultNamespace` on either generator |
 | `DefaultMode` | `layout.KustomizationExplicit` | informational: the listing mode the layout writers use for a layout with no `Mode` of its own | setting `ManifestLayout.Mode` (or `Config.KustomizationMode` for `WriteManifest`) |
 | `DefaultBootstrapName` | `flux-system` | naming the bootstrap Kustomization | assigning `BootstrapGenerator.BootstrapName` |
@@ -1118,14 +1118,14 @@ A layout's own fields apply to that layout's Kustomization only: a layout below 
 
 **Bundle labels and annotations.** In a tree walked from a cluster, `Bundle.Labels` and `Bundle.Annotations` are on the bundle's Kustomization and on the per-layout Kustomizations above, and on no object the applications generate: the walker generates each application on its own, and only `Bundle.Generate` adds them to objects.
 
-**Refusals.** The settings in effect are checked where the Kustomization is created, before anything is written. A `Timeout` or `RetryInterval` must parse as a Go duration. Every label and annotation in effect is checked with the validators the Kubernetes API uses for `metadata.labels` and `metadata.annotations`, key by key and then as a whole (the total size of the annotations). The error names the layout by its directory (`ManifestLayout 'prod/shop/db'`) and the field, and for an inherited entry the bundle (`inherited from bundle "shop"`). A bundle's own Kustomization carries the bundle's labels and annotations unchecked, as before: the check is made only where a per-layout Kustomization takes them.
+**Refusals.** The settings in effect are checked where the Kustomization is created, before anything is written. A `Timeout` or `RetryInterval` must parse as a Go duration and be one Flux takes, neither negative nor under a millisecond (see [Durations](#durations)). Every label and annotation in effect is checked with the validators the Kubernetes API uses for `metadata.labels` and `metadata.annotations`, key by key and then as a whole (the total size of the annotations). The error names the layout by its directory (`ManifestLayout 'prod/shop/db'`) and the field, and for an inherited entry the bundle (`inherited from bundle "shop"`). A bundle's own Kustomization carries the bundle's labels and annotations unchecked, as before: the check is made only where a per-layout Kustomization takes them.
 
 **A second integration** keeps the per-layout Kustomization the first one placed, as it is: its settings are not written again, so a field changed on the layout or the bundle in between is not on it. Remove the kept Kustomization or walk the cluster again.
 
 **Readiness through the chain.** With `wait`, a Kustomization health-checks every object it applied, the Kustomization objects among them, and becomes Ready only after that check. A Kustomization object is healthy once the controller has observed its current generation and its `Ready` condition is true. With `Bundle.Wait` set, the bundle's Kustomization is therefore Ready only when the Kustomization of each application directory is, which is Ready only when the Kustomization of each layout below it is, each of them Ready only when the objects in its directory are: a `dependsOn` on the bundle's Kustomization waits for the workloads, where it used to wait only until each directory had been applied. This is how kustomize-controller v1.9.5 reads, with the status rules of fluxcd/cli-utils v1.2.3, and it holds for a first apply and for every change of a Kustomization's own spec. Two limits:
 
 - **A change of content only.** When a new revision of the source changes the files in a layout's directory and leaves the layout's Kustomization object as it was, the Kustomization above finds that object unchanged, with its generation observed and `Ready` true from the revision before. The health check does not look at the revision an object last applied, so the Kustomization above can be Ready for the new revision before the one below has applied it.
-- **Nested timeouts.** A health check runs under its own Kustomization's timeout (`spec.timeout`, or the interval less 30 seconds without one) and has to outlast everything below it. One timeout inherited on every level gives the innermost Kustomization as long as the outermost, which then fails at the moment the innermost would. Set a shorter `Timeout` on the layouts below: the layout fields are how the layouts get a shorter timeout than their bundle.
+- **Nested timeouts.** A health check runs under its own Kustomization's timeout (`spec.timeout`, or the interval less 30 seconds without one) and has to outlast everything below it. One timeout inherited on every level gives the innermost Kustomization as long as the outermost, which then fails at the moment the innermost would. Set a shorter `Timeout` on the layouts below: the layout fields are how the layouts get a shorter timeout than their bundle. Flux raises any timeout under 30 seconds to 30 seconds, so a shorter value gives no margin below that: the timeout above has to exceed the timeout in effect below, which is never less than 30 seconds.
 
 **Wait and a dependency on the layout above.** A layout that lists the application layout above it in `DependsOn` (a hook group that applies after the application's own objects) cannot be combined with `wait` on that application layout's Kustomization: it would wait for the hook group's Kustomization, which waits for it. With `Bundle.Wait` set both now have `wait`, and the reconcile-order check refuses the tree, naming the chain, where it rendered before. Set `Wait` to a pointer to `false` on the application's layout; the layouts below keep the bundle's.
 
@@ -1222,6 +1222,50 @@ begins, and the error names the placement in use (`FluxIntegratedPerLayout mode
 requires a SourceRef …` or `FluxIntegratedPerBundle mode requires a SourceRef …`).
 The integrator also enforces this at CR-creation time as defense in
 depth. `FluxSeparate` and non-Flux paths are unaffected.
+
+### Durations
+
+Every duration this package writes into an object it generates is held to the pattern the Flux
+API holds that field to, `^([0-9]+(\.[0-9]+)?(ms|s|m|h))+$`, where the object is created. The
+pattern is the same on a Kustomization's `spec.interval`, `spec.timeout` and `spec.retryInterval`
+(kustomize-controller v1.9.5), on the `spec.interval` of a `GitRepository` and an `OCIRepository`
+(source-controller v1.9.5) and on a `FluxInstance`'s `spec.sync.interval` (flux-operator v0.58.1):
+
+| Generated object | Durations checked |
+|---|---|
+| a bundle's Kustomization | `Bundle.Interval`, `Timeout` and `RetryInterval`; `ResourceGenerator.DefaultInterval` when the bundle sets no interval |
+| a per-layout Kustomization | the `Timeout` and `RetryInterval` in effect, the layout's own or the bundle's it inherits, and `ResourceGenerator.DefaultInterval` |
+| the bootstrap Kustomization (`gotk` mode) | `BootstrapGenerator.DefaultInterval` |
+| a `GitRepository` or `OCIRepository`, derived from a `SourceRef` with a `URL` or generated by the bootstrap | the generator's `DefaultInterval` |
+| the `FluxInstance` sync (`flux-operator` mode, with a `SourceURL`) | `BootstrapGenerator.DefaultInterval` |
+
+A `stack.SourceRef` has no duration of its own, so a bundle's durations reach its Kustomization
+and no source. A `DefaultInterval` is checked only where an object takes it: a generator whose
+interval nothing generated carries is not refused for it.
+
+The check is made on the form the value is written in, not the one it was authored in. A duration
+is written as Go prints it, so `"90s"` is written `1m30s` and `"1us"` is written `1µs`. Go's
+`time.ParseDuration` takes more than Flux does, a sign and the units `ns` and `us`, so two kinds
+of value parse and are refused here, because the API server would refuse the object: a
+negative duration (`"-1s"`) and one under a millisecond (`"1us"`, `"500ns"`). Zero is written `0s`
+and is taken. A day is no unit of a Go duration, so `"1d"` is refused as a value that does not
+parse, as it was before.
+
+The error names the bundle by its path (`Bundle 'shop/infra'` for an umbrella child) or the layout
+by its directory, then the field, the value as authored and the form it is written in, and what
+Flux takes; for a value a layout inherits it names the bundle as well, and for a generator's
+default the generator and `DefaultInterval`:
+
+```text
+retryInterval "-2m" is written as "-2m0s", which the Flux API does not take: it takes digits with a unit of ms, s, m or h, so no negative duration and none under a millisecond
+```
+
+A layout's inherited timeout or retry interval is first written into the Kustomization of the
+bundle it comes from, which is created before those of the layouts below it, so a tree is refused
+there, naming the bundle.
+
+`Bundle.Validate` and `stack.ValidateCluster` are unchanged and accept these values: the rule is
+Flux's, and another workflow generates from a bundle that carries one as before.
 
 ## Related Packages
 

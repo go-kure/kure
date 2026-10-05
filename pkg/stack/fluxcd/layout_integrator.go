@@ -1069,6 +1069,10 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 			if err != nil {
 				return err
 			}
+			// The interval of a per-layout Kustomization is the generator's.
+			if err := checkDefaultInterval("ResourceGenerator", p.gen.DefaultInterval); err != nil {
+				return err
+			}
 			cr := p.gen.createKustomizationForLayout(name, child, ref, deps, settings)
 			if err := p.add(l, []client.Object{cr}, owner, p.layoutNamed(child)); err != nil {
 				return err

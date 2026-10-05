@@ -107,8 +107,10 @@ func (p *integratedPlacement) layoutSettings(l *layout.ManifestLayout) (layoutSe
 
 // layoutDuration resolves one duration setting of l's per-layout
 // Kustomization: own, the layout's, or else inherited, the holding bundle's.
-// Neither set leaves the field out. A value that does not parse is refused
-// with the layout's directory, as parseBundleDuration refuses a bundle's.
+// Neither set leaves the field out. A value that does not parse, and one
+// Flux does not take in a Kustomization (fluxDuration), is refused with the
+// layout's directory and, when it is inherited, the bundle, as
+// parseBundleDuration refuses a bundle's own.
 func layoutDuration(l *layout.ManifestLayout, holder *stack.Bundle, name, own, inherited string) (*metav1.Duration, error) {
 	value, from := own, ""
 	if value == "" && inherited != "" {
@@ -121,6 +123,10 @@ func layoutDuration(l *layout.ManifestLayout, holder *stack.Bundle, name, own, i
 	if err != nil {
 		return nil, errors.ResourceValidationError("ManifestLayout", l.FullRepoPath(), name,
 			fmt.Sprintf("%s %q%s is not a valid duration: %v", name, value, from, err), err)
+	}
+	if written, ok := fluxDuration(d); !ok {
+		return nil, errors.ResourceValidationError("ManifestLayout", l.FullRepoPath(), name,
+			durationRefusal(name, value, from, written), nil)
 	}
 	return &metav1.Duration{Duration: d}, nil
 }
