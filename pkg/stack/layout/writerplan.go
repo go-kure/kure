@@ -65,7 +65,9 @@ type writerPlan struct {
 // parent's directory gets an entry climbing out of it with "../", which
 // kustomize's default load restrictor rejects; checkLayoutTree refuses such a
 // tree, and one whose directories differ only in case, before anything is
-// written (see checkSingleChildEntry).
+// written (see checkSingleChildEntry). A listed directory child whose
+// Namespace is its own path, so that it is written below the directory its
+// entry names, is refused as well (see checkDirectoryChildEntry).
 func childEntry(outDir outDirFunc, skipCrossPackage bool) func(parent, child *ManifestLayout) string {
 	return func(parent, child *ManifestLayout) string {
 		if child == nil || child.UmbrellaChild || child.rendersBundle() {
@@ -220,6 +222,72 @@ func checkSingleChildEntry(parent, child *ManifestLayout, plan writerPlan, root 
 			child.FullRepoPath(), child.Name), nil)
 	}
 	return nil
+}
+
+// checkDirectoryChildEntry refuses a directory child that its parent's
+// kustomization.yaml lists and whose Namespace is the path the child itself
+// should have, <parent directory>/<Name>, instead of its parent's path
+// (go-kure/kure#979). FullRepoPath joins Name onto Namespace, so such a child
+// nests one level deeper and is written to <parent directory>/<Name>/<Name>.
+// The parent lists it by its Name (see childEntry), which kustomize resolves
+// to <parent directory>/<Name>: a directory that then holds no
+// kustomization.yaml, so the build of the parent fails.
+//
+// It refuses that one shape. A child written to <parent directory>/<Name>
+// passes, same-name layouts included: an application web in a bundle web is at
+// web/web with Namespace web, its parent's path. A child a caller places
+// elsewhere on purpose (a root that lists sibling layers living under a group
+// directory) is not refused either; the entry names nothing there too, and
+// such a root's kustomization.yaml is not a valid kustomize entry point.
+//
+// Both directories are the writer's own (plan.outDir) and their segments must
+// match exactly, so an AppFileSingle root, which writes its kustomization.yaml
+// into its Namespace, is compared by that directory. A child the parent does
+// not list (see childEntry), and every child of a parent that writes no
+// kustomization.yaml, has no entry to dangle. root is true when parent is the
+// tree root.
+func checkDirectoryChildEntry(parent, child *ManifestLayout, plan writerPlan, root bool) error {
+	childDir, single := plan.outDir(child)
+	if single {
+		return nil
+	}
+	entry := plan.childEntry(parent, child)
+	if entry == "" || !plan.writesKustomization(parent, root) {
+		return nil
+	}
+	parentDir, _ := plan.outDir(parent)
+	// entry is the child's Name: the directory the parent lists is the path
+	// the child should have, and the child is refused when it is written one
+	// Name below that.
+	listed := path.Join(filepath.ToSlash(parentDir), filepath.ToSlash(entry))
+	nested := path.Join(listed, filepath.ToSlash(entry))
+	if rel, inside := relPath(nested, childDir); nested == listed || !inside || rel != "." {
+		return nil
+	}
+	return errors.NewFileError("write", childDir, fmt.Sprintf(
+		"layout %q is written to %q, not to %q, the directory the kustomization.yaml of its parent layout %q lists as %q: its Namespace %q is the child's own path, so its Name is joined on twice; set Namespace to the parent's path",
+		child.FullRepoPath(), filepath.ToSlash(childDir), listed, parent.FullRepoPath(), entry, child.Namespace), nil)
+}
+
+// checkDirectoryChildEntries runs checkDirectoryChildEntry on every child of
+// the tree, parents first.
+func checkDirectoryChildEntries(root *ManifestLayout, plan writerPlan) error {
+	var walk func(l *ManifestLayout) error
+	walk = func(l *ManifestLayout) error {
+		for _, child := range l.Children {
+			if child == nil {
+				continue
+			}
+			if err := checkDirectoryChildEntry(l, child, plan, l == root); err != nil {
+				return err
+			}
+			if err := walk(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return walk(root)
 }
 
 // groupResourceFiles groups l's resources into files: all of them into
