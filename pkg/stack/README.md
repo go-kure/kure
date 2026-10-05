@@ -436,6 +436,8 @@ apply that tree's child directories exist only in a layout): use `CreateLayoutWi
 with the Flux engine for that placement.
 `CreateLayoutWithResources` takes the same rules and also returns the layout it walked, with
 the resources placed in it.
+`GenerateBootstrap(config, rootNode, rules)` takes the same rules too, and points Flux at the top
+directory of the tree a walk with them writes (see [Flux Engine](/api-reference/flux-engine/)).
 
 Supported workflow providers: `"flux"` / `"fluxcd"` and `"argo"` / `"argocd"`. Each is registered by
 importing its package, and `NewWorkflow` returns that package's `*fluxcd.WorkflowEngine` or

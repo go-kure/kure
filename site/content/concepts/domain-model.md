@@ -169,7 +169,7 @@ clusters/
         api/                     # Application → K8s manifests
 ```
 
-The [Layout Engine](/api-reference/layout) handles this mapping, and the [Flux Engine](/api-reference/flux-engine) generates the corresponding Flux Kustomization resources — by default in a separate `flux-system` directory, not beside each bundle. The workflow entry points take the same `rules`: `GenerateFromCluster(cluster, rules)` returns the Flux resources as a list placed nowhere (the Kustomizations and any Sources generated for them), each Kustomization's `spec.path` a directory a walk with those rules writes, so pass the rules the tree is written with; `CreateLayoutWithResources(cluster, rules)` returns them placed in the layout it walks.
+The [Layout Engine](/api-reference/layout) handles this mapping, and the [Flux Engine](/api-reference/flux-engine) generates the corresponding Flux Kustomization resources — by default in a separate `flux-system` directory, not beside each bundle. The workflow entry points take the same `rules`: `GenerateFromCluster(cluster, rules)` returns the Flux resources as a list placed nowhere (the Kustomizations and any Sources generated for them), each Kustomization's `spec.path` a directory a walk with those rules writes, so pass the rules the tree is written with; `CreateLayoutWithResources(cluster, rules)` returns them placed in the layout it walks; `GenerateBootstrap(config, rootNode, rules)` points Flux at the top directory of the tree a walk with them writes.
 
 ## Further Reading
 
