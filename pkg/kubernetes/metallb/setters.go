@@ -2,6 +2,7 @@ package metallb
 
 import (
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+	metallbv1beta2 "go.universe.tf/metallb/api/v1beta2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -24,8 +25,10 @@ func SetIPAddressPoolAllocateTo(obj *metallbv1beta1.IPAddressPool, alloc *metall
 
 // BGPPeer setters
 
-// AddBGPPeerNodeSelector appends a node selector to the BGPPeer spec.
-func AddBGPPeerNodeSelector(obj *metallbv1beta1.BGPPeer, sel metallbv1beta1.NodeSelector) {
+// AddBGPPeerNodeSelector appends a node selector to the BGPPeer spec. It takes
+// the metallb.io/v1beta2 object [CreateBGPPeer] returns, which selects nodes
+// with the apimachinery label selector.
+func AddBGPPeerNodeSelector(obj *metallbv1beta2.BGPPeer, sel metav1.LabelSelector) {
 	obj.Spec.NodeSelectors = append(obj.Spec.NodeSelectors, sel)
 }
 

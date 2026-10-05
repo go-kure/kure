@@ -949,6 +949,17 @@
     },
     {
       "group": "metallb.io",
+      "version": "v1beta2",
+      "kind": "BGPPeer",
+      "goType": "BGPPeer",
+      "importPath": "go.universe.tf/metallb/api/v1beta2",
+      "module": "go.universe.tf/metallb",
+      "moduleVersion": "v0.16.1",
+      "namespaced": true,
+      "scopeSource": "crd"
+    },
+    {
+      "group": "metallb.io",
       "version": "v1beta1",
       "kind": "Community",
       "goType": "Community",
@@ -1895,6 +1906,15 @@
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
       "moduleVersion": "v0.94.1"
+    },
+    {
+      "importPath": "go.universe.tf/metallb/api/v1beta2",
+      "typeName": "BGPPeerSpec",
+      "field": "disableMP",
+      "goField": "DisableMP",
+      "stability": "deprecated",
+      "module": "go.universe.tf/metallb",
+      "moduleVersion": "v0.16.1"
     },
     {
       "importPath": "k8s.io/api/apps/v1",

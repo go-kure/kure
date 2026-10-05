@@ -65,7 +65,7 @@ For a **cluster-scoped** kind the generator emits a one-argument wrapper, so the
 `CreateNewKind("test")` <!-- doc-api-refs:ignore placeholder kind, as above --> and the `want.SetNamespace` line goes: a namespace on a cluster-scoped
 object then fails the same comparison, which is the point of comparing the whole object.
 
-`pkg/kubernetes/identity_test.go` already asserts this for every registered kind.
+`pkg/kubernetes/identity_test.go` already asserts this for every generated constructor.
 
 ### Error Handling
 

@@ -10,6 +10,10 @@
 // a kind no source can answer for is an error, so a scheme change that adds a
 // kind fails generation until upstream states its scope. See
 // pkg/kubernetes/README.md § 9.
+//
+// Every registered kind gets a generated constructor except the ones
+// skippedWrappers names: a second version of a kind, whose wrapper name another
+// version holds. See skips.go.
 package kinds
 
 import (
@@ -34,6 +38,11 @@ type Kind struct {
 	TypeName   string       // Go type name
 	Package    string       // kure package directory under pkg/kubernetes ("" for the root)
 	Namespaced bool         // derived; see [Registered]
+
+	// WrapperSkipped marks a kind that is registered, and so parsed and listed
+	// in the kind table, but gets no generated constructor: another version of
+	// the same kind in the same package takes the name. See skippedWrappers.
+	WrapperSkipped bool
 }
 
 // Key returns the group/kind key the scope lookups are indexed by ("apps/Deployment", "/Pod").
@@ -106,6 +115,9 @@ func derive() ([]Kind, error) {
 	if err := applyScopes(all, resolved); err != nil {
 		return nil, err
 	}
+	if err := applySkips(all, skippedWrappers); err != nil {
+		return nil, err
+	}
 	return all, nil
 }
 
@@ -115,9 +127,17 @@ func derive() ([]Kind, error) {
 // one entry per kind or an error, so that is unreachable through it today; the
 // check stays because the alternative to noticing is handing out the zero
 // value, Namespaced, which is a wrong answer indistinguishable from a right one.
+//
+// Scope belongs to the group/kind, not to a version of it, and the lookups are
+// keyed that way. A kind registered at two versions therefore resolves twice
+// under one key, and the two must agree: answering with whichever came last
+// would make the scope of one version depend on the order of the other.
 func applyScopes(all []Kind, resolved []DerivedScope) error {
 	scopes := make(map[string]markers.Scope, len(resolved))
 	for _, d := range resolved {
+		if prev, seen := scopes[d.Key]; seen && prev != d.Scope {
+			return errors.Errorf("kinds: %s resolves to two scopes (%s and %s); the versions of one group/kind share one scope", d.Key, prev, d.Scope)
+		}
 		scopes[d.Key] = d.Scope
 	}
 	for i := range all {

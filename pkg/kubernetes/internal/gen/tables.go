@@ -71,17 +71,21 @@ func deriveTables(all []kinds.Kind) (tableData, error) {
 	if err != nil {
 		return tableData{}, err
 	}
-	scopes := map[string]kinds.DerivedScope{}
-	for _, d := range resolved {
-		scopes[d.Key] = d
+	// One resolution per kind, in the order given. The pairing is by position,
+	// not through a map keyed by group/kind: a kind registered at two versions
+	// has two resolutions under one key, each naming the module and the source
+	// its own version was read from, and a map would hand both rows whichever
+	// came last.
+	if len(resolved) != len(all) {
+		return tableData{}, errors.Errorf("gen: %d scopes resolved for %d kinds", len(resolved), len(all))
 	}
 
 	data := tableData{}
 	roots := make([]maturity.Root, 0, len(all))
-	for _, k := range all {
-		d, ok := scopes[k.Key()]
-		if !ok {
-			return tableData{}, errors.Errorf("gen: no scope resolved for %s", k.Key())
+	for i, k := range all {
+		d := resolved[i]
+		if d.Key != k.Key() {
+			return tableData{}, errors.Errorf("gen: scope %d is for %s, the kind at that position is %s (%s)", i, d.Key, k.Key(), k.GVK)
 		}
 		// kinds.Registered() already derives Namespaced from this same
 		// resolution, so comparing the two here would assert nothing —

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-kure/kure/pkg/kubernetes/metallb"
 )
@@ -32,8 +33,11 @@ func ExampleCreateBGPPeer() {
 	peer.Spec.ASN = 64501
 	peer.Spec.Address = "10.0.0.1"
 	peer.Spec.Port = 179
-	fmt.Println(peer.Spec.Address, peer.Spec.ASN)
-	// Output: 10.0.0.1 64501
+	metallb.AddBGPPeerNodeSelector(peer, metav1.LabelSelector{
+		MatchLabels: map[string]string{"node-role.kubernetes.io/worker": ""},
+	})
+	fmt.Println(peer.APIVersion, peer.Spec.Address, peer.Spec.ASN, len(peer.Spec.NodeSelectors))
+	// Output: metallb.io/v1beta2 10.0.0.1 64501 1
 }
 
 func ExampleCreateBGPAdvertisement() {

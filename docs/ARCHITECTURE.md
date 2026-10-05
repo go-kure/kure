@@ -831,6 +831,17 @@ This writes the `Create<Kind>` wrapper into `zz_generated_create.go`, adds the k
 `zz_generated_tables.go` and to `docs/api-tables.{json,md}`, and records the scope it derived and
 what stated it. Commit the generated files; `./scripts/gen-builders.sh check` fails CI otherwise.
 
+If the generator reports that `Create<Kind>` would be generated twice in one package, the scheme now
+holds two versions of one kind. A wrapper is named after its kind alone, so one of the two goes
+without: name it, with the reason, in `skippedWrappers` (`pkg/kubernetes/internal/kinds/skips.go`)
+and regenerate. The skipped version stays registered — its manifests parse to their typed object and
+it keeps its row in the generated tables — and callers build it from the upstream type. An entry
+that does not resolve such a clash is refused, so the table is not a way to drop a constructor.
+Moving the wrapper from one version to the other changes the constructor's return type, which is a
+breaking change for callers: say so in the PR, and move the family's `Set*`/`Add*` helpers that take
+the object with it. MetalLB's `BGPPeer` is the worked case: `metallb.io/v1beta2` has the wrapper,
+the deprecated `metallb.io/v1beta1` is the skipped entry.
+
 If the generator reports that it cannot determine a kind's scope, that is the intended failure: add
 the `+kubebuilder:resource` marker upstream, or ship the `CustomResourceDefinition` in the module.
 Do not default it. The built-in table is not a third option here: `builtinClusterScoped`
@@ -923,7 +934,7 @@ that have no such field, and the generator writes the wrapper's signature from t
 — so a cluster-scoped kind drops the namespace argument and the matching `want.SetNamespace` line,
 and nothing else changes.
 
-`pkg/kubernetes/identity_test.go:53-80` already asserts exactly this for every registered kind, by
+`pkg/kubernetes/identity_test.go:64-103` already asserts exactly this for every generated wrapper, by
 constructing `want` reflectively from the scheme. The per-kind test is a local echo of that, worth
 writing because it fails with the kind's name in it rather than as one subtest among hundreds.
 

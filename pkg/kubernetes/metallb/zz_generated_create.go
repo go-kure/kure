@@ -5,6 +5,7 @@ package metallb
 
 import (
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+	metallbv1beta2 "go.universe.tf/metallb/api/v1beta2"
 
 	"github.com/go-kure/kure/pkg/kubernetes"
 )
@@ -19,9 +20,9 @@ func CreateBGPAdvertisement(name, namespace string) *metallbv1beta1.BGPAdvertise
 	return kubernetes.Create[metallbv1beta1.BGPAdvertisement](name, namespace)
 }
 
-// CreateBGPPeer returns a metallb.io/v1beta1 BGPPeer carrying TypeMeta and identity only.
-func CreateBGPPeer(name, namespace string) *metallbv1beta1.BGPPeer {
-	return kubernetes.Create[metallbv1beta1.BGPPeer](name, namespace)
+// CreateBGPPeer returns a metallb.io/v1beta2 BGPPeer carrying TypeMeta and identity only.
+func CreateBGPPeer(name, namespace string) *metallbv1beta2.BGPPeer {
+	return kubernetes.Create[metallbv1beta2.BGPPeer](name, namespace)
 }
 
 // CreateCommunity returns a metallb.io/v1beta1 Community carrying TypeMeta and identity only.

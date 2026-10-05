@@ -26,7 +26,8 @@ type generatedKind struct {
 }
 
 // generatedKinds lists every generated wrapper; the identity test walks the
-// scheme and fails on any registered kind missing here.
+// scheme and fails on any registered kind missing here, unless internal/kinds
+// names it as skipped.
 var generatedKinds = []generatedKind{
 	{GVK: schema.GroupVersionKind{Group: "apiregistration.k8s.io", Version: "v1", Kind: "APIService"}, Namespaced: false, Create: func(name, _ string) client.Object { return kubernetes.CreateAPIService(name) }},
 	{GVK: schema.GroupVersionKind{Group: "gateway.networking.k8s.io", Version: "v1", Kind: "BackendTLSPolicy"}, Namespaced: true, Create: func(name, namespace string) client.Object { return kubernetes.CreateBackendTLSPolicy(name, namespace) }},
@@ -173,7 +174,7 @@ var generatedKinds = []generatedKind{
 	}},
 	{GVK: schema.GroupVersionKind{Group: "metallb.io", Version: "v1beta1", Kind: "BFDProfile"}, Namespaced: true, Create: func(name, namespace string) client.Object { return metallb.CreateBFDProfile(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "metallb.io", Version: "v1beta1", Kind: "BGPAdvertisement"}, Namespaced: true, Create: func(name, namespace string) client.Object { return metallb.CreateBGPAdvertisement(name, namespace) }},
-	{GVK: schema.GroupVersionKind{Group: "metallb.io", Version: "v1beta1", Kind: "BGPPeer"}, Namespaced: true, Create: func(name, namespace string) client.Object { return metallb.CreateBGPPeer(name, namespace) }},
+	{GVK: schema.GroupVersionKind{Group: "metallb.io", Version: "v1beta2", Kind: "BGPPeer"}, Namespaced: true, Create: func(name, namespace string) client.Object { return metallb.CreateBGPPeer(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "metallb.io", Version: "v1beta1", Kind: "Community"}, Namespaced: true, Create: func(name, namespace string) client.Object { return metallb.CreateCommunity(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "metallb.io", Version: "v1beta1", Kind: "ConfigurationState"}, Namespaced: true, Create: func(name, namespace string) client.Object { return metallb.CreateConfigurationState(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "metallb.io", Version: "v1beta1", Kind: "IPAddressPool"}, Namespaced: true, Create: func(name, namespace string) client.Object { return metallb.CreateIPAddressPool(name, namespace) }},

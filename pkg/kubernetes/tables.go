@@ -130,6 +130,12 @@ func copyMaturity(m FieldMaturity) FieldMaturity {
 }
 
 // KindByGroupKind returns the registered kind for a "group/Kind" key.
+//
+// A group/kind registered at more than one version has one row per version, and
+// this returns the first in table order: the lowest version string, which is
+// not necessarily the newest or the stored one. Read from it only what the
+// versions share — scope and what declared it. For the Go type or the module of
+// one version, ask [KindFor].
 func KindByGroupKind(groupKind string) (KindInfo, bool) {
 	for _, k := range kinds {
 		if k.GroupKind() == groupKind {
@@ -176,15 +182,19 @@ func IsNamespaced(apiVersion, kind string) (namespaced, known bool) {
 	return k.Namespaced, true
 }
 
-// KindForAnyVersion returns the registered kind for an apiVersion and kind,
-// matching the group but not the version — the row kure registers for that
-// group/kind, whichever version that is.
+// KindForAnyVersion returns the registered kind for an apiVersion and kind
+// without requiring the version to be registered: the row for that exact
+// version when kure registers it, and otherwise the row [KindByGroupKind]
+// returns for the group/kind.
 //
 // It answers the questions whose answer does not vary between the versions of
 // one group/kind: scope, and what declared it. Use [KindFor] for anything
 // version-specific, since the row this returns may describe a different version
 // than the one asked about.
 func KindForAnyVersion(apiVersion, kind string) (KindInfo, bool) {
+	if k, ok := KindFor(apiVersion, kind); ok {
+		return k, true
+	}
 	group, _ := groupVersion(apiVersion)
 	return KindByGroupKind(group + "/" + kind)
 }

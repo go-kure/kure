@@ -14,6 +14,10 @@ import (
 // TestIdentity_EveryRegisteredKindHasAWrapper walks the scheme and fails on any
 // object kind that has no generated constructor, and on any registry entry
 // that no longer matches a registered kind (a stale generated file).
+//
+// The one exception is a kind internal/kinds names as skipped: another version
+// of it holds the wrapper name. For that kind the check runs the other way, and
+// a wrapper it should not have is the failure.
 func TestIdentity_EveryRegisteredKindHasAWrapper(t *testing.T) {
 	registered, err := kinds.Registered()
 	if err != nil {
@@ -26,6 +30,13 @@ func TestIdentity_EveryRegisteredKindHasAWrapper(t *testing.T) {
 	seen := map[schema.GroupVersionKind]bool{}
 	for _, k := range registered {
 		g, ok := generated[k.GVK]
+		if k.WrapperSkipped {
+			if ok {
+				t.Errorf("%s is named as skipped but has a generated wrapper (run scripts/gen-builders.sh generate)", k.GVK)
+				seen[k.GVK] = true
+			}
+			continue
+		}
 		if !ok {
 			t.Errorf("%s is registered in the scheme but has no generated wrapper (run scripts/gen-builders.sh generate)", k.GVK)
 			continue
@@ -45,8 +56,8 @@ func TestIdentity_EveryRegisteredKindHasAWrapper(t *testing.T) {
 	}
 }
 
-// TestIdentity_ConstructorsEmitIdentityOnly proves, for every registered kind,
-// that the generated constructor sets exactly TypeMeta plus name (and
+// TestIdentity_ConstructorsEmitIdentityOnly proves, for every generated wrapper,
+// that the constructor sets exactly TypeMeta plus name (and
 // namespace when namespaced) and nothing else: the result must DeepEqual a
 // zero value of the type with only those fields written. Any injected label,
 // annotation, selector or default turns this red.

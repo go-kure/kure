@@ -1,9 +1,13 @@
 package metallb
 
 import (
+	"reflect"
 	"testing"
 
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+	metallbv1beta2 "go.universe.tf/metallb/api/v1beta2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func TestCreateL2Advertisement(t *testing.T) {
@@ -51,12 +55,28 @@ func TestIPAddressPoolAllocateTo(t *testing.T) {
 	}
 }
 
+// CreateBGPPeer builds the version MetalLB stores, v1beta2. The deprecated
+// v1beta1 stays registered for parsing and has no constructor.
+func TestCreateBGPPeerIsV1Beta2(t *testing.T) {
+	got := CreateBGPPeer("my-peer", "metallb-system")
+
+	want := &metallbv1beta2.BGPPeer{}
+	want.GetObjectKind().SetGroupVersionKind(
+		schema.GroupVersionKind{Group: "metallb.io", Version: "v1beta2", Kind: "BGPPeer"})
+	want.SetName("my-peer")
+	want.SetNamespace("metallb-system")
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("constructor emitted more than identity:\n got %#v\nwant %#v", got, want)
+	}
+}
+
 func TestBGPPeerSetters(t *testing.T) {
 	obj := CreateBGPPeer("my-peer", "metallb-system")
 	obj.Spec.MyASN = 64500
 	obj.Spec.ASN = 64501
 	obj.Spec.Address = "10.0.0.1"
-	AddBGPPeerNodeSelector(obj, metallbv1beta1.NodeSelector{
+	AddBGPPeerNodeSelector(obj, metav1.LabelSelector{
 		MatchLabels: map[string]string{"role": "worker"},
 	})
 
