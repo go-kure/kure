@@ -1552,6 +1552,9 @@ func (emptyAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
 // TestPerLayout_EmptyBundlelessNodeSurvivesGitTree: every directory a
 // PerLayout CR targets gets a kustomization.yaml — an empty bundle-less node,
 // an application that renders nothing and an empty augmenter layout included.
+// With a directory per bundle (GroupByName) the bundle-less node takes the
+// root bundle's SourceRef too, the bundle of the nearest node above it
+// (go-kure/kure#979, item 12).
 func TestPerLayout_EmptyBundlelessNodeSurvivesGitTree(t *testing.T) {
 	for _, grouping := range []string{"nodeOnly", "GroupByName"} {
 		for _, clusterName := range []string{"", ".", "prod"} {
@@ -1562,21 +1565,15 @@ func TestPerLayout_EmptyBundlelessNodeSurvivesGitTree(t *testing.T) {
 				rules := propertyGroupings[grouping]
 				rules.FluxPlacement = layout.FluxIntegratedPerLayout
 				rules.ClusterName = clusterName
-				if grouping == "GroupByName" {
-					// The root node layout renders no bundle here (its bundle
-					// has a layout of its own, with or without a ClusterName)
-					// and nothing below "empty" has a SourceRef: its CR has no
-					// source, which S5 refuses.
-					_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
-					if err == nil || !strings.Contains(err.Error(), `platform/empty" needs a Kustomization CR`) {
-						t.Fatalf("got %v, want the no-source refusal for platform/empty", err)
-					}
-					return
-				}
 				ml := integrated(t, c, rules)
 				var dirs []string
+				emptyNode := false
 				for _, k := range kustomizations(ml) {
 					dirs = append(dirs, k.Spec.Path)
+					emptyNode = emptyNode || filepath.Base(k.Spec.Path) == "empty"
+				}
+				if !emptyNode {
+					t.Errorf("no Kustomization applies the directory of node empty: %v", dirs)
 				}
 				for writer, w := range writeAll(t, ml) {
 					checkWrittenTree(t, writer, w, dirs)

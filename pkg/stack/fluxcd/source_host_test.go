@@ -394,12 +394,10 @@ func sourceHostRefusal(placement layout.FluxPlacement, grouping, clusterName, sh
 	// different SourceRefs into one Kustomization.
 	case grouping == "nodeFlat" && (shape == urlLess || shape == "root bundle and child node, a Source each"):
 		return "sourceRef differ"
-	// Not the Source invariant's: with a directory per bundle no node's layout
-	// renders one, and a SourceRef with a URL is not taken from a bundle
-	// below, so a node's layout Kustomization has no source.
-	case perLayout && grouping == "GroupByName":
-		return "needs a Kustomization CR but no enclosing bundle"
 	}
+	// With a directory per bundle (GroupByName) no node's layout renders one;
+	// its layout Kustomization takes the SourceRef of its own node's bundle,
+	// or of the nearest bundle above (item 12).
 	return ""
 }
 
