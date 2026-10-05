@@ -575,7 +575,8 @@ the object it encodes, also when it carries an object beside the raw JSON, and o
 metadata as the object it serializes to): an
 identity (namespace/name) present twice, or taken by
 a generated CR elsewhere, is refused in every placement, since the kustomize build would register
-the id twice. A generated Source has one definition across the whole pass: every Source of its
+the id twice. Where a generated CR meets one in the tree, the error names both and the way out
+(see [Kustomization names](#kustomization-names)). A generated Source has one definition across the whole pass: every Source of its
 identity — kind, namespace and name, whatever the API version (a `v1beta2` `GitRepository` is the
 same Source as the generated `v1` one) — anywhere in the tree, top-level or inside a `List`, and
 every Source the pass places in another layout, must have the same API version and content, or the
