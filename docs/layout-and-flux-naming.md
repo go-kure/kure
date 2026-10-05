@@ -236,6 +236,13 @@ go-kure/kure#979 (`v0.2.0-beta.15` wrote `manifests/<root>`). The Source and the
    protection or force replace, so a consumer writes Flux annotations onto objects itself. No
    longer so: `Application.Delivery` carries the intent
    ([go-kure/kure#974](https://github.com/go-kure/kure/issues/974), below).
+6. **Readiness settings and labels of a per-layout Kustomization.** Under
+   `FluxIntegratedPerLayout` the Kustomization of an application's directory, of a layout an
+   augmenter added and of a group took interval and prune from the generator and nothing else: no
+   `wait`, timeout, retry interval, label or annotation, whatever the bundle set, and no field to
+   give it any. Ordering between such Kustomizations was apply order only. No longer so: they
+   take the five from the bundle that holds the application and from the layout
+   ([go-kure/kure#1015](https://github.com/go-kure/kure/issues/1015), below).
 
 What a consumer can do today:
 - **Ordering inside an application** is expressible, as umbrella children with `DependsOn`.
@@ -462,9 +469,11 @@ name of its bundle's.
   (`checkNodeKustomizationFields` in `pkg/stack/argocd/argo.go`).
 - **Collisions:** a node's `KustomizationName` equal to another Kustomization name generated in
   the same integration is refused, naming both owners (`integratedPlacement.claim`).
-- **Reconciliation settings:** a node Kustomization has none of its own. Interval and prune are
-  the generator's and `wait`, `timeout` and `retryInterval` stay unset
-  (`createKustomizationForLayout`); what a group applies is the Kustomizations below it.
+- **Reconciliation settings:** a node Kustomization inherits none and `Node` has no field for
+  any. Interval and prune are the generator's (`createKustomizationForLayout`); what a group
+  applies is the Kustomizations below it. `wait`, `timeout` and `retryInterval` stayed unset
+  until go-kure/kure#1015, which reads them, with labels and annotations, from the node's layout
+  (below).
 - **A second integration** keeps the node Kustomization the first one placed, and is refused when
   the node's `DependsOn` or `NamedDependsOn` ask for a dependency the kept one lacks
   (`checkKeptNodeCR`).
@@ -1423,3 +1432,74 @@ object, and the generated `pkg/kubernetes/zz_generated_create_test.go` calls eac
 a typed list of each kind, an empty list, a generic `List` with mixed items, the order of a
 multi-document stream, an item that does not decode or is `null` in either shape, and the nesting
 bound.
+
+### Settings of a per-layout Kustomization ([go-kure/kure#1015](https://github.com/go-kure/kure/issues/1015))
+
+**Shipped.** Under `FluxIntegratedPerLayout` a per-layout Kustomization takes `wait`, timeout,
+retry interval, labels and annotations, from the bundle that holds its application and from its
+layout. Readiness passes through the chain of Kustomizations a bundle with `Wait` applies.
+
+**What it does.**
+
+- **Inherited from the bundle:** the Kustomization of an application's own layout and of every
+  layout below it, at any depth, takes `Bundle.Wait`, `Timeout`, `RetryInterval`, `Labels` and
+  `Annotations` of the bundle that holds the application. In a directory a grouping axis merged
+  several bundles into, that is the bundle whose `Applications` lists the application
+  (`integratedPlacement.holdingBundle` in `layout_settings.go`).
+- **Fields on the layout:** `ManifestLayout.Wait`, `Timeout`, `RetryInterval`, `Labels` and
+  `Annotations` (`manifest.go`). Unset inherits; a set scalar replaces the bundle's, and a `Wait`
+  pointing at false turns an inherited wait off; labels and annotations merge key by key, the
+  layout's value winning (`integratedPlacement.layoutSettings`). An inherited duration cannot be
+  removed and an inherited key cannot be dropped. The fields are read on every layout that gets a
+  Kustomization of its own, and dropped without an error elsewhere and under the other
+  placements, as `DependsOn` and `KustomizationName` are.
+- **Interval and prune stay the generator's** (`createKustomizationForLayout`). An interval is a
+  cadence and changes nothing about the order of readiness; `ResourceGenerator.Prune` is the
+  documented input for these Kustomizations, and taking `Bundle.Prune` would switch garbage
+  collection on in trees that render without it.
+- **No health checks:** `wait` is the readiness setting of a per-layout Kustomization, and Flux
+  ignores health checks under `wait`.
+- **Nodes:** `Node` gets no field and a node's Kustomization inherits nothing. The five layout
+  fields are read on a node's layout as on any other. The remainder: without `Wait` on its layout
+  a node's Kustomization is Ready once the Kustomization objects below it are applied, so a
+  dependency on it does not wait for the workloads.
+- **Refusals:** where the Kustomization is created, a timeout or retry interval that is no Go
+  duration, and a label or annotation in effect that the apimachinery validators refuse, the
+  annotations' total size included. The error names the layout by its directory and, for an
+  inherited entry, the bundle (`layoutDuration`, `layoutMetadata`). `Bundle.Validate` is
+  unchanged: a bundle's own Kustomization carries the bundle's labels and annotations unchecked.
+- **A second integration** keeps a per-layout Kustomization the first one placed and does not
+  write its settings again.
+- **What does not reach an application's directory:** `Bundle.Prune`, `Interval`, `Force`,
+  `Suspend`, `PostBuild` and `Patches` stay settings of the bundle's Kustomization, which applies
+  the Kustomizations of its applications' directories and not the objects in them. For patches
+  this is what item 5 of go-kure/kure#979 pinned.
+- **Bundle labels and annotations in a walked tree** are on the bundle's Kustomization and on
+  these per-layout Kustomizations, and on no object: the walker generates each application on
+  its own and only `Bundle.Generate` adds them to objects. The comment on the two `Bundle` fields
+  said otherwise and is corrected; the behaviour is unchanged.
+- **Readiness through the chain:** with `wait`, a Kustomization health-checks every object it
+  applied, Kustomization objects included, and one of those is healthy once its generation is
+  observed and its `Ready` condition is true (kustomize-controller v1.9.5, fluxcd/cli-utils
+  v1.2.3). With `Bundle.Wait` the bundle's Kustomization is Ready only when every Kustomization
+  below it is. Two limits: a revision that changes a directory's content and not its
+  Kustomization object can be read as Ready before the Kustomization below applied it, and a
+  health check runs under its own Kustomization's timeout, so one timeout inherited on every
+  level is too tight for a chain. The layout's `Timeout` is how the layouts below get a shorter
+  one.
+
+**Breaking.** Every tree under `FluxIntegratedPerLayout` whose bundle sets `Wait`, `Timeout`,
+`RetryInterval`, `Labels` or `Annotations` gains them on the Kustomizations of its application
+directories and of the layouts below them. Two refusals are new for such a tree. A bundle label
+or annotation the Kubernetes API does not accept is refused where a per-layout Kustomization
+inherits it. And a layout that depends on the application layout above it is refused by the
+reconcile-order check once the bundle sets `Wait`, since that layout's Kustomization now waits
+for the one that depends on it: set `Wait` to a pointer to false on the application's layout. A
+tree that sets none of the five renders byte for byte as before.
+
+**Tests.** `pkg/stack/fluxcd/layout_settings_test.go` renders to disk and to tar and covers the
+inherited settings with the whole file of one per-layout Kustomization, the tree that sets none,
+each layout field against its sibling, the other two placements, every refusal with the layout
+and the bundle named, the merged directory, an umbrella child, a node's layout, a layout outside an application, the
+bundle settings that do not reach an application's directory, and wait beside a dependency on the
+layout above.

@@ -974,7 +974,7 @@ func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string)
 			return nil
 		case 1:
 			i := slices.Index(stack, n)
-			return errors.Errorf("Flux Kustomizations can never all become Ready: %s waits for itself (%s); a dependsOn waits before applying, a health check before becoming Ready, and a CR exists only once the Kustomization that creates it has applied",
+			return errors.Errorf("Flux Kustomizations can never all become Ready: %s waits for itself (%s); a dependsOn waits before applying, a health check before becoming Ready, a Kustomization with wait becomes Ready only once every Kustomization it applied is, and a CR exists only once the Kustomization that creates it has applied",
 				strings.TrimPrefix(strings.TrimPrefix(n, "ready "), "apply "), strings.Join(append(stack[i:], n), " -> "))
 		}
 		state[n] = 1
@@ -1065,7 +1065,11 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 			if err != nil {
 				return err
 			}
-			cr := p.gen.createKustomizationForLayout(name, child, ref, deps)
+			settings, err := p.layoutSettings(child)
+			if err != nil {
+				return err
+			}
+			cr := p.gen.createKustomizationForLayout(name, child, ref, deps, settings)
 			if err := p.add(l, []client.Object{cr}, owner, p.layoutNamed(child)); err != nil {
 				return err
 			}

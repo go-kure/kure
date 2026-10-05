@@ -517,7 +517,7 @@ func TestLayoutKustomizationPruneIsAnInput(t *testing.T) {
 			obj := g.createKustomizationForLayout(ml.Name, ml, kustv1.CrossNamespaceSourceReference{
 				Kind: DefaultSourceKind,
 				Name: DefaultSourceName,
-			}, nil)
+			}, nil, layoutSettings{})
 			k, ok := obj.(*kustv1.Kustomization)
 			if !ok {
 				t.Fatalf("expected a Kustomization, got %T", obj)

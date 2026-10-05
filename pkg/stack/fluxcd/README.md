@@ -330,7 +330,10 @@ integrated placements). The root node's bundle cannot close that one any more: t
 root's child nodes are hosted in the root node's directory, which the bundle's Kustomization does
 not build, and are created by whatever applies that directory (go-kure/kure#979). The bundle's own
 directory still hosts the CRs of its umbrella children and, under `FluxIntegratedPerLayout`, of
-the layouts inside it, as every bundle's directory does. ArgoCD
+the layouts inside it, as every bundle's directory does. A per-layout Kustomization with `wait`
+(its layout's, or the one it inherits: see [Per-layout settings](#per-layout-settings)) waits for
+the CRs its directory hosts like any other, so a layout that depends on the application layout
+above it closes a cycle once that one has `wait`. ArgoCD
 Applications get the unit rule but not this check: only a `DependsOn` cycle between units is
 refused there. Give bundles directories of their own (`NodeGrouping` or
 `BundleGrouping` `GroupByName`) when they need different settings.
@@ -505,7 +508,9 @@ full reference.
 `Bundle.Prune` and `Bundle.Wait` are `*bool` and are passed through untouched.
 `BootstrapConfig.Prune` does the same for the bootstrap Kustomization, and
 `ResourceGenerator.Prune` for Kustomizations generated from a `layout.ManifestLayout`, which
-carries no prune setting of its own.
+carries no prune setting of its own. A layout does carry a wait setting: `ManifestLayout.Wait`,
+unset meaning the wait of the bundle that holds the layout's application (see
+[Per-layout settings](#per-layout-settings)).
 
 The two fields resolve differently because their upstream tags differ:
 
@@ -1089,6 +1094,41 @@ A `ManifestLayout.DependsOn` entry on an application or augmenter layout is a la
 
 The integrator applies this rule at any depth. The CR's `spec.sourceRef` is the `SourceRef` of the nearest layout at or above the host that renders bundles; with `BundleGrouping: GroupFlat` the root node's layout renders none and counts with the `SourceRef` of its own bundle, rendered in the directory inside it (`OriginUnit`, go-kure/kure#979), so a bundle-less child node of the root still takes the root bundle's source; with none, the one `SourceRef` the URL-less bundles below the child share; with none of those either (no `SourceRef` without a URL below the child, or two that differ), the `SourceRef` of the bundle of the nearest node, at or above the child's own, that has one. That last rule is what a node's layout takes with `BundleGrouping: GroupByName`, where no node's layout renders a bundle, the root's included, when every `SourceRef` at and below it has a URL or the ones without a URL below it differ: its own node's bundle's, rendered one directory lower, or for a node without a bundle the one of the nearest node above, the bundle that encloses it with `GroupFlat` (go-kure/kure#979). It comes last, so it gives a source only to a layout that has no other. The CR of the root node's layout (below a `ClusterName` wrapper; on a tree built by hand, that of any layout above it too) takes no Source the integration generates, whichever of these would give it one (see [Layout Integration](#layout-integration): no Kustomization takes its source from inside what it applies). A missing, incomplete or ambiguous source is a hard error — a `Kustomization` without a valid `spec.sourceRef` is rejected by Flux and must not be emitted silently — and so is a layout whose bundles have different `SourceRef`s (a `NodeGrouping: GroupFlat` merge) hosting a layout CR. A node without a bundle, with no bundle on a node above it, above bundles whose `SourceRef`s all have a URL has no source under either `BundleGrouping`: the error names its Kustomization and the three ways out (a `SourceRef` without a URL on a bundle below, a bundle with a `SourceRef` on a node at or above, or `FluxIntegratedPerBundle`). Such a node above bundles whose `SourceRef`s without a URL differ has none either, and its error names the bundle on a node at or above it as the way out: without a URL where the layout is the root node's below a `ClusterName` wrapper. A CR name used twice (a node whose `KustomizationName` is also a bundle's Kustomization name, say) is an error, not a silent skip: Flux Kustomizations share one namespace. When this integration generates both, the error names both owners, each as `bundle "<path>"`, `node "<path>"` or `layout "<directory>"`; a clash with a Kustomization already in the tree names the two layouts that hold them.
 
+### Per-layout settings
+
+Besides its name, path, source and dependencies, a per-layout Kustomization carries five settings: `spec.wait`, `spec.timeout`, `spec.retryInterval`, `metadata.labels` and `metadata.annotations` (go-kure/kure#1015). They come from the bundle and from the layout.
+
+**From the bundle.** The Kustomization of an application's own layout, and of every layout below it at any depth (the ones the application's `LayoutAugmenter` added), takes the five from the bundle that holds the application: `Bundle.Wait`, `Timeout`, `RetryInterval`, `Labels` and `Annotations`. Where a grouping axis merged several bundles into the directory above the application's, that bundle is the one whose `Applications` lists the application, not the first of them and not the merged set. An application of an umbrella child inherits from the child bundle, not from the umbrella above it.
+
+**From the layout.** `layout.ManifestLayout` has the same five fields, set by an augmenter on a layout it creates or by a caller on a walked layout before integration:
+
+| Layout field | Unset | Set |
+|---|---|---|
+| `Wait` (`*bool`) | the bundle's | replaces the bundle's; a pointer to `false` turns an inherited wait off |
+| `Timeout`, `RetryInterval` | the bundle's | replaces the bundle's. An inherited value can be replaced, not removed |
+| `Labels`, `Annotations` | the bundle's | merged with the bundle's key by key, the layout's value winning. An inherited key can be given another value, not dropped |
+
+A layout's own fields apply to that layout's Kustomization only: a layout below it inherits from the bundle again, not from the layout above. The fields are read on every layout that gets a Kustomization of its own under this placement, a node's layout included (see [Node Kustomizations](#node-kustomizations)); a layout that belongs to no application inherits nothing, so its own fields are all it has. On a layout that gets no Kustomization of its own, and under `FluxSeparate` and `FluxIntegratedPerBundle`, the fields are dropped without an error, as `DependsOn` and `KustomizationName` are.
+
+**What stays the generator's.** `spec.interval` and `spec.prune` are `ResourceGenerator.DefaultInterval` and `ResourceGenerator.Prune`, whatever the bundle sets. An interval is a cadence, not a readiness setting: it changes nothing about the order in which Kustomizations become Ready. `ResourceGenerator.Prune` is the input for these Kustomizations (see [`prune` and `wait` are inputs, not policy](#prune-and-wait-are-inputs-not-policy)), and taking `Bundle.Prune` instead would switch garbage collection on in trees that render without it today.
+
+**No health checks.** A per-layout Kustomization takes no `spec.healthChecks`: `wait` is its readiness setting, and with `wait` Flux ignores health checks. A bundle's `HealthChecks` stay on the bundle's Kustomization.
+
+**What does not reach an application's directory.** Under this placement the bundle's Kustomization applies the Kustomizations of its applications' directories, not the objects in them. `Bundle.Prune`, `Interval`, `Force`, `Suspend`, `PostBuild` and `Patches` are therefore settings of the bundle's Kustomization alone and none of them is passed on: a patch or a substitution on the bundle reaches no object of an application with a directory of its own (`ApplicationGrouping: GroupByName`, or an application with a `LayoutAugmenter`). An application rendered in the bundle's directory is applied by the bundle's Kustomization and gets all of them.
+
+**Bundle labels and annotations.** In a tree walked from a cluster, `Bundle.Labels` and `Bundle.Annotations` are on the bundle's Kustomization and on the per-layout Kustomizations above, and on no object the applications generate: the walker generates each application on its own, and only `Bundle.Generate` adds them to objects.
+
+**Refusals.** The settings in effect are checked where the Kustomization is created, before anything is written. A `Timeout` or `RetryInterval` must parse as a Go duration. Every label and annotation in effect is checked with the validators the Kubernetes API uses for `metadata.labels` and `metadata.annotations`, key by key and then as a whole (the total size of the annotations). The error names the layout by its directory (`ManifestLayout 'prod/shop/db'`) and the field, and for an inherited entry the bundle (`inherited from bundle "shop"`). A bundle's own Kustomization carries the bundle's labels and annotations unchecked, as before: the check is made only where a per-layout Kustomization takes them.
+
+**A second integration** keeps the per-layout Kustomization the first one placed, as it is: its settings are not written again, so a field changed on the layout or the bundle in between is not on it. Remove the kept Kustomization or walk the cluster again.
+
+**Readiness through the chain.** With `wait`, a Kustomization health-checks every object it applied, the Kustomization objects among them, and becomes Ready only after that check. A Kustomization object is healthy once the controller has observed its current generation and its `Ready` condition is true. With `Bundle.Wait` set, the bundle's Kustomization is therefore Ready only when the Kustomization of each application directory is, which is Ready only when the Kustomization of each layout below it is, each of them Ready only when the objects in its directory are: a `dependsOn` on the bundle's Kustomization waits for the workloads, where it used to wait only until each directory had been applied. This is how kustomize-controller v1.9.5 reads, with the status rules of fluxcd/cli-utils v1.2.3, and it holds for a first apply and for every change of a Kustomization's own spec. Two limits:
+
+- **A change of content only.** When a new revision of the source changes the files in a layout's directory and leaves the layout's Kustomization object as it was, the Kustomization above finds that object unchanged, with its generation observed and `Ready` true from the revision before. The health check does not look at the revision an object last applied, so the Kustomization above can be Ready for the new revision before the one below has applied it.
+- **Nested timeouts.** A health check runs under its own Kustomization's timeout (`spec.timeout`, or the interval less 30 seconds without one) and has to outlast everything below it. One timeout inherited on every level gives the innermost Kustomization as long as the outermost, which then fails at the moment the innermost would. Set a shorter `Timeout` on the layouts below: the layout fields are how the layouts get a shorter timeout than their bundle.
+
+**Wait and a dependency on the layout above.** A layout that lists the application layout above it in `DependsOn` (a hook group that applies after the application's own objects) cannot be combined with `wait` on that application layout's Kustomization: it would wait for the hook group's Kustomization, which waits for it. With `Bundle.Wait` set both now have `wait`, and the reconcile-order check refuses the tree, naming the chain, where it rendered before. Set `Wait` to a pointer to `false` on the application's layout; the layouts below keep the bundle's.
+
 ### Node Kustomizations
 
 A node whose directory renders no bundle (a group of nodes, or a node above its bundle's own directory under `BundleGrouping: GroupByName`) is applied by a Kustomization of its own. Three fields of `stack.Node` name and order it:
@@ -1149,7 +1189,7 @@ Set `KustomizationName` and `NamedDependsOn` before the cluster is walked. The w
 
 A second integration of the same tree keeps the node Kustomization the first one placed. If the node sets `DependsOn` or `NamedDependsOn` and that Kustomization's `spec.dependsOn` lacks one of the Kustomizations they ask for (in the Kustomization's own namespace), the integration is refused rather than dropping the dependency: remove the kept Kustomization, add the entry to it, or walk the cluster again.
 
-A node Kustomization has no reconciliation settings of its own. `spec.interval` and `spec.prune` are the generator's (`ResourceGenerator.DefaultInterval` and `Prune`), as for every per-layout Kustomization, and `spec.wait`, `spec.timeout` and `spec.retryInterval` are left unset. What a group node applies is the Kustomizations of the nodes below it; the settings of the workloads stay on their bundles.
+A node Kustomization inherits no settings and `stack.Node` has no field for any. `spec.interval` and `spec.prune` are the generator's (`ResourceGenerator.DefaultInterval` and `Prune`), as for every per-layout Kustomization. `spec.wait`, `spec.timeout`, `spec.retryInterval`, labels and annotations are those the node's layout sets (`ManifestLayout.Wait`, `Timeout`, `RetryInterval`, `Labels`, `Annotations`, on the walked layout before integration: see [Per-layout settings](#per-layout-settings)) and are left out otherwise. What a group node applies is the Kustomizations of the nodes below it; the settings of the workloads stay on their bundles. Without `Wait` on its layout, a node Kustomization is therefore Ready once those Kustomization objects are applied, and a dependency on it (`Node.DependsOn`) waits for that, not for the workloads below.
 
 ## Validation
 
