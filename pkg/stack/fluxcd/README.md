@@ -529,8 +529,9 @@ that uses it.
 
 **No Kustomization takes its source from inside what it applies** (go-kure/kure#979). A generated
 Source is in a build that is applied before every Kustomization that names it, never in a
-directory that Kustomization delivers: a Kustomization that waited for a Source only its own
-apply creates would never reconcile. On a walked tree every bundle's Kustomization meets the rule
+directory that Kustomization delivers: where nothing else applies that directory (Flux pointed at
+the top of the written tree, the `ClusterName` directory), the Kustomization waits for a Source
+only its own apply creates and never reconciles. On a walked tree every bundle's Kustomization meets the rule
 by construction, because the root node's directory renders no bundle. The one Kustomization that
 applies the root node's directory is that directory's layout Kustomization below a `ClusterName`
 wrapper under `FluxIntegratedPerLayout`, hosted in the wrapper. It takes no
@@ -542,8 +543,9 @@ directory that hosts it. Give a bundle a `SourceRef` without a URL, naming a Sou
 before the tree is applied (the one the bootstrap creates, for one), or use
 `FluxIntegratedPerBundle`, under which those directories have no Kustomization of their own.
 Without a `ClusterName` wrapper the root node's directory has no Kustomization and nothing
-changes. A URL on a kind the integration generates no Source for (anything but `GitRepository`
-and `OCIRepository`) stays the generator's own error. The rule is held for the Kustomizations
+changes. A `SourceRef` with a URL on a kind the integration generates no Source for (anything but
+`GitRepository` and `OCIRepository`) is not counted as a generated Source; where generation is
+reached, it is the generator's own error. The rule is held for the Kustomizations
 the integration generates or keeps and the directories they apply: a Kustomization of your own
 placed inside one of them and pointing back up the tree is not followed (see below, the builds
 kure answers for).

@@ -2,6 +2,7 @@ package fluxcd_test
 
 import (
 	"bytes"
+	stderrors "errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"sigs.k8s.io/yaml"
 
+	kerrors "github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -92,13 +94,21 @@ type writtenCR struct {
 // readFluxObjects returns the Flux Kustomizations written below root, and the
 // files that hold each Flux Source, keyed kind/namespace/name. The items of a
 // List count as objects of the file that holds the List, as kustomize builds
-// them.
+// them; the items field of an object of any other kind does not.
 func readFluxObjects(t *testing.T, root string) ([]writtenCR, map[string][]string) {
 	t.Helper()
 	var crs []writtenCR
 	sources := map[string][]string{}
 	var read func(p string, obj fluxDoc)
 	read = func(p string, obj fluxDoc) {
+		// A List is an envelope (a kind that ends in "List"): its items are
+		// the objects. The items field of any other kind is that object's own.
+		if strings.HasSuffix(obj.Kind, "List") {
+			for _, item := range obj.Items {
+				read(p, item)
+			}
+			return
+		}
 		switch {
 		case obj.Kind == "Kustomization" && strings.HasPrefix(obj.APIVersion, "kustomize.toolkit.fluxcd.io/"):
 			ns := obj.Spec.SourceRef.Namespace
@@ -110,9 +120,6 @@ func readFluxObjects(t *testing.T, root string) ([]writtenCR, map[string][]strin
 		case strings.HasPrefix(obj.APIVersion, "source.toolkit.fluxcd.io/"):
 			key := obj.Kind + "/" + obj.Metadata.Namespace + "/" + obj.Metadata.Name
 			sources[key] = append(sources[key], p)
-		}
-		for _, item := range obj.Items {
-			read(p, item)
 		}
 	}
 	err := filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
@@ -144,7 +151,8 @@ func readFluxObjects(t *testing.T, root string) ([]writtenCR, map[string][]strin
 // takes in and, through the Kustomizations among them, what their builds
 // deliver. For every Kustomization that names a Source the tree holds:
 //
-//   - no file holding that Source is delivered by the Kustomization: it would
+//   - no file holding that Source is delivered by the Kustomization: with the
+//     top of the written tree as the one thing applied from outside, it would
 //     wait for a Source that only its own apply creates;
 //   - some build takes in a file holding the Source and delivers the
 //     Kustomization, so the Source is applied with it or before it.
@@ -237,7 +245,8 @@ func sourceHostViolations(t *testing.T, w writtenTree) (violations []string, che
 // checkSourceHosts, on trees written by hand: a Kustomization whose build
 // holds its own Source is reported, as an object of its own and inside a List,
 // and so is one whose Source no build delivers with it; a Source in the build
-// that also holds the Kustomization is not.
+// that also holds the Kustomization is not, and a Source-shaped item of an
+// object that is no List is not read as a Source.
 func TestCheckSourceHosts_SeesWhatBreaksTheInvariant(t *testing.T) {
 	const source = `apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
@@ -305,6 +314,18 @@ metadata:
 				"platform/source.yaml":        source,
 			},
 			want: "a file the Kustomization itself delivers",
+		},
+		{
+			// Read as a Source, the Widget's item would be a copy in the
+			// directory the Kustomization applies.
+			name: "a Source-shaped item of an object that is no List",
+			files: map[string]string{
+				"kustomization.yaml":               lists("source.yaml", "cr.yaml"),
+				"source.yaml":                      source,
+				"cr.yaml":                          cr("", "platform/core"),
+				"platform/core/kustomization.yaml": lists("widget.yaml"),
+				"platform/core/widget.yaml":        "apiVersion: example.com/v1\nkind: Widget\nmetadata:\n  name: w\nitems:\n- " + strings.ReplaceAll(strings.TrimSuffix(source, "\n"), "\n", "\n  ") + "\n",
+			},
 		},
 		{
 			name: "the Source in a directory no build takes in",
@@ -508,6 +529,17 @@ func TestPerLayout_RootNodeLayoutTakesNoGeneratedSource(t *testing.T) {
 		_, err := integrator().CreateLayoutWithResources(c, rules)
 		if err == nil || !strings.Contains(err.Error(), "Bucket") || strings.Contains(err.Error(), ownSourceRefusal) {
 			t.Errorf("got %v, want the generator's refusal of the kind Bucket", err)
+		}
+		// The kinds the error lists are the caller's copy: writing to them
+		// changes neither the next error nor what counts as generated.
+		var invalid *kerrors.ValidationError
+		if !stderrors.As(err, &invalid) || len(invalid.ValidValues) == 0 {
+			t.Fatalf("got %v, want a ValidationError that lists the kinds a Source is generated for", err)
+		}
+		invalid.ValidValues[0] = "Bucket"
+		_, again := integrator().CreateLayoutWithResources(c, rules)
+		if again == nil || !strings.Contains(again.Error(), "Bucket") || strings.Contains(again.Error(), ownSourceRefusal) {
+			t.Errorf("after writing to the first error's ValidValues: got %v, want the generator's refusal of the kind Bucket", again)
 		}
 	})
 

@@ -745,7 +745,9 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      `FluxIntegratedPerLayout` below a `ClusterName` wrapper, the root node's layout has a
      layout Kustomization, hosted in the wrapper, which applies the directory that hosts the
      Sources. Item 1 gave it the root bundle's `SourceRef` (`unitSource`), and with a URL on
-     that `SourceRef` it waited for a Source only its own apply creates.
+     that `SourceRef` it took a Source its own apply delivers: with Flux pointed at the
+     wrapper, the top of the written tree (item 9), nothing else creates that Source and the
+     Kustomization waits for it.
      `integratedPlacement.layoutSource` now passes over a generated Source for the Kustomization
      of the root node's layout (or of a layout above it, on a tree built by hand), whether the
      reference comes from the scope, from the root bundle or from a URL-less `SourceRef` that
@@ -754,7 +756,7 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      refused: the error names the Kustomization, its `spec.path`, the Source and the directory
      that hosts it, and says to give a bundle a `SourceRef` without a URL or to use
      `FluxIntegratedPerBundle`. Breaking for that shape: it was integrated before, into a tree
-     that could not reconcile.
+     that could not reconcile from its top.
    - `integratedPlacement.checkSourcesAreHostedBeforeUse` holds a Kustomization the integration
      keeps in place of its own, and a tree built by hand, to the same rule after placement.
    - Two checks can no longer be met by a root bundle on a walked tree and stay in place.
@@ -781,7 +783,7 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      Kustomization, and that disk equals tar;
      each combination is pinned as integrated or as refused with a named error;
      `TestCheckSourceHosts_SeesWhatBreaksTheInvariant` is the control of that check, on trees
-     written by hand;
+     written by hand (a `List` is opened, the `items` of any other kind are not);
      `TestPerLayout_RootNodeLayoutTakesNoGeneratedSource` for the selection and the refusal;
      `TestKeptKustomization_SourceInsideWhatItApplies` for a kept Kustomization in every form.
 3. **`GenerateFromCluster` takes the caller's layout rules.** Shipped.

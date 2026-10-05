@@ -351,8 +351,9 @@ What changed, and what to do:
   the bundles below share, and a tree in which every `SourceRef` has a URL is refused, naming the
   Kustomization and the Source. Give one bundle a `SourceRef` without a URL, naming a Source that
   exists before the tree is applied, or use `FluxIntegratedPerBundle`. Before, the root bundle's
-  generated Source was accepted there, and the Kustomization would have waited for a Source only
-  its own apply creates.
+  generated Source was accepted there; with Flux pointed at the `ClusterName` directory, the top
+  of the written tree, the Kustomization would have waited for a Source only its own apply
+  creates.
   A Kustomization already in the tree that the integration keeps in place of its own (same name
   and `spec.path`, in the layout that would host it) is held to the same refusals as a generated
   one, whether it is typed, unstructured or inside a `List`: two copies of a generated Source
