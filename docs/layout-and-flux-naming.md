@@ -682,8 +682,9 @@ generates. kure shortens and rewrites nothing; the caller chooses a valid name.
 - **Application names** become directories only where the layout rules give the application one:
   `ApplicationGrouping: GroupByName`, or an augmenter application that takes its own layout.
   `ValidateCluster` takes no rules and `pkg/stack` cannot import the layout package, so the walk
-  checks them, on the tree it returns (`checkApplicationDirs` in `walker.go`): an application
-  whose directory `FlattenSingleTier` merged into its parent's keeps any name.
+  checks them, on the tree it returns (`checkApplicationDirs` in `walker.go`). Every application
+  directory is in that tree: `FlattenSingleTier` collapses none, since it leaves a directory
+  that renders a bundle and the directories below it (go-kure/kure#979).
 - **A bundle name never reaches the walk's directory checks unchecked.** Both walkers validate
   the cluster first, so a bundle name is one path segment when the root node's bundle gets its
   directory (go-kure/kure#979): `<root>/<bundle name>` is a directory inside the root node's,

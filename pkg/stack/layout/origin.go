@@ -26,10 +26,6 @@ type origin struct {
 	unit *ManifestLayout
 	// app is the application of a per-app layout.
 	app *stack.Application
-	// appDir is set on the layout the walker created as app's own directory,
-	// named after it. The layout that absorbs one (flattenSingleTier) takes
-	// app but keeps its own name, so it does not take appDir.
-	appDir bool
 	// objects are the objects each of bundles renders, per-app directories
 	// inside this one included: what a Kustomization for this directory
 	// builds, attributed to the bundle whose applications emitted it.

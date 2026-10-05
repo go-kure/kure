@@ -263,15 +263,15 @@ func checkedLayout(ml *ManifestLayout) (*ManifestLayout, error) {
 // every application that has a directory of its own in the finished tree ml.
 // stack.ValidateCluster takes no layout rules and cannot know which
 // applications get one, so the check is the walker's. It runs on the tree the
-// walk returns, after FlattenSingleTier: an application whose layout was
-// absorbed into its parent's directory names no directory, and its name is
-// not checked, as when it is written flat.
+// walk returns, and so on the directories that are written: a layout with an
+// application origin is that application's own directory, named after it
+// (renderApps), and FlattenSingleTier collapses none, since it leaves every
+// directory that renders a bundle and the directories below it.
 func checkApplicationDirs(ml *ManifestLayout) error {
 	if ml == nil {
 		return nil
 	}
-	if ml.origin.appDir {
-		app := ml.origin.app
+	if app := ml.origin.app; app != nil {
 		if err := stack.ValidateDirectoryName(app.Name); err != nil {
 			return errors.ResourceValidationError("Application", app.Name, "name",
 				fmt.Sprintf("it names a directory in %q: %v", ml.Namespace, err), nil)
@@ -584,13 +584,12 @@ func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) (
 			target.origin.apps = append(target.origin.apps, ApplicationObjects{Application: app, Objects: objs})
 			continue
 		}
-		// Only here does the application's name become a directory. Whether
-		// it stays one is known when the tree is complete, so the name is
-		// checked there (checkApplicationDirs).
+		// Only here does the application's name become a directory. It is
+		// checked once the tree is complete (checkApplicationDirs).
 		appLayout := g.newLayout(app.Name, target.FullRepoPath())
 		appLayout.Resources = objs
 		appLayout.Mode = KustomizationExplicit
-		appLayout.origin = origin{app: app, appDir: true}
+		appLayout.origin = origin{app: app}
 		if err := augmentAppLayout(app, appLayout); err != nil {
 			return nil, err
 		}
