@@ -146,6 +146,19 @@ so the intent could not reach the output. On
 `stack.LayoutRulesProvider` and must be a `layout.LayoutRules` value: anything else, `nil`
 included, is refused, never replaced by the defaults.
 
+`GenerateFromLayout` takes a layout the caller walked, and refuses it when any layout of the tree
+carries `FluxIntegratedPerLayout`, for the same reason: the list holds the Kustomizations of the
+bundle directories only, and the ones that apply the other child directories are placed by the
+integrator alone. The error names the placement and the first layout, in pre-order, that carries
+it; use `CreateLayoutWithResources` or `IntegrateWithLayout` instead. Each layout has its own
+`FluxPlacement` and the writers decide per parent, so a tree with placements set by hand is
+refused for one such layout below a root that carries another. The placement decides, not the
+tree's shape: a per-layout tree with no such child directory is refused although its list would
+be complete, as `GenerateFromCluster` refuses the rules whatever the cluster holds. A tree the
+integrator already placed per layout is refused as well: it holds every Kustomization it needs.
+The integrator's own use of `GenerateFromLayout`, under `FluxSeparate`, is not affected: it sets
+its placement on every layout of the tree first.
+
 ## Kustomization names
 
 A bundle's Kustomization is named after the bundle, unless the bundle sets `KustomizationName`:
@@ -651,8 +664,8 @@ Things to know:
 - The integrator applies the intent. `GenerateFromCluster` returns Kustomizations and Sources and
   none of the application's objects, so it refuses a cluster in which an application sets an
   intent, with an error naming the application and pointing to `CreateLayoutWithResources`.
-  `GenerateFromLayout` does not refuse: its caller holds the layout, and the list it returns
-  carries no intent by itself. The intent is applied by `IntegrateWithLayout` or
+  `GenerateFromLayout` does not refuse an intent: its caller holds the layout, and the list it
+  returns carries no intent by itself. The intent is applied by `IntegrateWithLayout` or
   `CreateLayoutWithResources` on the layout, and a layout that is walked and written without
   either carries none.
 - A bundle patch runs after the build: `Bundle.Patches` become the Kustomization's `spec.patches`,

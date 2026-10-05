@@ -92,7 +92,8 @@ func TestDependencyCopy_Refused(t *testing.T) {
 
 // TestDependencyCopy_RefusedOnAWalkedTree: the entry points that take a tree
 // walked earlier refuse a copy changed since the walk, in every placement and
-// before anything is generated.
+// before anything is generated. GenerateFromLayout refuses a per-layout tree
+// for its placement, which comes first; the integrator refuses the copy there.
 func TestDependencyCopy_RefusedOnAWalkedTree(t *testing.T) {
 	for _, placement := range allPlacements {
 		t.Run(string(placement), func(t *testing.T) {
@@ -103,23 +104,38 @@ func TestDependencyCopy_RefusedOnAWalkedTree(t *testing.T) {
 			if err != nil {
 				t.Fatalf("WalkCluster with a true copy: %v", err)
 			}
-			dbCopy.KustomizationName = "x"
+			integrate := func() error {
+				return fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+			}
+			generate := func(want []string) {
+				t.Helper()
+				objs, err := fluxstack.NewResourceGenerator().GenerateFromLayout(ml, c)
+				if placement == layout.FluxIntegratedPerLayout {
+					assertPerLayoutRefused(t, "GenerateFromLayout", objs, err, ml)
+					return
+				}
+				assertCopyRefused(t, "GenerateFromLayout", err, want)
+				if objs != nil {
+					t.Errorf("GenerateFromLayout returned %d objects next to the error", len(objs))
+				}
+			}
+			intact := func() {
+				t.Helper()
+				if got := kustomizations(ml); len(got) != 0 {
+					t.Errorf("IntegrateWithLayout left %d Kustomizations in the refused tree", len(got))
+				}
+			}
 
-			objs, err := fluxstack.NewResourceGenerator().GenerateFromLayout(ml, c)
-			assertCopyRefused(t, "GenerateFromLayout", err, contradictoryCopy)
-			if objs != nil {
-				t.Errorf("GenerateFromLayout returned %d objects next to the error", len(objs))
-			}
-			err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
-			assertCopyRefused(t, "IntegrateWithLayout", err, contradictoryCopy)
-			if got := kustomizations(ml); len(got) != 0 {
-				t.Errorf("IntegrateWithLayout left %d Kustomizations in the refused tree", len(got))
-			}
+			dbCopy.KustomizationName = "x"
+			generate(contradictoryCopy)
+			assertCopyRefused(t, "IntegrateWithLayout", integrate(), contradictoryCopy)
+			intact()
 
 			dbCopy.KustomizationName = ""
 			c.Node.Children[1].Bundle.NamedDependsOn = []string{"db-cr"}
-			_, err = fluxstack.NewResourceGenerator().GenerateFromLayout(ml, c)
-			assertCopyRefused(t, "GenerateFromLayout", err, copyInBothLists)
+			generate(copyInBothLists)
+			assertCopyRefused(t, "IntegrateWithLayout", integrate(), copyInBothLists)
+			intact()
 		})
 	}
 }

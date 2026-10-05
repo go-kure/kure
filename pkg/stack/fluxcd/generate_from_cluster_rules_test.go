@@ -289,6 +289,12 @@ func unlistedDirs(t *testing.T, build func() *stack.Cluster, rules layout.Layout
 	if err != nil {
 		t.Fatalf("WalkCluster: %v", err)
 	}
+	return unlistedIn(t, ml)
+}
+
+// unlistedIn is unlistedDirs for a tree the caller holds.
+func unlistedIn(t *testing.T, ml *layout.ManifestLayout) map[string]int {
+	t.Helper()
 	out := map[string]int{}
 	for writer, w := range writeAll(t, ml) {
 		files := treeFiles(t, w.root)

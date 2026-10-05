@@ -453,8 +453,8 @@ engine's annotations. The Flux workflow turns that intent into the Flux annotati
   none of the application's objects, so the intent could not reach its output. After the walk,
   and so after its placement refusal and any walk error, it returns an error naming the
   application and pointing to `CreateLayoutWithResources` (`refuseDeliveryIntent` in
-  `delivery.go`). `GenerateFromLayout` does not refuse: its caller holds the layout and may have
-  integrated it, and the list it returns carries no intent by itself.
+  `delivery.go`). `GenerateFromLayout` does not refuse an intent: its caller holds the layout and
+  may have integrated it, and the list it returns carries no intent by itself.
 - **Lists:** a `List` contributes what it holds, a `List` inside it included, never the envelope.
   What is a `List` is decided as kustomize decides on the written file: a kind ending in `List`
   that has an `items` field. A typed object whose written form still holds an object without the
@@ -939,18 +939,36 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      `FluxSeparate` is not affected.
    - Tests: `pkg/stack/fluxcd/kept_forms_test.go` covers each check and the refusal under the
      integrated placements, with the kept Kustomization typed, unstructured and inside a `List`.
-7. **`GenerateFromLayout` on a per-layout tree returns an incomplete set.** Target.
-   - Current: `ResourceGenerator.GenerateFromLayout` (`resource_generator.go`) generates one
-     Kustomization per directory that renders bundles. In a tree walked with
-     `FluxIntegratedPerLayout` the writers do not list a directory child in its parent's
-     `kustomization.yaml` (`childEntry` in `writerplan.go`), and the Kustomization of such a
-     child (an application, augmenter or bundle-less node layout) is created only by the
-     integrator. A caller who walks with those rules, calls `GenerateFromLayout` and writes the
-     tree gets child directories that nothing applies, without an error. `GenerateFromCluster`
-     refuses that placement (item 3).
-   - Expected: the call refuses a per-layout tree with an error that points to the integrator,
-     or generates the per-layout Kustomizations too. The choice follows items 1 and 2, which
-     rework those functions.
+7. **`GenerateFromLayout` refuses a per-layout tree.** Shipped.
+   - Before: `ResourceGenerator.GenerateFromLayout` (`resource_generator.go`) generated one
+     Kustomization per directory that renders bundles, whatever the tree's placement. In a tree
+     walked with `FluxIntegratedPerLayout` the writers do not list a directory child in its
+     parent's `kustomization.yaml` (`childEntry` in `writerplan.go`), and the Kustomization of
+     such a child (an application, augmenter or bundle-less node layout) is created only by the
+     integrator. A caller who walked with those rules, called `GenerateFromLayout` and wrote the
+     tree got child directories that nothing applies, without an error.
+   - Now: the call refuses a tree in which any layout carries `FluxIntegratedPerLayout`
+     (`perLayoutCarrier` in `resource_generator.go`), before anything else and whatever the
+     cluster is. The error names the placement and the first such layout in pre-order, and points
+     to `CreateLayoutWithResources` and `IntegrateWithLayout`. `GenerateFromCluster` refuses
+     those rules for the same reason and points to `CreateLayoutWithResources` (item 3). The call
+     does not generate the per-layout Kustomizations: their names and Sources are the
+     integrator's to resolve (items 1 and 2).
+   - Any layout, not the root alone: each layout has its own `FluxPlacement` and the writers
+     decide per parent, so in a tree with placements set by hand one such layout below a root
+     that carries another leaves its directory children unlisted. The placement decides, not the
+     tree's shape: a per-layout tree with no such child is refused although its list would be
+     complete. A tree the integrator already placed per layout is refused too; it holds every
+     Kustomization it needs.
+   - The integrator is not affected: it calls `GenerateFromLayout` under `FluxSeparate` only,
+     after setting that placement on every layout of the tree (`setPlacement` in
+     `layout_integrator.go`), and generates per unit under the integrated placements.
+   - Breaking: a caller that passed a tree carrying `FluxIntegratedPerLayout` got a list and now
+     gets an error.
+   - Tests: `pkg/stack/fluxcd/generate_from_layout_placement_test.go` covers the walked tree
+     written to disk and to tar, flat applications, an absent cluster, an integrated tree, a tree
+     with the placement only below the root, and the two placements and the integrator call that
+     are not refused.
 8. **The walk validates its rules.** Shipped.
    - Before: `LayoutRules.Validate` had no caller outside tests. An unknown grouping, `FilePer`,
      placement or file-naming value was walked as if it were another value, and a `ClusterName`

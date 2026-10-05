@@ -1074,7 +1074,8 @@ func TestDeliveryIntent_SourceAlsoDerivedFromSourceRef(t *testing.T) {
 // one under the three grouping rule sets and both placements the call accepts,
 // naming the application and CreateLayoutWithResources; without an intent the
 // same cluster generates. Under FluxIntegratedPerLayout the placement refusal
-// comes first. GenerateFromLayout does not refuse: its caller holds the layout.
+// comes first. GenerateFromLayout does not refuse an intent: its caller holds
+// the layout.
 func TestDeliveryIntent_GenerateFromClusterRefused(t *testing.T) {
 	intents := map[string]stack.DeliveryIntent{
 		"prune": {PruneProtection: true},
