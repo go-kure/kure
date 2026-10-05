@@ -1146,7 +1146,9 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
        to the checks the other writers run there. Three hand-built trees whose unnamed root
        wrote no `kustomization.yaml` are now refused as in the other writers: a directory
        child that sets `Namespace` to its own path (item 11), listed children that hold one
-       object twice, and a listed `KustomizationRecursive` child;
+       object twice, and a listed `KustomizationRecursive` child. One walked tree is refused
+       as well: a root node named `kustomization.yaml` below a `ClusterName`, whose directory
+       is the path of the file now written;
      - under a `ClusterName` the bootstrap no longer checks the root node's name as a
        directory name: its path takes no segment from the name. The walk still checks it,
        as the name is the directory `<ClusterName>/<root>` of the written tree.

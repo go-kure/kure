@@ -638,10 +638,10 @@ A Kustomization the integration keeps in place of its own (same name and `spec.p
 layout that would host it) is checked as the generated one would be, with what the kept object
 itself sets and in whatever form it has: typed, unstructured or inside a `List`
 (go-kure/kure#979). Its `spec.path` is a build in which a generated Source may appear once; when
-that build holds the root node's layout, its patches and postBuild are checked against the Sources
-hosted there, and its `sourceRef` may not name one of them (an omitted `sourceRef` namespace is
-the Kustomization's own): the integration is refused, naming it, since it would take its source
-from inside what it applies; and its `dependsOn`, `wait` and health checks enter the reconcile-order check (see
+that build holds the root node's layout, its `sourceRef` may not name a Source hosted there (an
+omitted `sourceRef` namespace is the Kustomization's own): the integration is refused, naming it,
+since it would take its source from inside what it applies; and its `dependsOn`, `wait` and health
+checks enter the reconcile-order check (see
 [One Kustomization per directory](#one-kustomization-per-directory)). An unstructured one is read
 through the typed Flux `Kustomization`; one that cannot be read that way (a field of the wrong
 type, for one) is refused, with an error naming the layout that holds it and its namespace and

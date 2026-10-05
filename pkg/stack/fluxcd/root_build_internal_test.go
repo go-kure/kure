@@ -52,9 +52,11 @@ func TestCheckRootBuildKeepsHostedSources_FollowsTheBootstrapBuild(t *testing.T)
 			return top, root, top
 		}
 	}
-	noWrapper := func() (*layout.ManifestLayout, *layout.ManifestLayout, *layout.ManifestLayout) {
-		root := &layout.ManifestLayout{Name: "platform", Namespace: ".", FluxPlacement: layout.FluxIntegratedPerBundle}
-		return root, root, root
+	noWrapper := func(placement layout.FluxPlacement) tree {
+		return func() (*layout.ManifestLayout, *layout.ManifestLayout, *layout.ManifestLayout) {
+			root := &layout.ManifestLayout{Name: "platform", Namespace: ".", FluxPlacement: placement}
+			return root, root, root
+		}
 	}
 
 	for _, shape := range []struct {
@@ -69,8 +71,10 @@ func TestCheckRootBuildKeepsHostedSources_FollowsTheBootstrapBuild(t *testing.T)
 		// The wrapper's kustomization.yaml lists the directory, so the
 		// bootstrap applies the Source as well.
 		{"wrapper that lists the root node's directory", wrapper(layout.FluxIntegratedPerBundle), true},
-		// The bootstrap applies the root node's directory itself.
-		{"no wrapper", noWrapper, true},
+		// The bootstrap applies the root node's directory itself, whatever
+		// the placement is: the build decides, not the placement.
+		{"no wrapper", noWrapper(layout.FluxIntegratedPerBundle), true},
+		{"no wrapper, per-layout placement", noWrapper(layout.FluxIntegratedPerLayout), true},
 	} {
 		for _, tc := range []struct {
 			name   string

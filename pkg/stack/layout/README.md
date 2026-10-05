@@ -298,7 +298,9 @@ that writes its own there afterwards replaces kure's. The file lists the directo
 are refused: an unnamed root whose directory child is nested below its own name (`Namespace` set
 to the child's own path, see "Layout paths"), one whose listed children hold one object twice
 (kustomize refuses that in a build), and one that lists a `KustomizationRecursive` child, which
-has no `kustomization.yaml` for the entry to name. A walked tree has none of the three.
+has no `kustomization.yaml` for the entry to name. A walked tree has none of the three. One tree
+a walk does give is refused as well: a root node named `kustomization.yaml` below a `ClusterName`,
+whose directory is the path of the file now written.
 
 **Breaking change (go-kure/kure#979).** Before, the root node's bundles rendered in the root
 node's directory. Their files, the Flux Kustomization's `spec.path` and the ArgoCD Application's
