@@ -215,7 +215,7 @@ func (a *Bundle) Validate() error {
 		}
 	}
 	visited := make(map[*Bundle]bool)
-	if err := a.validateChildren(visited); err != nil {
+	if err := a.validateChildren(a.Name, visited); err != nil {
 		return err
 	}
 	return a.validateNames(a.Name, make(map[*Bundle]bool))
@@ -276,7 +276,12 @@ func (a *Bundle) validateNames(path string, seen map[*Bundle]bool) error {
 // KustomizationName names the bundle's own. A child against the bundle's
 // DependsOn is compared on both: a DependsOn bundle is resolved by its Name,
 // so one with a child's Name is that child whatever KustomizationName it has.
-func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
+//
+// path is the bundle's path from the bundle Validate was called on. The
+// refusal of a nil DependsOn entry names the bundle by it, so an umbrella
+// descendant is found by its ancestors; the other refusals here name the
+// bundle that holds the fault by its Name, as before.
+func (a *Bundle) validateChildren(path string, visited map[*Bundle]bool) error {
 	if visited[a] {
 		return errors.ResourceValidationError("Bundle", a.Name, "children",
 			fmt.Sprintf("umbrella cycle detected at %q", a.Name), nil)
@@ -289,7 +294,7 @@ func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 	depBundleNames := make(map[string]bool, len(a.DependsOn))
 	for i, dep := range a.DependsOn {
 		if dep == nil {
-			return errors.ResourceValidationError("Bundle", a.Name, "dependsOn",
+			return errors.ResourceValidationError("Bundle", path, "dependsOn",
 				fmt.Sprintf("dependency at index %d is nil", i), nil)
 		}
 		depNames[dep.UnitName()] = true
@@ -351,7 +356,7 @@ func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 			return errors.ResourceValidationError("Bundle", a.Name, "children",
 				fmt.Sprintf("child %q has parent %q in namedDependsOn", c.Name, a.Name), nil)
 		}
-		if err := c.validateChildren(visited); err != nil {
+		if err := c.validateChildren(path+"/"+c.Name, visited); err != nil {
 			return err
 		}
 	}
