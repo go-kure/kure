@@ -1375,7 +1375,7 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 					continue
 				}
 				return errors.Errorf("layout %q already has Flux Kustomization %q with spec.path %q%s; this integration generates one of that name for %s, with spec.path %q in layout %q: %s",
-					e.host.FullRepoPath(), k.Name, e.path, heldBy(p.ix, key), by.owner, k.Spec.Path, host.FullRepoPath(), nameApart(by.field, by.owner))
+					e.host.FullRepoPath(), k.Name, e.path, heldBy(p.ix, key, e.host), by.owner, k.Spec.Path, host.FullRepoPath(), nameApart(by.field, by.owner))
 			}
 		} else if key, ok := sourceKey(obj); ok {
 			// One identity, one object: an identical Source (a repeated
@@ -1786,23 +1786,32 @@ func (p *integratedPlacement) layoutNamed(l *layout.ManifestLayout) nameField {
 }
 
 // heldBy says whose a Flux Kustomization already in the tree is, for the
-// refusal of a generated one with its identity (key, a crKey): the
-// application among whose objects the walk recorded one with that identity,
-// and that application's bundle. Those objects are read as kustomize builds
-// them, a List's items included (resourceItems). It says nothing when no
-// application's record holds one: an earlier integration's Kustomization, or
-// one a caller added to a layout, which the tree does not tell apart. A record
-// without an application names none, as in applyDeliveryIntents.
-func heldBy(ix *layout.OriginIndex, key string) string {
+// refusal of a generated one with its identity (key, a crKey), found in host:
+// the application among whose objects the walk recorded one with that
+// identity, and that application's bundle. Those objects are read as
+// kustomize builds them, a List's items included (resourceItems), and only
+// those host still holds, the very values the walk recorded: an object a
+// caller put in an application's place since is not the application's. It
+// says nothing when no application's record holds one: an earlier
+// integration's Kustomization, or one a caller added to a layout, which the
+// tree does not tell apart. A record without an application names none, as in
+// applyDeliveryIntents.
+func heldBy(ix *layout.OriginIndex, key string, host *layout.ManifestLayout) string {
 	for _, unit := range ix.Units() {
 		for _, rec := range unit.OriginApplicationObjects() {
 			if rec.Application == nil {
 				continue
 			}
+			var held []client.Object
+			for _, obj := range rec.Objects {
+				if slices.Contains(host.Resources, obj) {
+					held = append(held, obj)
+				}
+			}
 			// A List that cannot be read holds nothing to name here, and is
 			// unreadable where it sits too: indexExistingKustomizations has
 			// refused such a tree before any identity is compared.
-			objs, _ := resourceItems(&layout.ManifestLayout{Resources: rec.Objects})
+			objs, _ := resourceItems(&layout.ManifestLayout{Resources: held})
 			for _, obj := range objs {
 				if _, ok := fluxKustomizationPath(obj); !ok || crKey(obj.GetNamespace(), obj.GetName()) != key {
 					continue
@@ -2067,7 +2076,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		if e, dup := existing[key]; dup {
 			owner := owners[obj.GetName()]
 			return errors.Errorf("layout %q already has Flux Kustomization %q (spec.path %q)%s; the one generated for %s (spec.path %q) would register the same id in the kustomize build: %s",
-				e.host.FullRepoPath(), obj.GetName(), e.path, heldBy(ix, key), owner, path, nameApart(bundleNameField, owner))
+				e.host.FullRepoPath(), obj.GetName(), e.path, heldBy(ix, key, e.host), owner, path, nameApart(bundleNameField, owner))
 		}
 	}
 	// Likewise a generated Source's identity (kind, namespace, name, whatever
