@@ -8,6 +8,7 @@ import (
 	"os"
 
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	utiljson "k8s.io/apimachinery/pkg/util/json"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
@@ -143,8 +144,11 @@ func marshalCleanResource(obj client.Object, opts EncodeOptions) ([]byte, error)
 		return nil, fmt.Errorf("failed to marshal resource to JSON: %w", err)
 	}
 
+	// The apimachinery decoder reads a number that fits an int64 as one; the
+	// standard library reads every number as a float64, which rounds an
+	// integer above 2^53.
 	var raw map[string]any
-	if err := json.Unmarshal(jsonBytes, &raw); err != nil {
+	if err := utiljson.Unmarshal(jsonBytes, &raw); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JSON for cleanup: %w", err)
 	}
 
@@ -258,13 +262,17 @@ func removeEmptyStatus(m map[string]any) {
 }
 
 // isDeepEmpty returns true if a map is empty or contains only zero-value primitives
-// and empty maps recursively. After JSON round-trip, numbers are float64, booleans
-// are bool, and strings are string — all checked against their zero values.
+// and empty maps recursively. After JSON round-trip, numbers are int64 or float64,
+// booleans are bool, and strings are string — all checked against their zero values.
 func isDeepEmpty(m map[string]any) bool {
 	for _, v := range m {
 		switch val := v.(type) {
 		case map[string]any:
 			if !isDeepEmpty(val) {
+				return false
+			}
+		case int64:
+			if val != 0 {
 				return false
 			}
 		case float64:

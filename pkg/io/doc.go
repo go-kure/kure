@@ -100,6 +100,13 @@
 // apiVersion, kind, metadata, spec, data, stringData, then remaining fields
 // alphabetically, with status last.
 //
+// # Numbers
+//
+// [EncodeObjectsToYAML] and [EncodeObjectsToYAMLWithOptions] write an integer
+// that fits an int64 as that integer, whatever its size. A number that does
+// not fit an int64 passes through a float64 and is written with that
+// precision.
+//
 // # Server-set field stripping
 //
 // Resources exported from a cluster via `kubectl get -o yaml` include

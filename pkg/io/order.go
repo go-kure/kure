@@ -103,8 +103,9 @@ func mapToNode(m map[string]any, topLevel bool) *yaml.Node {
 	return node
 }
 
-// valueToNode converts a value produced by json.Unmarshal into interface{}
-// to a yaml.v3 Node.
+// valueToNode converts a value of the cleaned resource map to a yaml.v3
+// Node. The map comes from the apimachinery JSON decoder, so a number is an
+// int64 where it fits one and a float64 otherwise.
 func valueToNode(v any) *yaml.Node {
 	switch val := v.(type) {
 	case nil:
@@ -122,6 +123,12 @@ func valueToNode(v any) *yaml.Node {
 			Kind:  yaml.ScalarNode,
 			Value: s,
 			Tag:   "!!bool",
+		}
+	case int64:
+		return &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: strconv.FormatInt(val, 10),
+			Tag:   "!!int",
 		}
 	case float64:
 		return floatToNode(val)
