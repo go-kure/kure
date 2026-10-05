@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
-	utiljson "k8s.io/apimachinery/pkg/util/json"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
@@ -144,11 +144,8 @@ func marshalCleanResource(obj client.Object, opts EncodeOptions) ([]byte, error)
 		return nil, fmt.Errorf("failed to marshal resource to JSON: %w", err)
 	}
 
-	// The apimachinery decoder reads a number that fits an int64 as one; the
-	// standard library reads every number as a float64, which rounds an
-	// integer above 2^53.
-	var raw map[string]any
-	if err := utiljson.Unmarshal(jsonBytes, &raw); err != nil {
+	raw, err := decodeResourceMap(jsonBytes)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JSON for cleanup: %w", err)
 	}
 
@@ -164,6 +161,60 @@ func marshalCleanResource(obj client.Object, opts EncodeOptions) ([]byte, error)
 	}
 
 	return out, nil
+}
+
+// decodeResourceMap reads the JSON of one resource into a map. A number is
+// read as an int64 where it fits one, as a uint64 where it fits that, and as
+// a float64 otherwise. Decoding straight into the map would read every number
+// as a float64, which rounds an integer above 2^53.
+func decodeResourceMap(data []byte) (map[string]any, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	var raw map[string]any
+	if err := dec.Decode(&raw); err != nil {
+		return nil, err
+	}
+	if _, err := convertNumbers(raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+// convertNumbers replaces every json.Number in v, at any depth, by the Go
+// number convertNumber gives for it, and returns the value to store for v.
+func convertNumbers(v any) (any, error) {
+	switch val := v.(type) {
+	case json.Number:
+		return convertNumber(val)
+	case map[string]any:
+		for k, item := range val {
+			converted, err := convertNumbers(item)
+			if err != nil {
+				return nil, err
+			}
+			val[k] = converted
+		}
+	case []any:
+		for i, item := range val {
+			converted, err := convertNumbers(item)
+			if err != nil {
+				return nil, err
+			}
+			val[i] = converted
+		}
+	}
+	return v, nil
+}
+
+// convertNumber returns n as an int64, else as a uint64, else as a float64.
+func convertNumber(n json.Number) (any, error) {
+	if i, err := n.Int64(); err == nil {
+		return i, nil
+	}
+	if u, err := strconv.ParseUint(n.String(), 10, 64); err == nil {
+		return u, nil
+	}
+	return n.Float64()
 }
 
 // cleanResourceMap removes server-managed fields from a resource map.
@@ -264,6 +315,7 @@ func removeEmptyStatus(m map[string]any) {
 // isDeepEmpty returns true if a map is empty or contains only zero-value primitives
 // and empty maps recursively. After JSON round-trip, numbers are int64 or float64,
 // booleans are bool, and strings are string — all checked against their zero values.
+// A uint64 is an integer above the int64 range, never zero, and takes the default.
 func isDeepEmpty(m map[string]any) bool {
 	for _, v := range m {
 		switch val := v.(type) {
