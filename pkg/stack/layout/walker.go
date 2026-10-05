@@ -58,17 +58,17 @@ func (g grouping) topLayout(root *stack.Node, clusterName string) *ManifestLayou
 // the tree's first kustomization.yaml, and so the one to point Flux at. It is
 // relative to the directory the tree is written into and has no leading slash;
 // "." is that directory itself. The walk takes its top from the same place
-// (topLayout), so the two cannot differ. The rules are validated first, as
-// WalkCluster validates them.
+// (topLayout), so the two name the same directory. The rules are validated
+// first, as WalkCluster validates them.
 //
 // With a ClusterName it is the cluster directory. Without one it is the root
 // node's name, "cluster" for an unnamed root node, and "." when root is nil:
 // no tree is walked then, and the caller applies the directory it writes to.
 //
-// For a rooted ClusterName ("/prod") the walk's own ManifestLayout.FullRepoPath
-// keeps the slash, and the writers resolve it under the directory they write
-// to. That is the directory returned here, "prod"; a ClusterName of "/" alone
-// gives ".".
+// Only the spelling differs, and only for a rooted ClusterName ("/prod"): the
+// walk's own ManifestLayout.FullRepoPath keeps the slash, and the writers
+// resolve it under the directory they write to. That is the directory returned
+// here, "prod"; a ClusterName of "/" alone gives ".".
 //
 // It does not describe a WalkClusterByPackage tree, which is placed without
 // the ClusterName, one tree per package. Nor does it know the directory a
