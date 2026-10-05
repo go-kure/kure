@@ -65,6 +65,11 @@ func (g grouping) topLayout(root *stack.Node, clusterName string) *ManifestLayou
 // node's name, "cluster" for an unnamed root node, and "." when root is nil:
 // no tree is walked then, and the caller applies the directory it writes to.
 //
+// Where the root node's name is the directory, a name that is no directory
+// name ("../prod", "a/b", ".") is an error, as it is to WalkCluster
+// (stack.ValidateCluster): no tree is walked for such a root. Under a
+// ClusterName the name is no part of the directory and is not checked here.
+//
 // Only the spelling differs, and only for a rooted ClusterName ("/prod"): the
 // walk's own ManifestLayout.FullRepoPath keeps the slash, and the writers
 // resolve it under the directory they write to. That is the directory returned
@@ -77,6 +82,11 @@ func (g grouping) topLayout(root *stack.Node, clusterName string) *ManifestLayou
 func TopDirectory(root *stack.Node, rules LayoutRules) (string, error) {
 	if err := rules.Validate(); err != nil {
 		return "", err
+	}
+	if rules.ClusterName == "" && root != nil && root.Name != "" {
+		if err := stack.ValidateDirectoryName(root.Name); err != nil {
+			return "", errors.ResourceValidationError("Node", root.Name, "name", err.Error(), nil)
+		}
 	}
 	dir := strings.TrimLeft(grouping{}.topLayout(root, rules.ClusterName).FullRepoPath(), "/")
 	if dir == "" {

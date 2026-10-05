@@ -124,7 +124,8 @@ func TestBootstrapModesNameTheSameDirectory(t *testing.T) {
 }
 
 // bootstrapConfigs are the configs the rules are checked under: the two that
-// generate nothing and one per mode.
+// generate nothing, one per mode, and flux-operator mode without a source,
+// which builds no sync and so never asks for the directory the rules name.
 func bootstrapConfigs() map[string]*stack.BootstrapConfig {
 	enabled := func(mode string) *stack.BootstrapConfig {
 		return &stack.BootstrapConfig{
@@ -140,6 +141,12 @@ func bootstrapConfigs() map[string]*stack.BootstrapConfig {
 		"disabled":      {Enabled: false},
 		"gotk":          enabled(fluxstack.ModeGotk),
 		"flux-operator": enabled(fluxstack.DefaultFluxMode),
+		"flux-operator without a source": {
+			Enabled:     true,
+			FluxMode:    fluxstack.DefaultFluxMode,
+			FluxVersion: fluxstack.GotkVersion,
+			Registry:    "ghcr.io/fluxcd",
+		},
 	}
 }
 

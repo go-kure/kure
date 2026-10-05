@@ -77,10 +77,11 @@ func NewBootstrapGenerator() *BootstrapGenerator {
 // at the top directory of the tree a walk with them writes for rootNode
 // (bootstrapDir). They are validated first, as a walk validates them, so
 // invalid rules are an error whatever config is, a nil or disabled one
-// included.
+// included. The directory itself is asked for only where it is used, so the
+// root node's name is checked as a directory name only where it becomes a
+// path (validateRootName).
 func (bg *BootstrapGenerator) GenerateBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node, rules layout.LayoutRules) ([]client.Object, error) {
-	dir, err := bootstrapDir(rootNode, rules)
-	if err != nil {
+	if err := rules.Validate(); err != nil {
 		return nil, err
 	}
 	if config == nil || !config.Enabled {
@@ -97,6 +98,10 @@ func (bg *BootstrapGenerator) GenerateBootstrap(config *stack.BootstrapConfig, r
 		if err := validateSyncRootName(config, rootNode, rules); err != nil {
 			return nil, err
 		}
+		dir, err := syncDir(config, rootNode, rules)
+		if err != nil {
+			return nil, err
+		}
 		return bg.generateFluxOperatorBootstrap(config, dir)
 	case ModeGotk:
 		// The bootstrap Kustomization's spec.path is built with or without
@@ -105,6 +110,10 @@ func (bg *BootstrapGenerator) GenerateBootstrap(config *stack.BootstrapConfig, r
 			return nil, err
 		}
 		if err := validateRootSourceName(rootNode); err != nil {
+			return nil, err
+		}
+		dir, err := bootstrapDir(rootNode, rules)
+		if err != nil {
 			return nil, err
 		}
 		return bg.generateGotkBootstrap(config, rootNode, dir)
@@ -302,6 +311,18 @@ func rootName(rootNode *stack.Node) string {
 // FluxInstance named "./<root>": two directories for one root.
 func bootstrapDir(rootNode *stack.Node, rules layout.LayoutRules) (string, error) {
 	return layout.TopDirectory(rootNode, rules)
+}
+
+// syncDir returns the directory a FluxInstance's sync applies (bootstrapDir),
+// and "" when config builds no sync. Without a SourceURL the directory goes
+// nowhere (generateFluxInstance), so it is not asked for: layout.TopDirectory
+// refuses a root node name that is no directory name, and such a name stays
+// accepted where no path is built from it (validateSyncRootName).
+func syncDir(config *stack.BootstrapConfig, rootNode *stack.Node, rules layout.LayoutRules) (string, error) {
+	if config == nil || config.SourceURL == "" {
+		return "", nil
+	}
+	return bootstrapDir(rootNode, rules)
 }
 
 // syncPath spells the directory bootstrapDir returns as a FluxInstance
@@ -505,10 +526,10 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 //
 // rules are the layout rules the tree is written with, as in
 // GenerateBootstrap: the sync.path is the top directory of that tree, and
-// invalid rules are an error whatever config is, nil included.
+// invalid rules are an error whatever config is, nil included. The directory
+// is asked for only when a sync is built (syncDir).
 func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node, rules layout.LayoutRules) (*fluxv1.FluxInstance, error) {
-	dir, err := bootstrapDir(rootNode, rules)
-	if err != nil {
+	if err := rules.Validate(); err != nil {
 		return nil, err
 	}
 	if err := validateSyncRootName(config, rootNode, rules); err != nil {
@@ -516,6 +537,10 @@ func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig
 	}
 	if config == nil {
 		return nil, nil
+	}
+	dir, err := syncDir(config, rootNode, rules)
+	if err != nil {
+		return nil, err
 	}
 	obj, err := bg.generateFluxInstance(config, dir)
 	if err != nil {
