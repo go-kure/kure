@@ -1270,6 +1270,38 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
       The matrices of items 2 and 9 no longer pin a refusal for this grouping
       (`sourceHostRefusal`): they hold every such combination to the Source invariant and to the
       bootstrap directory.
+13. **The refusal of a generated Kustomization that meets one already in the tree did not say
+    what causes it or what helps.** Shipped.
+    - Before: a bundle whose application holds a Flux Kustomization of the bundle's own name (a
+      component that is itself a Flux Kustomization, named like its application) is refused under
+      every placement, correctly: the generated Kustomization and the one in the tree would be
+      two objects of one name in one namespace (section 1.7). The errors named two layouts and a
+      `spec.path`. Neither said that the one in the tree is an object of the tree's own
+      applications, nor that `Bundle.KustomizationName` (go-kure/kure#971) names the generated
+      one apart.
+    - Now: what is refused and what is kept is unchanged. The error of the two integrated
+      placements (`integratedPlacement.add`) and that of `FluxSeparate`
+      (`addSeparateFluxToLayout`) name:
+      - the Kustomization in the tree, by its layout and `spec.path`, and by the application and
+        bundle that hold it (`heldBy`). That is read from what the walk recorded for each
+        application (`ManifestLayout.OriginApplicationObjects`), as kustomize builds it: a
+        Kustomization inside a List counts. One that no application holds, such as one a caller
+        added to a walked layout, is named by its layout alone: the error claims no origin for
+        it;
+      - what the generated one is for: the bundle, by its path, or under
+        `FluxIntegratedPerLayout` the node or the layout that gets a Kustomization of its own;
+      - the way out (`nameApart`): the field that names the generated one, on its owner
+        (`Bundle.KustomizationName`, `Node.KustomizationName` or
+        `ManifestLayout.KustomizationName`), or another name for the one in the tree.
+    - Not changed: the refusal of one name present twice in the tree before integration, and
+      that of one name claimed twice by generated Kustomizations, which names both owners.
+    - Not breaking: error text only.
+    - Tests: `TestKustomizationClash_AuthoredKustomizationNamedLikeItsBundle` (the three
+      placements, with the authored object in the bundle's directory and in the application's
+      own, and the control with `KustomizationName` set),
+      `TestKustomizationClash_NodeAndLayoutKustomizations` and
+      `TestKustomizationClash_KustomizationNoApplicationHolds` in
+      `pkg/stack/fluxcd/kustomization_clash_test.go`.
 
 **Acceptance.** Each target has a test rendering the input above and asserting the expected tree;
 the shipped items name theirs.

@@ -125,27 +125,35 @@ func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.L
 // integrator already placed, which holds every Kustomization it needs. The
 // error names the first such layout in pre-order.
 func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, error) {
+	out, _, err := g.generateFromLayout(root, c)
+	return out, err
+}
+
+// generateFromLayout is GenerateFromLayout, and returns the index of the
+// tree's origins it generated from as well: nil when there was nothing to
+// index (a nil root, cluster or root node).
+func (g *ResourceGenerator) generateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, *layout.OriginIndex, error) {
 	if l := perLayoutCarrier(root); l != nil {
-		return nil, errors.Errorf("GenerateFromLayout does not support FluxPlacement %q, which layout %q carries: the Kustomizations that apply a per-layout tree's child directories are placed only by the integrator; use LayoutIntegrator.CreateLayoutWithResources or IntegrateWithLayout", l.FluxPlacement, l.FullRepoPath())
+		return nil, nil, errors.Errorf("GenerateFromLayout does not support FluxPlacement %q, which layout %q carries: the Kustomizations that apply a per-layout tree's child directories are placed only by the integrator; use LayoutIntegrator.CreateLayoutWithResources or IntegrateWithLayout", l.FluxPlacement, l.FullRepoPath())
 	}
 	if root == nil || c == nil || c.Node == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	ix, err := layout.IndexOrigins(root, c)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// Only bundles get a Kustomization here: a node's name or dependencies
 	// would be dropped.
 	if err := newNodeIndex(ix, c).checkFields(false); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var out []client.Object
 	var kusts []*kustv1.Kustomization
 	for _, l := range ix.Units() {
 		objs, err := g.generateForUnit(l, ix)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, o := range objs {
 			if k, ok := o.(*kustv1.Kustomization); ok {
@@ -160,16 +168,16 @@ func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *s
 				if sameObject(same, o) {
 					continue
 				}
-				return nil, errors.Errorf("%s %q is defined twice with different content: bundles %q and %q name one Source differently",
+				return nil, nil, errors.Errorf("%s %q is defined twice with different content: bundles %q and %q name one Source differently",
 					o.GetObjectKind().GroupVersionKind().Kind, o.GetName(), sourceOwner(out, same), l.OriginBundles()[0].Name)
 			}
 			out = append(out, o)
 		}
 	}
 	if err := checkReconcileOrder(kusts, nil, nil); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return out, nil
+	return out, ix, nil
 }
 
 // perLayoutCarrier returns the first layout of the tree, in pre-order, whose
