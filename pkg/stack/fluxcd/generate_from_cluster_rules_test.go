@@ -208,12 +208,11 @@ func TestFluxSeparate_RefusesLayoutInTheFluxDirectory(t *testing.T) {
 		build func() *stack.Cluster
 		want  string
 	}{
-		"root bundle":            {func() *stack.Cluster { return bundleNamed("flux-system") }, `bundle "flux-system" is rendered to "platform/flux-system", the directory the Flux resources are written to`},
-		"root bundle, case only": {func() *stack.Cluster { return bundleNamed("Flux-System") }, `bundle "Flux-System" is rendered to "platform/Flux-System", the directory the Flux resources are written to`},
-		"child node":             {func() *stack.Cluster { return nodeNamed("flux-system") }, `node "flux-system" is rendered to "platform/flux-system", the directory the Flux resources are written to`},
-		// A name that resolves to the same directory is the same directory.
-		"child node, rooted name":    {func() *stack.Cluster { return nodeNamed("/flux-system") }, `node "/flux-system" is rendered to "platform/flux-system", the directory the Flux resources are written to`},
-		"child node, dot-slash name": {func() *stack.Cluster { return nodeNamed("./flux-system") }, `node "./flux-system" is rendered to "platform/flux-system", the directory the Flux resources are written to`},
+		"root bundle": {func() *stack.Cluster { return bundleNamed("flux-system") }, `bundle "flux-system" is rendered to "platform/flux-system", the directory the Flux resources are written to`},
+		"child node":  {func() *stack.Cluster { return nodeNamed("flux-system") }, `node "flux-system" is rendered to "platform/flux-system", the directory the Flux resources are written to`},
+		// A node name that differs only in case is the same directory to
+		// the writers. (A bundle name is lowercase.)
+		"child node, case only": {func() *stack.Cluster { return nodeNamed("Flux-System") }, `node "Flux-System" is rendered to "platform/Flux-System", the directory the Flux resources are written to`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
@@ -231,6 +230,27 @@ func TestFluxSeparate_RefusesLayoutInTheFluxDirectory(t *testing.T) {
 			}
 			if len(ml.Children) != before {
 				t.Errorf("the refused integration left %d children, the walk %d", len(ml.Children), before)
+			}
+		})
+	}
+	// A name that would resolve to the Flux directory without being it holds
+	// a path separator or an upper-case bundle name: stack.ValidateCluster
+	// refuses it before any directory is compared.
+	for name, tc := range map[string]struct {
+		build func() *stack.Cluster
+		want  string
+	}{
+		"child node, rooted name":    {func() *stack.Cluster { return nodeNamed("/flux-system") }, `"/flux-system" contains a path separator`},
+		"child node, dot-slash name": {func() *stack.Cluster { return nodeNamed("./flux-system") }, `"./flux-system" contains a path separator`},
+		"root bundle, case only":     {func() *stack.Cluster { return bundleNamed("Flux-System") }, `"Flux-System" is not a valid bundle name`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+			if _, err := li.CreateLayoutWithResources(tc.build(), rules); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("CreateLayoutWithResources: got %v, want the refusal %q", err, tc.want)
+			}
+			if _, err := layout.WalkCluster(tc.build(), rules); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("WalkCluster: got %v, want the refusal %q", err, tc.want)
 			}
 		})
 	}
