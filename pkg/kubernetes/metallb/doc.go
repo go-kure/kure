@@ -20,6 +20,12 @@
 // Resources covered include IPAddressPool, BGPPeer, BGPAdvertisement,
 // L2Advertisement, and BFDProfile.
 //
+// BGPPeer is built at metallb.io/v1beta2, the version MetalLB stores:
+// CreateBGPPeer returns the v1beta2 object and AddBGPPeerNodeSelector takes it
+// with a metav1.LabelSelector. The deprecated metallb.io/v1beta1 stays
+// registered, so its manifests still parse to their typed object, and has no
+// constructor; build one from the upstream type directly.
+//
 // # Constructors
 //
 // Constructors follow the form Create<Kind>(name, namespace string). A minimal example

@@ -6,7 +6,7 @@
 Generated from the modules this build pins. Every row names the module and
 version it was read from, so a table entry is always traceable to a pin.
 
-## Kinds (141)
+## Kinds (142)
 
 `Scope from` is what stated the scope: the kind's own `+kubebuilder:resource`
 marker, the `CustomResourceDefinition` its module ships, or the built-in table
@@ -100,6 +100,7 @@ for the kinds whose scope the API server defines.
 | `metallb.io/v1beta1` | `BFDProfile` | Namespaced | `crd` | `BFDProfile` | `go.universe.tf/metallb@v0.16.1` |
 | `metallb.io/v1beta1` | `BGPAdvertisement` | Namespaced | `crd` | `BGPAdvertisement` | `go.universe.tf/metallb@v0.16.1` |
 | `metallb.io/v1beta1` | `BGPPeer` | Namespaced | `crd` | `BGPPeer` | `go.universe.tf/metallb@v0.16.1` |
+| `metallb.io/v1beta2` | `BGPPeer` | Namespaced | `crd` | `BGPPeer` | `go.universe.tf/metallb@v0.16.1` |
 | `metallb.io/v1beta1` | `Community` | Namespaced | `crd` | `Community` | `go.universe.tf/metallb@v0.16.1` |
 | `metallb.io/v1beta1` | `ConfigurationState` | Namespaced | `marker` | `ConfigurationState` | `go.universe.tf/metallb@v0.16.1` |
 | `metallb.io/v1beta1` | `IPAddressPool` | Namespaced | `crd` | `IPAddressPool` | `go.universe.tf/metallb@v0.16.1` |
@@ -156,7 +157,7 @@ for the kinds whose scope the API server defines.
 | `volsync.backube/v1alpha1` | `ReplicationDestination` | Namespaced | `marker` | `ReplicationDestination` | `github.com/backube/volsync@v0.16.0` |
 | `volsync.backube/v1alpha1` | `ReplicationSource` | Namespaced | `marker` | `ReplicationSource` | `github.com/backube/volsync@v0.16.0` |
 
-## Field maturity (128)
+## Field maturity (129)
 
 kure neither warns nor filters on any of this: it reports, and a consumer with
 cluster knowledge decides. For built-in types the API server does not reject a
@@ -206,6 +207,7 @@ by a caller.
 | `monitoring/v1.ShardingStrategy` | `mode` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
 | `monitoring/v1.StorageSpec` | `ephemeral` | beta | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
 | `monitoring/v1.ThanosRulerSpec` | `prometheusRulesExcludedFromEnforce` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
+| `api/v1beta2.BGPPeerSpec` | `disableMP` | deprecated | — | `go.universe.tf/metallb@v0.16.1` |
 | `apps/v1.RollingUpdateStatefulSetStrategy` | `maxUnavailable` | beta | `MaxUnavailableStatefulSet` | `k8s.io/api@v0.37.1` |
 | `autoscaling/v2.HPAScalingRules` | `tolerance` | stable | `HPAConfigurableTolerance` | `k8s.io/api@v0.37.1` |
 | `batch/v1.JobSpec` | `scheduling` | alpha | `WorkloadWithJob` | `k8s.io/api@v0.37.1` |

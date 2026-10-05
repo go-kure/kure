@@ -83,6 +83,69 @@ func TestKindByGroupKindAndKeys(t *testing.T) {
 	}
 }
 
+// The MetalLB BGPPeer is registered at two versions, so its group/kind has two
+// rows. Each version's question gets that version's row; a question about the
+// group/kind alone gets one of them, the same one every time, and only what the
+// two share is safe to read from it.
+func TestAKindRegisteredAtTwoVersions(t *testing.T) {
+	const (
+		kind = "BGPPeer"
+		base = "go.universe.tf/metallb/api/"
+	)
+	for _, version := range []string{"v1beta1", "v1beta2"} {
+		apiVersion := "metallb.io/" + version
+
+		exact, ok := KindFor(apiVersion, kind)
+		if !ok {
+			t.Fatalf("%s %s is registered", apiVersion, kind)
+		}
+		if exact.Version != version || exact.ImportPath != base+version || exact.GoType != kind {
+			t.Errorf("KindFor(%q) = %s %s.%s, want that version's own type", apiVersion, exact.APIVersion(), exact.ImportPath, exact.GoType)
+		}
+
+		// A registered version is answered with its own row, not with the row
+		// of whichever version sorts first.
+		anyVersion, ok := KindForAnyVersion(apiVersion, kind)
+		if !ok || anyVersion != exact {
+			t.Errorf("KindForAnyVersion(%q) = %+v, %v; want the row KindFor returns, %+v", apiVersion, anyVersion, ok, exact)
+		}
+
+		if namespaced, known := IsNamespaced(apiVersion, kind); !namespaced || !known {
+			t.Errorf("IsNamespaced(%q) = %v, %v; want true, true", apiVersion, namespaced, known)
+		}
+	}
+
+	// A version kure does not register falls back to the group/kind, as it does
+	// for a kind registered once.
+	if _, ok := KindFor("metallb.io/v1", kind); ok {
+		t.Error("metallb.io/v1 BGPPeer is not registered")
+	}
+	fallback, ok := KindForAnyVersion("metallb.io/v1", kind)
+	byKey, okKey := KindByGroupKind("metallb.io/" + kind)
+	if !ok || !okKey || fallback != byKey {
+		t.Errorf("KindForAnyVersion at an unregistered version = %+v, %v; KindByGroupKind = %+v, %v; want the same row", fallback, ok, byKey, okKey)
+	}
+	if byKey.Version != "v1beta1" {
+		t.Errorf("KindByGroupKind returned the %s row, want the first in table order, v1beta1", byKey.Version)
+	}
+	if namespaced, known := IsNamespaced("metallb.io/v1", kind); !namespaced || !known {
+		t.Errorf("IsNamespaced at an unregistered version = %v, %v; want true, true", namespaced, known)
+	}
+
+	rows := 0
+	for _, k := range Kinds() {
+		if k.GroupKind() == "metallb.io/"+kind {
+			rows++
+			if !k.Namespaced || k.ScopeSource != ScopeSourceShippedCRD {
+				t.Errorf("%s %s: namespaced=%v from %q; the versions of one group/kind share one scope", k.APIVersion(), kind, k.Namespaced, k.ScopeSource)
+			}
+		}
+	}
+	if rows != 2 {
+		t.Errorf("%d rows for metallb.io/%s, want 2", rows, kind)
+	}
+}
+
 // The committed maturity table is what the generator's drift check compares, so
 // its row order must be defined and total: sorted by import path, type and
 // field, with no two rows sharing all three. An undefined order would show up

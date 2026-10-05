@@ -193,6 +193,39 @@ func TestApplyScopes(t *testing.T) {
 	}
 }
 
+// A group/kind registered at two versions resolves once per version, under one
+// key. Every scope lookup answers per group/kind, so two versions that disagree
+// have no right answer: taking either one silently would give the other
+// version's objects the wrong scope.
+func TestApplyScopes_VersionsOfOneKindMustAgree(t *testing.T) {
+	all := []Kind{
+		{GVK: schema.GroupVersionKind{Group: "example.com", Version: "v1beta1", Kind: "Thing"}},
+		{GVK: schema.GroupVersionKind{Group: "example.com", Version: "v1beta2", Kind: "Thing"}},
+	}
+	agree := []DerivedScope{
+		{Key: "example.com/Thing", Scope: markers.ScopeCluster},
+		{Key: "example.com/Thing", Scope: markers.ScopeCluster},
+	}
+	if err := applyScopes(all, agree); err != nil {
+		t.Fatal(err)
+	}
+	if all[0].Namespaced || all[1].Namespaced {
+		t.Error("both versions must come out cluster-scoped")
+	}
+
+	disagree := []DerivedScope{
+		{Key: "example.com/Thing", Scope: markers.ScopeCluster},
+		{Key: "example.com/Thing", Scope: markers.ScopeNamespaced},
+	}
+	err := applyScopes(all, disagree)
+	if err == nil {
+		t.Fatal("two versions of one group/kind resolving to different scopes must be an error")
+	}
+	if !strings.Contains(err.Error(), "example.com/Thing") {
+		t.Errorf("the error must name the kind: %v", err)
+	}
+}
+
 func TestRoutePackage_Unknown(t *testing.T) {
 	if _, ok := routePackage("example.com/unknown/api/v1"); ok {
 		t.Error("unknown import path must not route")

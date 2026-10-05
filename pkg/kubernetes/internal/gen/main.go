@@ -158,11 +158,15 @@ func render(root, docs string) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Constructors, their tests and the registry cover the kinds that keep a
+	// wrapper. The tables below cover every registered kind: a kind skipped
+	// here is still parsed, and a reader of the tables must find it.
+	wrapped := kinds.Wrapped(all)
 	byPackage := map[string][]kinds.Kind{}
-	for _, k := range all {
+	for _, k := range wrapped {
 		byPackage[k.Package] = append(byPackage[k.Package], k)
 	}
-	aliases, err := importAliases(all)
+	aliases, err := importAliases(wrapped)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +187,7 @@ func render(root, docs string) (map[string][]byte, error) {
 		}
 		files[filepath.Join(root, pkg, createTestFile)] = test
 	}
-	src, err := renderRegistry(all)
+	src, err := renderRegistry(wrapped)
 	if err != nil {
 		return nil, err
 	}
@@ -253,12 +257,16 @@ func findOrphans(root string, files map[string][]byte) ([]string, error) {
 
 func wrapperName(k kinds.Kind) string { return "Create" + k.GVK.Kind }
 
+// checkUniqueWrappers refuses two kinds that would get one wrapper name in one
+// package: two versions of one kind, in practice. A wrapper is named after its
+// kind alone, so the way out is to name the version that goes without one in
+// the skippedWrappers table of internal/kinds.
 func checkUniqueWrappers(pkg string, ks []kinds.Kind) error {
 	seen := map[string]kinds.Kind{}
 	for _, k := range ks {
 		name := wrapperName(k)
 		if prev, dup := seen[name]; dup {
-			return errors.Errorf("gen: %s would be generated twice in package %q (%s and %s); give one a version-qualified name", name, pkg, prev.GVK, k.GVK)
+			return errors.Errorf("gen: %s would be generated twice in package %q (%s and %s); name the one that goes without a constructor in skippedWrappers (internal/kinds)", name, pkg, prev.GVK, k.GVK)
 		}
 		seen[name] = k
 	}
@@ -386,7 +394,7 @@ func renderRegistry(all []kinds.Kind) ([]byte, error) {
 	}
 	b.WriteString(")\n\n")
 	b.WriteString("// generatedKind pairs a registered GVK with its generated constructor wrapper.\ntype generatedKind struct {\n\tGVK        schema.GroupVersionKind\n\tNamespaced bool\n\tCreate     func(name, namespace string) client.Object\n}\n\n")
-	b.WriteString("// generatedKinds lists every generated wrapper; the identity test walks the\n// scheme and fails on any registered kind missing here.\nvar generatedKinds = []generatedKind{\n")
+	b.WriteString("// generatedKinds lists every generated wrapper; the identity test walks the\n// scheme and fails on any registered kind missing here, unless internal/kinds\n// names it as skipped.\nvar generatedKinds = []generatedKind{\n")
 	for _, k := range all {
 		goPkg := rootGoPackage
 		if k.Package != "" {

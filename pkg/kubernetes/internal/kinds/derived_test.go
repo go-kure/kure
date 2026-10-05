@@ -13,10 +13,13 @@ import (
 // deliberate rather than incidental. They are asserted against the derivation
 // and against the frozen fixture, which is what the hand-seeded scope table
 // used to answer for.
+//
+// A kind registered at two versions counts twice: the metallb.io BGPPeer is 2
+// of the 142, v1beta1 and v1beta2.
 const (
-	wantKinds      = 141
+	wantKinds      = 142
 	wantCluster    = 42
-	wantNamespaced = 99
+	wantNamespaced = 100
 )
 
 func TestBaselineCounts(t *testing.T) {
@@ -46,7 +49,7 @@ func TestBaselineCounts(t *testing.T) {
 
 // Registered fills each Kind's scope from the resolution. A dropped or mis-keyed
 // fill-in step would leave the zero value, Namespaced=false, for every kind —
-// and the zero value is the right answer for 42 of the 141, so it neither
+// and the zero value is the right answer for 42 of the 142, so it neither
 // crashes nor looks obviously wrong.
 func TestRegisteredScopesComeFromTheResolution(t *testing.T) {
 	all, types := loadRegistered(t)

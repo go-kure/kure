@@ -73,6 +73,13 @@ type. That changes what a parse returns when kure starts registering a kind: a
 items, typed where the kind is registered, in the list's order and in the list's
 place in the stream. The [IO reference](/api-reference/io) states the rules.
 
+One kind is registered at two versions. MetalLB serves `BGPPeer` at
+`metallb.io/v1beta1`, which it deprecates, and at `metallb.io/v1beta2`, which it
+stores. A manifest at either version parses to that version's own Go type.
+`metallb.CreateBGPPeer` builds the v1beta2 object, and `metallb.AddBGPPeerNodeSelector`
+takes it with a `metav1.LabelSelector`. The v1beta1 type has no constructor: build it
+from the upstream struct if you need one. Kure does not convert between the two.
+
 Kure adds a helper only for one of a few write shapes: appending one item to a
 list, inserting one key into a map, setting a pointer field, or composing a
 small upstream struct. A helper never defaults, never validates, and never
@@ -276,7 +283,9 @@ properties of that version. `IsNamespaced` matches on group and kind only: scope
 property of the resource, not of the version, so it still answers for a manifest at a
 version kure does not register — `autoscaling/v1` above, where the scheme carries
 `autoscaling/v2`. `KindForAnyVersion` is that same version-insensitive match
-returning the whole row. `pkg/manifest`'s `Scope` builds on the version-insensitive
+returning the whole row: the row of the exact version when kure registers it, and
+otherwise the first row of the group/kind, whose version-specific fields then describe
+another version. `pkg/manifest`'s `Scope` builds on the version-insensitive
 form, which is why a manifest at an unregistered version is classified rather than
 left unknown.
 

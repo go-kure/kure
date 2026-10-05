@@ -132,6 +132,10 @@ infrastructure:
       node-specific ConfigurationState validation, security fixes via
       govulncheck. No changes to the v1beta1 API types that kure imports
       (IPAddressPool, BGPPeer, BGPAdvertisement, L2Advertisement, BFDProfile).
+      BGPPeer is built at metallb.io/v1beta2, the stored version: the BGPPeer
+      definition shipped at v0.14.0 already serves and stores v1beta2 beside
+      the deprecated v1beta1, so that version is served across this range.
+      A v1beta1 BGPPeer is still parsed.
   prometheus-operator:
     go_module: "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring"
     supported_range: "0.75 - 0.94"

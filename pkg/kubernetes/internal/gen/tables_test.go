@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
 	"github.com/go-kure/kure/pkg/kubernetes/internal/kinds"
 )
 
@@ -48,30 +50,43 @@ func TestDeriveTablesCoversEveryRegisteredKind(t *testing.T) {
 	if len(data.Kinds) != len(all) {
 		t.Fatalf("derived %d kinds, the scheme registers %d", len(data.Kinds), len(all))
 	}
-	seen := map[string]kindRow{}
+	// Keyed by group, version and kind: a group/kind registered at two versions
+	// has a row for each, and a kind named as skipped has its row like any other.
+	seen := map[schema.GroupVersionKind]kindRow{}
 	for _, k := range data.Kinds {
-		key := k.Group + "/" + k.Kind
+		key := schema.GroupVersionKind{Group: k.Group, Version: k.Version, Kind: k.Kind}
 		if _, dup := seen[key]; dup {
 			t.Errorf("%s appears twice", key)
 		}
 		seen[key] = k
 	}
+	versions := map[string]int{}
 	for _, k := range all {
-		row, ok := seen[k.Key()]
+		versions[k.Key()]++
+		row, ok := seen[k.GVK]
 		if !ok {
-			t.Fatalf("%s is registered but has no row", k.Key())
+			t.Fatalf("%s is registered but has no row", k.GVK)
+		}
+		// The row describes this version's Go type, not another version's.
+		if row.GoType != k.TypeName || row.ImportPath != k.ImportPath {
+			t.Errorf("%s: row names %s.%s, the scheme registers %s.%s", k.GVK, row.ImportPath, row.GoType, k.ImportPath, k.TypeName)
 		}
 		if row.Namespaced != k.Namespaced {
-			t.Errorf("%s: row says namespaced=%v, the scheme says %v", k.Key(), row.Namespaced, k.Namespaced)
+			t.Errorf("%s: row says namespaced=%v, the scheme says %v", k.GVK, row.Namespaced, k.Namespaced)
 		}
 		if row.Module == "" || row.ModuleVersion == "" {
-			t.Errorf("%s: row names no module (%q@%q)", k.Key(), row.Module, row.ModuleVersion)
+			t.Errorf("%s: row names no module (%q@%q)", k.GVK, row.Module, row.ModuleVersion)
 		}
 		switch row.ScopeSource {
 		case "marker", "builtin", "crd":
 		default:
-			t.Errorf("%s: unrecognised scope source %q", k.Key(), row.ScopeSource)
+			t.Errorf("%s: unrecognised scope source %q", k.GVK, row.ScopeSource)
 		}
+	}
+	// Without a kind at two versions the per-version checks above are the
+	// per-kind ones under another name.
+	if versions["metallb.io/BGPPeer"] != 2 {
+		t.Errorf("metallb.io/BGPPeer is registered at %d versions, want 2", versions["metallb.io/BGPPeer"])
 	}
 }
 

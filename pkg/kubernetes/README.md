@@ -77,6 +77,21 @@ generated from the scheme and the scope table in `pkg/kubernetes/internal/kinds`
 are never hand-written. A kind registered in the scheme without a wrapper fails the
 identity test; a wrapper that sets anything beyond identity fails it too.
 
+One case is registered without a wrapper, by name. A wrapper is named after its kind
+alone, so two versions of one kind in one package would both be `Create<Kind>`, and
+the generator refuses that. The version that goes without is listed, with the reason,
+in `skippedWrappers` (`pkg/kubernetes/internal/kinds/skips.go`). It stays registered:
+a manifest at that version still parses to its typed object and the kind keeps its row
+in the [generated table](/api-reference/api-tables/). A caller that needs to build one
+uses the upstream type directly. An entry is accepted only when it resolves such a
+clash — it names a registered kind, gives a reason, and another version of the same
+kind in the same package keeps the wrapper — so the table cannot be used to drop a
+constructor nothing else stands in for.
+
+The one entry is MetalLB's `BGPPeer` at `metallb.io/v1beta1`, which upstream
+deprecates. `metallb.CreateBGPPeer` returns `metallb.io/v1beta2`, the version MetalLB
+stores.
+
 ### Base kinds covered
 
 A base kind has a wrapper when kure registers the group version that defines it. From
@@ -453,10 +468,10 @@ Status types are not entered. A kind's status is reported by the cluster and nev
 constructed by a caller, so a gate there says nothing about whether a manifest kure
 builds applies as written — and that is where most of the markers are.
 
-Against the current pins, the walk finds 128 maturity-carrying construction-side
+Against the current pins, the walk finds 129 maturity-carrying construction-side
 fields, of which 43 require a feature gate (42 in `k8s.io/api`, one in
-`k8s.io/apiextensions-apiserver`); 25 are documented alpha, 14 beta and 66
-deprecated, the remaining 23 are gated without a documented stability claim, and 96
+`k8s.io/apiextensions-apiserver`); 25 are documented alpha, 14 beta and 67
+deprecated, the remaining 23 are gated without a documented stability claim, and 97
 distinct status types are skipped. No CRD module kure pins uses `+featureGate` at
 all. These numbers move with the pins and are not asserted by any test; the pins
 themselves are not restated here — every generated row carries the module and
@@ -493,7 +508,7 @@ module root — and none of them is part of the public API:
 Every resolved scope records which of three sources answered — `marker`, `builtin`
 or `crd`, surfaced on `KindInfo.ScopeSource` — so a wrong scope can be traced to the
 thing that claimed it. Against the current pins that is 67 from the kind's own
-marker, 55 from the built-in table and 19 from a shipped CRD. The source is part of
+marker, 55 from the built-in table and 20 from a shipped CRD. The source is part of
 the public answer and not only a debugging aid: `builtin` is what makes a kind a
 built-in, so a caller asking specifically about built-ins reads it rather than
 keeping a list.
@@ -506,7 +521,7 @@ where it asks about built-ins specifically. The cluster-scoped half of
 the old table survives as a frozen fixture in the `internal/kinds` tests, dated to
 the pins it was taken at. That is deliberate: the derivation fails silently by
 construction — an absent, unread or detached marker resolves to `Namespaced`, which
-is also the right answer for 99 of the 141 kinds — so without a literal to compare
+is also the right answer for 100 of the 142 kinds — so without a literal to compare
 against, a regression in the comment reattachment below would turn cluster-scoped
 kinds namespaced with nothing going red. A pin bump that legitimately re-scopes a kind
 is an edit to that fixture, made with the upstream change named in the commit message.
@@ -541,7 +556,7 @@ the default handed to it:
   explicit entries in `internal/kinds` name the cluster-scoped built-ins; every other
   built-in kind is namespaced.
 - A CRD module marks a type only when it needs a non-default setting, so an unmarked
-  root type is ordinary rather than exceptional: 19 of the registered kinds are in
+  root type is ordinary rather than exceptional: 20 of the registered kinds are in
   that state, across cnpg, metallb and `plugin-barman-cloud`. Their scope is read
   from the `CustomResourceDefinition` the module itself ships — controller-gen's own
   output, generated from the same source, which states the scope explicitly whether
@@ -610,16 +625,25 @@ version:
   `ImportPath` and `ModuleVersion` describe one version's Go type, so a group/kind
   registered at some other version is not an answer — it reads as unregistered,
   which is what it is.
-- `KindForAnyVersion(apiVersion, kind)` matches the group only, and is the row
-  behind the version-insensitive answers: scope, and what declared it. The row it
-  returns may describe a different version than the one asked about, so anything
-  version-specific on it is not an answer to the question that was asked.
+- `KindForAnyVersion(apiVersion, kind)` does not require the version to be
+  registered, and is the row behind the version-insensitive answers: scope, and what
+  declared it. It returns the row for the exact version when kure registers it, and
+  otherwise the row `KindByGroupKind` returns. That row may describe a different
+  version than the one asked about, so anything version-specific on it is not an
+  answer to the question that was asked.
+- `KindByGroupKind("group/Kind")` returns one row for the group/kind. A group/kind
+  registered at two versions has two rows — MetalLB's `BGPPeer`, at
+  `metallb.io/v1beta1` and `metallb.io/v1beta2` — and this returns the first in table
+  order, the lowest version string, which is not necessarily the stored one. Read from
+  it only what the versions share.
 - `IsNamespaced(apiVersion, kind)` ignores the version. Scope is a property of the
   resource and is the same across the versions of one group/kind, so a manifest
   written against a version kure does not register is still answered rather than
   returned as unknown. `pkg/manifest`'s `Scope` depends on that: an object at
   `autoscaling/v1` must not fall through to `ScopeUnknown` because the scheme
-  happens to register `autoscaling/v2`.
+  happens to register `autoscaling/v2`. The generator holds the tables to it: two
+  registered versions of one group/kind that resolve to different scopes are a
+  generation error, not two rows that disagree.
 
 Regenerate with `scripts/gen-builders.sh generate`; CI's `validate` job runs
 `scripts/gen-builders.sh check`, and Renovate runs `generate` in its
@@ -640,11 +664,13 @@ Two consequences of that wiring:
 
 ## Identity test
 
-`TestIdentity_ConstructorsEmitIdentityOnly` walks every kind the scheme registers,
-calls its generated wrapper and compares the result with `reflect.DeepEqual` against
-a zero value carrying only GVK, name and (when namespaced) namespace. Any injected
-label, selector or default turns it red. `TestIdentity_EveryRegisteredKindHasAWrapper`
-fails on a registered kind with no wrapper and on a wrapper with no registered kind.
+`TestIdentity_ConstructorsEmitIdentityOnly` walks every generated wrapper, calls it
+and compares the result with `reflect.DeepEqual` against a zero value carrying only
+GVK, name and (when namespaced) namespace. Any injected label, selector or default
+turns it red. `TestIdentity_EveryRegisteredKindHasAWrapper` fails on a registered kind
+with no wrapper and on a wrapper with no registered kind. A kind named in
+`skippedWrappers` is the exception in both directions: it must have no wrapper, and
+one that has is a failure too.
 
 ## Schema validation test
 
@@ -666,7 +692,7 @@ tree, every path it names resolves too, and what each Flux Kustomization applies
 with the reason. Schema-backed kinds are the ones whose module ships its definitions
 (cert-manager, cilium, cloudnative-pg, plugin-barman-cloud, flux-operator,
 gateway-api, metallb, volsync) or whose definitions the vendored Flux install bundle
-carries (`internal/gotk`): 75 against the current pins. Uncovered kinds have no
+carries (`internal/gotk`): 76 against the current pins. Uncovered kinds have no
 definition to hold them to — the built-in kinds of `k8s.io/api`,
 `k8s.io/apiextensions-apiserver` and `k8s.io/kube-aggregator`, whose validation the
 apiserver implements in Go,

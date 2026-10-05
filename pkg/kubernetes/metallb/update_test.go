@@ -1,6 +1,7 @@
 package metallb
 
 import (
+	"reflect"
 	"testing"
 
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
@@ -45,13 +46,21 @@ func TestSetIPAddressPoolAllocateTo(t *testing.T) {
 func TestAddBGPPeerNodeSelector(t *testing.T) {
 	peer := CreateBGPPeer("test", "metallb-system")
 
-	sel := metallbv1beta1.NodeSelector{
+	// v1beta2 selects nodes with the apimachinery label selector, the type the
+	// advertisement kinds already take, so one selector value serves all three.
+	first := metav1.LabelSelector{
 		MatchLabels: map[string]string{"role": "worker"},
 	}
-	AddBGPPeerNodeSelector(peer, sel)
+	second := metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{Key: "zone", Operator: metav1.LabelSelectorOpIn, Values: []string{"a", "b"}},
+		},
+	}
+	AddBGPPeerNodeSelector(peer, first)
+	AddBGPPeerNodeSelector(peer, second)
 
-	if len(peer.Spec.NodeSelectors) != 1 {
-		t.Fatalf("expected 1 node selector, got %d", len(peer.Spec.NodeSelectors))
+	if !reflect.DeepEqual(peer.Spec.NodeSelectors, []metav1.LabelSelector{first, second}) {
+		t.Errorf("node selectors = %+v, want the two given, in order", peer.Spec.NodeSelectors)
 	}
 }
 

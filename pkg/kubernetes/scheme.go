@@ -22,6 +22,7 @@ import (
 	sourceWatcherv1beta1 "github.com/fluxcd/source-watcher/api/v2/v1beta1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+	metallbv1beta2 "go.universe.tf/metallb/api/v1beta2"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -102,6 +103,7 @@ func registerAllSchemes() error {
 		sourceWatcherv1beta1.AddToScheme,
 		esv1.AddToScheme,
 		metallbv1beta1.AddToScheme,
+		metallbv1beta2.AddToScheme,
 		gwapiv1.Install,
 		monitoringv1.AddToScheme,
 		volsyncv1alpha1.AddToScheme,

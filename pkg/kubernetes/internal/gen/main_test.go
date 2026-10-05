@@ -399,11 +399,88 @@ func TestCheckUniqueWrappers(t *testing.T) {
 	a.GVK.Group = "a"
 	b := a
 	b.GVK.Group = "b"
-	if err := checkUniqueWrappers("p", []kinds.Kind{a, b}); err == nil {
-		t.Error("expected a duplicate-wrapper error")
+	err := checkUniqueWrappers("p", []kinds.Kind{a, b})
+	if err == nil {
+		t.Fatal("expected a duplicate-wrapper error")
+	}
+	// The error has to send the reader to the one remedy there is: a wrapper
+	// name cannot be qualified by version, so one of the two is named as skipped.
+	if !strings.Contains(err.Error(), "skippedWrappers") {
+		t.Errorf("the error must name the skip table: %v", err)
 	}
 	if err := checkUniqueWrappers("p", []kinds.Kind{a}); err != nil {
 		t.Error(err)
+	}
+}
+
+// A kind named as skipped keeps everything but its constructor: both versions
+// of the MetalLB BGPPeer are rows in every table artifact, and exactly one of
+// them, v1beta2, is a wrapper, a generated test case and a registry entry.
+func TestRender_SkippedKindKeepsItsRowsAndLosesItsWrapper(t *testing.T) {
+	all, err := kinds.Registered()
+	if err != nil {
+		t.Fatal(err)
+	}
+	skipped := 0
+	for _, k := range all {
+		if k.WrapperSkipped {
+			skipped++
+		}
+	}
+	if skipped == 0 {
+		t.Fatal("no registered kind is named as skipped; this test asserts nothing")
+	}
+
+	files, err := render("x", docsRoot("x", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	create := string(files[filepath.Join("x", "metallb", createFile)])
+	if got := strings.Count(create, "func CreateBGPPeer("); got != 1 {
+		t.Errorf("%d CreateBGPPeer wrappers, want exactly 1:\n%s", got, create)
+	}
+	if !strings.Contains(create, "func CreateBGPPeer(name, namespace string) *metallbv1beta2.BGPPeer {\n\treturn kubernetes.Create[metallbv1beta2.BGPPeer](name, namespace)\n}") {
+		t.Errorf("CreateBGPPeer must build the v1beta2 type:\n%s", create)
+	}
+	if strings.Contains(create, "metallbv1beta1.BGPPeer") {
+		t.Errorf("the skipped v1beta1 BGPPeer still has a wrapper:\n%s", create)
+	}
+	// The other v1beta1 kinds keep theirs: the skip names one kind, not a version.
+	if !strings.Contains(create, "func CreateIPAddressPool(name, namespace string) *metallbv1beta1.IPAddressPool {") {
+		t.Errorf("the v1beta1 IPAddressPool lost its wrapper:\n%s", create)
+	}
+
+	createTest := string(files[filepath.Join("x", "metallb", createTestFile)])
+	if got := strings.Count(createTest, `{"BGPPeer", true, CreateBGPPeer("name", "ns")},`); got != 1 {
+		t.Errorf("%d generated test cases for BGPPeer, want exactly 1:\n%s", got, createTest)
+	}
+
+	registry := string(files[filepath.Join("x", registryFile)])
+	if !strings.Contains(registry, `{GVK: schema.GroupVersionKind{Group: "metallb.io", Version: "v1beta2", Kind: "BGPPeer"}, Namespaced: true, Create: func(name, namespace string) client.Object { return metallb.CreateBGPPeer(name, namespace) }},`) {
+		t.Errorf("the registry lacks the v1beta2 BGPPeer:\n%s", registry)
+	}
+	if strings.Contains(registry, `Version: "v1beta1", Kind: "BGPPeer"`) {
+		t.Error("the registry lists the skipped v1beta1 BGPPeer; its entry would call the v1beta2 wrapper")
+	}
+	if got, want := strings.Count(registry, "{GVK: schema.GroupVersionKind{"), len(all)-skipped; got != want {
+		t.Errorf("%d registry entries, want %d (%d registered, %d skipped)", got, want, len(all), skipped)
+	}
+
+	tables := string(files[filepath.Join("x", tablesFile)])
+	page := string(files[filepath.Join("x", "docs", tablesDocFile)])
+	raw := string(files[filepath.Join("x", "docs", tablesJSONFile)])
+	for _, version := range []string{"v1beta1", "v1beta2"} {
+		importPath := "go.universe.tf/metallb/api/" + version
+		if !strings.Contains(tables, `{Group: "metallb.io", Version: "`+version+`", Kind: "BGPPeer", GoType: "BGPPeer", ImportPath: "`+importPath+`",`) {
+			t.Errorf("%s has no metallb.io/%s BGPPeer row", tablesFile, version)
+		}
+		if !strings.Contains(page, "| `metallb.io/"+version+"` | `BGPPeer` | Namespaced | `crd` | `BGPPeer` |") {
+			t.Errorf("%s has no metallb.io/%s BGPPeer row", tablesDocFile, version)
+		}
+		if !strings.Contains(raw, `"importPath": "`+importPath+`"`) {
+			t.Errorf("%s has no row for %s", tablesJSONFile, importPath)
+		}
 	}
 }
 

@@ -10,7 +10,8 @@ Each generated constructor returns a MetalLB custom resource carrying its API ve
 
 Each block on this page is the body of an `Example` function in `example_test.go`, which `go test`
 runs: it imports this package as `metallb`, the upstream API as
-`metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"`, and `fmt` for the line that prints what the
+`metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"`, the apimachinery meta types as
+`metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"`, and `fmt` for the line that prints what the
 example built.
 
 ## Constructors
@@ -45,6 +46,16 @@ fmt.Println(pool.Spec.Addresses)
 
 ### BGP Peers
 
+MetalLB serves `BGPPeer` at two versions: `metallb.io/v1beta1`, which it deprecates, and
+`metallb.io/v1beta2`, the one it stores. `CreateBGPPeer` returns the v1beta2 object
+(`go.universe.tf/metallb/api/v1beta2`), and `AddBGPPeerNodeSelector` takes that object and a
+`metav1.LabelSelector`, the selector type the advertisement kinds already use.
+
+Both versions are registered, so a manifest at either one parses to its own typed object. Only
+v1beta2 has a constructor: a wrapper is named after its kind, and one package cannot hold two
+`CreateBGPPeer`. To build a v1beta1 object, use the upstream type directly
+(`&metallbv1beta1.BGPPeer{...}` with its `TypeMeta` set). kure does not convert between the two.
+
 <!-- doc-example: pkg/kubernetes/metallb ExampleCreateBGPPeer -->
 ```go
 peer := metallb.CreateBGPPeer("my-peer", "metallb-system")
@@ -52,7 +63,10 @@ peer.Spec.MyASN = 64500
 peer.Spec.ASN = 64501
 peer.Spec.Address = "10.0.0.1"
 peer.Spec.Port = 179
-fmt.Println(peer.Spec.Address, peer.Spec.ASN)
+metallb.AddBGPPeerNodeSelector(peer, metav1.LabelSelector{
+    MatchLabels: map[string]string{"node-role.kubernetes.io/worker": ""},
+})
+fmt.Println(peer.APIVersion, peer.Spec.Address, peer.Spec.ASN, len(peer.Spec.NodeSelectors))
 ```
 <!-- doc-example:end -->
 

@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	stderrors "errors"
+	"reflect"
 	"testing"
 
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
@@ -14,6 +15,7 @@ import (
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+	metallbv1beta2 "go.universe.tf/metallb/api/v1beta2"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -394,6 +396,40 @@ func TestScheme_MetalLBTypes(t *testing.T) {
 		if len(gvks) == 0 {
 			t.Errorf("no GVKs found for %T", obj)
 		}
+	}
+}
+
+// The MetalLB BGPPeer is registered at both versions upstream serves. Each Go
+// type answers for its own version only, and each version decodes to its own
+// Go type, so neither stands in for the other.
+func TestScheme_MetalLBBGPPeerVersions(t *testing.T) {
+	if err := RegisterSchemes(); err != nil {
+		t.Fatalf("failed to register schemes: %v", err)
+	}
+	cases := []struct {
+		obj  runtime.Object
+		want schema.GroupVersionKind
+	}{
+		{&metallbv1beta1.BGPPeer{}, schema.GroupVersionKind{Group: "metallb.io", Version: "v1beta1", Kind: "BGPPeer"}},
+		{&metallbv1beta2.BGPPeer{}, schema.GroupVersionKind{Group: "metallb.io", Version: "v1beta2", Kind: "BGPPeer"}},
+	}
+	for _, c := range cases {
+		t.Run(c.want.Version, func(t *testing.T) {
+			gvks, _, err := Scheme.ObjectKinds(c.obj)
+			if err != nil {
+				t.Fatalf("ObjectKinds(%T): %v", c.obj, err)
+			}
+			if len(gvks) != 1 || gvks[0] != c.want {
+				t.Errorf("ObjectKinds(%T) = %v, want exactly [%s]", c.obj, gvks, c.want)
+			}
+			made, err := Scheme.New(c.want)
+			if err != nil {
+				t.Fatalf("New(%s): %v", c.want, err)
+			}
+			if got, want := reflect.TypeOf(made), reflect.TypeOf(c.obj); got != want {
+				t.Errorf("New(%s) = %s, want %s", c.want, got, want)
+			}
+		})
 	}
 }
 
