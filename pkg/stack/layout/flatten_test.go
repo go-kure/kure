@@ -401,47 +401,39 @@ func TestRenderUmbrellaChildren_NilChild(t *testing.T) {
 }
 
 // TestCheckApplicationDirs: an application's name is checked on the layout
-// that is its own directory, and nowhere else. The layout that absorbs such a
-// directory (flattenSingleTier) is the parent's directory and keeps the
-// parent's name, so the application's name is no longer checked there. The
-// last case holds whichever way the flatten decides: the name is refused
-// exactly when the application's layout is still in the tree.
+// that is its own directory, the one layout with that application as its
+// origin, wherever it sits in the tree.
 func TestCheckApplicationDirs(t *testing.T) {
 	app := stack.NewApplication("a/b", "ns", &flattenFakeConfig{})
-	tree := func() *ManifestLayout {
-		child := &ManifestLayout{Name: app.Name, Namespace: "root"}
-		child.origin = origin{app: app, appDir: true}
-		return &ManifestLayout{Name: "root", Namespace: ".", Children: []*ManifestLayout{child}}
+	tree := func(name string) *ManifestLayout {
+		child := &ManifestLayout{Name: name, Namespace: "root/web"}
+		child.origin = origin{app: stack.NewApplication(name, "ns", &flattenFakeConfig{})}
+		bundle := &ManifestLayout{Name: "web", Namespace: "root", Children: []*ManifestLayout{child}}
+		bundle.origin = origin{bundles: []*stack.Bundle{{Name: "web"}}}
+		return &ManifestLayout{Name: "root", Namespace: ".", Children: []*ManifestLayout{bundle}}
 	}
 
 	if err := checkApplicationDirs(nil); err != nil {
 		t.Errorf("nil tree: %v", err)
 	}
+	if err := checkApplicationDirs(tree("frontend")); err != nil {
+		t.Errorf("an application directory named frontend: %v", err)
+	}
 
-	err := checkApplicationDirs(tree())
+	err := checkApplicationDirs(tree(app.Name))
 	if err == nil {
 		t.Fatal("an application directory named a/b was accepted")
 	}
-	for _, want := range []string{`'a/b'`, `it names a directory in "root"`, "path separator"} {
+	for _, want := range []string{`'a/b'`, `it names a directory in "root/web"`, "path separator"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not contain %s", err, want)
 		}
 	}
 
-	// A layout that carries the application without being its directory.
-	absorbed := &ManifestLayout{Name: "root", Namespace: "."}
-	absorbed.origin = origin{app: app}
-	if err := checkApplicationDirs(absorbed); err != nil {
-		t.Errorf("a layout that only carries the application: %v", err)
-	}
-
-	flat := flattenSingleTier(tree(), LayoutRules{FlattenSingleTier: true})
-	kept := len(flat.Children) == 1
-	err = checkApplicationDirs(flat)
-	if kept && err == nil {
+	// The flatten leaves a directory that renders a bundle, and with it the
+	// application directories below: the name is still refused.
+	flat := flattenSingleTier(tree(app.Name), LayoutRules{FlattenSingleTier: true})
+	if err := checkApplicationDirs(flat); err == nil {
 		t.Error("after the flatten the application's directory is still in the tree, and a/b was accepted")
-	}
-	if !kept && err != nil {
-		t.Errorf("after the flatten the application has no directory of its own, and its name was refused: %v", err)
 	}
 }
