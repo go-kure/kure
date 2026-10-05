@@ -284,9 +284,9 @@ func rootName(rootNode *stack.Node) string {
 // node, and "." — the root of the source — when there is no root node. Invalid
 // rules are the error layout.TopDirectory returns for them.
 //
-// A rooted directory (a ClusterName such as "/prod") is returned without its
-// leading slash, which is where the writers put it: they resolve it under the
-// directory they write to.
+// A rooted directory (a ClusterName such as "/prod") comes back from
+// layout.TopDirectory without its leading slash, which is where the writers
+// put it: they resolve it under the directory they write to.
 //
 // Each mode spells that one directory its own way. The gotk bootstrap
 // Kustomization's spec.path is the directory itself with no "./" prefix, and
@@ -301,14 +301,7 @@ func rootName(rootNode *stack.Node) string {
 // "manifests/<root>", a prefix no writer of the package produces, while the
 // FluxInstance named "./<root>": two directories for one root.
 func bootstrapDir(rootNode *stack.Node, rules layout.LayoutRules) (string, error) {
-	dir, err := layout.TopDirectory(rootNode, rules)
-	if err != nil {
-		return "", err
-	}
-	if dir = strings.TrimLeft(dir, "/"); dir == "" {
-		dir = "."
-	}
-	return dir, nil
+	return layout.TopDirectory(rootNode, rules)
 }
 
 // syncPath spells the directory bootstrapDir returns as a FluxInstance
