@@ -556,15 +556,18 @@ func TestBundleValidateUmbrellaChildren(t *testing.T) {
 	})
 
 	// A nil DependsOn entry names no bundle and every generator would
-	// dereference it: refused on the bundle and on an umbrella child, with
-	// the bundle that holds it and the entry's index.
+	// dereference it: refused on the bundle and on an umbrella descendant,
+	// with the path of the bundle that holds it, from the bundle Validate
+	// was called on, and the entry's index.
 	t.Run("nil dependency rejected", func(t *testing.T) {
 		cases := []struct {
 			bundle *Bundle
 			want   []string
 		}{
 			{&Bundle{Name: "p", DependsOn: []*Bundle{{Name: "db"}, nil}}, []string{"'p'", "dependency at index 1 is nil"}},
-			{&Bundle{Name: "p", Children: []*Bundle{{Name: "c", DependsOn: []*Bundle{nil}}}}, []string{"'c'", "dependency at index 0 is nil"}},
+			{&Bundle{Name: "p", Children: []*Bundle{{Name: "c", DependsOn: []*Bundle{nil}}}}, []string{"'p/c'", "dependency at index 0 is nil"}},
+			{&Bundle{Name: "platform", Children: []*Bundle{{Name: "infra", Children: []*Bundle{{Name: "db", DependsOn: []*Bundle{{Name: "dns"}, nil}}}}}},
+				[]string{"'platform/infra/db'", "dependency at index 1 is nil"}},
 		}
 		for _, tc := range cases {
 			err := tc.bundle.Validate()
