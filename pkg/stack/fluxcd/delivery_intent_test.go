@@ -730,9 +730,13 @@ func (l *typedSplitItems) DeepCopyObject() runtime.Object {
 }
 
 // TestDeliveryIntent_WrittenWithoutAnnotationRefused: what counts is the
-// written file. A typed object whose written form still holds an object
-// without the annotation, after the integrator set it on everything it could
-// reach, is refused, and what was set is taken back.
+// written file. A typed object whose written form holds an object without
+// the annotation is refused, and the objects its Go value holds are left as
+// they were. Where the Go value's items are what is written, item for item,
+// but written from another field, the integrator sets the annotation on them,
+// finds the written ones without it, and takes it back. Where other items are
+// written, the Go value's are not the application's objects and are never
+// touched.
 func TestDeliveryIntent_WrittenWithoutAnnotationRefused(t *testing.T) {
 	cm := func(name string) corev1.ConfigMap {
 		return corev1.ConfigMap{
@@ -740,31 +744,38 @@ func TestDeliveryIntent_WrittenWithoutAnnotationRefused(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
 		}
 	}
-	list := &typedSplitItems{
-		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMapList"},
-		Items:    []corev1.ConfigMap{cm("reached")},
-		Entries:  []corev1.ConfigMap{cm("written")},
-	}
-	var obj client.Object = list
-	app := stack.NewApplication("listed", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
-	app.Delivery = stack.DeliveryIntent{PruneProtection: true}
-	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app)}}
-	rules := recursiveRules("nodeOnly", layout.FluxSeparate)
-	ml, err := layout.WalkCluster(c, rules)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
-	if err == nil {
-		t.Fatal("a List written with an item that lacks the annotation was accepted")
-	}
-	for _, want := range []string{`application "listed"`, "ConfigMapList", `ConfigMap "default/written"`, stack.AnnotationFluxPruneKey} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error %q does not contain %q", err, want)
-		}
-	}
-	if got := list.Items[0].GetAnnotations(); len(got) != 0 {
-		t.Errorf("the refusal left annotations %v on the object it had reached", got)
+	for name, held := range map[string]string{
+		"the same items written from another field": "written",
+		"other items written":                       "held",
+	} {
+		t.Run(name, func(t *testing.T) {
+			list := &typedSplitItems{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMapList"},
+				Items:    []corev1.ConfigMap{cm(held)},
+				Entries:  []corev1.ConfigMap{cm("written")},
+			}
+			var obj client.Object = list
+			app := stack.NewApplication("listed", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+			app.Delivery = stack.DeliveryIntent{PruneProtection: true}
+			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app)}}
+			rules := recursiveRules("nodeOnly", layout.FluxSeparate)
+			ml, err := layout.WalkCluster(c, rules)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+			if err == nil {
+				t.Fatal("a List written with an item that lacks the annotation was accepted")
+			}
+			for _, want := range []string{`application "listed"`, "ConfigMapList", `ConfigMap "default/written"`, stack.AnnotationFluxPruneKey} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not contain %q", err, want)
+				}
+			}
+			if got := list.Items[0].GetAnnotations(); len(got) != 0 {
+				t.Errorf("the refusal left annotations %v on an object the Go value holds", got)
+			}
+		})
 	}
 }
 
