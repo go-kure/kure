@@ -130,7 +130,9 @@ A list is refused as a whole, with no item returned, in three cases:
 - Its own `metadata` carries labels or annotations. The items are all a parse
   returns of a list, and they cannot keep what the list says about itself; a
   `helm.sh/hook` annotation on a list is the known case. The error names what the
-  list carries. Metadata that cannot be read is refused as well. What describes the
+  list carries. Metadata that cannot be read is refused as well, and a list that
+  states `metadata`, `labels` or `annotations` more than once carries what any of
+  them states. What describes the
   response a list came in (`resourceVersion`, `continue`, `selfLink`,
   `remainingItemCount`) is ignored, and so is a name on a list.
 - It states its items under a key in another case (`Items`); see below.

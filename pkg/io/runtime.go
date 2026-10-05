@@ -179,7 +179,7 @@ func decodeDocument(raw []byte, opts ParseOptions, nesting int) ([]runtime.Objec
 				return decodeDocument(item, opts, nesting+1)
 			}
 		}
-		return flattenList(fields, listGVK.Kind, nesting, decodeItem)
+		return flattenList(raw, fields, listGVK.Kind, nesting, decodeItem)
 	}
 
 	obj, _, err := decodeRegistered(raw, nil)
@@ -254,7 +254,7 @@ func decodeUnregistered(raw []byte, fields map[string]json.RawMessage, opts Pars
 	kind, _ := stringField(fields, "kind")
 	if _, stated := fields["items"]; strings.HasSuffix(kind, "List") && (stated || len(foldedKeys(fields, "items")) > 0) {
 		itemKind := strings.TrimSuffix(kind, "List")
-		return flattenList(fields, kind, nesting, func(item []byte) ([]runtime.Object, []error) {
+		return flattenList(raw, fields, kind, nesting, func(item []byte) ([]runtime.Object, []error) {
 			return decodeDocument(withListIdentity(item, apiVersion, itemKind), opts, nesting+1)
 		})
 	}
@@ -353,9 +353,9 @@ func stringField(fields map[string]json.RawMessage, key string) (string, error) 
 }
 
 // flattenList returns the items of a list document, in the list's own order.
-// fields is the document's top level, kind the kind it states, and decodeItem
-// what turns one item into objects. It is the one path for the three shapes a
-// list has:
+// raw is the document, fields its top level, kind the kind it states, and
+// decodeItem what turns one item into objects. It is the one path for the
+// three shapes a list has:
 //
 //   - a typed list (DeploymentList): its items are of the one kind the list
 //     holds. An item that leaves apiVersion and kind out, as the API server's
@@ -378,7 +378,7 @@ func stringField(fields map[string]json.RawMessage, key string) (string, error) 
 // Each item is decoded by itself: one that does not decode, a null among them,
 // is an error naming its position, and the items beside it are still returned.
 // An empty list yields no object and no error.
-func flattenList(fields map[string]json.RawMessage, kind string, nesting int, decodeItem func(item []byte) ([]runtime.Object, []error)) ([]runtime.Object, []error) {
+func flattenList(raw []byte, fields map[string]json.RawMessage, kind string, nesting int, decodeItem func(item []byte) ([]runtime.Object, []error)) ([]runtime.Object, []error) {
 	refuse := func(reason string, cause error) []error {
 		return []error{errors.NewParseError("Kubernetes object", reason, 0, 0, cause)}
 	}
@@ -388,7 +388,7 @@ func flattenList(fields map[string]json.RawMessage, kind string, nesting int, de
 	if refused := foldedKeys(fields, "items"); len(refused) > 0 {
 		return nil, parseErrorsOfKeys(refused)
 	}
-	carried, err := listMetadata(fields)
+	carried, err := listMetadata(raw)
 	if err != nil {
 		return nil, refuse(fmt.Sprintf("failed to read the metadata of %s", kind), err)
 	}
@@ -436,32 +436,78 @@ func (nullItemError) Unwrap() error { return errors.ErrNilRuntimeObject }
 // resourceVersion, continue and the like describe the response the list came
 // in, and nothing is lost with them. Metadata that cannot be read is an error:
 // it cannot be shown to carry no label and no annotation.
-func listMetadata(fields map[string]json.RawMessage) (string, error) {
-	var metadata map[string]json.RawMessage
-	if raw := fields["metadata"]; len(raw) > 0 {
-		if err := json.Unmarshal(raw, &metadata); err != nil {
-			return "", err
-		}
+//
+// raw is the list document, not a reading of it. A document can state
+// metadata, labels or annotations more than once, and its readers do not keep
+// the same occurrence. What any occurrence carries is carried: a hook
+// annotation followed by an empty annotations field is still one the items
+// cannot keep.
+func listMetadata(raw []byte) (string, error) {
+	metadata, err := occurrences(raw, "metadata")
+	if err != nil {
+		return "", err
 	}
 	var carried []string
 	for _, field := range []string{"annotations", "labels"} {
-		var entries map[string]json.RawMessage
-		if raw := metadata[field]; len(raw) > 0 {
-			if err := json.Unmarshal(raw, &entries); err != nil {
+		named := make(map[string]struct{})
+		for _, object := range metadata {
+			stated, err := occurrences(object, field)
+			if err != nil {
 				return "", err
 			}
+			for _, value := range stated {
+				var entries map[string]json.RawMessage
+				if err := json.Unmarshal(value, &entries); err != nil {
+					return "", err
+				}
+				for key := range entries {
+					named[key] = struct{}{}
+				}
+			}
 		}
-		if len(entries) == 0 {
+		if len(named) == 0 {
 			continue
 		}
-		keys := make([]string, 0, len(entries))
-		for key := range entries {
+		keys := make([]string, 0, len(named))
+		for key := range named {
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
 		carried = append(carried, field+" "+strings.Join(keys, ", "))
 	}
 	return strings.Join(carried, "; "), nil
+}
+
+// occurrences returns every value a JSON object states under key, in the order
+// it states them: more than one where it states the key more than once. A null
+// in place of the object states none; anything else that is no object is the
+// error of reading it as one, which says what the document states there.
+func occurrences(object []byte, key string) ([]json.RawMessage, error) {
+	if !bytes.HasPrefix(bytes.TrimSpace(object), []byte("{")) {
+		// The value is read as an object only to have the error of that
+		// reading, or none for a null; the walk below never sees it.
+		var fields map[string]json.RawMessage
+		return nil, json.Unmarshal(object, &fields)
+	}
+	dec := json.NewDecoder(bytes.NewReader(object))
+	if _, err := dec.Token(); err != nil {
+		return nil, err
+	}
+	var values []json.RawMessage
+	for dec.More() {
+		name, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		var value json.RawMessage
+		if err := dec.Decode(&value); err != nil {
+			return nil, err
+		}
+		if stated, isString := name.(string); isString && stated == key {
+			values = append(values, value)
+		}
+	}
+	return values, nil
 }
 
 // listItemKind returns what a registered list holds: generic is true for the
