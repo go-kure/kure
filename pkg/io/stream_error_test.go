@@ -115,6 +115,14 @@ var streamCases = []struct {
 		wantErrs: [][]string{{jsonSyntax}},
 	},
 	{
+		// After two JSON documents the decoder reads JSON only, and a
+		// separator line is not JSON.
+		name:     "two JSON documents, a separator line, then a document that is not reached",
+		doc:      configMapDoc("a") + "\n" + configMapDoc("b") + "\n---\n" + configMapDoc("d") + "\n",
+		want:     []string{"a", "b"},
+		wantErrs: [][]string{{"invalid character '-'"}},
+	},
+	{
 		name:     "malformed JSON, then text",
 		doc:      malformedJSON + "some more text here\n",
 		wantErrs: [][]string{{jsonSyntax}},
@@ -148,6 +156,22 @@ var streamCases = []struct {
 		doc:      yamlConfigMap("a") + "---\n" + malformedYAML,
 		want:     []string{"a"},
 		wantErrs: [][]string{{"yaml:"}},
+	},
+	{
+		// JSON documents with a separator line between them are YAML
+		// documents to the decoder, and so is the malformed one.
+		name:     "malformed JSON among JSON documents with a separator line between them",
+		doc:      configMapDoc("a") + "\n---\n" + configMapDoc("b") + "\n---\n" + malformedJSON + "---\n" + configMapDoc("c") + "\n",
+		want:     []string{"a", "b", "c"},
+		wantErrs: [][]string{{"yaml:"}},
+	},
+	{
+		// After one JSON document the decoder can still fall back to its
+		// YAML reader, which reads on from the separator line.
+		name:     "one JSON document, malformed JSON, a separator line, then a document",
+		doc:      configMapDoc("a") + "\n" + malformedJSON + "---\n" + configMapDoc("c") + "\n",
+		want:     []string{"a", "c"},
+		wantErrs: [][]string{{jsonSyntax}},
 	},
 	{
 		name:     "malformed JSON, then YAML documents",

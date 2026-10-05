@@ -52,8 +52,11 @@ A place where the stream itself cannot be read is an error as well. Where the
 decoder can go on from it, the parse does: a YAML document that does not parse
 costs only itself, and the documents after it are read. Where the decoder
 cannot, the parse ends there. It returns one error for the place beside the
-objects decoded before it, and what follows in the stream is not read. Malformed
-JSON in a stream of JSON documents is such a place.
+objects decoded before it, and what follows in the stream is not read. A stream
+that starts with two JSON documents, one after the other with no `---` line
+between them, is read as JSON only from there on, and the first thing in it that
+is not JSON is such a place: malformed JSON, or a `---` line. JSON documents
+with a `---` line between them are read as YAML documents, each on its own.
 
 A registered kind is decoded into its upstream Go type, so that type's own
 `UnmarshalJSON` runs inside the parse. One that panics does not take the caller
