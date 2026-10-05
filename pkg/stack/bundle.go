@@ -84,10 +84,21 @@ type Bundle struct {
 	SourceRef *SourceRef
 	// Applications holds the Kubernetes objects that belong to the application.
 	Applications []*Application
-	// Labels are common labels that should be applied to each resource.
+	// Labels are the labels of what is generated for the bundle. The Flux
+	// workflow sets them on the bundle's Kustomization and, under
+	// FluxIntegratedPerLayout, on the Kustomization of each application of the
+	// bundle that has a directory of its own and of each layout below it; the
+	// ArgoCD workflow sets them on the bundle's Application. Generate adds
+	// them to the objects of the bundle's applications, an object's own value
+	// winning. A tree walked from a cluster is not built with Generate: the
+	// walker generates each application on its own, so no object in such a
+	// tree gets them.
 	Labels map[string]string
-	// Annotations are common annotations propagated to all generated resources and
-	// the generated Kustomization resource. Application-specific annotations take precedence.
+	// Annotations are the annotations of what is generated for the bundle: on
+	// the same Flux Kustomizations as Labels, and added by Generate to the
+	// objects of the bundle's applications, an object's own value winning. The
+	// ArgoCD workflow does not read them. As for Labels, no object in a tree
+	// walked from a cluster gets them.
 	Annotations map[string]string
 	// Description provides a human-readable description of the bundle.
 	Description string

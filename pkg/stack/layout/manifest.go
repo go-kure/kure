@@ -85,6 +85,34 @@ type ManifestLayout struct {
 	// where it creates the Kustomization and does not shorten a default, so
 	// a default that is too long is fixed by setting this field.
 	KustomizationName string
+	// Wait, Timeout, RetryInterval, Labels and Annotations are settings of the
+	// Flux Kustomization the layout integrator generates for this layout in
+	// FluxIntegratedPerLayout mode: its spec.wait, spec.timeout and
+	// spec.retryInterval, and the labels and annotations of the Kustomization
+	// object itself. No object in the layout's directory gets them. Like
+	// KustomizationName they are read only where the layout gets a
+	// Kustomization of its own, and are dropped without an error anywhere
+	// else.
+	//
+	// An application's own layout, and every layout below it (the ones its
+	// LayoutAugmenter added), inherits the five from the bundle that holds the
+	// application. Wait, Timeout and RetryInterval left unset here are the
+	// bundle's, and set here they replace it: a Wait that points at false
+	// turns an inherited wait off, while an inherited Timeout or RetryInterval
+	// can be replaced but not removed. Labels and Annotations are merged with
+	// the bundle's per key and the value set here wins, so a key the bundle
+	// sets can be given another value but not dropped. Any other layout (a
+	// node's own, one a caller added to the tree) inherits nothing: its
+	// Kustomization carries what is set here.
+	//
+	// Timeout and RetryInterval must parse as a Go duration ("5m"). Where the
+	// integrator creates the Kustomization it refuses any other value, and a
+	// label or annotation the Kubernetes API does not accept.
+	Wait          *bool
+	Timeout       string
+	RetryInterval string
+	Labels        map[string]string
+	Annotations   map[string]string
 	// origin records the stack objects this layout renders (see origin.go).
 	// Set only by the walkers and FlattenSingleTier; never serialised.
 	origin origin

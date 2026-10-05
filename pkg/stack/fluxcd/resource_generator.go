@@ -817,13 +817,25 @@ func parseBundleDuration(b *stack.Bundle, field, value string) (time.Duration, e
 // ManifestLayout child in FluxIntegratedPerLayout mode. spec.path is
 // ml.FullRepoPath(); spec.dependsOn is dependsOn, the Kustomization names the
 // layout integrator resolved from ml.DependsOn and, for a node layout, from
-// the node's DependsOn (layoutDependsOn). Interval and prune are the
-// generator's: a per-layout Kustomization has no settings of its own.
+// the node's DependsOn (layoutDependsOn).
+//
+// settings are the wait, timeout, retry interval, labels and annotations in
+// effect on it: the layout's own over those of the bundle that holds its
+// application (integratedPlacement.layoutSettings). Interval and prune are
+// the generator's, whatever that bundle sets. An interval is a cadence, not a
+// readiness setting: it changes nothing about the order in which
+// Kustomizations become Ready. ResourceGenerator.Prune is the documented
+// input for these Kustomizations, and taking Bundle.Prune instead would
+// switch garbage collection on in trees that render without it today.
+//
+// It gets no health checks: wait is its readiness setting, and with wait Flux
+// ignores health checks.
 func (g *ResourceGenerator) createKustomizationForLayout(
 	name string,
 	ml *layout.ManifestLayout,
 	sourceRef kustv1.CrossNamespaceSourceReference,
 	dependsOn []string,
+	settings layoutSettings,
 ) client.Object {
 	kust := &kustv1.Kustomization{
 		TypeMeta: metav1.TypeMeta{
@@ -831,14 +843,19 @@ func (g *ResourceGenerator) createKustomizationForLayout(
 			Kind:       "Kustomization",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: g.DefaultNamespace,
+			Name:        name,
+			Namespace:   g.DefaultNamespace,
+			Labels:      settings.labels,
+			Annotations: settings.annotations,
 		},
 		Spec: kustv1.KustomizationSpec{
-			Interval:  metav1.Duration{Duration: g.DefaultInterval},
-			Path:      ml.FullRepoPath(),
-			Prune:     pruneValue(g.Prune),
-			SourceRef: sourceRef,
+			Interval:      metav1.Duration{Duration: g.DefaultInterval},
+			Path:          ml.FullRepoPath(),
+			Prune:         pruneValue(g.Prune),
+			SourceRef:     sourceRef,
+			Wait:          settings.wait,
+			Timeout:       settings.timeout,
+			RetryInterval: settings.retryInterval,
 		},
 	}
 	for _, dep := range dependsOn {
