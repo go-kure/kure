@@ -819,6 +819,15 @@ func TestBundleValidate_Durations(t *testing.T) {
 			{"5 minutes", true},
 			{"5min", true},
 			{"5", true},
+			// A day is no unit of time.ParseDuration.
+			{"1d", true},
+			// Durations the Flux API does not take in a Kustomization, a
+			// negative one and one under a millisecond, are durations all
+			// the same: that rule is Flux's, so the Flux workflow refuses
+			// them where it writes a Kustomization and nothing is refused
+			// here (go-kure/kure#1015).
+			{"-1s", false},
+			{"1us", false},
 		} {
 			t.Run(field+"="+tc.value, func(t *testing.T) {
 				b := &Bundle{Name: "b"}

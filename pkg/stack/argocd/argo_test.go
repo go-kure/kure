@@ -388,6 +388,32 @@ func TestCreateLayoutWithResources_Success(t *testing.T) {
 	}
 }
 
+// TestArgoWorkflow_TakesDurationsOnlyFluxRefuses is the control of the Flux
+// workflow's duration check (go-kure/kure#1015): a negative duration and one
+// under a millisecond are refused where the Flux workflow writes a
+// Kustomization, because the Flux API does not take them. That rule is
+// Flux's. A bundle carrying such values validates and generates under this
+// workflow as before.
+func TestArgoWorkflow_TakesDurationsOnlyFluxRefuses(t *testing.T) {
+	build := func() *stack.Cluster {
+		bundle := &stack.Bundle{Name: "shop", Interval: "-1s", Timeout: "1us", RetryInterval: "-2m"}
+		return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "prod", Bundle: bundle}}
+	}
+	if err := stack.ValidateCluster(build()); err != nil {
+		t.Fatalf("ValidateCluster: %v", err)
+	}
+	objs, err := Engine().GenerateFromCluster(build(), layout.DefaultLayoutRules())
+	if err != nil {
+		t.Fatalf("GenerateFromCluster: %v", err)
+	}
+	if len(objs) != 1 || objs[0].GetName() != "shop" {
+		t.Fatalf("GenerateFromCluster returned %d objects, want the Application of bundle shop", len(objs))
+	}
+	if _, err := Engine().CreateLayoutWithResources(build(), layout.DefaultLayoutRules()); err != nil {
+		t.Fatalf("CreateLayoutWithResources: %v", err)
+	}
+}
+
 func TestGenerateBootstrap_Disabled(t *testing.T) {
 	engine := Engine()
 	config := &stack.BootstrapConfig{Enabled: false}

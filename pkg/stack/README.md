@@ -163,7 +163,10 @@ fmt.Println(bundle.Name, bundle.DependsOn[0].Name, bundle.NamedDependsOn, bundle
 `Timeout`/`RetryInterval`, that the field is omitted so Flux's own defaults
 apply; any other value that does not parse (`"5 minutes"`, `"5min"`, `"5"`)
 is rejected by `Bundle.Validate` and by the Flux generator, never replaced by
-the default.
+the default. The Flux generator also refuses a duration the Flux API does not
+take, a negative one or one under a millisecond (`"-1s"`, `"1us"`), where it
+writes the bundle's Kustomization; `Bundle.Validate` accepts those, since the rule is
+Flux's (see the Flux engine's "Durations").
 
 Bundles also support an **umbrella pattern** via `Bundle.Children`. When a
 bundle has non-empty `Children`, its generated Flux Kustomization automatically

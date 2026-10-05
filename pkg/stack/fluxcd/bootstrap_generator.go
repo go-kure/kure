@@ -145,7 +145,11 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 	}
 	resources = append(resources, gotkResources...)
 
-	// Generate flux-system Kustomization
+	// Generate flux-system Kustomization. Its interval is the generator's,
+	// held to what Flux takes like every Kustomization interval.
+	if err := checkDefaultInterval("BootstrapGenerator", bg.DefaultInterval); err != nil {
+		return nil, err
+	}
 	fluxSystemKust := bg.generateFluxSystemKustomization(config, rootNode, dir)
 	resources = append(resources, fluxSystemKust)
 
@@ -486,6 +490,9 @@ func (bg *BootstrapGenerator) generateGitSource(config *stack.BootstrapConfig, r
 		return nil, errors.ResourceValidationError("BootstrapConfig", sourceName(rootNode), "sourceURL",
 			"a GitRepository source requires sourceURL; there is no default repository", nil)
 	}
+	if err := checkDefaultInterval("BootstrapGenerator", bg.DefaultInterval); err != nil {
+		return nil, err
+	}
 
 	gr := pubfluxcd.CreateGitRepository(sourceName(rootNode), bg.DefaultNamespace)
 	gr.Spec.URL = config.SourceURL
@@ -503,6 +510,9 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 	if config.SourceURL == "" {
 		return nil, errors.ResourceValidationError("BootstrapConfig", sourceName(rootNode), "sourceURL",
 			"an OCIRepository source requires sourceURL; there is no default registry", nil)
+	}
+	if err := checkDefaultInterval("BootstrapGenerator", bg.DefaultInterval); err != nil {
+		return nil, err
 	}
 
 	ref := config.SourceRef
@@ -598,8 +608,12 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 		spec.Components = append(spec.Components, fluxv1.Component(comp))
 	}
 
-	// Add sync configuration if source is provided
+	// Add sync configuration if source is provided. Its interval is the
+	// generator's, held to what Flux takes (checkDefaultInterval).
 	if config.SourceURL != "" {
+		if err := checkDefaultInterval("BootstrapGenerator", bg.DefaultInterval); err != nil {
+			return nil, err
+		}
 		spec.Sync = &fluxv1.Sync{
 			Name:     config.SyncName,
 			Kind:     resolvedSourceKind(config),

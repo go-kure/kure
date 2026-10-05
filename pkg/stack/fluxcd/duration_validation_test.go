@@ -3,6 +3,7 @@ package fluxcd_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 
@@ -86,6 +87,281 @@ func TestGenerateFromCluster_RejectsInvalidInterval(t *testing.T) {
 	if _, err := fluxstack.NewResourceGenerator().GenerateFromCluster(c, layout.DefaultLayoutRules()); err == nil {
 		t.Fatal("expected an error for an unparsable interval")
 	}
+}
+
+// Every duration the Flux workflow writes into an object it generates is held
+// to the pattern the Flux API holds it to, where that object is created and
+// in the form it is written in (go-kure/kure#1015): a bundle's interval,
+// timeout and retryInterval on the bundle's Kustomization, the timeout and
+// retryInterval in effect on a per-layout one, and the generator's
+// DefaultInterval wherever it is written, a generated source and the
+// FluxInstance sync included.
+// Bundle.Validate and stack.ValidateCluster take the same values as before
+// (TestBundleValidate_Durations), and so does the Argo CD workflow.
+
+// fluxDurationCases are the values of those tests. refused is the text of the
+// refusal, empty for a value that is taken, which is then written as want.
+var fluxDurationCases = []struct {
+	value   string
+	refused string
+	want    time.Duration
+}{
+	{value: "-1s", refused: `"-1s" is written as "-1s", which the Flux API does not take`},
+	{value: "1us", refused: `"1us" is written as "1µs", which the Flux API does not take`},
+	// time.ParseDuration takes no day unit, so "1d" is refused as before, as
+	// a value that is no duration, and never reaches Flux's pattern.
+	{value: "1d", refused: `"1d" is not a valid duration`},
+	{value: "1h30m", want: 90 * time.Minute},
+	{value: "1ms", want: time.Millisecond},
+}
+
+// kustomizationDuration returns the duration field of k, nil when it is unset.
+func kustomizationDuration(t *testing.T, k *kustv1.Kustomization, field string) *time.Duration {
+	t.Helper()
+	switch field {
+	case "interval":
+		return &k.Spec.Interval.Duration
+	case "timeout":
+		if k.Spec.Timeout != nil {
+			return &k.Spec.Timeout.Duration
+		}
+	case "retryInterval":
+		if k.Spec.RetryInterval != nil {
+			return &k.Spec.RetryInterval.Duration
+		}
+	default:
+		t.Fatalf("no duration field %q", field)
+	}
+	return nil
+}
+
+// TestFluxDurations_Bundle: a bundle's own interval, timeout and
+// retryInterval, where its Kustomization is created.
+func TestFluxDurations_Bundle(t *testing.T) {
+	for _, field := range []string{"interval", "timeout", "retryInterval"} {
+		for _, tc := range fluxDurationCases {
+			t.Run(field+"="+tc.value, func(t *testing.T) {
+				objs, err := fluxstack.NewResourceGenerator().GenerateForBundle(bundleWith(field, tc.value), "b")
+				if tc.refused != "" {
+					mustContainAll(t, err, "Bundle", "'b'", field+" "+tc.refused)
+					return
+				}
+				if err != nil {
+					t.Fatalf("refused: %v", err)
+				}
+				got := kustomizationDuration(t, objs[0].(*kustv1.Kustomization), field)
+				if got == nil || *got != tc.want {
+					t.Errorf("%s = %v, want %v", field, got, tc.want)
+				}
+			})
+		}
+	}
+}
+
+// TestFluxDurations_BundleByPath: the refusal names the bundle by its path,
+// which for an umbrella child of a walked cluster holds its umbrella's, on
+// every generation path. Bundle.Validate takes the value, so the generator's
+// check is the only one.
+func TestFluxDurations_BundleByPath(t *testing.T) {
+	build := func() *stack.Cluster {
+		child := srBundle("infra", cmApp("infra-app"))
+		child.RetryInterval = "-2m"
+		umbrella := srBundle("shop", cmApp("shop-app"))
+		umbrella.Children = []*stack.Bundle{child}
+		return oneBundleCluster(umbrella)
+	}
+	wants := []string{"Bundle", "'shop/infra'", `retryInterval "-2m" is written as "-2m0s", which the Flux API does not take`}
+
+	if err := stack.ValidateCluster(build()); err != nil {
+		t.Fatalf("ValidateCluster refuses a duration only Flux does not take: %v", err)
+	}
+	t.Run("GenerateFromCluster", func(t *testing.T) {
+		_, err := fluxstack.NewResourceGenerator().GenerateFromCluster(build(), layout.DefaultLayoutRules())
+		mustContainAll(t, err, wants...)
+	})
+	t.Run("GenerateFromLayout", func(t *testing.T) {
+		c := build()
+		_, err := fluxstack.NewResourceGenerator().GenerateFromLayout(mustWalk(t, c, layout.DefaultLayoutRules()), c)
+		mustContainAll(t, err, wants...)
+	})
+	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout, layout.FluxSeparate} {
+		t.Run("CreateLayoutWithResources/"+string(placement), func(t *testing.T) {
+			rules := layout.DefaultLayoutRules()
+			rules.FluxPlacement = placement
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(build(), rules)
+			mustContainAll(t, err, wants...)
+		})
+	}
+}
+
+// TestFluxDurations_Layout: the timeout and retryInterval a layout sets
+// itself, where its per-layout Kustomization is created. The refusal names
+// the layout by its directory and says nothing of an inherited value.
+func TestFluxDurations_Layout(t *testing.T) {
+	for _, field := range []string{"timeout", "retryInterval"} {
+		for _, tc := range fluxDurationCases {
+			t.Run(field+"="+tc.value, func(t *testing.T) {
+				b := shopSettings(func(_, _, main, _ *layout.ManifestLayout) {
+					if field == "timeout" {
+						main.Timeout = tc.value
+					} else {
+						main.RetryInterval = tc.value
+					}
+				})
+				ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(oneBundleCluster(b), perLayoutRules())
+				if tc.refused != "" {
+					mustContainAll(t, err, "ManifestLayout", "'prod/shop/db/01-main'", field+" "+tc.refused)
+					if strings.Contains(err.Error(), "inherited") {
+						t.Errorf("the refusal says \"inherited\" of a value the layout sets itself: %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("refused: %v", err)
+				}
+				got := kustomizationDuration(t, mustKustomization(t, ml, "shop-01-main"), field)
+				if got == nil || *got != tc.want {
+					t.Errorf("%s = %v, want %v", field, got, tc.want)
+				}
+			})
+		}
+	}
+}
+
+// TestFluxDurations_InheritedByALayout: the timeout and retryInterval a
+// layout inherits from the bundle that holds its application. A value Flux
+// takes reaches every per-layout Kustomization. One it does not take is
+// refused on the bundle's own Kustomization, which is created before those of
+// the layouts below it, so the refusal names the bundle; the wording of the
+// refusal on the layout is pinned on its own
+// (TestLayoutDurationRefusalNamesLayoutAndBundle).
+func TestFluxDurations_InheritedByALayout(t *testing.T) {
+	for _, field := range []string{"timeout", "retryInterval"} {
+		for _, tc := range fluxDurationCases {
+			t.Run(field+"="+tc.value, func(t *testing.T) {
+				b := shopSettings(nil)
+				if field == "timeout" {
+					b.Timeout = tc.value
+				} else {
+					b.RetryInterval = tc.value
+				}
+				ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(oneBundleCluster(b), perLayoutRules())
+				if tc.refused != "" {
+					mustContainAll(t, err, "Bundle", "'shop'", field+" "+tc.refused)
+					return
+				}
+				if err != nil {
+					t.Fatalf("refused: %v", err)
+				}
+				for _, name := range append([]string{"shop"}, shopLayoutNames...) {
+					got := kustomizationDuration(t, mustKustomization(t, ml, name), field)
+					if got == nil || *got != tc.want {
+						t.Errorf("%s: %s = %v, want %v", name, field, got, tc.want)
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestFluxDurations_DefaultInterval: a generator's DefaultInterval is held to
+// the same pattern wherever it is written into an object: on a bundle's
+// Kustomization when the bundle sets no interval, on every per-layout
+// Kustomization, on the gotk bootstrap Kustomization, on a generated source
+// and on the FluxInstance sync. Where no object takes it, nothing is refused.
+// The five places that are no Kustomization are each called on their own in
+// TestDefaultIntervalOnSourcesAndSync.
+func TestFluxDurations_DefaultInterval(t *testing.T) {
+	for name, tc := range map[string]struct {
+		interval time.Duration
+		written  string
+	}{
+		"negative":            {-time.Minute, "-1m0s"},
+		"under a millisecond": {500 * time.Microsecond, "500µs"},
+	} {
+		refusal := func(generator string) []string {
+			return []string{generator, "DefaultInterval",
+				`interval "` + tc.written + `" (the generator's DefaultInterval) is written as "` + tc.written + `", which the Flux API does not take`}
+		}
+		gen := func() *fluxstack.ResourceGenerator {
+			g := fluxstack.NewResourceGenerator()
+			g.DefaultInterval = tc.interval
+			return g
+		}
+		t.Run(name+"/a bundle without an interval", func(t *testing.T) {
+			_, err := gen().GenerateForBundle(&stack.Bundle{Name: "b"}, "b")
+			mustContainAll(t, err, refusal("ResourceGenerator")...)
+		})
+		t.Run(name+"/a bundle with its own interval", func(t *testing.T) {
+			objs, err := gen().GenerateForBundle(bundleWith("interval", "10m"), "b")
+			if err != nil {
+				t.Fatalf("refused, though no object takes the DefaultInterval: %v", err)
+			}
+			if got := objs[0].(*kustv1.Kustomization).Spec.Interval.Duration; got != 10*time.Minute {
+				t.Errorf("interval = %v, want the bundle's 10m", got)
+			}
+		})
+		t.Run(name+"/a per-layout Kustomization", func(t *testing.T) {
+			// The bundle's own interval keeps its Kustomization clear of the
+			// DefaultInterval; the per-layout ones always take it.
+			b := shopSettings(nil)
+			b.Interval = "10m"
+			_, err := fluxstack.NewLayoutIntegrator(gen()).CreateLayoutWithResources(oneBundleCluster(b), perLayoutRules())
+			mustContainAll(t, err, refusal("ResourceGenerator")...)
+
+			rules := perLayoutRules()
+			rules.FluxPlacement = layout.FluxIntegratedPerBundle
+			if _, err := fluxstack.NewLayoutIntegrator(gen()).CreateLayoutWithResources(oneBundleCluster(b), rules); err != nil {
+				t.Fatalf("refused without a per-layout Kustomization, though no object takes the DefaultInterval: %v", err)
+			}
+		})
+		t.Run(name+"/the gotk bootstrap Kustomization", func(t *testing.T) {
+			bg := fluxstack.NewBootstrapGenerator()
+			bg.DefaultInterval = tc.interval
+			_, err := bg.GenerateBootstrap(&stack.BootstrapConfig{Enabled: true, FluxMode: fluxstack.ModeGotk},
+				&stack.Node{Name: "prod"}, layout.LayoutRules{})
+			mustContainAll(t, err, refusal("BootstrapGenerator")...)
+		})
+		t.Run(name+"/a source generated for a bundle", func(t *testing.T) {
+			// The bundle's own interval keeps its Kustomization clear of the
+			// DefaultInterval; the source it derives always takes it.
+			b := bundleWith("interval", "10m")
+			b.SourceRef = &stack.SourceRef{Kind: "GitRepository", Name: "src", Namespace: "flux-system", URL: "https://example.com/repo.git"}
+			_, err := gen().GenerateForBundle(b, "b")
+			mustContainAll(t, err, refusal("ResourceGenerator")...)
+		})
+		t.Run(name+"/the FluxInstance sync", func(t *testing.T) {
+			config := &stack.BootstrapConfig{Enabled: true, FluxVersion: "v2.4.0", Registry: "ghcr.io/fluxcd",
+				SourceURL: "oci://registry.example.com/flux-system"}
+			bg := fluxstack.NewBootstrapGenerator()
+			bg.DefaultInterval = tc.interval
+			_, err := bg.GenerateBootstrap(config, &stack.Node{Name: "prod"}, layout.LayoutRules{})
+			mustContainAll(t, err, refusal("BootstrapGenerator")...)
+			_, err = bg.GenerateFluxInstance(config, &stack.Node{Name: "prod"}, layout.LayoutRules{})
+			mustContainAll(t, err, refusal("BootstrapGenerator")...)
+
+			// Without a SourceURL the FluxInstance carries no sync, so no
+			// object takes the DefaultInterval.
+			config.SourceURL = ""
+			if _, err := bg.GenerateBootstrap(config, &stack.Node{Name: "prod"}, layout.LayoutRules{}); err != nil {
+				t.Fatalf("refused without a sync, though no object takes the DefaultInterval: %v", err)
+			}
+		})
+	}
+
+	t.Run("taken", func(t *testing.T) {
+		g := fluxstack.NewResourceGenerator()
+		g.DefaultInterval = 90 * time.Minute
+		ml, err := fluxstack.NewLayoutIntegrator(g).CreateLayoutWithResources(oneBundleCluster(shopSettings(nil)), perLayoutRules())
+		if err != nil {
+			t.Fatalf("refused: %v", err)
+		}
+		for _, name := range append([]string{"shop"}, shopLayoutNames...) {
+			if got := mustKustomization(t, ml, name).Spec.Interval.Duration; got != 90*time.Minute {
+				t.Errorf("%s: interval = %v, want the DefaultInterval 1h30m", name, got)
+			}
+		}
+	})
 }
 
 func TestIntegrateWithLayout_RejectsInvalidDurationOnUmbrellaChild(t *testing.T) {

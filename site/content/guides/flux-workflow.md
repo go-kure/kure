@@ -613,6 +613,36 @@ bundle gave two Kustomizations one name and was refused. What to do:
   `KustomizationName` on the other owner.
 - **Keep an old name** by setting `ManifestLayout.KustomizationName` on the layout.
 
+### Per-layout Kustomizations take the bundle's readiness settings and labels (breaking change)
+
+Under `FluxIntegratedPerLayout` the Kustomization of an application's directory, and of every
+layout below it, now carries `wait`, `timeout`, `retryInterval`, labels and annotations: those of
+the bundle that holds the application, unless the layout sets its own (`ManifestLayout.Wait`,
+`Timeout`, `RetryInterval`, `Labels`, `Annotations`). They used to carry none, so a bundle with
+`Wait` was Ready once those Kustomizations had applied their directories, not once the workloads
+were. Interval and prune stay the generator's. What to do:
+
+- **Expect the new fields in the output.** A tree whose bundle sets one of the five gains it on
+  those Kustomizations. A tree that sets none renders as before.
+- **Give the layouts below a shorter timeout than their bundle.** With `wait`, the bundle's
+  Kustomization waits for the ones below it under its own timeout. Set `Timeout` on the layouts,
+  and keep the bundle's above theirs; Flux treats any timeout under 30 seconds as 30 seconds.
+- **A layout that depends on the application layout above it is refused once the bundle sets
+  `Wait`.** That application layout's Kustomization would wait for the one that depends on it.
+  Set `Wait` to a pointer to `false` on the application's layout; the layouts below keep the
+  bundle's.
+- **A label or annotation the Kubernetes API does not accept is refused** where a per-layout
+  Kustomization takes it, naming the layout and, for one it inherits, the bundle.
+- **A duration Flux does not take is refused**, on every placement and on the bootstrap: a
+  negative one (`"-1s"`) or one under a millisecond (`"1us"`), in a bundle's `Interval`,
+  `Timeout` or `RetryInterval`, a layout's `Timeout` or `RetryInterval`, or a generator's
+  `DefaultInterval`. The Flux API refuses the object such a value is written into, so no
+  object it ever accepted changes. `Bundle.Validate` still accepts these values.
+- **A node's Kustomization inherits nothing.** Set the fields on the node's walked layout.
+
+What readiness through such a chain means, and where it stops, is in the
+[Flux Engine reference](/api-reference/flux-engine/#per-layout-settings).
+
 ## Umbrella Bundles — Readiness Aggregation
 
 A bundle with non-empty `Children` becomes an **umbrella**: Flux will only mark
@@ -757,8 +787,9 @@ spec:
 ```
 
 Flux reconciles `web-nginx-01-hooks` only after `web-nginx-00-pre-install` is healthy. An entry
-may also name another layout of the same bundle, the parent application layout for instance. An
-entry that names no such layout is written as given, as the name of a Kustomization.
+may also name another layout of the same bundle, the parent application layout for instance
+(not while that layout's Kustomization has `wait`, its own or the bundle's: see the section
+above). An entry that names no such layout is written as given, as the name of a Kustomization.
 
 ### Naming uniqueness
 
