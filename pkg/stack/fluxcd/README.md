@@ -525,7 +525,26 @@ root node's layout**, whichever layouts hold the Kustomizations that use it (go-
 and not in a `ClusterName` wrapper above it. For a named root node under the default rules that is
 the directory the bootstrap sync path `./<root>` names (see [Kustomization paths](#kustomization-paths)
 for other rules), so the Source is in one build, the root's, and exists before any Kustomization
-that uses it. A Kustomization whose `spec.path` build holds that directory applies it beside the
+that uses it.
+
+**No Kustomization takes its source from inside what it applies** (go-kure/kure#979). A generated
+Source is in a build that is applied before every Kustomization that names it, never in a
+directory that Kustomization delivers: a Kustomization that waited for a Source only its own
+apply creates would never reconcile. On a walked tree every bundle's Kustomization meets the rule
+by construction, because the root node's directory renders no bundle. The one Kustomization that
+applies the root node's directory is that directory's layout Kustomization below a `ClusterName`
+wrapper under `FluxIntegratedPerLayout`, hosted in the wrapper. It takes no
+generated Source: the `SourceRef` of the root node's bundle is passed over when it has a URL or
+names a Source another `SourceRef` generates, and its source is the one `SourceRef` the other
+URL-less bundles below share. When nothing is left (every `SourceRef` in the tree has a URL, say)
+the integration is refused, naming the Kustomization, its `spec.path`, the Source and the
+directory that hosts it. Give a bundle a `SourceRef` without a URL, naming a Source that exists
+before the tree is applied (the one the bootstrap creates, for one), or use
+`FluxIntegratedPerBundle`, under which those directories have no Kustomization of their own.
+Without a `ClusterName` wrapper the root node's directory has no Kustomization and nothing
+changes.
+
+A Kustomization whose `spec.path` build holds that directory applies it beside the
 bootstrap: both hold the same objects, so neither prunes what the other keeps, but the
 Kustomization's patches and postBuild apply only in its own build. On a walked tree no bundle's
 Kustomization is one any more: the root node's directory renders no bundle (go-kure/kure#979;
@@ -542,8 +561,10 @@ expression that reads a var the inline vars do not set is refused whatever the o
 that reads only inline vars, which override `substituteFrom`'s, is decided by it. Otherwise the two
 would apply the Source differently and keep
 overwriting each other. The error names the Kustomization, the Source and the patch index or
-postBuild; narrow the patch target, move the patch or postBuild to a bundle below the root node, or
-drop the `${...}` from the `SourceRef` URL. A patch that selects a hosted Source but leaves it
+postBuild; narrow the patch target so that it leaves the Source out, remove the patch or postBuild
+from that Kustomization, or drop the `${...}` from the `SourceRef` URL (the remedies are worded
+for the Kustomization that can still meet the check; before go-kure/kure#979 they told a root
+bundle to move the patch to a bundle below the root node). A patch that selects a hosted Source but leaves it
 unchanged is refused too. A copy the integration did not add, anywhere in the root build (see
 below), is its owner's: the integration hosts none of its own then and does not check what a
 Kustomization's patches do to it. A `sourceRef` names the object, not the layout holding it.
@@ -568,7 +589,9 @@ layout that would host it) is checked as the generated one would be, with what t
 itself sets and in whatever form it has: typed, unstructured or inside a `List`
 (go-kure/kure#979). Its `spec.path` is a build in which a generated Source may appear once; when
 that build holds the root node's layout, its patches and postBuild are checked against the Sources
-hosted there; and its `dependsOn`, `wait` and health checks enter the reconcile-order check (see
+hosted there, and its `sourceRef` may not name one of them (an omitted `sourceRef` namespace is
+the Kustomization's own): the integration is refused, naming it, since it would take its source
+from inside what it applies; and its `dependsOn`, `wait` and health checks enter the reconcile-order check (see
 [One Kustomization per directory](#one-kustomization-per-directory)). An unstructured one is read
 through the typed Flux `Kustomization`; one that cannot be read that way (a field of the wrong
 type, for one) is refused, with an error naming the layout that holds it and its namespace and
@@ -884,7 +907,7 @@ In `FluxIntegratedPerLayout` mode every child layout that is not an umbrella chi
 - **Augmenter sub-layouts** — hook-group child layouts added by a `LayoutAugmenter` are children of an app layout. `spec.dependsOn` is populated from `ManifestLayout.DependsOn`, enabling ordered reconciliation between hook groups.
 - **Bundle-less node layouts** — a GroupByName node layout above its bundle layout, or a node without a bundle. The CR is named `<path with "/" replaced by "-">-node` (with `ClusterName: "."`, node `web`'s path is `web`, which is also its bundle's CR name when the bundle sets no `KustomizationName`).
 
-The integrator applies this rule at any depth. The CR's `spec.sourceRef` is the `SourceRef` of the nearest layout at or above the host that renders bundles; with `BundleGrouping: GroupFlat` the root node's layout renders none and counts with the `SourceRef` of its own bundle, rendered in the directory inside it (`OriginUnit`, go-kure/kure#979), so a bundle-less child node of the root still takes the root bundle's source (with `GroupByName` no node's layout renders a bundle, the root's included, and none counts); with none, the one `SourceRef` the URL-less bundles below the child share. A missing, incomplete or ambiguous source is a hard error — a `Kustomization` without a valid `spec.sourceRef` is rejected by Flux and must not be emitted silently — and so is a layout whose bundles have different `SourceRef`s (a `NodeGrouping: GroupFlat` merge) hosting a layout CR. A CR name used twice (a layout named like a bundle's Kustomization, say, which without a `KustomizationName` is the bundle's own name) is an error, not a silent skip: Flux Kustomizations share one namespace.
+The integrator applies this rule at any depth. The CR's `spec.sourceRef` is the `SourceRef` of the nearest layout at or above the host that renders bundles; with `BundleGrouping: GroupFlat` the root node's layout renders none and counts with the `SourceRef` of its own bundle, rendered in the directory inside it (`OriginUnit`, go-kure/kure#979), so a bundle-less child node of the root still takes the root bundle's source (with `GroupByName` no node's layout renders a bundle, the root's included, and none counts); with none, the one `SourceRef` the URL-less bundles below the child share. The CR of the root node's layout (below a `ClusterName` wrapper; on a tree built by hand, that of any layout above it too) takes no Source the integration generates, whichever of these would give it one (see [Layout Integration](#layout-integration): no Kustomization takes its source from inside what it applies). A missing, incomplete or ambiguous source is a hard error — a `Kustomization` without a valid `spec.sourceRef` is rejected by Flux and must not be emitted silently — and so is a layout whose bundles have different `SourceRef`s (a `NodeGrouping: GroupFlat` merge) hosting a layout CR. A CR name used twice (a layout named like a bundle's Kustomization, say, which without a `KustomizationName` is the bundle's own name) is an error, not a silent skip: Flux Kustomizations share one namespace.
 
 ## Validation
 

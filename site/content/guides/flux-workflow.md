@@ -340,14 +340,25 @@ What changed, and what to do:
   (with `substituteFrom` set, any `${...}` in the `SourceRef` URL reading a var the inline
   `substitute` does not set), is refused: the bootstrap
   applies that directory without either, and the two would keep overwriting each other's Source.
-  Narrow the patch target or move the patch or postBuild to a bundle below the root node. Since
+  Narrow the patch target so that it leaves the Source out, or remove the patch or postBuild from
+  that Kustomization. Since
   go-kure/kure#979 no bundle renders in the root node's directory, so on a walked tree this is
-  met only by a Kustomization of your own that the integration keeps (next sentence).
+  met only by a Kustomization of your own that the integration keeps (below).
+  No Kustomization takes its source from inside what it applies (go-kure/kure#979): under
+  `FluxIntegratedPerLayout` with a `ClusterName` wrapper above a named root node, the root node's
+  directory has a Kustomization of its own, which applies the directory that hosts every
+  generated Source. It takes none of them; its source is the one `SourceRef` without a URL that
+  the bundles below share, and a tree in which every `SourceRef` has a URL is refused, naming the
+  Kustomization and the Source. Give one bundle a `SourceRef` without a URL, naming a Source that
+  exists before the tree is applied, or use `FluxIntegratedPerBundle`. Before, the root bundle's
+  generated Source was accepted there, and the Kustomization would have waited for a Source only
+  its own apply creates.
   A Kustomization already in the tree that the integration keeps in place of its own (same name
   and `spec.path`, in the layout that would host it) is held to the same refusals as a generated
   one, whether it is typed, unstructured or inside a `List`: two copies of a generated Source
   that the integration did not add, in the build of its directory; a root-build patch or
-  postBuild that changes a hosted Source; and a cycle through its `dependsOn`, `wait` or health
+  postBuild that changes a hosted Source; a `sourceRef` that names a generated Source when its
+  build holds the root node's directory; and a cycle through its `dependsOn`, `wait` or health
   checks. One that cannot be read as a Flux Kustomization (a field of the wrong type, for one) is
   refused, naming its layout.
 - **Grouping axes.** `NodeGrouping`, `BundleGrouping` and `ApplicationGrouping` are independent;
@@ -448,7 +459,8 @@ What changed, and what to do:
   every placement; integrate the whole tree `layout.WalkCluster` returns, not a subtree of it.
 
 The `SourceRef` of the root node's bundle is still the source of the Kustomizations of the root
-node's directory and of the bundle-less directories below it, as before. A parent bundle still
+node's directory and of the bundle-less directories below it, as before (the Kustomization of the
+root node's directory itself takes it only when it has no URL, see "Refusals" above). A parent bundle still
 cannot depend on a child node's bundle under the integrated placements, except the root node's
 bundle, whose directory no longer holds the child's Kustomization. See
 [The root node's bundles](/api-reference/layout/#the-root-nodes-bundles) for the rule.
@@ -563,7 +575,7 @@ A child layout receives a CR when:
 - `!child.UmbrellaChild`
 - `child.ApplicationFileMode != AppFileSingle`
 - it renders no bundle (a child that does already has that bundle's CR in the parent)
-- a source resolves: the `SourceRef` of the nearest bundle-rendering layout at or above the parent, with both `Kind` and `Name` set (with `BundleGrouping: GroupFlat` the root node's directory renders no bundle and counts with the `SourceRef` of the root node's own bundle; with `GroupByName` no node's directory counts), else the one `SourceRef` the URL-less bundles below the child share (nil, empty struct, missing either field, or ambiguous is a hard error — a `Kustomization` without `spec.sourceRef` is invalid)
+- a source resolves: the `SourceRef` of the nearest bundle-rendering layout at or above the parent, with both `Kind` and `Name` set (with `BundleGrouping: GroupFlat` the root node's directory renders no bundle and counts with the `SourceRef` of the root node's own bundle; with `GroupByName` no node's directory counts), else the one `SourceRef` the URL-less bundles below the child share (nil, empty struct, missing either field, or ambiguous is a hard error — a `Kustomization` without `spec.sourceRef` is invalid); the Kustomization of the root node's directory, below a `ClusterName` wrapper, takes no Source the integration generates and is refused when no other is left (go-kure/kure#979)
 
 `CreateLayoutWithResources` validates SourceRef completeness for all bundles before layout walking. Both the node bundle and every umbrella child bundle must have `SourceRef.Kind` and `SourceRef.Name` set when either inline mode (`FluxIntegratedPerLayout` or `FluxIntegratedPerBundle`) is active — both emit bundle/node CRs carrying a `spec.sourceRef`. `FluxSeparate` and non-Flux callers are unaffected.
 

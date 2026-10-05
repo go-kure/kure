@@ -288,6 +288,10 @@ type integratedPlacement struct {
 	// hostSourcesOncePerBuild keeps each derived Source once per build.
 	derived map[string]bool
 	placed  map[client.Object]bool
+	// derivable is the sourceKey of every Source this pass will derive
+	// (derivableSources), known before the first is placed: layoutSource
+	// passes one over for a Kustomization that would deliver it.
+	derivable map[string]bool
 	// delivery maps the sourceKey of every Source an application with a
 	// delivery intent emits to the annotations that intent asks for
 	// (applyDeliveryIntents): a Source this pass derives with that identity
@@ -351,6 +355,7 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		generated: map[string]bool{},
 		derived:   map[string]bool{},
 		placed:    map[client.Object]bool{},
+		derivable: derivableSources(ml, li.Generator.DefaultNamespace),
 		delivery:  delivery,
 	}
 	existing, err := indexExistingKustomizations(ml, nil)
@@ -367,6 +372,9 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		return err
 	}
 	if err := p.hostSourcesOncePerBuild(ml); err != nil {
+		return err
+	}
+	if err := p.checkSourcesAreHostedBeforeUse(ml); err != nil {
 		return err
 	}
 	if err := p.checkRootBuildKeepsHostedSources(ml); err != nil {
@@ -722,7 +730,10 @@ func (p *integratedPlacement) checkRootBuildKeepsHostedSources(top *layout.Manif
 			return errors.Errorf("Flux Kustomization %q (spec.path %q) builds %s %q, which the integration hosts in %q, the root node's layout the Flux bootstrap applies without patches or postBuild: its %s, so the two would apply the Source differently and keep overwriting each other; %s",
 				k.Name, k.Spec.Path, s.GetObjectKind().GroupVersionKind().Kind, s.GetName(), p.root.FullRepoPath(), cause, remedy)
 		}
-		const movePatch = "narrow the patch target, or move the patch to a bundle below the root node"
+		// The remedies are worded for the Kustomization this check still
+		// meets on a walked tree: the caller's own, of the root node's
+		// layout, which renders no bundle to move a patch to.
+		const movePatch = "narrow the patch target so that it leaves the Source out, or remove the patch from this Kustomization"
 		for i, patch := range k.Spec.Patches {
 			if patch.Target != nil {
 				t := &stack.PatchSelector{
@@ -763,7 +774,7 @@ func (p *integratedPlacement) checkRootBuildKeepsHostedSources(top *layout.Manif
 					k.Name, k.Spec.Path, s.GetObjectKind().GroupVersionKind().Kind, s.GetName(), p.root.FullRepoPath())
 			}
 			if cause != "" {
-				return refuse(s, cause, "drop the ${...} expression from the SourceRef, or move the postBuild to a bundle below the root node")
+				return refuse(s, cause, "drop the ${...} expression from the SourceRef URL, or remove the postBuild from this Kustomization")
 			}
 		}
 	}
@@ -1031,11 +1042,29 @@ func unitSource(l *layout.ManifestLayout) (kustv1.CrossNamespaceSourceReference,
 // nearest bundle-rendering layout at or above the host), else the one of the
 // bundles merged into child's node (unitSource), else the one SourceRef the
 // URL-less bundles below child share.
+//
+// When child is the root node's layout (below a ClusterName wrapper, which
+// hosts its CR) or, on a tree built by hand, a layout above it, its CR applies
+// the directory that hosts every Source this pass derives (add), so it cannot
+// take one of them: it would wait for a Source that only its own apply creates
+// (go-kure/kure#979). Such a reference is passed over, whichever of the three
+// it is, and when nothing else is left the refusal names it.
 func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope sourceScope) (kustv1.CrossNamespaceSourceReference, error) {
-	if scope.ref.Kind != "" && scope.ref.Name != "" {
+	delivers := holdsLayout(child, p.root)
+	var own *kustv1.CrossNamespaceSourceReference
+	delivered := func(ref kustv1.CrossNamespaceSourceReference) bool {
+		if !delivers || !p.derivable[sourceRefKey(ref, p.gen.DefaultNamespace)] {
+			return false
+		}
+		if own == nil {
+			own = &ref
+		}
+		return true
+	}
+	if scope.ref.Kind != "" && scope.ref.Name != "" && !delivered(scope.ref) {
 		return scope.ref, nil
 	}
-	if ref, ok := unitSource(child); ok {
+	if ref, ok := unitSource(child); ok && !delivered(ref) {
 		return ref, nil
 	}
 	// Deduplicated by effective value: an omitted namespace is the
@@ -1046,10 +1075,13 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 	var walk func(l *layout.ManifestLayout)
 	walk = func(l *layout.ManifestLayout) {
 		for _, b := range l.OriginBundles() {
-			if b.SourceRef == nil || b.SourceRef.URL != "" {
+			if b.SourceRef == nil {
 				continue
 			}
 			ref := sourceRefOf(b)
+			if delivered(ref) || b.SourceRef.URL != "" {
+				continue
+			}
 			effective := ref
 			if effective.Namespace == "" {
 				effective.Namespace = p.gen.DefaultNamespace
@@ -1070,6 +1102,11 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 	case 1:
 		return refs[0], nil
 	case 0:
+		if own != nil {
+			return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
+				fmt.Sprintf("%s; give a bundle a SourceRef without a URL, naming a Source that exists before the tree is applied, or use FluxIntegratedPerBundle, under which layout %q has no Kustomization of its own",
+					p.sourceInsideDelivery(layoutCRName(child), child.FullRepoPath(), *own), child.FullRepoPath()), nil)
+		}
 		return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
 			"FluxIntegratedPerLayout mode requires a SourceRef with Kind and Name; "+
 				fmt.Sprintf("layout %q needs a Kustomization CR but no enclosing bundle and no bundle below it has one", child.FullRepoPath()), nil)
@@ -1077,6 +1114,97 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 		return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
 			fmt.Sprintf("layout %q has no enclosing bundle and the bundles below it have different SourceRefs, so its Flux Kustomization has no single source", child.FullRepoPath()), nil)
 	}
+}
+
+// sourceInsideDelivery words the refusal of a Kustomization that would take
+// its source from ref, a Source this pass derives, while what it applies holds
+// the root node's layout, which hosts that Source. The caller adds the remedy.
+func (p *integratedPlacement) sourceInsideDelivery(name, specPath string, ref kustv1.CrossNamespaceSourceReference) string {
+	return fmt.Sprintf("Flux Kustomization %q (spec.path %q) would take its source from %s %q, which the integration generates from a SourceRef with a URL and hosts in %q, the root node's layout: that is inside what the Kustomization applies, so it would wait for a Source that only its own apply creates",
+		name, specPath, ref.Kind, ref.Name, p.root.FullRepoPath())
+}
+
+// checkSourcesAreHostedBeforeUse refuses a Kustomization this pass placed or
+// kept that takes its source from a Source the pass derived while its
+// spec.path is the root node's layout or a layout above it. The pass hosts
+// every derived Source in the root node's layout (add), which that
+// Kustomization applies, itself or through the Kustomizations it creates: it
+// would wait for a Source that only its own apply creates (go-kure/kure#979).
+//
+// On a walked tree the one such Kustomization is the layout Kustomization of
+// the root node's layout below a ClusterName wrapper under
+// FluxIntegratedPerLayout. layoutSource gives a generated one another source,
+// or refuses it; this check is for the caller's own, kept in its place, and
+// for a tree built by hand in which the root node's layout, or one above it,
+// renders a bundle.
+func (p *integratedPlacement) checkSourcesAreHostedBeforeUse(top *layout.ManifestLayout) error {
+	if len(p.derived) == 0 {
+		return nil
+	}
+	layoutAt, crs, err := p.indexGenerated(top)
+	if err != nil {
+		return err
+	}
+	for _, k := range crs {
+		b := layoutAt[path.Clean(k.Spec.Path)]
+		if b == nil || !holdsLayout(b, p.root) {
+			continue
+		}
+		if p.derived[sourceRefKey(k.Spec.SourceRef, k.Namespace)] {
+			return errors.Errorf("%s; name a Source that exists before the tree is applied", p.sourceInsideDelivery(k.Name, k.Spec.Path, k.Spec.SourceRef))
+		}
+	}
+	return nil
+}
+
+// holdsLayout reports whether target is l or a layout below it.
+func holdsLayout(l, target *layout.ManifestLayout) bool {
+	if l == nil || target == nil {
+		return false
+	}
+	if l == target {
+		return true
+	}
+	for _, child := range l.Children {
+		if holdsLayout(child, target) {
+			return true
+		}
+	}
+	return false
+}
+
+// derivableSources returns the sourceKey of every Source an integration of the
+// tree under top derives: one per SourceRef with a URL among the bundles its
+// layouts render. An omitted namespace is defaultNS, as it is for the Source.
+func derivableSources(top *layout.ManifestLayout, defaultNS string) map[string]bool {
+	out := map[string]bool{}
+	var walk func(l *layout.ManifestLayout)
+	walk = func(l *layout.ManifestLayout) {
+		if l == nil {
+			return
+		}
+		for _, b := range l.OriginBundles() {
+			if b.SourceRef != nil && b.SourceRef.URL != "" {
+				out[sourceRefKey(sourceRefOf(b), defaultNS)] = true
+			}
+		}
+		for _, child := range l.Children {
+			walk(child)
+		}
+	}
+	walk(top)
+	return out
+}
+
+// sourceRefKey is the sourceKey of the Source ref names. An omitted namespace
+// is defaultNS: the generator's for a bundle's SourceRef, the Kustomization's
+// own for its spec.sourceRef.
+func sourceRefKey(ref kustv1.CrossNamespaceSourceReference, defaultNS string) string {
+	ns := ref.Namespace
+	if ns == "" {
+		ns = defaultNS
+	}
+	return ref.Kind + " " + crKey(ns, ref.Name)
 }
 
 // add appends objs to host.Resources, except a Source, which goes to the root

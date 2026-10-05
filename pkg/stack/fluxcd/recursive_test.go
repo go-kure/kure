@@ -25,15 +25,21 @@ import (
 
 var placements = []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle}
 
-// recursiveCluster: prod -> platform (bundle) -> web (bundle), each bundle
-// with a URL-bearing GitRepository, so Sources are generated and hosted.
+// recursiveCluster: prod -> platform (bundle) -> web (bundle), ops (bundle).
+// platform and web each have a URL-bearing GitRepository, so Sources are
+// generated and hosted. ops names a Source the tree does not generate: under
+// FluxIntegratedPerLayout the Kustomization of the root node's layout applies
+// the directory that hosts the generated ones and takes that one instead
+// (go-kure/kure#979).
 func recursiveCluster() *stack.Cluster {
 	gitRef := func(name string) *stack.SourceRef {
 		return &stack.SourceRef{Kind: "GitRepository", Name: name, Namespace: "flux-system", URL: "https://example.com/" + name + ".git", Branch: "main"}
 	}
 	web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", SourceRef: gitRef("web-git"), Applications: []*stack.Application{cmApp("web-app")}}}
-	root := &stack.Node{Name: "platform", Bundle: &stack.Bundle{Name: "platform", SourceRef: gitRef("platform-git"), Applications: []*stack.Application{cmApp("core")}}, Children: []*stack.Node{web}}
+	ops := &stack.Node{Name: "ops", Bundle: srBundle("ops", cmApp("ops-app"))}
+	root := &stack.Node{Name: "platform", Bundle: &stack.Bundle{Name: "platform", SourceRef: gitRef("platform-git"), Applications: []*stack.Application{cmApp("core")}}, Children: []*stack.Node{web, ops}}
 	web.SetParent(root)
+	ops.SetParent(root)
 	return &stack.Cluster{Name: "demo", Node: root}
 }
 
