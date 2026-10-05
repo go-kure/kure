@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -240,19 +241,23 @@ func checkSingleChildEntry(parent, child *ManifestLayout, plan writerPlan, root 
 // directory) is not refused either; the entry names nothing there too, and
 // such a root's kustomization.yaml is not a valid kustomize entry point.
 //
-// Both directories are the writer's own (plan.outDir) and their segments must
-// match exactly, so an AppFileSingle root, which writes its kustomization.yaml
-// into its Namespace, is compared by that directory. A child the parent does
-// not list (see childEntry), and every child of a parent that writes no
-// kustomization.yaml, has no entry to dangle. root is true when parent is the
-// tree root.
-func checkDirectoryChildEntry(parent, child *ManifestLayout, plan writerPlan, root bool) error {
+// Both directories are the writer's own (plan.outDir), so an AppFileSingle
+// root, which writes its kustomization.yaml into its Namespace, is compared by
+// that directory. They are compared as normDir compares them: a Namespace that
+// is the child's own path in another case is the same mistake, and its entry
+// names a kustomization.yaml on no volume (the directory listed does not
+// exist on a case-sensitive one and holds only the child's directory on a
+// case-insensitive one). A child the parent does not list (see childEntry),
+// and every child of a parent that writes no kustomization.yaml, has no entry
+// to dangle. parentWrites reports whether parent writes a kustomization.yaml
+// (see checkDirectoryChildEntries).
+func checkDirectoryChildEntry(parent, child *ManifestLayout, plan writerPlan, parentWrites func() bool) error {
 	childDir, single := plan.outDir(child)
 	if single {
 		return nil
 	}
 	entry := plan.childEntry(parent, child)
-	if entry == "" || !plan.writesKustomization(parent, root) {
+	if entry == "" || !parentWrites() {
 		return nil
 	}
 	parentDir, _ := plan.outDir(parent)
@@ -261,24 +266,32 @@ func checkDirectoryChildEntry(parent, child *ManifestLayout, plan writerPlan, ro
 	// Name below that.
 	listed := path.Join(filepath.ToSlash(parentDir), filepath.ToSlash(entry))
 	nested := path.Join(listed, filepath.ToSlash(entry))
-	if rel, inside := relPath(nested, childDir); nested == listed || !inside || rel != "." {
+	written := path.Clean(filepath.ToSlash(childDir))
+	if nested == listed || normDir(nested) != normDir(written) {
 		return nil
 	}
+	mistake := "is the child's own path"
+	if nested != written {
+		mistake = "differs only in case from the child's own path"
+	}
 	return errors.NewFileError("write", childDir, fmt.Sprintf(
-		"layout %q is written to %q, not to %q, the directory the kustomization.yaml of its parent layout %q lists as %q: its Namespace %q is the child's own path, so its Name is joined on twice; set Namespace to the parent's path",
-		child.FullRepoPath(), filepath.ToSlash(childDir), listed, parent.FullRepoPath(), entry, child.Namespace), nil)
+		"layout %q is written to %q, not to %q, the directory the kustomization.yaml of its parent layout %q lists as %q: its Namespace %q %s, so its Name is joined on twice; set Namespace to the parent's path",
+		child.FullRepoPath(), filepath.ToSlash(childDir), listed, parent.FullRepoPath(), entry, child.Namespace, mistake), nil)
 }
 
 // checkDirectoryChildEntries runs checkDirectoryChildEntry on every child of
-// the tree, parents first.
+// the tree, parents first. Whether a parent writes a kustomization.yaml is
+// asked once per parent, for the first child that needs the answer: a plan
+// may group the parent's resources into files to give it.
 func checkDirectoryChildEntries(root *ManifestLayout, plan writerPlan) error {
 	var walk func(l *ManifestLayout) error
 	walk = func(l *ManifestLayout) error {
+		parentWrites := sync.OnceValue(func() bool { return plan.writesKustomization(l, l == root) })
 		for _, child := range l.Children {
 			if child == nil {
 				continue
 			}
-			if err := checkDirectoryChildEntry(l, child, plan, l == root); err != nil {
+			if err := checkDirectoryChildEntry(l, child, plan, parentWrites); err != nil {
 				return err
 			}
 			if err := walk(child); err != nil {

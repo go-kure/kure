@@ -226,8 +226,10 @@ What changed, and what to do:
   child where its parent's `kustomization.yaml` lists it: the entry `web` of the parent at `apps`
   names `apps/web`, a directory without a `kustomization.yaml`. `WriteToDisk`, `WriteToTar` and
   `WriteManifest` return an error that names both directories, before anything is written. A
-  child its parent does not list, or one placed elsewhere on purpose, is written as before; see
-  the [Layout Engine reference](/api-reference/layout/) for the full rule.
+  `Namespace` that is the child's own path in another case (`apps/web` for a child named `Web`)
+  is refused the same way. A child its parent does not list, or one placed elsewhere on purpose,
+  is written as before; see the [Layout Engine reference](/api-reference/layout/) for the full
+  rule.
 - **Same-name and suffix-sharing layouts nest.** A bundle and an application with the same name
   now give `web/web`. Before, they collapsed onto `web/`, and one of the two `kustomization.yaml`
   files replaced the other. The same applies to a name that merely ends another as a string: `oo`
