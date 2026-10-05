@@ -794,7 +794,8 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
    - Kept: the `SourceRef` of the root node's own bundle is still the source of the root node's
      layout and of the layout Kustomizations below it that no other bundle encloses
      (`unitSource`, used by `integratedPlacement.place` and `integratedPlacement.layoutSource`),
-     although the bundle now renders one directory lower. Under `BundleGrouping: GroupByName`
+     although the bundle now renders one directory lower (since item 2 the Kustomization of the
+     root node's layout itself takes it only when it names no generated Source). Under `BundleGrouping: GroupByName`
      the root node's layout never had a source of its own, and such a tree is refused as before.
      Accepting it would be a change of its own.
    - Breaking: the path of the root node's bundles moves one directory down, from `<root>` to
@@ -823,28 +824,54 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      `unset_output_test.go` in `pkg/stack/fluxcd` compares
      (`testdata/unset-kustomization-name/merged.txt`) was rewritten for the path move, so it is
      no longer output from before `KustomizationName` existed; no object name in it changed.
-2. **An integrated Source is hosted inside the directory it delivers.** Target.
+2. **An integrated Source is hosted inside the directory it delivers.** Shipped.
    - Before item 1: when the root node rendered a bundle, the Source landed in that bundle's
      directory (`integratedPlacement.add`), so the Kustomization that needed the Source was the
      one that applied it.
-   - Current: the Source is hosted in the root node's layout, which since item 1 renders no
-     bundle, so no bundle's Kustomization applies the directory that holds its Source. Nothing
-     renders a tree and asserts that yet.
+   - Rule: a generated Source is in a build that is applied before every Kustomization that
+     names it, never in a directory that Kustomization delivers. The Source stays in the root
+     node's layout, which since item 1 renders no bundle, so every bundle's Kustomization that
+     names a generated Source is hosted at or below the build that holds it.
+   - Found by rendering: one generated Kustomization still broke the rule. Under
+     `FluxIntegratedPerLayout` below a `ClusterName` wrapper, the root node's layout has a
+     layout Kustomization, hosted in the wrapper, which applies the directory that hosts the
+     Sources. Item 1 gave it the root bundle's `SourceRef` (`unitSource`), and with a URL on
+     that `SourceRef` it waited for a Source only its own apply creates.
+     `integratedPlacement.layoutSource` now passes over a generated Source for the Kustomization
+     of the root node's layout (or of a layout above it, on a tree built by hand), whether the
+     reference comes from the scope, from the root bundle or from a URL-less `SourceRef` that
+     names a Source another one generates, and takes the one `SourceRef` the other URL-less
+     bundles below share. With none left, the case that cannot be built, the integration is
+     refused: the error names the Kustomization, its `spec.path`, the Source and the directory
+     that hosts it, and says to give a bundle a `SourceRef` without a URL or to use
+     `FluxIntegratedPerBundle`. Breaking for that shape: it was integrated before, into a tree
+     that could not reconcile.
+   - `integratedPlacement.checkSourcesAreHostedBeforeUse` holds a Kustomization the integration
+     keeps in place of its own, and a tree built by hand, to the same rule after placement.
    - Two checks can no longer be met by a root bundle on a walked tree and stay in place.
-     `integratedPlacement.checkRootBuildKeepsHostedSources` still words its remedy for one
-     ("move the patch to a bundle below the root node"), but no bundle's patches or postBuild
-     reach the root node's layout any more. It still guards a Kustomization the integration
-     keeps in place of its own when that one builds the root node's layout: the layout
-     Kustomization of the root node's layout under `FluxIntegratedPerLayout` below a
-     `ClusterName` wrapper. The reconcile-order check (`checkPlacedReconcileOrder`) refused a
-     root bundle that waits while a child node's bundle depends on it; the root bundle's
-     directory now holds no child node's Kustomization, so that cycle is gone. (It still hosts
-     those of the bundle's umbrella children and, under `FluxIntegratedPerLayout`, of the
-     layouts inside it.) The check still refuses it below the root, and for a kept
-     Kustomization.
-   - Expected: a Source is hosted in a build that is applied before any Kustomization that
-     references it, never inside a directory delivered through it, with a render test of that
-     invariant and refusals worded for what they still guard.
+     `integratedPlacement.checkRootBuildKeepsHostedSources` worded its remedy for one ("move
+     the patch to a bundle below the root node"); it now words it for the Kustomization it
+     still guards, one the integration keeps in place of its own that builds the root node's
+     layout (narrow the patch target, or remove the patch or postBuild from that
+     Kustomization). The reconcile-order check (`checkPlacedReconcileOrder`) refused a root
+     bundle that waits while a child node's bundle depends on it; the root bundle's directory
+     now holds no child node's Kustomization, so that cycle is gone. (It still hosts those of
+     the bundle's umbrella children and, under `FluxIntegratedPerLayout`, of the layouts inside
+     it.) The check still refuses it below the root, and for a kept Kustomization; its error
+     names no root bundle, so its wording stays, and the fluxcd README says what it still
+     guards.
+   - Not changed: a bundle-less layout below the root node whose bundles all have a URL on
+     their `SourceRef` and that no bundle encloses is refused as before, with the error that
+     says no bundle below it has a `SourceRef`. Its Source is not inside what its Kustomization
+     applies; taking it would be a change of its own.
+   - Tests, in `pkg/stack/fluxcd/source_host_test.go`:
+     `TestGeneratedSourceIsHostedBeforeItsKustomizations` renders eight shapes under the three
+     placements, three groupings and four `ClusterName` values (none, `.`, one and two
+     segments) to disk, tar and manifest, and checks on the written files that no Kustomization
+     delivers a file holding its Source, that some build holds the Source and delivers the
+     Kustomization, and that disk equals tar;
+     `TestPerLayout_RootNodeLayoutTakesNoGeneratedSource` for the selection and the refusal;
+     `TestKeptKustomization_SourceInsideWhatItApplies` for a kept Kustomization in every form.
 3. **`GenerateFromCluster` takes the caller's layout rules.** Shipped.
    - Before: it took no rules and walked with `DefaultLayoutRules()`, so its paths disagreed with
      a layout written with rules that place directories differently (a `ClusterName`, a flat
