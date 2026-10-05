@@ -1102,8 +1102,8 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      `sourceRef` stay on the root node's name.
    - `WriteManifest` writes the `ClusterName` directory its `kustomization.yaml` like
      `WriteToDisk` and `WriteToTar` (`manifestPlan` in `writerplan.go`). It used to write none
-     into a one-segment one that held no resource file, no bundle and no `AppFileSingle` child's
-     file; the
+     into a one-segment one that held no resource file and no `AppFileSingle` child's file and
+     rendered no bundle, neither itself nor in a directory inside it (`OriginUnit()`); the
      bootstrap applies that directory, and without the file Flux would build every file below
      it. The generator refusal that existed only because of the missing file
      (go-kure/kure#899) is no longer met there: the generators are written into the file.
@@ -1139,16 +1139,24 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
        the root node's name to the cluster directory;
      - an unnamed root node without a `ClusterName` moves from the root of the source to
        `cluster`;
-     - `WriteManifest` writes one more file, the `kustomization.yaml` of a one-segment
-       `ClusterName` directory it used to leave without one; a file of that name a caller put there is
-       replaced, as in every other directory;
-     - that file lists the directory's children, so `WriteManifest` holds the build it starts
-       to the checks the other writers run there. Three hand-built trees whose unnamed root
-       wrote no `kustomization.yaml` are now refused as in the other writers: a directory
-       child that sets `Namespace` to its own path (item 11), listed children that hold one
-       object twice, and a listed `KustomizationRecursive` child. One walked tree is refused
-       as well: a root node named `kustomization.yaml` below a `ClusterName`, whose directory
-       is the path of the file now written;
+     - `WriteManifest` used to make one exception: it wrote no `kustomization.yaml` for a
+       layout with no `Name` and a one-segment `Namespace` that held no resource file and no
+       `AppFileSingle` child's file and rendered no bundle, neither itself nor in a directory
+       inside it (`OriginUnit()`). A walk gives that shape as a one-segment `ClusterName`
+       directory; a caller or an application's `AugmentLayout` can set it anywhere in a
+       tree. `WriteToDisk` and `WriteToTar` never made that exception. It is gone:
+       `WriteManifest` writes such a layout's `kustomization.yaml` under
+       the same rules as any other layout's (none for a `KustomizationRecursive` layout; for
+       an `AppFileSingle` one only at the root of the written tree, when it has resources or
+       children). A file of that name a caller put there is replaced, as in every other
+       directory;
+     - that file lists the directory's children, so `WriteManifest` now holds the build it
+       starts to every check a directory with a `kustomization.yaml` gets, as the other two
+       writers do, and refuses a tree it used to write when that directory fails one of
+       them. Two examples, not a complete list: a child directory named
+       `kustomization.yaml`, the path of the file now written (a walk gives it for a root
+       node of that name below a `ClusterName`), and listed children that hold one object
+       twice, which kustomize refuses in a build;
      - under a `ClusterName` the bootstrap no longer checks the root node's name as a
        directory name: its path takes no segment from the name. The walk still checks it,
        as the name is the directory `<ClusterName>/<root>` of the written tree.
