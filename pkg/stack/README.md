@@ -108,6 +108,21 @@ a name-only copy of a bundle that sets `KustomizationName`, beside a `NamedDepen
 to the bundle's `Name` (which then means another Kustomization), is reported as one dependency in
 both lists. Set the bundle's `KustomizationName` on the copy to say which one is meant.
 
+A bundle's directory is named after the bundle as well. `DirName` gives it another name
+(`00-infra` for the bundle `shop-infra`, say), and the path the generated resource applies follows
+it; the resource's name does not. The rule is one: wherever a bundle's name becomes a directory,
+`DirName` names it, or else `Name`. That is the case for an umbrella child, for a node's bundle
+under the layout rule `BundleGrouping: GroupByName`, and for the root node's bundle under
+`GroupFlat`, which has a directory inside the root node's. Under `GroupFlat` below the root a
+node's bundle is rendered in its node's directory and `DirName` has no effect on it. When a flat
+`NodeGrouping` merges several bundles into the root node, the directory they share takes the first
+merged bundle's `DirName`, or its `Name`; a `DirName` on a later one has no effect.
+
+A `DirName` must be one path segment (`ValidateDirectoryName`): not `.` or `..`, and without `/`,
+`\` or a NUL byte. `Bundle.Validate` checks it on the bundle and on every umbrella child, whether
+or not the layout rules give the bundle a directory. It is no object name, so it need not be a
+DNS-1123 subdomain: `00_Infra` is valid.
+
 `NewBundle` validates the bundle it builds; fields set afterwards are checked by
 `Bundle.Validate`:
 

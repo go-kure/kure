@@ -138,6 +138,28 @@ func ExampleResourceGenerator_GenerateForBundle() {
 	// Output: apps-shop clusters/prod/shop apps-db
 }
 
+func ExampleEngine_dirName() {
+	// The children's directories get the names set here; the bundles and
+	// their Kustomizations keep theirs.
+	infra := &stack.Bundle{Name: "shop-infra", DirName: "00-infra"}
+	services := &stack.Bundle{Name: "shop-services", DirName: "10-services", DependsOn: []*stack.Bundle{infra}}
+	shop := &stack.Bundle{Name: "shop", Children: []*stack.Bundle{infra, services}}
+	cluster := &stack.Cluster{Name: "prod", Node: &stack.Node{Name: "apps", Bundle: shop}}
+
+	objects, err := fluxcd.Engine().GenerateFromCluster(cluster, layout.DefaultLayoutRules())
+	if err != nil {
+		panic(err)
+	}
+	for _, obj := range objects {
+		kust := obj.(*kustv1.Kustomization)
+		fmt.Println(kust.Name, kust.Spec.Path)
+	}
+	// Output:
+	// shop apps/shop
+	// shop-infra apps/shop/00-infra
+	// shop-services apps/shop/10-services
+}
+
 func ExampleWorkflowEngine_CreateLayoutWithResources() {
 	cluster := exampleCluster()
 	engine := fluxcd.Engine()

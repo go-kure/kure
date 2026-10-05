@@ -132,6 +132,7 @@ func deepCopyBundle(b *Bundle) *Bundle {
 	newBundle := &Bundle{
 		Name:              b.Name,
 		KustomizationName: b.KustomizationName,
+		DirName:           b.DirName,
 		ParentPath:        b.ParentPath,
 		SourceRef:         b.SourceRef,
 		Interval:          b.Interval,

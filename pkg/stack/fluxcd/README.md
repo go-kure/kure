@@ -130,7 +130,7 @@ Each directory that renders bundles produces one Flux Kustomization resource (se
 `LayoutAugmenter`: their errors surface there. It walks with the `layout.LayoutRules` it is given,
 so its paths are the directories `WalkCluster` writes under those rules: pass the rules you write
 the tree with. Under `layout.DefaultLayoutRules()` that is the root node at `<root>`, its bundle
-at `<root>/<bundle>` and its children at `<root>/<child>`, which is also what the bootstrap sync
+at `<root>/<bundle>` (the bundle's `DirName`, or its `Name` without one) and its children at `<root>/<child>`, which is also what the bootstrap sync
 path `./<root>` expects; with
 `ClusterName: "."` and an unnamed root node it is the root of the tree, not `cluster`. The objects
 come back as a list and are placed nowhere, and the list is the same under `FluxSeparate` and
@@ -179,8 +179,9 @@ fmt.Println(kust.Name, kust.Spec.Path, kust.Spec.DependsOn[0].Name)
 ```
 <!-- doc-example:end -->
 
-`Bundle.Name` stays the bundle's identity and its directory, so `spec.path` is the same with and
-without the field. `Bundle.UnitName()` returns the name in effect, and everything that refers to
+`Bundle.Name` stays the bundle's identity, and the field does not move the bundle's directory
+(named by `Bundle.DirName`, or by `Name` without one; see [Directory names](#directory-names)),
+so `spec.path` is the same with and without the field. `Bundle.UnitName()` returns the name in effect, and everything that refers to
 the bundle's Kustomization uses it:
 
 | Reference | Written as |
@@ -230,10 +231,47 @@ alike) and is relative to the root of what the writer wrote: the `WriteToDisk` /
 base, or `<basePath>/<ManifestsDir>` for `layout.WriteManifest`. Root the Flux source there.
 
 The root node's directory renders no bundle (go-kure/kure#979): with a flat `BundleGrouping` its
-bundle has a directory inside it, named after the bundle, as the last two rows show. Before, the
+bundle has a directory inside it, named after the bundle (by its `DirName` when it sets one, see
+[Directory names](#directory-names)), as the last two rows show. Before, the
 bundle rendered in the root node's directory (`prod/platform` and `.` in those rows), and the
 Kustomization that applied that directory was hosted inside it. See "The root node's bundles" in
 the layout package README, also for the path move this is on a deployed tree.
+
+### Directory names
+
+A bundle's directory is named after the bundle. `Bundle.DirName` names it otherwise, and
+leaves the Kustomization's name and every reference to it alone; `spec.path` follows the
+directory, in every placement:
+
+| Umbrella `shop` at `platform/apps`, child | Directory | Kustomization | `spec.path` |
+|---|---|---|---|
+| `Name: "shop-infra"` | `platform/apps/shop-infra` | `shop-infra` | `platform/apps/shop-infra` |
+| `Name: "shop-infra"`, `DirName: "00-infra"` | `platform/apps/00-infra` | `shop-infra` | `platform/apps/00-infra` |
+| `Name: "shop-infra"`, `DirName: "00-infra"`, `KustomizationName: "apps-shop-infra"` | `platform/apps/00-infra` | `apps-shop-infra` | `platform/apps/00-infra` |
+
+The field applies wherever a bundle's name becomes a directory: for an umbrella child, for a
+node's bundle under `BundleGrouping: GroupByName`, and for the root node's bundle under
+`GroupFlat`, which has a directory inside the root node's (root node `platform` with bundle
+`platform-bundle` and `DirName: "00-platform"` gives the Kustomization `platform-bundle` with
+`spec.path: platform/00-platform`). Under `GroupFlat` below the root a node's bundle is rendered
+in its node's directory, which the node names, and its `DirName` has no effect. Bundles a flat
+`NodeGrouping` merges into the root node share one directory and one Kustomization (see below):
+the directory takes the first merged bundle's `DirName`, or its `Name`, and a `DirName` on a
+later one has no effect.
+
+A `DirName` must be one path segment (`stack.ValidateDirectoryName`); every entry point that
+takes a cluster refuses any other value before it walks. It is no object name and may hold upper
+case.
+
+Two bundles whose own directories would be one, two umbrella children with one `DirName` for
+example (or with two that differ in case only, which the writers treat as one directory), are
+refused before any Kustomization is generated, and the error names both bundles by their paths. The checks on the root node's bundle directory compare the directory it gets, so
+they follow a `DirName`: a child node of the root with that name is refused, and so is a
+`DirName` of `flux-system` under `FluxSeparate`. The directory is set on the bundle, not on the
+layout: a bundle's own layout renamed between `WalkCluster` and `IntegrateWithLayout` is refused,
+and the error points at `DirName`. Such a rename used to be accepted, and gave the directory
+another name without renaming the bundle or its Kustomization; a caller that relied on it sets
+`DirName` instead.
 
 ### One Kustomization per directory
 
@@ -325,7 +363,9 @@ pointed it at the parent bundle's directory, whose kustomization excludes the ch
 
 `IndexOrigins` refuses a tree it cannot resolve unambiguously: a hand-built, partial or
 other-cluster tree (the rendered set is not what the cluster reaches), a bundle or node rendered
-twice, two bundles with one name or with one Kustomization name, and a node or bundle
+twice, two bundles with one name or with one Kustomization name, a bundle's own directory
+under another name than the bundle's `DirName` (or its `Name` without one), two bundles with
+one directory of their own, and a node or bundle
 layout in `AppFileSingle` mode (written into its `Namespace`, not its own directory). Build the
 tree with `layout.WalkCluster`. Not covered: a bundle whose `SourceRef.URL` names another
 artifact — its path is relative to that artifact.
@@ -856,7 +896,7 @@ README.
 
 Controls where Flux Kustomization resources are placed:
 
-- `FluxSeparate` - Flux resources collected in a separate `flux-system/` directory inside the root layout's own directory (where the root's `kustomization.yaml` references it); children referenced as directories, except those that render bundles, which their own CRs apply. `WriteToDisk` and `WriteToTar` name its files by `LayoutRules.FileNaming`, like the rest of the tree: `flux-system-kustomization-<name>.yaml` by default, `kustomization-<name>.yaml` with `FileNamingKindName` (go-kure/kure#976; before, always the default pattern). Rules passed to `IntegrateWithLayout` that leave `FileNaming` unset take the root layout's. The directory must be free: a root node's bundle or a child node rendered to it (named `flux-system` in whatever case, or a name that resolves to it such as `./flux-system`; `ManifestLayout.SameDirectory` in the layout package) is refused, naming the bundle or node. Rename it, or use an integrated placement. Since go-kure/kure#979 the root node's bundle has a directory named after it there; before, such a bundle was written into the root node's directory.
+- `FluxSeparate` - Flux resources collected in a separate `flux-system/` directory inside the root layout's own directory (where the root's `kustomization.yaml` references it); children referenced as directories, except those that render bundles, which their own CRs apply. `WriteToDisk` and `WriteToTar` name its files by `LayoutRules.FileNaming`, like the rest of the tree: `flux-system-kustomization-<name>.yaml` by default, `kustomization-<name>.yaml` with `FileNamingKindName` (go-kure/kure#976; before, always the default pattern). Rules passed to `IntegrateWithLayout` that leave `FileNaming` unset take the root layout's. The directory must be free: a root node's bundle or a child node rendered to it (named `flux-system` in whatever case, or a name that resolves to it such as `./flux-system`; `ManifestLayout.SameDirectory` in the layout package) is refused, naming the bundle or node. Rename it (for a bundle, its directory: its `DirName`, or its `Name` without one), or use an integrated placement. Since go-kure/kure#979 the root node's bundle has a directory named after it there; before, such a bundle was written into the root node's directory.
 - `FluxIntegratedPerLayout` - a Flux Kustomization CR for every layout that renders bundles (bundles a `GroupFlat` merge puts in one directory share one CR, named after the first) and for every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle (augmenter-added child layouts included), hosted in its parent layout (the top of the tree `layout.WalkCluster` returns renders no bundle and gets no CR, go-kure/kure#979); the parent's `kustomization.yaml` lists those CR files as its own resources and references no child directory. Not literally every layout: a layout whose CR name another generated CR already uses, such as an augmenter application named like its bundle, is refused instead (see [Non-Bundle Child Layout CRs](#non-bundle-child-layout-crs)). A Kustomization already in the tree with that name, in the namespace of the generated CRs, is kept in place of a generated one when it sits in the layout that would host it and has the same `spec.path`, and is refused otherwise. Finest granularity.
 - `FluxIntegratedPerBundle` - Flux Kustomization CRs at **bundle boundaries only**, each hosted in its parent layout; a bundle's interior (application and augmenter-added child layouts) is a single kustomize build, with those children referenced as directories. A child that renders bundles is not referenced: its own CR applies it. Coarser: Flux reconciles per bundle, kustomize handles the interior.
 

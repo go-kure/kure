@@ -167,6 +167,22 @@ func (ml *ManifestLayout) hasNodeOrBundleOrigin() bool {
 	return len(ml.origin.nodes) > 0 || len(ml.origin.bundles) > 0
 }
 
+// ownBundle returns the bundle whose own directory this layout is: the bundle
+// of a layout the walker made for an umbrella child, for a node's bundle
+// under BundleGrouping GroupByName, or for the root node's bundle under
+// GroupFlat when no other bundle is merged with it. It is nil for a node
+// layout, which renders its bundles in the node's directory (BundleGrouping
+// GroupFlat below the root), for the directory several bundles merged into
+// the root node share, which is no one bundle's, for an application layout
+// and for a hand-built one.
+func (ml *ManifestLayout) ownBundle() *stack.Bundle {
+	o := ml.origin
+	if len(o.nodes) > 0 || o.app != nil || len(o.bundles) != 1 {
+		return nil
+	}
+	return o.bundles[0]
+}
+
 // OriginIndex resolves the stack objects of one cluster to the layouts that
 // render them. Build it with IndexOrigins.
 type OriginIndex struct {
@@ -204,6 +220,16 @@ type OriginIndex struct {
 //     dependant's NamedDependsOn: one dependency in both lists, which
 //     Bundle.Validate cannot see through the copy. stack.ValidateCluster
 //     refuses both in the same words (see checkDependencyCopies);
+//   - a layout that is a bundle's own directory (an umbrella child, or a
+//     node's bundle under BundleGrouping GroupByName) whose Name is not the
+//     bundle's directory name, its DirName or else its Name: the directory is
+//     named on the bundle, not by renaming the layout after the walk. A node
+//     layout that renders a differently named bundle is not affected;
+//   - two bundles whose own directories are one, compared as the writers
+//     compare them (SameDirectory), so two DirNames that differ in case only
+//     are one: each would get a Kustomization or Application for that one
+//     directory. Both are named by their paths (the writers refuse the same
+//     tree in the same words, see checkLayoutTree);
 //   - a dependency cycle between reconciliation units (see Units).
 func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) {
 	if root == nil || c == nil || c.Node == nil {
@@ -216,6 +242,10 @@ func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) 
 	}
 	byName := map[string]*stack.Bundle{}
 	byUnitName := map[string]*stack.Bundle{}
+	// The directory as the writers compare it (SameDirectory) -> the bundle's
+	// own directory there. A DirName may hold upper case, so two of them can
+	// differ in case only.
+	ownDirs := map[string]*ManifestLayout{}
 	var walk func(l, parent *ManifestLayout) error
 	walk = func(l, parent *ManifestLayout) error {
 		if parent != nil {
@@ -223,6 +253,16 @@ func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) 
 		}
 		if l.hasNodeOrBundleOrigin() && l.ApplicationFileMode == AppFileSingle {
 			return errors.Errorf("layout %q renders a node or bundle but is AppFileSingle: its files are written into %q, not into its own directory", l.FullRepoPath(), l.Namespace)
+		}
+		if b := l.ownBundle(); b != nil {
+			if l.Name != bundleDirName(b) {
+				return errors.Errorf("layout %q is the directory of bundle %q but is named %q, not %q: a bundle's directory is named by its DirName, or by its Name without one; set DirName on the bundle instead of renaming its layout", l.FullRepoPath(), b.GetPath(), l.Name, bundleDirName(b))
+			}
+			dir := normDir(unrooted(l.FullRepoPath()))
+			if other, dup := ownDirs[dir]; dup {
+				return errors.New(sameDirectory(other, l))
+			}
+			ownDirs[dir] = l
 		}
 		for _, n := range l.origin.nodes {
 			if other, dup := ix.nodeLayout[n]; dup {
