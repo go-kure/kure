@@ -8,6 +8,8 @@ import (
 	metallbv1beta2 "go.universe.tf/metallb/api/v1beta2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
 func TestCreateL2Advertisement(t *testing.T) {
@@ -68,6 +70,22 @@ func TestCreateBGPPeerIsV1Beta2(t *testing.T) {
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("constructor emitted more than identity:\n got %#v\nwant %#v", got, want)
+	}
+}
+
+// The v1beta1 BGPPeer has no wrapper, and is still registered: the generic
+// constructor builds it, with its own version and identity only.
+func TestGenericCreateBuildsTheV1Beta1BGPPeer(t *testing.T) {
+	got := kubernetes.Create[metallbv1beta1.BGPPeer]("my-peer", "metallb-system")
+
+	want := &metallbv1beta1.BGPPeer{}
+	want.GetObjectKind().SetGroupVersionKind(
+		schema.GroupVersionKind{Group: "metallb.io", Version: "v1beta1", Kind: "BGPPeer"})
+	want.SetName("my-peer")
+	want.SetNamespace("metallb-system")
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("the generic constructor emitted more than identity:\n got %#v\nwant %#v", got, want)
 	}
 }
 

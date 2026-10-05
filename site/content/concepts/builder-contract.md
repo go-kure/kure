@@ -16,7 +16,8 @@ The normative text is the [Kubernetes Builders](/api-reference/kubernetes-builde
 
 ## Building an object
 
-Every registered kind has a constructor. It returns the upstream type, carrying `apiVersion`,
+Every registered kind has a constructor, all but one of them under the name `Create<Kind>`. It
+returns the upstream type, carrying `apiVersion`,
 `kind`, `metadata.name` and — for a namespaced kind — `metadata.namespace`. Nothing else.
 
 <!-- doc-example: pkg/kubernetes ExampleCreateDeployment -->
@@ -56,6 +57,12 @@ fmt.Println(d.APIVersion, d.Kind, d.Namespace, d.Name)
 The wrappers are generated from the registered scheme, so the set of constructors and the set of
 kinds kure knows about cannot drift apart. An unregistered type panics — that is a programming
 error, like a nil receiver, not a runtime condition to handle.
+
+One registered kind has no wrapper of its own. MetalLB serves `BGPPeer` at two versions, a wrapper
+is named after its kind alone, and `metallb.CreateBGPPeer` builds `metallb.io/v1beta2`, the version
+MetalLB stores. The deprecated `metallb.io/v1beta1` is still registered, so the generic form builds
+it: `kubernetes.Create[metallbv1beta1.BGPPeer](name, namespace)`. The
+[Kubernetes Builders](/api-reference/kubernetes-builders/) page states the rule.
 
 ### What a constructor will not do
 

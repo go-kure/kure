@@ -213,25 +213,36 @@ func TestBuiltinClusterScopedHasNoStaleEntries(t *testing.T) {
 // — the count is the thing a module reorganising its comments would move.
 func TestUnmarkedKindsAreAnsweredByTheShippedCRDs(t *testing.T) {
 	all, types := loadRegistered(t)
-	unmarked := map[string]bool{}
+	// Counted per group/kind, not held as a set: a kind registered at two
+	// versions has two types under one key, and one of them may carry a marker
+	// where the other does not.
+	unmarked := map[string]int{}
 	for _, key := range UnmarkedKinds(all, types) {
-		unmarked[key] = true
+		unmarked[key]++
 	}
 	resolved, err := ResolveScopes(all, types)
 	if err != nil {
 		t.Fatal(err)
 	}
 	bySource := map[ScopeSource]int{}
+	fromCRD := map[string]int{}
 	for _, d := range resolved {
 		bySource[d.Source]++
-		if unmarked[d.Key] && d.Source != SourceShippedCRD {
-			t.Errorf("%s carries no marker but was resolved from %q", d.Key, d.Source)
-		}
-		if !unmarked[d.Key] && d.Source == SourceShippedCRD {
-			t.Errorf("%s carries a marker but was resolved from the shipped CRD", d.Key)
+		if d.Source == SourceShippedCRD {
+			fromCRD[d.Key]++
 		}
 		if d.Source == "" {
 			t.Errorf("%s: no scope source recorded", d.Key)
+		}
+	}
+	for key, n := range unmarked {
+		if fromCRD[key] != n {
+			t.Errorf("%s: %d of its registered types carry no marker, but %d were resolved from the shipped CRD", key, n, fromCRD[key])
+		}
+	}
+	for key, n := range fromCRD {
+		if unmarked[key] == 0 {
+			t.Errorf("%s: %d resolved from the shipped CRD, but every registered type of it carries a marker", key, n)
 		}
 	}
 	if bySource[SourceShippedCRD] == 0 {

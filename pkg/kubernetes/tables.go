@@ -134,8 +134,10 @@ func copyMaturity(m FieldMaturity) FieldMaturity {
 // A group/kind registered at more than one version has one row per version, and
 // this returns the first in table order: the lowest version string, which is
 // not necessarily the newest or the stored one. Read from it only what the
-// versions share — scope and what declared it. For the Go type or the module of
-// one version, ask [KindFor].
+// versions share, which is the scope. Everything else on the row, ScopeSource
+// included, describes that one version: a marker may state the scope of one
+// version's type and the shipped definition that of another. For one version's
+// row, ask [KindFor].
 func KindByGroupKind(groupKind string) (KindInfo, bool) {
 	for _, k := range kinds {
 		if k.GroupKind() == groupKind {
@@ -187,10 +189,10 @@ func IsNamespaced(apiVersion, kind string) (namespaced, known bool) {
 // version when kure registers it, and otherwise the row [KindByGroupKind]
 // returns for the group/kind.
 //
-// It answers the questions whose answer does not vary between the versions of
-// one group/kind: scope, and what declared it. Use [KindFor] for anything
-// version-specific, since the row this returns may describe a different version
-// than the one asked about.
+// It answers the question whose answer does not vary between the versions of
+// one group/kind: scope. Use [KindFor] for anything version-specific, since the
+// row this returns may describe a different version than the one asked about;
+// its ScopeSource then says what declared the scope for that version's type.
 func KindForAnyVersion(apiVersion, kind string) (KindInfo, bool) {
 	if k, ok := KindFor(apiVersion, kind); ok {
 		return k, true
