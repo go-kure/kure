@@ -60,8 +60,8 @@ Flux objects to that tree in one of three placements: `FluxSeparate` (the defaul
 | Layout directory | `FullRepoPath() = Namespace/Name` | `ManifestLayout.FullRepoPath` in `pkg/stack/layout/manifest.go` |
 | Cluster wrapper | `ClusterName "."`: none. `"prod"`: `prod/`. `""` with a named root: `<root>/`. `""` with an unnamed root: `cluster/`. A `ClusterName` with a `..` path segment is refused at the walk (go-kure/kure#979). | `WalkCluster` and `walkClusterWithClusterName` in `pkg/stack/layout/walker.go`; `LayoutRules.Validate` in `pkg/stack/layout/types.go` |
 | Node directory | node name, nested by tree (`NodeGrouping: GroupByName`, the default). `GroupFlat` merges descendant nodes' bundles into the first-level node's directory. | `walkNode`, `renderNodeContent` and `renderChildren` in `walker.go` |
-| Bundle directory | none by default: the bundle renders into its node's directory. The root node is the exception (go-kure/kure#979): its layout renders no bundle, so the bundles the default would render there (its own, and under `NodeGrouping: GroupFlat` those of the nodes it absorbs) share one directory inside it, named after the first of them: `<root>/<first bundle name>`. A child node of the root with that name is refused, and so is a layout below a child node that an application's `LayoutAugmenter` places in that directory. A bundle name that is not one path segment (`.`, `/`, `web/api`) is refused at validation, before the walk (go-kure/kure#978). `BundleGrouping: GroupByName` adds `<node>/<bundle name>` for every bundle. | `renderBundle`, `rootUnit` and `rootUnit.checkRootUnitName` in `walker.go` |
-| Umbrella child directory | `<parent dir>/<child bundle name>`, marked `UmbrellaChild` | `renderUmbrellaChildren` in `walker.go` |
+| Bundle directory | none by default: the bundle renders into its node's directory. The root node is the exception (go-kure/kure#979): its layout renders no bundle, so the bundles the default would render there (its own, and under `NodeGrouping: GroupFlat` those of the nodes it absorbs) share one directory inside it, named after the first of them: `<root>/<first bundle name>`, or `<root>/<first bundle DirName>` when that bundle sets one (go-kure/kure#972). A child node of the root with that name is refused, and so is a layout below a child node that an application's `LayoutAugmenter` places in that directory. A bundle name that is not one path segment (`.`, `/`, `web/api`) is refused at validation, before the walk (go-kure/kure#978). `BundleGrouping: GroupByName` adds `<node>/<bundle name>` for every bundle, or `<node>/<bundle DirName>`. | `renderBundle`, `rootUnit` and `rootUnit.checkRootUnitName` in `walker.go` |
+| Umbrella child directory | `<parent dir>/<child bundle name>`, or `<parent dir>/<child bundle DirName>` when the child sets one (go-kure/kure#972), marked `UmbrellaChild` | `renderUmbrellaChildren` in `walker.go` |
 | Application directory | none by default. `ApplicationGrouping: GroupByName` adds `<bundle dir>/<app name>`. Under the default flat grouping an application whose config is a `LayoutAugmenter` still gets its own directory, unless the config also implements `LayoutIntentAugmenter` and `WantsOwnLayout()` returns false; it is then merged like any other application. | `renderApps`, `wantsOwnLayout` and `isAugmenter` in `walker.go` |
 | Resource file | `WriteToDisk` and `WriteToTar` name by the layout's own FileNaming: default `{namespace}-{kind}-{name}.yaml` (empty namespace: `cluster`); `FileNamingKindName` gives `{kind}-{name}.yaml`. `WriteManifest` names every layout's files from its `Config` instead. | `DefaultManifestFileName` in `pkg/stack/layout/config.go`; `groupResourceFiles` and `manifestPlan` in `writerplan.go` |
 | Generated Kustomization file | under `WriteToDisk` and `WriteToTar`, named by the host layout's FileNaming. The `flux-system/` layout of `FluxSeparate` takes the rules' FileNaming (the root layout's when the rules leave it unset): `flux-system-kustomization-<name>.yaml` by default, `kustomization-<name>.yaml` with `FileNamingKindName`. A layout an augmenter adds and leaves unset takes its parent's. | `ManifestLayout.resolveManifestFileName` in `manifest.go`; `addSeparateFluxToLayout` in `pkg/stack/fluxcd/layout_integrator.go`; `inheritFileNaming`, called from `renderApps`, in `walker.go` |
@@ -214,11 +214,12 @@ FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since go
    bundle). A merged directory takes its first bundle's Kustomization name; `-node` names have no
    parameter.
 2. **The directory that hosts it.** The only lever is the placement.
-3. **A directory name separate from the bundle name.** An umbrella child's directory is the child
-   bundle's name (`renderUmbrellaChildren`), whatever its Kustomization is named
-   (`kustomizationForBundle`; go-kure/kure#971).
-   Renaming the walked layout before `IntegrateWithLayout` gives the directory another name and is
-   accepted, but no document or test covers that route.
+3. **A directory name separate from the bundle name.** In `v0.2.0-beta.15` an umbrella child's
+   directory is the child bundle's name (`renderUmbrellaChildren`), whatever its Kustomization is
+   named (`kustomizationForBundle`; go-kure/kure#971), and renaming the walked layout before
+   `IntegrateWithLayout` gives the directory another name and is accepted, with no document or
+   test covering that route. No longer so: `Bundle.DirName` names the directory, and the rename
+   is refused ([go-kure/kure#972](https://github.com/go-kure/kure/issues/972), below).
 4. **Ordering between groups, from the model.** A group gets a Kustomization only under
    `FluxIntegratedPerLayout`, with a fixed name, and `Node` has no dependency field. The one route
    to a `dependsOn` is on the layout, not the model: set `DependsOn` (Kustomization names, as
@@ -277,7 +278,8 @@ and describes what the code does now.
 
 - **The field:** `Bundle.KustomizationName string`; empty means `Bundle.Name`. `Bundle.UnitName()`
   returns the name in effect (`pkg/stack/bundle.go`). `Bundle.Name` stays the bundle's identity
-  and its directory, so every `spec.path` is what it is without the field.
+  and, without a `DirName` (go-kure/kure#972), its directory, so every `spec.path` is what it is
+  without the field.
 - **One name for both workflows:** under the ArgoCD workflow the same value names the Application
   generated for the bundle. The accessor is called `UnitName` because it names the reconciliation
   unit generated for the bundle, the word `layout.OriginIndex` uses for the same thing.
@@ -357,30 +359,63 @@ name changed).
 
 ### Directory name separate from the Kustomization name ([go-kure/kure#972](https://github.com/go-kure/kure/issues/972))
 
-**Target.** A bundle that gets its own directory can name that directory independently of its
+**Shipped.** A consumer can name a bundle's directory without renaming the bundle or its
 Kustomization (for example `00-infra` for the Kustomization `shop-infra`).
 
-**Design outline.**
+**What it does.**
 
-- **New field:** `Bundle.DirName string`; empty means `Bundle.Name`.
-- **Where it applies:** where a bundle has its own directory, the umbrella child layout
-  (`renderUmbrellaChildren`) and the `BundleGrouping: GroupByName` bundle layout
-  (`renderBundle`). A
-  bundle rendered into its node's directory has no directory of its own; that directory is
-  `Node.Name`.
-- **Unchanged:** `spec.path` keeps following `FullRepoPath`, and the duplicate-directory check
-  stays. Its message names the two bundles; today it prints the two layouts' paths, which can be
-  the same path twice (`checkLayoutTree` in `treecheck.go`).
+- **The field:** `Bundle.DirName string`; empty means `Bundle.Name` (`pkg/stack/bundle.go`;
+  `bundleDirName` in `walker.go` returns the name in effect).
+- **One rule:** wherever a bundle's name becomes a directory, `DirName` names it, else `Name`.
+  That is the umbrella child layout (`renderUmbrellaChildren`), the `BundleGrouping: GroupByName`
+  bundle layout, and the directory the root node's bundles get inside the root node's under
+  `GroupFlat` (item 1 of go-kure/kure#979; both in `renderBundle`). Under `GroupFlat` below the
+  root a bundle renders into its node's directory, which is `Node.Name`, and `DirName` has no
+  effect.
+- **Merged bundles:** when a flat `NodeGrouping` merges several bundles into the root node, the
+  directory they share takes the first merged bundle's `DirName`, or its `Name`. A `DirName` on a
+  later bundle of that directory has no effect, as its `Name` has none.
+- **Paths follow, names do not:** `spec.path` and the ArgoCD `source.path` keep following
+  `FullRepoPath`; the Kustomization's or Application's name, `dependsOn` entries and umbrella
+  health checks stay on the name in effect (`Bundle.UnitName`).
+- **The value is checked:** a `DirName` must be one path segment (`stack.ValidateDirectoryName`,
+  called from `Bundle.validateNames` for the bundle and every umbrella descendant, so
+  `stack.ValidateCluster` refuses it before any walk), whether or not the rules give the bundle a
+  directory. It is no object name: it need not be a DNS-1123 subdomain and may hold upper case.
+- **The directory checks follow the directory:** the checks on the root node's bundle directory
+  compare the directory it gets (`ManifestLayout.SameDirectory`), so a `DirName` is compared and
+  the bundle is named by its `Name`: a child node of the root with that name
+  (`rootUnit.checkRootUnitName`), a layout further down in that directory (`rootUnit.checkBelow`),
+  the `flux-system` directory under `FluxSeparate` (`addSeparateFluxToLayout`) and the `argocd`
+  directory of the ArgoCD workflow. A bundle named like a child node, or like one of those two
+  directories, is accepted once its `DirName` names another directory.
+- **Two bundles, one directory:** the duplicate-directory check names the two bundles by their
+  paths instead of printing one path twice (`sameDirectory` in `treecheck.go`), and the origin
+  index refuses the pair before any Kustomization or Application is generated (`IndexOrigins`).
+  Both compare the directories without regard to case, so two `DirName`s that differ in case
+  only are one directory.
 - **The rename route closes:** `IndexOrigins` refuses a layout that is a bundle's own directory
-  (an umbrella child, or a `GroupByName` bundle layout) when its name differs from the bundle's
+  (`ManifestLayout.ownBundle`: an umbrella child, a `GroupByName` bundle layout, or the root
+  node's bundle directory when it holds one bundle) when its name differs from the bundle's
   directory name. A node layout that renders a bundle keeps `Node.Name`, whatever the bundle is
-  called, and is not refused.
+  called, and is not refused; neither is the directory several merged bundles share.
 
-**Acceptance.**
-- The umbrella child directory is `DirName` and its Kustomization is the effective Kustomization
-  name.
-- Two siblings with the same `DirName` are refused, naming both bundles.
-- A walked umbrella child or `GroupByName` bundle layout renamed before integration is refused.
+**Breaking.** With the field unset, every object and path generated is unchanged. One input that
+used to be accepted is refused: a bundle's own layout renamed between the walk and the
+integration, which gave the directory another name without renaming the bundle or its
+Kustomization. Set `DirName` on the bundle instead. The refusal messages for the root node's bundle directory
+changed their wording.
+
+**Tests.** `pkg/stack/layout/dirname_test.go` covers the walk in every grouping combination and
+both walkers, the root node's bundle directory, the merged directory, the directory checks with a
+`DirName` at the root, the values refused, the renamed layout and the two-bundles refusal in the
+index and every writer. `pkg/stack/fluxcd/dirname_test.go` covers the directory, `spec.path`,
+names and references under the three placements with disk and tar compared byte for byte, the
+root node's bundle, the merged directory, the `flux-system` reservation and the renamed layout;
+its `TestDirName_UnsetOutputUnchanged` compares a cluster without the field, and one whose
+`DirName` equals `Name`, with the stored trees of `unset_output_test.go`.
+`pkg/stack/argocd/dirname_test.go` covers `source.path` and the `argocd` reservation, and
+`pkg/stack/bundle_dirname_test.go` the validation and the builder's copy.
 
 ### Ordering and naming for node-level Kustomizations ([go-kure/kure#973](https://github.com/go-kure/kure/issues/973))
 
@@ -651,8 +686,9 @@ generates. kure shortens and rewrites nothing; the caller chooses a valid name.
 - **The model** (`Bundle.Validate`, `ValidateCluster`): a bundle's `Name`, and that of every
   umbrella descendant, is a bundle name and a directory name (`Bundle.validateNames`). A
   `KustomizationName`, when set, is a DNS-1123 subdomain as well, since it names the same object;
-  `Name` is checked as before, being still the bundle's identity and its directory. A node name is
-  a directory name. The 63-character limit is not the model's: a name of 64 to 253 characters
+  `Name` is checked as before, being still the bundle's identity and, without a `DirName`, its
+  directory. A `DirName`, when set, is a directory name and nothing more (go-kure/kure#972). A
+  node name is a directory name. The 63-character limit is not the model's: a name of 64 to 253 characters
   validates, and the ArgoCD workflow renders an Application named after it.
 - **Node names are checked under every layout grouping.** A node name is a segment of the node's
   path in the model before it is a directory: `Node.GetPath` and the path map join node names
@@ -688,7 +724,8 @@ generates. kure shortens and rewrites nothing; the caller chooses a valid name.
 - **A bundle name never reaches the walk's directory checks unchecked.** Both walkers validate
   the cluster first, so a bundle name is one path segment when the root node's bundle gets its
   directory (go-kure/kure#979): `<root>/<bundle name>` is a directory inside the root node's,
-  never that directory itself and never one further down. The walk's refusal of a root bundle
+  never that directory itself and never one further down. A `DirName`, which names that directory
+  when the bundle sets one, is validated the same way (go-kure/kure#972). The walk's refusal of a root bundle
   name that resolved to the root node's own directory could no longer be met and is removed;
   `.`, `/` and `web/api` are refused at validation.
 - **Entry points that run no cluster validation** check for themselves. `GenerateForBundle` does
@@ -751,8 +788,8 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      them: `<root>/<first bundle name>` (`renderBundle` and `rootUnit` in `walker.go`).
      `ManifestLayout.OriginUnit` (`origin.go`) returns that directory's layout. They stay one
      unit: one directory, one Kustomization, named as before. The directory takes the bundle's
-     `Name`; a `KustomizationName` names the Kustomization alone, as for every other bundle
-     directory. `BundleGrouping: GroupByName`
+     `DirName`, or its `Name` without one (go-kure/kure#972); a `KustomizationName` names the
+     Kustomization alone, as for every other bundle directory. `BundleGrouping: GroupByName`
      already gave each bundle a directory and is unchanged. Both walkers do this,
      `WalkClusterByPackage` in the tree of the package the root node is in. Its trees are
      otherwise placed as before, and not as `WalkCluster` places them: the root node without the
@@ -799,7 +836,8 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      the root node's layout never had a source of its own, and such a tree is refused as before.
      Accepting it would be a change of its own.
    - Breaking: the path of the root node's bundles moves one directory down, from `<root>` to
-     `<root>/<first bundle name>`: the files, the Kustomization's `spec.path` and the ArgoCD
+     `<root>/<first bundle name>` (that bundle's `DirName` when it sets one, go-kure/kure#972):
+     the files, the Kustomization's `spec.path` and the ArgoCD
      Application's `source.path`. `FlattenSingleTier` leaves a directory it used to collapse.
      On a deployed tree with `prune` on, the objects can be deleted by the outer owner and
      re-created by the inner Kustomization.
