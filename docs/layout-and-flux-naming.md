@@ -728,7 +728,8 @@ test get names.
 **Tests.** `pkg/stack/names_test.go` holds the rule tables and the model's checks, the
 `KustomizationName` value included. `bundle_names_test.go` in `pkg/stack/fluxcd` covers the
 63-character limit at every entry point: a bundle and an umbrella descendant, the name in effect,
-a merged bundle's name, a reference outside the cluster, and the per-layout Kustomization names.
+a merged bundle's name and a reference outside the cluster; `layout_names_test.go` there covers
+the per-layout Kustomization names.
 `bootstrap_names_test.go` covers the root name under both rules, `pkg/stack/layout/names_test.go` and `flatten_test.go` the application names, and
 `pkg/stack/argocd` (`argo_test.go`, `kustomization_name_test.go`) the names over 63 characters
 that the ArgoCD workflow renders. `TestWalk_RefusesRootBundleNameThatIsNoPathSegment` in
