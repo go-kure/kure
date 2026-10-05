@@ -350,10 +350,10 @@ that instead of generating it:
 The error names both bundles, the target and the object it reaches. Narrow the target to the
 bundle's own objects, or give the bundles directories of their own (`NodeGrouping` or
 `BundleGrouping` `GroupByName`). Not covered: objects inside an `ExtraFiles` file (they are not
-kustomize resources) and objects without a kind. Known gap: under `FluxIntegratedPerLayout` the
-check does not see a generated ConfigMap that the shared directory itself builds. A
-`FlattenSingleTier` collapse was the known way to such a directory, and it no longer collapses a
-directory that renders a bundle; whether another input reaches the gap is open (go-kure/kure#979).
+kustomize resources) and objects without a kind. Under `FluxIntegratedPerLayout` the check counts
+no generated ConfigMap, and needs none: no walked tree has a shared directory that builds one. An
+augmenter application keeps a directory of its own, which its own Kustomization applies without
+patches, and `FlattenSingleTier` collapses no directory that renders a bundle (go-kure/kure#979).
 
 The generator computes no path, the integrator matches nothing by name, and `FlattenSingleTier`
 rewrites nothing afterwards: it collapses no directory that renders a bundle

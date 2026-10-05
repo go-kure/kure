@@ -949,19 +949,30 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      `TestBootstrapPathIsTheWalkedRootDirectory` in `pkg/stack/fluxcd/bootstrap_path_test.go`.
      The second covers a named root walked without a `ClusterName`; the other shapes are item 9.
 5. **Under `FluxIntegratedPerLayout` the patch-scope check does not see a generated ConfigMap.**
-   Target.
-   - Current: `checkPatchScope` in `resource_generator.go` counts only the objects held in the
-     unit's `Resources` and in those of its `AppFileSingle` application children. A ConfigMap
-     that a `configMapGenerator` builds is not among them, so it
-     is skipped, also when the unit's own directory builds it. Before item 1, with every
-     grouping flat and `FlattenSingleTier: true`, a bundle whose one augmenter application adds
-     a generator collapsed into the shared directory; another merged bundle's patch that
-     targeted that ConfigMap was accepted, although the shared Kustomization built the ConfigMap
-     and applied the patch to it. Since item 1 `FlattenSingleTier` collapses no directory that
-     renders a bundle, so that input no longer reaches the gap; whether another one does is
-     part of this item.
-   - Expected: the check sees every object the unit's directory builds, generated ConfigMaps
-     included, with a test that pins it.
+   Shipped: resolved by item 1.
+   - Before item 1: with every grouping flat and `FlattenSingleTier: true`, a bundle whose one
+     augmenter application adds a generator collapsed into the shared directory. Another merged
+     bundle's patch that targeted that ConfigMap was accepted, although the shared Kustomization
+     built the ConfigMap and applied the patch to it: under this placement `checkPatchScope` in
+     `resource_generator.go` counts only the objects held in the unit's `Resources` and in those
+     of its `AppFileSingle` application children, and a ConfigMap that a `configMapGenerator`
+     builds is in neither.
+   - Now: no walked tree has a directory that renders bundles and builds a generated ConfigMap.
+     `FlattenSingleTier` collapses no child that renders a bundle (item 1), and an augmenter
+     application keeps a directory of its own (`renderApps` in `walker.go`), which under this
+     placement its own Kustomization applies, without patches
+     (`createKustomizationForLayout`). A patch that targets the generated ConfigMap is still
+     accepted, and rightly: the Kustomization that carries the patch does not build it.
+   - Not changed: `checkPatchScope`, and the `layout` package gets no accessor for the generated
+     ConfigMaps of a directory. No walked tree could exercise either.
+   - Tests: `TestPerLayoutPatchScope_GeneratedConfigMapStaysOutOfTheUnitsBuild` in
+     `pkg/stack/fluxcd/patch_scope_generated_test.go`, for the generator's application beside
+     others and as its bundle's only one, with and without `FlattenSingleTier` and a
+     `ClusterName`, by name and by an annotation selector. On the files written to disk, tar and
+     manifest, the generator entry is in the application's directory only and the build of the
+     bundles' directory makes no such ConfigMap; the same cluster under `FluxSeparate` is
+     refused. If it fails, a directory that renders bundles builds a generated ConfigMap again,
+     and the check has to count it before such a tree is accepted.
 6. **A kept Kustomization is checked in whatever form it has.** Shipped.
    - Under the two integrated placements, the checks that look at a layout's Flux Kustomizations
      read both the Kustomizations the integration generates and the ones it keeps in place of
