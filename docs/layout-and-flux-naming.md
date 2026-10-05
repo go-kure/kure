@@ -1234,7 +1234,8 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
       below it, with an error that said a `SourceRef` was missing. With `SourceRef`s without a
       URL the combination worked. Every shape of item 2's render matrix has such a node, which is
       how it was found.
-    - Now: where `integratedPlacement.layoutSource` finds no source, the layout takes the
+    - Now: where `integratedPlacement.layoutSource` finds no source (no `SourceRef` without a
+      URL below the layout, or two that differ), the layout takes the
       `SourceRef` of the bundle of the nearest node, at or above its own, that has one
       (`nodeBundleSource`). That is its own node's bundle, rendered one directory lower, or for a
       node without a bundle the one of the nearest node above: the bundle that encloses it under
@@ -1243,8 +1244,10 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
       the layout's own apply delivers (item 2): below a `ClusterName` wrapper the root node's
       layout with only `SourceRef`s that have a URL is refused as before, under either grouping.
     - The fallback comes last, so it gives a source only to a layout that had none: no tree that
-      was integrated before changes a `sourceRef`. A layout below which two `SourceRef`s without
-      a URL differ is refused as before.
+      was integrated before changes a `sourceRef`. That includes a layout below which two
+      `SourceRef`s without a URL differ, which was refused for having no single source: the
+      bundle of its own node, or of the nearest node above, decides, as it does under a flat
+      grouping. The nodes below keep their own.
     - Still refused, under both groupings: a node without a bundle, with no bundle on a node
       above it, above bundles whose `SourceRef`s all have a URL (a group node under a root
       without a bundle). The error names the Kustomization, the node and the `spec.path`, says
@@ -1252,10 +1255,17 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
       a bundle with a `SourceRef` on a node at or above, or `FluxIntegratedPerBundle`. It names
       no grouping. Only where no bundle at, below or above the layout has a `SourceRef` does the
       error still say that one is required.
-    - Not breaking: refusals become acceptances, and the text of two errors changes.
+    - Still refused as well: a layout below which two `SourceRef`s without a URL differ, where
+      no node at or above it has a bundle whose `SourceRef` it can take. The error adds the way
+      out it now has, a bundle with a `SourceRef` on a node at or above: without a URL where the
+      layout is the root node's below a `ClusterName` wrapper, and where that bundle is there
+      with a URL the error names the Source it generates.
+    - Not breaking: refusals become acceptances, and the text of three errors changes.
     - Tests: `TestPerLayout_ByName_NodeLayoutTakesItsNodesBundleSource`,
-      `TestPerLayout_ByName_BundleLessNodeTakesTheNearestBundleAbove` and
-      `TestPerLayout_NodeLayoutWithoutASource_RefusalSaysWhatHelps` in
+      `TestPerLayout_ByName_BundleLessNodeTakesTheNearestBundleAbove`,
+      `TestPerLayout_ByName_DifferingSourcesBelowTakeTheNodesBundleSource`,
+      `TestPerLayout_NodeLayoutWithoutASource_RefusalSaysWhatHelps` and
+      `TestPerLayout_DifferingSourcesBelow_RefusalSaysWhatHelps` in
       `pkg/stack/fluxcd/by_name_source_test.go`, on the files of every writer, disk equal to tar.
       The matrices of items 2 and 9 no longer pin a refusal for this grouping
       (`sourceHostRefusal`): they hold every such combination to the Source invariant and to the

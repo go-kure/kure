@@ -1111,7 +1111,8 @@ func unitSource(l *layout.ManifestLayout) (kustv1.CrossNamespaceSourceReference,
 // bundle or one above it: under BundleGrouping by name every bundle has a
 // directory of its own, one level below its node's, so no bundle encloses a
 // node's layout (go-kure/kure#979). It comes last, so it gives a source only
-// to a layout that had none.
+// to a layout that had none: one with no URL-less SourceRef below it, and one
+// below which two of them differ.
 //
 // When child is the root node's layout (below a ClusterName wrapper, which
 // hosts its CR) or, on a tree built by hand, a layout above it, its CR applies
@@ -1125,7 +1126,8 @@ func unitSource(l *layout.ManifestLayout) (kustv1.CrossNamespaceSourceReference,
 //
 // A layout left without a source is refused. The refusal says which
 // Kustomization it is and what would give it a source; where every SourceRef
-// below has a URL it does not say that one is missing.
+// below has a URL it does not say that one is missing, and where the
+// SourceRefs below differ it names the bundle that would decide.
 func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope sourceScope) (kustv1.CrossNamespaceSourceReference, error) {
 	delivers := holdsLayout(child, p.root)
 	var own *kustv1.CrossNamespaceSourceReference
@@ -1206,8 +1208,26 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 			"FluxIntegratedPerLayout mode requires a SourceRef with Kind and Name; "+
 				fmt.Sprintf("Flux Kustomization %q of %s (spec.path %q) has no source: no bundle at, below or above it has one", name, owner, child.FullRepoPath()), nil)
 	default:
+		// The bundles below do not agree; the node's own bundle, or the one
+		// of the nearest node above, decides as it does where they have none.
+		ref, ok := p.nodeBundleSource(child, delivered)
+		if ok {
+			return ref, nil
+		}
+		remedy := "give a node at or above it a bundle with a SourceRef, which its Kustomization then takes"
+		if delivers {
+			// One with a URL would be a Source this Kustomization delivers.
+			remedy = "give a node at or above it a bundle with a SourceRef without a URL, which its Kustomization then takes"
+		}
+		if ref.Kind != "" && ref.Name != "" {
+			// There is such a bundle, and its Source is one this
+			// Kustomization would deliver.
+			remedy = fmt.Sprintf("the bundle of the nearest node at or above it names %s %q, which the integration generates from a SourceRef with a URL and hosts inside what this Kustomization applies: give that bundle a SourceRef without a URL, naming a Source that exists before the tree is applied",
+				ref.Kind, ref.Name)
+		}
 		return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
-			fmt.Sprintf("layout %q has no enclosing bundle and the bundles below it have different SourceRefs, so its Flux Kustomization has no single source", child.FullRepoPath()), nil)
+			fmt.Sprintf("layout %q has no enclosing bundle and the bundles below it have different SourceRefs, so its Flux Kustomization has no single source; %s",
+				child.FullRepoPath(), remedy), nil)
 	}
 }
 
