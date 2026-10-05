@@ -1023,7 +1023,7 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 		// The CR is hosted by the parent of the layout that renders the
 		// bundles. Every unit has one: IntegrateWithLayout refuses a top
 		// that renders a bundle (go-kure/kure#979).
-		if err := p.add(p.ix.Parent(l), objs, fmt.Sprintf("bundle %q", bundles[0].GetPath())); err != nil {
+		if err := p.add(p.ix.Parent(l), objs, bundleOwner(bundles[0]), bundleNameField); err != nil {
 			return err
 		}
 	}
@@ -1066,7 +1066,7 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 				return err
 			}
 			cr := p.gen.createKustomizationForLayout(name, child, ref, deps)
-			if err := p.add(l, []client.Object{cr}, owner); err != nil {
+			if err := p.add(l, []client.Object{cr}, owner, layoutNameField(child)); err != nil {
 				return err
 			}
 		}
@@ -1353,23 +1353,29 @@ func sourceRefKey(ref kustv1.CrossNamespaceSourceReference, defaultNS string) st
 // (go-kure/kure#876). A Kustomization whose name this pass already emitted is
 // an identity collision; one already present in host with the same spec.path
 // is kept (a repeated integration adds nothing), with another spec.path it is
-// an error. A Source is checked against every Source with its identity (kind,
-// namespace, name, whatever the API version) anywhere in the tree, and every
-// one this pass placed: a different one is an error, wherever it sits; an
-// identical one in the root is kept once.
-func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Object, owner string) error {
+// an error, which says whose the one in the tree is (heldBy) and what names
+// the generated one apart (nameApart). A Source is checked against every
+// Source with its identity (kind, namespace, name, whatever the API version)
+// anywhere in the tree, and every one this pass placed: a different one is an
+// error, wherever it sits; an identical one in the root is kept once.
+//
+// owner says what objs are generated for (see claimant), and field is the
+// field that names its Kustomization: bundleNameField, or layoutNameField's.
+func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Object, owner, field string) error {
 	for _, obj := range objs {
 		to := host
 		if k, ok := obj.(*kustv1.Kustomization); ok {
 			if err := p.claim(k.Name, k.Spec.Path, owner); err != nil {
 				return err
 			}
-			p.generated[crKey(k.Namespace, k.Name)] = true
-			if e, ok := p.existing[crKey(k.Namespace, k.Name)]; ok {
+			key := crKey(k.Namespace, k.Name)
+			p.generated[key] = true
+			if e, ok := p.existing[key]; ok {
 				if e.host == host && e.path == k.Spec.Path {
 					continue
 				}
-				return errors.Errorf("layout %q already has Flux Kustomization %q with spec.path %q; this integration derives %q in layout %q", e.host.FullRepoPath(), k.Name, e.path, k.Spec.Path, host.FullRepoPath())
+				return errors.Errorf("layout %q already has Flux Kustomization %q with spec.path %q%s; this integration generates one of that name for %s, with spec.path %q in layout %q: %s",
+					e.host.FullRepoPath(), k.Name, e.path, heldBy(p.ix, key), owner, k.Spec.Path, host.FullRepoPath(), nameApart(field, owner))
 			}
 		} else if key, ok := sourceKey(obj); ok {
 			// One identity, one object: an identical Source (a repeated
@@ -1748,6 +1754,61 @@ func (p *integratedPlacement) layoutOwner(l *layout.ManifestLayout) string {
 	return fmt.Sprintf("layout %q", l.FullRepoPath())
 }
 
+// bundleOwner names the bundle a unit's Kustomization is generated for, the
+// first of the bundles its directory renders, for claim.
+func bundleOwner(b *stack.Bundle) string {
+	return fmt.Sprintf("bundle %q", b.GetPath())
+}
+
+// bundleNameField is the field that names a bundle's Kustomization.
+const bundleNameField = "Bundle.KustomizationName"
+
+// layoutNameField is the field that names the Kustomization of a layout with
+// a per-layout CR, as checkLayoutCRName names it: the node's for a node's own
+// layout (the walker copies it to the layout), the layout's for any other.
+func layoutNameField(l *layout.ManifestLayout) string {
+	if len(l.OriginNodes()) > 0 {
+		return "Node.KustomizationName"
+	}
+	return "ManifestLayout.KustomizationName"
+}
+
+// heldBy says whose a Flux Kustomization already in the tree is, for the
+// refusal of a generated one with its identity (key, a crKey): the
+// application among whose objects the walk recorded one with that identity,
+// and that application's bundle. Those objects are read as kustomize builds
+// them, a List's items included (resourceItems). It says nothing when no
+// application's record holds one: an earlier integration's Kustomization, or
+// one a caller added to a layout, which the tree does not tell apart.
+func heldBy(ix *layout.OriginIndex, key string) string {
+	for _, unit := range ix.Units() {
+		for _, rec := range unit.OriginApplicationObjects() {
+			// A List that cannot be read holds nothing to name here, and is
+			// unreadable where it sits too: indexExistingKustomizations has
+			// refused such a tree before any identity is compared.
+			objs, _ := resourceItems(&layout.ManifestLayout{Resources: rec.Objects})
+			for _, obj := range objs {
+				if _, ok := fluxKustomizationPath(obj); !ok || crKey(obj.GetNamespace(), obj.GetName()) != key {
+					continue
+				}
+				for _, b := range unit.OriginBundles() {
+					if slices.Contains(b.Applications, rec.Application) {
+						return fmt.Sprintf(", an object of application %q of bundle %q", rec.Application.Name, b.GetPath())
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// nameApart is the way out of a generated Kustomization meeting one already
+// in the tree: the two share namespace and name, so one of them gets another
+// name. field is the field that names the generated one, on owner.
+func nameApart(field, owner string) string {
+	return fmt.Sprintf("the two share namespace and name, so one of them needs another name; set %s on %s to name the generated one, or give the one already there another name", field, owner)
+}
+
 // layoutDependsOn returns the spec.dependsOn names of child's per-layout CR,
 // child being a child of host.
 //
@@ -1925,7 +1986,7 @@ func effectiveNamespace(obj client.Object) string {
 // error when it does not. A directory this call creates names its files by
 // fileNaming, the rules'; left unset, by ml's own.
 func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster, fileNaming layout.FileNamingMode) error {
-	fluxResources, err := li.Generator.GenerateFromLayout(ml, c)
+	fluxResources, ix, err := li.Generator.generateFromLayout(ml, c)
 	if err != nil {
 		return errors.ResourceValidationError("Cluster", c.Name, "flux-resources",
 			fmt.Sprintf("failed to generate Flux resources: %v", err), err)
@@ -1967,17 +2028,30 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	}
 	// The flux-system directory is applied beside the rest of the tree, so
 	// a generated Kustomization's identity must not already be taken there
-	// (an earlier flux-system child is compared as a whole below).
+	// (an earlier flux-system child is compared as a whole below). The
+	// refusal says whose the one in the tree is (heldBy) and what names the
+	// generated one apart (nameApart): every Kustomization generated here is
+	// a unit's, named after the first bundle its directory renders
+	// (generateForUnit).
 	existing, err := indexExistingKustomizations(ml, fluxDir)
 	if err != nil {
 		return err
 	}
+	owners := map[string]string{}
+	for _, unit := range ix.Units() {
+		first := unit.OriginBundles()[0]
+		owners[first.UnitName()] = bundleOwner(first)
+	}
 	for _, obj := range fluxResources {
-		if _, ok := fluxKustomizationPath(obj); !ok {
+		path, ok := fluxKustomizationPath(obj)
+		if !ok {
 			continue
 		}
-		if e, dup := existing[crKey(obj.GetNamespace(), obj.GetName())]; dup {
-			return errors.Errorf("layout %q already has Flux Kustomization %q (spec.path %q); the generated one would register the same id in the kustomize build", e.host.FullRepoPath(), obj.GetName(), e.path)
+		key := crKey(obj.GetNamespace(), obj.GetName())
+		if e, dup := existing[key]; dup {
+			owner := owners[obj.GetName()]
+			return errors.Errorf("layout %q already has Flux Kustomization %q (spec.path %q)%s; the one generated for %s (spec.path %q) would register the same id in the kustomize build: %s",
+				e.host.FullRepoPath(), obj.GetName(), e.path, heldBy(ix, key), owner, path, nameApart(bundleNameField, owner))
 		}
 	}
 	// Likewise a generated Source's identity (kind, namespace, name, whatever

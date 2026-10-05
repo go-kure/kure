@@ -196,6 +196,15 @@ by their paths. `Bundle.Name` stays unique too. A bundle may hold an object that
 Kustomization named like the bundle (a component that delivers its own content): give the bundle
 another `KustomizationName` and the generated Kustomization no longer collides with it.
 
+Without it the tree is refused under every placement: the generated Kustomization and the one in
+the tree would be two objects of one name in one namespace. The error names the one in the tree by
+its layout and `spec.path`, and by the application and bundle that hold it; it names what the
+generated one is for (the bundle, or under `FluxIntegratedPerLayout` the node or layout that gets
+a Kustomization of its own); and it names the way out: the field that names the generated one
+(`Bundle.KustomizationName`, `Node.KustomizationName` or `ManifestLayout.KustomizationName`), or
+another name for the one in the tree. A Kustomization that no application holds, such as one added
+to a walked layout by hand, is named by its layout alone.
+
 `Bundle.Validate` compares the names in effect wherever it compares against a Kustomization
 reference. A bundle that lists the bundle `db` in `DependsOn` and the name `db` in
 `NamedDependsOn` is valid when `db` sets `KustomizationName: "db-cr"`: the two are different

@@ -435,7 +435,9 @@ refused, and so is a copy of a bundle whose Kustomization name is also in `Named
 Two bundles whose Kustomizations would get one name are refused, whether the name comes from the
 field or from the bundle's name. The field is also the way out when a bundle's payload contains a
 Flux Kustomization named like the bundle: give the bundle another `KustomizationName` and the two
-no longer collide. See the
+no longer collide. Without it the tree is refused, and the error names the application and bundle
+that hold the Kustomization in the tree, what the generated one is for, and the field to set. See
+the
 [Flux Engine reference](/api-reference/flux-engine/#kustomization-names).
 
 ### The root node's bundle has its own directory (breaking change in go-kure/kure#979)
