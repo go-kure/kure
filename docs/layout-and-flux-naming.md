@@ -1286,9 +1286,10 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
         bundle that hold it (`heldBy`). That is read from what the walk recorded for each
         application (`ManifestLayout.OriginApplicationObjects`), as kustomize builds it: a
         Kustomization inside a List counts. Only an object the layout still holds, the very
-        value the walk recorded, is an application's. One that no application holds, such as
-        one a caller added to a walked layout or put where an application's was, is named by
-        its layout alone: the error claims no origin for it;
+        value the walk recorded, is an application's (`sameValue`; an object whose value Go
+        cannot compare is no application's, and the refusal is an error for it as well). One
+        that no application holds, such as one a caller added to a walked layout or put where
+        an application's was, is named by its layout alone: the error claims no origin for it;
       - what the generated one is for: the bundle, by its path, or under
         `FluxIntegratedPerLayout` the node or the layout that gets a Kustomization of its own;
       - the way out (`nameApart`): the field that names the generated one, on its owner
@@ -1306,7 +1307,8 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
       `TestKustomizationClash_NodeAndLayoutKustomizations`,
       `TestKustomizationClash_KustomizationInsideAList`,
       `TestKustomizationClash_KustomizationNoApplicationHolds`,
-      `TestKustomizationClash_ObjectReplacedSinceTheWalk` and
+      `TestKustomizationClash_ObjectReplacedSinceTheWalk`,
+      `TestKustomizationClash_ObjectThatCannotBeCompared` and
       `TestKustomizationClash_RecordWithoutApplication` (a walk record whose application was
       cleared names none, and the refusal still comes back) in
       `pkg/stack/fluxcd/kustomization_clash_test.go`.
