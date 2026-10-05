@@ -6,6 +6,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
@@ -100,20 +101,21 @@ func TestWriters_ClusterRootGeneratesConfigMap(t *testing.T) {
 // TestWriters_ClusterRootBuildIsChecked: the cluster root's kustomization.yaml
 // lists its children, so every writer holds the build that file starts to the
 // checks every other directory with one gets. WriteManifest used to write no
-// file into a cluster root that held nothing itself, and so wrote these
-// hand-built trees (go-kure/kure#979); WriteToDisk and WriteToTar refused them.
+// file into a cluster root that held nothing itself, and so wrote these trees
+// (go-kure/kure#979); WriteToDisk and WriteToTar refused them. All but the last
+// are built by hand; the last is walked.
 func TestWriters_ClusterRootBuildIsChecked(t *testing.T) {
 	root := func(children ...*layout.ManifestLayout) *layout.ManifestLayout {
 		return &layout.ManifestLayout{Name: "", Namespace: "demo", Children: children}
 	}
 	cases := map[string]struct {
-		tree func() *layout.ManifestLayout
+		tree func(t *testing.T) *layout.ManifestLayout
 		want string
 	}{
 		// Children a and b each hold ConfigMap default/same: the root lists
 		// both, and kustomize refuses one object twice in a build.
 		"one object in two listed children": {
-			tree: func() *layout.ManifestLayout {
+			tree: func(*testing.T) *layout.ManifestLayout {
 				a, b := cmLayout("same", "demo"), cmLayout("same", "demo")
 				a.Name, b.Name = "a", "b"
 				return root(a, b)
@@ -123,20 +125,44 @@ func TestWriters_ClusterRootBuildIsChecked(t *testing.T) {
 		// The root lists child a, and a KustomizationRecursive directory has
 		// no kustomization.yaml for the entry to name.
 		"listed KustomizationRecursive child": {
-			tree: func() *layout.ManifestLayout {
+			tree: func(*testing.T) *layout.ManifestLayout {
 				a := cmLayout("a", "demo")
 				a.Mode = layout.KustomizationRecursive
 				return root(a)
 			},
 			want: `layout "demo/a" is KustomizationRecursive and writes no kustomization.yaml, but the kustomization.yaml of layout "demo" lists its directory`,
 		},
+		// The child's directory is the path of the file the root writes.
+		"child directory named kustomization.yaml": {
+			tree: func(*testing.T) *layout.ManifestLayout {
+				a := cmLayout("a", "demo")
+				a.Name = "kustomization.yaml"
+				return root(a)
+			},
+			want: `the directory of layout "demo/kustomization.yaml" would replace the kustomization.yaml of layout "demo"`,
+		},
+		// The same tree from a walk: a root node of that name below a
+		// ClusterName is the directory <ClusterName>/kustomization.yaml.
+		"root node named kustomization.yaml, walked": {
+			tree: func(t *testing.T) *layout.ManifestLayout {
+				t.Helper()
+				rules := layout.DefaultLayoutRules()
+				rules.ClusterName = "demo"
+				ml, err := layout.WalkCluster(&stack.Cluster{Name: "demo", Node: &stack.Node{Name: "kustomization.yaml"}}, rules)
+				if err != nil {
+					t.Fatalf("WalkCluster: %v", err)
+				}
+				return ml
+			},
+			want: `the directory of layout "demo/kustomization.yaml" would replace the kustomization.yaml of layout "demo"`,
+		},
 	}
 	for name, tc := range cases {
 		for _, writer := range allWriters {
 			t.Run(name+"/"+writer, func(t *testing.T) {
-				err := writeRefused(t, writer, layout.Config{}, tc.tree())
+				err := writeRefused(t, writer, layout.Config{}, tc.tree(t))
 				if err == nil {
-					t.Fatal("the tree was written: the cluster root's kustomization.yaml starts a build kustomize refuses")
+					t.Fatal("the tree was written: every writer writes the cluster root a kustomization.yaml and must refuse it")
 				}
 				if !strings.Contains(err.Error(), tc.want) {
 					t.Errorf("refusal does not hold %s:\n%v", tc.want, err)

@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/provider"
 	"sigs.k8s.io/kustomize/kyaml/resid"
+	"sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
@@ -648,57 +649,55 @@ func checkRootBundleBuildHoldsNoSource(t *testing.T, ml *layout.ManifestLayout) 
 	}
 }
 
-// checkBootstrapBuildHoldsNoSource Flux-builds the top of the written tree, as
-// the bootstrap does (no patches, no postBuild), and requires it to hold no
-// copy of the hosted Source.
-func checkBootstrapBuildHoldsNoSource(t *testing.T, ml *layout.ManifestLayout) {
+// checkOnlyTheCRAppliesTheSource Flux-builds the top of each written tree, as
+// the bootstrap does (no patches, no postBuild), takes from that build the one
+// Flux Kustomization whose spec.path is dir, the root node's directory, in
+// whatever form the tree holds it (kustomize opens a List), and builds dir as
+// that Kustomization does. The bootstrap's build must hold no copy of the
+// hosted Source and the Kustomization's must hold it: the Kustomization is the
+// only one to apply the Source, so its patches and postBuild are the only ones
+// the Source gets. fluxBuild runs no postBuild, so when the Kustomization has
+// one every object it built is passed through Flux's substitution with its
+// vars (dry run, and always when substituteFrom is set: its values are in the
+// cluster), which must not fail. It returns the Kustomization each writer
+// wrote, by writer.
+func checkOnlyTheCRAppliesTheSource(t *testing.T, ml *layout.ManifestLayout, dir string) map[string]*kustv1.Kustomization {
 	t.Helper()
-	for writer, w := range writeAll(t, ml) {
-		built := fluxBuild(t, w.root, ml.FullRepoPath(), unstructured.Unstructured{Object: map[string]any{}})
-		if len(built) == 0 {
-			t.Errorf("%s: the bootstrap build of %q holds no object", writer, ml.FullRepoPath())
-		}
-		if built[sharedSourceID()] != "" {
-			t.Errorf("%s: the bootstrap build of %q holds %s", writer, ml.FullRepoPath(), sharedSourceID())
-		}
-	}
-}
-
-// checkOnlyTheCRAppliesTheSource Flux-builds the top of the written tree, as
-// the bootstrap does (no patches, no postBuild), and dir, the root node's
-// directory, as the Kustomization that names it does. The bootstrap's build
-// must hold no copy of the hosted Source and the Kustomization's must hold it:
-// the Kustomization is the only one to apply the Source, so its patches and
-// postBuild are the only ones the Source gets. fluxBuild runs no postBuild, so
-// when the Kustomization has one every object it built is passed through
-// Flux's substitution with its vars (dry run, and always when substituteFrom is
-// set: its values are in the cluster), which must not fail.
-func checkOnlyTheCRAppliesTheSource(t *testing.T, ml *layout.ManifestLayout, dir string) {
-	t.Helper()
-	var cr *kustv1.Kustomization
-	for _, k := range kustomizations(ml) {
-		if filepath.Clean(k.Spec.Path) == dir {
-			cr = k
-		}
-	}
-	if cr == nil {
-		t.Fatalf("no Kustomization builds %q", dir)
-	}
-	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(cr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	kust := unstructured.Unstructured{Object: content}
 	id := sharedSourceID()
 	rf := provider.NewDefaultDepProvider().GetResourceFactory()
+	written := map[string]*kustv1.Kustomization{}
 	for writer, w := range writeAll(t, ml) {
 		bootstrap := fluxBuild(t, w.root, ml.FullRepoPath(), unstructured.Unstructured{Object: map[string]any{}})
-		if len(bootstrap) == 0 {
-			t.Errorf("%s: the bootstrap build of %q holds no object", writer, ml.FullRepoPath())
-		}
 		if bootstrap[id] != "" {
-			t.Errorf("%s: the bootstrap build of %q holds %s, which %q applies too", writer, ml.FullRepoPath(), id, cr.Name)
+			t.Errorf("%s: the bootstrap build of %q holds %s, which the Kustomization of %q applies too", writer, ml.FullRepoPath(), id, dir)
 		}
+		var cr *kustv1.Kustomization
+		var kust unstructured.Unstructured
+		for _, y := range bootstrap {
+			var content map[string]any
+			if err := yaml.Unmarshal([]byte(y), &content); err != nil {
+				t.Fatal(err)
+			}
+			u := unstructured.Unstructured{Object: content}
+			if u.GroupVersionKind() != kustv1.GroupVersion.WithKind("Kustomization") {
+				continue
+			}
+			k := &kustv1.Kustomization{}
+			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(content, k); err != nil {
+				t.Fatal(err)
+			}
+			if filepath.Clean(k.Spec.Path) != dir {
+				continue
+			}
+			if cr != nil {
+				t.Fatalf("%s: the bootstrap build of %q holds two Kustomizations of %q, %q and %q", writer, ml.FullRepoPath(), dir, cr.Name, k.Name)
+			}
+			cr, kust = k, u
+		}
+		if cr == nil {
+			t.Fatalf("%s: the bootstrap build of %q holds no Kustomization of %q", writer, ml.FullRepoPath(), dir)
+		}
+		written[writer] = cr
 		built := fluxBuild(t, w.root, cr.Spec.Path, kust)
 		if built[id] == "" {
 			t.Errorf("%s: the build of %q holds no %s", writer, cr.Name, id)
@@ -721,4 +720,5 @@ func checkOnlyTheCRAppliesTheSource(t *testing.T, ml *layout.ManifestLayout, dir
 			}
 		}
 	}
+	return written
 }

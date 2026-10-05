@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -275,24 +276,31 @@ func TestKeptKustomization_RootBuildChangesHostedSource(t *testing.T) {
 					t.Errorf("GitRepository shared hosted %v, want %v", got, want)
 				}
 				// The integration placed no Kustomization of its own beside
-				// the caller's, which carries the patch or postBuild.
-				var typed []*kustv1.Kustomization
+				// the caller's: only the typed form is a typed object among
+				// the tree's resources.
+				typed := 0
 				for _, k := range kustomizations(ml) {
 					if k.Name == rootCR {
-						typed = append(typed, k)
+						typed++
 					}
 				}
-				if form != "typed" {
-					if len(typed) != 0 {
-						t.Errorf("the integration placed its own Kustomization %q beside the kept one", rootCR)
+				if want := map[bool]int{true: 1, false: 0}[form == "typed"]; typed != want {
+					t.Errorf("the tree holds %d typed Kustomizations %q, want %d: the kept one alone", typed, rootCR, want)
+				}
+				// Every writer writes the kept Kustomization with the patch
+				// or postBuild the caller gave it, in every form, and its
+				// build is the only one that holds the Source.
+				want := &kustv1.Kustomization{}
+				tc.change(want)
+				for writer, k := range checkOnlyTheCRAppliesTheSource(t, ml, rootDir) {
+					if k.Name != rootCR {
+						t.Errorf("%s: the Kustomization of %q is %q, want the kept %q", writer, rootDir, k.Name, rootCR)
 					}
-					checkBootstrapBuildHoldsNoSource(t, ml)
-					return
+					if !reflect.DeepEqual(k.Spec.Patches, want.Spec.Patches) || !reflect.DeepEqual(k.Spec.PostBuild, want.Spec.PostBuild) {
+						t.Errorf("%s: the kept Kustomization has patches %v and postBuild %v, want the caller's %v and %v",
+							writer, k.Spec.Patches, k.Spec.PostBuild, want.Spec.Patches, want.Spec.PostBuild)
+					}
 				}
-				if len(typed) != 1 || (len(typed[0].Spec.Patches) == 0 && typed[0].Spec.PostBuild == nil) {
-					t.Fatalf("the tree holds %d typed Kustomizations %q, want the kept one alone, with its patch or postBuild", len(typed), rootCR)
-				}
-				checkOnlyTheCRAppliesTheSource(t, ml, rootDir)
 			})
 			for _, placement := range integratedPlacements {
 				t.Run(tc.name+"/root bundle/"+string(placement)+"/"+form, func(t *testing.T) {
