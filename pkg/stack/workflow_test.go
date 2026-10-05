@@ -110,7 +110,7 @@ func TestWorkflowInterface(t *testing.T) {
 			}
 
 			// Test GenerateBootstrap
-			_, err = wf.GenerateBootstrap(cluster.GitOps.Bootstrap, cluster.Node)
+			_, err = wf.GenerateBootstrap(cluster.GitOps.Bootstrap, cluster.Node, layout.LayoutRules{})
 			if provider == "argocd" {
 				// ArgoCD bootstrap is not yet implemented, expect error
 				if err == nil {

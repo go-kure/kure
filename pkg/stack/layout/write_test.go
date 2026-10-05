@@ -335,11 +335,12 @@ func TestWriteManifest_WithChildren(t *testing.T) {
 	}
 }
 
-func TestWriteManifest_ClusterRootEmptyContainerNoKustomization(t *testing.T) {
+func TestWriteManifest_ClusterRootEmptyContainerWritesKustomization(t *testing.T) {
 	// Cluster root acting as a structural container: no own resources, only
-	// child layouts. No kustomization.yaml at this level — children own their
-	// own kustomization.yaml. Preserves the original walkClusterWithClusterName
-	// behaviour.
+	// child layouts. It gets a kustomization.yaml that lists its children, as
+	// WriteToDisk and WriteToTar write it (go-kure/kure#979): it is the
+	// directory the Flux bootstrap applies, and without the file Flux would
+	// build every file below it. WriteManifest used to write none here.
 	ml := &ManifestLayout{
 		Name:      "",
 		Namespace: "mycluster",
@@ -360,8 +361,15 @@ func TestWriteManifest_ClusterRootEmptyContainerNoKustomization(t *testing.T) {
 	}
 
 	kustomFile := filepath.Join(dir, "clusters", "mycluster", "kustomization.yaml")
-	if _, err := os.Stat(kustomFile); !os.IsNotExist(err) {
-		t.Errorf("kustomization.yaml should NOT be generated at empty cluster root (%s)", kustomFile)
+	data, err := os.ReadFile(kustomFile)
+	if err != nil {
+		t.Fatalf("expected kustomization.yaml at the empty cluster root: %v", err)
+	}
+	if want := "resources:\n  - child\n"; !strings.HasSuffix(string(data), want) {
+		t.Errorf("kustomization.yaml should list the child directory and nothing else, got:\n%s", data)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "clusters", "mycluster", "child", "kustomization.yaml")); err != nil {
+		t.Errorf("the child keeps its own kustomization.yaml: %v", err)
 	}
 }
 

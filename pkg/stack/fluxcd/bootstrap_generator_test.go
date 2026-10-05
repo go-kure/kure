@@ -13,6 +13,7 @@ import (
 	"github.com/go-kure/kure/internal/kuretest"
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 // findFluxInstance locates the FluxInstance in a flux-operator bootstrap
@@ -69,7 +70,7 @@ func TestGenerateBootstrapNil(t *testing.T) {
 	rootNode := &stack.Node{Name: "test"}
 
 	// Nil config
-	resources, err := bg.GenerateBootstrap(nil, rootNode)
+	resources, err := bg.GenerateBootstrap(nil, rootNode, layout.LayoutRules{})
 	if err != nil {
 		t.Errorf("GenerateBootstrap(nil, _) error = %v", err)
 	}
@@ -86,7 +87,7 @@ func TestGenerateBootstrapDisabled(t *testing.T) {
 	}
 	rootNode := &stack.Node{Name: "test"}
 
-	resources, err := bg.GenerateBootstrap(config, rootNode)
+	resources, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 	if err != nil {
 		t.Errorf("GenerateBootstrap(disabled, _) error = %v", err)
 	}
@@ -104,7 +105,7 @@ func TestGenerateBootstrapInvalidMode(t *testing.T) {
 	}
 	rootNode := &stack.Node{Name: "test"}
 
-	_, err := bg.GenerateBootstrap(config, rootNode)
+	_, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 	if err == nil {
 		t.Error("expected error for invalid flux mode")
 	}
@@ -124,7 +125,7 @@ func TestGenerateFluxOperatorBootstrap(t *testing.T) {
 
 	rootNode := &stack.Node{Name: "test-cluster"}
 
-	resources, err := bg.GenerateBootstrap(config, rootNode)
+	resources, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}
@@ -149,7 +150,7 @@ func TestGenerateFluxOperatorBootstrapWithComponents(t *testing.T) {
 
 	rootNode := &stack.Node{Name: "test-cluster"}
 
-	resources, err := bg.GenerateBootstrap(config, rootNode)
+	resources, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}
@@ -172,7 +173,7 @@ func TestGenerateFluxOperatorBootstrapNoSourceURL(t *testing.T) {
 
 	rootNode := &stack.Node{Name: "test-cluster"}
 
-	resources, err := bg.GenerateBootstrap(config, rootNode)
+	resources, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}
@@ -197,7 +198,7 @@ func TestGenerateBootstrapDefaultMode(t *testing.T) {
 
 	rootNode := &stack.Node{Name: "test-cluster"}
 
-	resources, err := bg.GenerateBootstrap(config, rootNode)
+	resources, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}
@@ -224,7 +225,7 @@ func TestFluxOperatorSourceKindGitRepository(t *testing.T) {
 
 	rootNode := &stack.Node{Name: "production"}
 
-	resources, err := bg.GenerateBootstrap(config, rootNode)
+	resources, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}
@@ -261,7 +262,7 @@ func TestFluxOperatorSourceKindOCIDefault(t *testing.T) {
 
 	rootNode := &stack.Node{Name: "staging"}
 
-	resources, err := bg.GenerateBootstrap(config, rootNode)
+	resources, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}
@@ -292,7 +293,7 @@ func TestFluxOperatorSourceKindExplicitOCI(t *testing.T) {
 
 	rootNode := &stack.Node{Name: "prod"}
 
-	resources, err := bg.GenerateBootstrap(config, rootNode)
+	resources, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}
@@ -319,7 +320,7 @@ func TestGotkSourceKindGitRepository(t *testing.T) {
 
 	// the whole gotk output: the install bundle, the GitRepository the
 	// SourceKind selects, and the bootstrap Kustomization
-	resources, err := bg.GenerateBootstrap(config, rootNode)
+	resources, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}
@@ -340,7 +341,7 @@ func TestGotkSourceKindOCIDefault(t *testing.T) {
 
 	// gotk mode may fail for component generation, but the source
 	// generation defaults to OCIRepository when SourceKind is empty.
-	_, _ = bg.GenerateBootstrap(config, rootNode)
+	_, _ = bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 }
 
 func TestV1alpha1BootstrapConfigSourceKind(t *testing.T) {
@@ -386,7 +387,7 @@ func TestGotkGitRepositorySourceGeneration(t *testing.T) {
 
 	rootNode := &stack.Node{Name: "test"}
 
-	resources, err := bg.GenerateBootstrap(config, rootNode)
+	resources, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}
@@ -424,7 +425,7 @@ func TestGotkBootstrapKustomizationReferencesTheEmittedSource(t *testing.T) {
 		"unnamed root node": {},
 	} {
 		t.Run(name, func(t *testing.T) {
-			resources, err := bg.GenerateBootstrap(config, rootNode)
+			resources, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 			if err != nil {
 				t.Fatalf("GenerateBootstrap() error = %v", err)
 			}
@@ -476,7 +477,8 @@ func TestGotkBootstrapKustomizationPruneIsAnInput(t *testing.T) {
 				SourceKind: "GitRepository",
 				SourceURL:  "https://github.com/org/fleet.git",
 				Prune:      tc.prune,
-			}, &stack.Node{Name: "prod"})
+			}, &stack.Node{Name: "prod"}, layout.LayoutRules{})
+
 			if err != nil {
 				t.Fatalf("GenerateBootstrap() error = %v", err)
 			}
@@ -496,7 +498,7 @@ func TestGotkBootstrapKustomizationPruneIsAnInput(t *testing.T) {
 func TestGenerateFluxInstanceNilConfig(t *testing.T) {
 	bg := fluxstack.NewBootstrapGenerator()
 
-	fi, err := bg.GenerateFluxInstance(nil, nil)
+	fi, err := bg.GenerateFluxInstance(nil, nil, layout.LayoutRules{})
 	if err != nil {
 		t.Errorf("GenerateFluxInstance(nil, nil) error = %v, want nil", err)
 	}
@@ -514,7 +516,7 @@ func TestGenerateFluxInstanceDistribution(t *testing.T) {
 		Registry:    "registry.example.com",
 	}
 
-	fi, err := bg.GenerateFluxInstance(config, nil)
+	fi, err := bg.GenerateFluxInstance(config, nil, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateFluxInstance() error = %v", err)
 	}
@@ -543,7 +545,7 @@ func TestGenerateFluxInstanceSyncFromSourceURL(t *testing.T) {
 	}
 	rootNode := &stack.Node{Name: "production"}
 
-	fi, err := bg.GenerateFluxInstance(config, rootNode)
+	fi, err := bg.GenerateFluxInstance(config, rootNode, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateFluxInstance() error = %v", err)
 	}
@@ -591,7 +593,8 @@ func TestGenerateFluxInstanceSyncName(t *testing.T) {
 				Registry:    "ghcr.io/fluxcd",
 				SourceURL:   tc.sourceURL,
 				SyncName:    tc.syncName,
-			}, &stack.Node{Name: "production"})
+			}, &stack.Node{Name: "production"}, layout.LayoutRules{})
+
 			if err != nil {
 				t.Fatalf("GenerateFluxInstance() error = %v", err)
 			}
@@ -627,7 +630,8 @@ func TestFluxOperatorBootstrapCarriesSyncName(t *testing.T) {
 		SourceURL:   "oci://registry.example.com/fleet",
 		SourceRef:   "latest",
 		SyncName:    "stack",
-	}, &stack.Node{Name: "production"})
+	}, &stack.Node{Name: "production"}, layout.LayoutRules{})
+
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}
@@ -656,7 +660,8 @@ func TestGenerateBootstrapGotkIgnoresSyncName(t *testing.T) {
 			SourceURL:   "https://github.com/org/fleet.git",
 			SourceRef:   "main",
 			SyncName:    syncName,
-		}, &stack.Node{Name: "prod"})
+		}, &stack.Node{Name: "prod"}, layout.LayoutRules{})
+
 		if err != nil {
 			t.Fatalf("GenerateBootstrap(syncName=%q) error = %v", syncName, err)
 		}
@@ -683,7 +688,7 @@ func TestGenerateFluxInstanceNoSyncWhenNoSourceURL(t *testing.T) {
 		// No SourceURL
 	}
 
-	fi, err := bg.GenerateFluxInstance(config, nil)
+	fi, err := bg.GenerateFluxInstance(config, nil, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateFluxInstance() error = %v", err)
 	}
@@ -715,7 +720,7 @@ func TestGenerateGotkComponents_FieldBranches(t *testing.T) {
 
 	// The pinned version builds from the vendored bundle, so this runs offline
 	// and must succeed.
-	if _, err := bg.GenerateBootstrap(config, rootNode); err != nil {
+	if _, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{}); err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}
 }
@@ -739,7 +744,7 @@ func TestGenerateFluxSystemKustomization_OCISourceKind(t *testing.T) {
 	// generateFluxSystemKustomization with OCIRepository as sourceKind.
 	// The function may fail at generateGotkComponents (network) but the
 	// generateFluxSystemKustomization code is reached before the error.
-	_, _ = bg.GenerateBootstrap(config, rootNode)
+	_, _ = bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 }
 
 // TestGenerateFluxInstance_ComponentsBranch covers the Components field branch
@@ -754,7 +759,7 @@ func TestGenerateFluxInstance_ComponentsBranch(t *testing.T) {
 		Components:  []string{"source-controller", "kustomize-controller"},
 	}
 
-	fi, err := bg.GenerateFluxInstance(config, nil)
+	fi, err := bg.GenerateFluxInstance(config, nil, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateFluxInstance() error = %v", err)
 	}
@@ -828,7 +833,7 @@ func TestFluxOperatorBootstrapIncludesInstallBundle(t *testing.T) {
 	}
 	rootNode := &stack.Node{Name: "test"}
 
-	resources, err := bg.GenerateBootstrap(config, rootNode)
+	resources, err := bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}
@@ -879,7 +884,8 @@ func TestGotkBootstrapSourceRefMatchesTheEmittedSourceKind(t *testing.T) {
 				FluxMode:   "gotk",
 				SourceKind: sourceKind,
 				SourceURL:  "https://example.test/fleet.git",
-			}, &stack.Node{Name: "prod"})
+			}, &stack.Node{Name: "prod"}, layout.LayoutRules{})
+
 			if err != nil {
 				t.Fatalf("GenerateBootstrap: %v", err)
 			}
@@ -919,7 +925,8 @@ func TestGotkBootstrapAcceptsANilRootNode(t *testing.T) {
 	resources, err := bg.GenerateBootstrap(&stack.BootstrapConfig{
 		Enabled:  true,
 		FluxMode: "gotk",
-	}, nil)
+	}, nil, layout.LayoutRules{})
+
 	if err != nil {
 		t.Fatalf("GenerateBootstrap: %v", err)
 	}
@@ -970,8 +977,8 @@ func TestGenerateGotkComponents_NamespaceFollowsDefaultNamespace(t *testing.T) {
 
 			objects, err := bg.GenerateBootstrap(
 				&stack.BootstrapConfig{Enabled: true, FluxMode: "gotk"},
-				&stack.Node{Name: "test"},
-			)
+				&stack.Node{Name: "test"}, layout.LayoutRules{})
+
 			if err != nil {
 				t.Fatalf("GenerateBootstrap: %v", err)
 			}

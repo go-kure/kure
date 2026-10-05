@@ -182,8 +182,8 @@ func TestWriteManifest_ConfigSingleChildIsListedAsFile(t *testing.T) {
 }
 
 // TestWriters_ClusterRootListsSingleChild: the synthetic cluster root
-// (no name, no resources of its own) normally gets no kustomization.yaml, but
-// one that holds an AppFileSingle child's file lists it.
+// (no name, no resources of its own) lists the file of an AppFileSingle child
+// it holds.
 func TestWriters_ClusterRootListsSingleChild(t *testing.T) {
 	root := &layout.ManifestLayout{Namespace: "demo"}
 	child := cmLayout("svc", root.FullRepoPath())
@@ -311,8 +311,10 @@ func TestWriteManifest_ArgoProfileWalkedTreesAreWritten(t *testing.T) {
 }
 
 // TestWriters_SingleChildWithoutResourcesIsNotListed: an AppFileSingle child
-// with no resources writes no file, so no kustomization.yaml lists one, and
-// the synthetic cluster root holding only such a child stays without one.
+// with no resources writes no file, so no kustomization.yaml lists one. The
+// synthetic cluster root holding only such a child still gets its
+// kustomization.yaml from every writer, and it lists nothing: WriteManifest
+// used to write none there (go-kure/kure#979).
 func TestWriters_SingleChildWithoutResourcesIsNotListed(t *testing.T) {
 	cases := map[string]struct {
 		cfg       layout.Config
@@ -343,8 +345,12 @@ func TestWriters_SingleChildWithoutResourcesIsNotListed(t *testing.T) {
 				if bad := danglingRefs(t, files); len(bad) > 0 {
 					t.Errorf("kustomization.yaml entries name nothing written: %v", bad)
 				}
-				if _, ok := files["demo/kustomization.yaml"]; ok && writer == "WriteManifest" {
-					t.Errorf("WriteManifest wrote the empty cluster root's kustomization.yaml:\n%s", files["demo/kustomization.yaml"])
+				k, ok := files["demo/kustomization.yaml"]
+				if !ok {
+					t.Fatalf("no demo/kustomization.yaml written; wrote %v", slices.Sorted(maps.Keys(files)))
+				}
+				if got := listedResources(t, files, "demo/kustomization.yaml"); len(got) != 0 {
+					t.Errorf("demo/kustomization.yaml lists %v, want nothing:\n%s", got, k)
 				}
 			})
 		}

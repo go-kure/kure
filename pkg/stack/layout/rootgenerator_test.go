@@ -25,9 +25,9 @@ func singleGenRoot() *layout.ManifestLayout {
 	return withGenerator(r, "x")
 }
 
-// clusterGenRoot is WriteManifest's synthetic cluster root (Name "", a
-// single-segment Namespace, no resources) carrying a configMapGenerator, with
-// a directory child apps.
+// clusterGenRoot is a layout shaped like the ClusterName directory at the top
+// of a walked tree (Name "", a single-segment Namespace, no resources)
+// carrying a configMapGenerator, with a directory child apps.
 func clusterGenRoot() *layout.ManifestLayout {
 	r := &layout.ManifestLayout{
 		Name:                "",
@@ -75,24 +75,75 @@ func TestWriters_AcceptGeneratorsOnSingleRootWithFile(t *testing.T) {
 	kustomizeBuildsAll(t, tree())
 }
 
-// TestWriteManifest_RefuseGeneratorsOnClusterRoot: WriteManifest writes the
-// synthetic cluster root no kustomization.yaml when it has no resources, so
-// it refuses the root's ConfigMapGenerators. WriteToDisk and WriteToTar write
-// that root a kustomization.yaml that generates the ConfigMap, and
-// WriteToDisk's output builds with kustomize.
-func TestWriteManifest_RefuseGeneratorsOnClusterRoot(t *testing.T) {
-	want := `layout "cluster" gets no kustomization.yaml, so its ConfigMapGenerators have nowhere to go`
-	err := writeRefused(t, "WriteManifest", layout.DefaultLayoutConfig(), clusterGenRoot())
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("WriteManifest: err = %v, want it to contain %q", err, want)
-	}
-	for _, writer := range []string{"WriteToDisk", "WriteToTar"} {
+// TestWriters_ClusterRootGeneratesConfigMap: every writer writes the cluster
+// root a kustomization.yaml, also when it has no resources, and that file
+// generates the root's ConfigMap. WriteManifest used to write none there and
+// refused the generators instead (go-kure/kure#899); since it writes the file
+// (go-kure/kure#979) nothing is dropped and nothing is refused. Each writer's
+// output builds with kustomize.
+func TestWriters_ClusterRootGeneratesConfigMap(t *testing.T) {
+	for _, writer := range allWriters {
 		files := writtenFiles(t, writer, layout.DefaultLayoutConfig(), clusterGenRoot())
-		if k := files["cluster/kustomization.yaml"]; !strings.Contains(k, "- name: x") {
-			t.Errorf("%s: cluster/kustomization.yaml does not generate x:\n%v", writer, files)
+		generated := false
+		for name, content := range files {
+			if strings.HasSuffix(name, "cluster/kustomization.yaml") && strings.Contains(content, "- name: x") {
+				generated = true
+			}
+		}
+		if !generated {
+			t.Errorf("%s: no cluster/kustomization.yaml generates x:\n%v", writer, files)
 		}
 	}
 	kustomizeBuildsAll(t, clusterGenRoot())
+}
+
+// TestWriters_ClusterRootBuildIsChecked: the cluster root's kustomization.yaml
+// lists its children, so every writer holds the build that file starts to the
+// checks every other directory with one gets. WriteManifest used to write no
+// file into a cluster root that held nothing itself, and so wrote these
+// hand-built trees (go-kure/kure#979); WriteToDisk and WriteToTar refused them.
+func TestWriters_ClusterRootBuildIsChecked(t *testing.T) {
+	root := func(children ...*layout.ManifestLayout) *layout.ManifestLayout {
+		return &layout.ManifestLayout{Name: "", Namespace: "demo", Children: children}
+	}
+	cases := map[string]struct {
+		tree func() *layout.ManifestLayout
+		want string
+	}{
+		// Children a and b each hold ConfigMap default/same: the root lists
+		// both, and kustomize refuses one object twice in a build.
+		"one object in two listed children": {
+			tree: func() *layout.ManifestLayout {
+				a, b := cmLayout("same", "demo"), cmLayout("same", "demo")
+				a.Name, b.Name = "a", "b"
+				return root(a, b)
+			},
+			want: `layouts "demo/a" and "demo/b" both hold the object v1 ConfigMap default/same, and the kustomization.yaml of layout "demo" builds both`,
+		},
+		// The root lists child a, and a KustomizationRecursive directory has
+		// no kustomization.yaml for the entry to name.
+		"listed KustomizationRecursive child": {
+			tree: func() *layout.ManifestLayout {
+				a := cmLayout("a", "demo")
+				a.Mode = layout.KustomizationRecursive
+				return root(a)
+			},
+			want: `layout "demo/a" is KustomizationRecursive and writes no kustomization.yaml, but the kustomization.yaml of layout "demo" lists its directory`,
+		},
+	}
+	for name, tc := range cases {
+		for _, writer := range allWriters {
+			t.Run(name+"/"+writer, func(t *testing.T) {
+				err := writeRefused(t, writer, layout.Config{}, tc.tree())
+				if err == nil {
+					t.Fatal("the tree was written: the cluster root's kustomization.yaml starts a build kustomize refuses")
+				}
+				if !strings.Contains(err.Error(), tc.want) {
+					t.Errorf("refusal does not hold %s:\n%v", tc.want, err)
+				}
+			})
+		}
+	}
 }
 
 // TestWriters_RefuseGeneratorsOnRecursiveSingleRoot: a KustomizationRecursive
@@ -161,10 +212,11 @@ func TestWriteManifest_RefuseGeneratorsOnSingleRootFromConfig(t *testing.T) {
 }
 
 // TestWriteManifest_ClusterRootWithSingleChildGenerators: WriteManifest
-// writes the synthetic cluster root a kustomization.yaml when it lists an
-// AppFileSingle child's file, and that kustomization.yaml generates the
-// root's ConfigMap. A child with no resources writes no file, so the root
-// gets none and its generators are refused.
+// writes the cluster root a kustomization.yaml that generates the root's
+// ConfigMap, whether its AppFileSingle child writes a file, which the root
+// then lists, or has no resources and writes none. In the second case
+// WriteManifest used to write the root no kustomization.yaml and refused its
+// generators (go-kure/kure#979).
 func TestWriteManifest_ClusterRootWithSingleChildGenerators(t *testing.T) {
 	tree := func(withResource bool) *layout.ManifestLayout {
 		r := clusterGenRoot()
@@ -176,20 +228,22 @@ func TestWriteManifest_ClusterRootWithSingleChildGenerators(t *testing.T) {
 		}
 		return r
 	}
-	files := writtenFiles(t, "WriteManifest", layout.DefaultLayoutConfig(), tree(true))
-	generated := false
-	for name, content := range files {
-		if strings.HasSuffix(name, "cluster/kustomization.yaml") && strings.Contains(content, "- name: x") {
-			generated = true
-		}
-	}
-	if !generated {
-		t.Errorf("WriteManifest: no cluster/kustomization.yaml generates x:\n%v", files)
-	}
-	kustomizeBuildsAll(t, tree(true))
-	err := writeRefused(t, "WriteManifest", layout.DefaultLayoutConfig(), tree(false))
-	want := `layout "cluster" gets no kustomization.yaml, so its ConfigMapGenerators have nowhere to go`
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("WriteManifest: err = %v, want it to contain %q", err, want)
+	for name, withResource := range map[string]bool{"child with a resource": true, "child without resources": false} {
+		t.Run(name, func(t *testing.T) {
+			files := writtenFiles(t, "WriteManifest", layout.DefaultLayoutConfig(), tree(withResource))
+			var root string
+			for file, content := range files {
+				if strings.HasSuffix(file, "cluster/kustomization.yaml") {
+					root = content
+				}
+			}
+			if !strings.Contains(root, "- name: x") {
+				t.Errorf("no cluster/kustomization.yaml generates x:\n%v", files)
+			}
+			if listed := strings.Contains(root, "s.yaml"); listed != withResource {
+				t.Errorf("cluster/kustomization.yaml lists s.yaml: %t, want %t:\n%s", listed, withResource, root)
+			}
+			kustomizeBuildsAll(t, tree(withResource))
+		})
 	}
 }

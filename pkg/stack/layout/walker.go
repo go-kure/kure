@@ -26,17 +26,54 @@ func layoutPathSegments(ml *ManifestLayout) []string {
 	return strings.Split(p, "/")
 }
 
-// rootAncestors is the parent path of the root node when no ClusterName is
-// set. A named root's parent is the tree root ".", so it sits at <root>. An
-// unnamed root has no directory of its own; it keeps no parent and so resolves
-// to "cluster", as before go-kure/kure#771. At "." it would look exactly like
-// the ClusterName "." container, whose root kustomization.yaml WriteManifest
-// skips, dropping the root's references to its children.
-func rootAncestors(root *stack.Node) []string {
-	if root.Name == "" {
-		return nil
+// topLayout returns the empty layout at the top of the tree a walk builds for
+// the root node root under clusterName. It is the one place that decides where
+// that top is: both walks start from it, and TopDirectory reports its
+// directory.
+//
+//   - With a ClusterName the top is the cluster directory, whatever the root
+//     node is. A named root node is rendered below it, or is that directory
+//     itself when the directory's last segment is its name
+//     (walkClusterWithClusterName); an unnamed one is rendered into it.
+//   - Without one, a named root's parent is the tree root ".", so it sits at
+//     <root>. An unnamed root has no directory of its own; it keeps no parent
+//     and so resolves to "cluster", as before go-kure/kure#771.
+//   - No root node and no ClusterName: nothing is walked, and the top is the
+//     tree root ".".
+func (g grouping) topLayout(root *stack.Node, clusterName string) *ManifestLayout {
+	switch {
+	case clusterName != "":
+		return g.newLayout("", clusterName)
+	case root == nil:
+		return g.newLayout("", ".")
+	case root.Name == "":
+		return g.newLayout("", "")
+	default:
+		return g.newLayout(root.Name, ".")
 	}
-	return []string{"."}
+}
+
+// TopDirectory returns the directory at the top of the tree WalkCluster builds
+// with rules for a cluster whose root node is root: the directory that holds
+// the tree's first kustomization.yaml, and so the one to point Flux at. It is
+// relative to the directory the tree is written into and spelled as
+// ManifestLayout.FullRepoPath spells every directory ("." for that directory
+// itself). The walk takes its top from the same place (topLayout), so the two
+// cannot differ. The rules are validated first, as WalkCluster validates them.
+//
+// With a ClusterName it is the cluster directory. Without one it is the root
+// node's name, "cluster" for an unnamed root node, and "." when root is nil:
+// no tree is walked then, and the caller applies the directory it writes to.
+//
+// It does not describe a WalkClusterByPackage tree, which is placed without
+// the ClusterName, one tree per package. Nor does it know the directory a
+// writer is given: a tree written below a sub-path of the repository is at
+// that sub-path joined with this directory.
+func TopDirectory(root *stack.Node, rules LayoutRules) (string, error) {
+	if err := rules.Validate(); err != nil {
+		return "", err
+	}
+	return grouping{}.topLayout(root, rules.ClusterName).FullRepoPath(), nil
 }
 
 // grouping holds the settings one walk renders with. Each of the three
@@ -251,11 +288,11 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 
 	// Traditional layout without cluster name. The root node's parent is the
 	// tree root ".", so the root sits at <root> and its children at
-	// <root>/<child>, which is also where the Flux bootstrap sync path
-	// ./<root> points. (With no parent at all, Namespace "" would put the root
+	// <root>/<child>. (With no parent at all, Namespace "" would put the root
 	// alone at cluster/<root>, away from its children.) An unnamed root stays
-	// at "cluster" (see rootAncestors).
-	ml, err := walkNode(c.Node, rootAncestors(c.Node), g, nil)
+	// at "cluster" (see topLayout). The Flux bootstrap applies that same
+	// directory: it asks TopDirectory, which reads topLayout too.
+	ml, err := walkNodeInto(c.Node, g.topLayout(c.Node, ""), g, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -311,16 +348,12 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, g grouping)
 	// FluxIntegratedPerLayout it hosts its children's Flux CRs (the root
 	// bundle's, among others), so it must not also reference their
 	// directories, which would apply them twice.
-	clusterLayout := g.newLayout("", rules.ClusterName)
+	clusterLayout := g.topLayout(c.Node, rules.ClusterName)
 
 	// Unnamed root node: it has no directory of its own, so its content is
 	// rendered straight into the cluster directory.
 	if c.Node.Name == "" {
-		clusterLayout.setNode(c.Node)
-		if err := renderNodeContent(c.Node, clusterLayout, g, nil); err != nil {
-			return nil, err
-		}
-		return clusterLayout, nil
+		return walkNodeInto(c.Node, clusterLayout, g, nil)
 	}
 
 	// Build the root node layout following the walker's path invariant
@@ -396,7 +429,7 @@ func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*Mani
 			// outside the package adds no directory.)
 			g.root = &rootUnit{node: c.Node}
 			var err error
-			ml, err = walkNode(c.Node, rootAncestors(c.Node), g, nil)
+			ml, err = walkNodeInto(c.Node, g.topLayout(c.Node, ""), g, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -435,7 +468,12 @@ func walkNode(n *stack.Node, ancestors []string, g grouping, pkg *schema.GroupVe
 	if n == nil {
 		return nil, nil
 	}
-	ml := g.newLayout(n.Name, filepath.Join(ancestors...))
+	return walkNodeInto(n, g.newLayout(n.Name, filepath.Join(ancestors...)), g, pkg)
+}
+
+// walkNodeInto renders node n into ml, the empty layout of the directory n is
+// rendered to, and returns ml.
+func walkNodeInto(n *stack.Node, ml *ManifestLayout, g grouping, pkg *schema.GroupVersionKind) (*ManifestLayout, error) {
 	ml.setNode(n)
 	if err := renderNodeContent(n, ml, g, pkg); err != nil {
 		return nil, err

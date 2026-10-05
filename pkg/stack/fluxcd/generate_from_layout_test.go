@@ -247,15 +247,12 @@ func writeAll(t *testing.T, ml *layout.ManifestLayout) map[string]writtenTree {
 
 	for name, w := range out {
 		top := filepath.Join(w.root, ml.FullRepoPath(), "kustomization.yaml")
-		if _, err := os.Stat(top); err == nil {
-			w.tops = []string{top}
-		} else {
-			// WriteManifest skips an empty cluster root: each child's
-			// kustomization.yaml is then applied directly.
-			for _, c := range ml.Children {
-				w.tops = append(w.tops, filepath.Join(w.root, c.FullRepoPath(), "kustomization.yaml"))
-			}
+		// Every writer writes the top directory its kustomization.yaml,
+		// WriteManifest too since go-kure/kure#979.
+		if _, err := os.Stat(top); err != nil {
+			t.Fatalf("%s: no kustomization.yaml at the top of the tree: %v", name, err)
 		}
+		w.tops = []string{top}
 		out[name] = w
 	}
 	return out

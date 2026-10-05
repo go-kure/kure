@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 func TestGenerateGotkBootstrap(t *testing.T) {
@@ -20,7 +21,7 @@ func TestGenerateGotkBootstrap(t *testing.T) {
 	rootNode := &stack.Node{Name: "test-cluster"}
 
 	// gotk mode downloads manifests from GitHub — requires network access
-	_, _ = bg.GenerateBootstrap(config, rootNode)
+	_, _ = bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 }
 
 func TestGenerateGotkBootstrapWithOptions(t *testing.T) {
@@ -40,5 +41,5 @@ func TestGenerateGotkBootstrapWithOptions(t *testing.T) {
 	rootNode := &stack.Node{Name: "test-cluster"}
 
 	// gotk mode downloads manifests from GitHub — requires network access
-	_, _ = bg.GenerateBootstrap(config, rootNode)
+	_, _ = bg.GenerateBootstrap(config, rootNode, layout.LayoutRules{})
 }

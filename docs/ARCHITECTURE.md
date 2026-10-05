@@ -313,7 +313,7 @@ type ManifestLayoutResult interface { // implemented by *layout.ManifestLayout
 type Workflow interface {
     GenerateFromCluster(*Cluster, LayoutRulesProvider) ([]client.Object, error)
     CreateLayoutWithResources(*Cluster, LayoutRulesProvider) (ManifestLayoutResult, error)
-    GenerateBootstrap(*BootstrapConfig, *Node) ([]client.Object, error)
+    GenerateBootstrap(*BootstrapConfig, *Node, LayoutRulesProvider) ([]client.Object, error)
 }
 ```
 

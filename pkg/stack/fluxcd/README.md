@@ -390,7 +390,7 @@ for the identifier to find every place its value can reach emitted YAML.
 | `DefaultSourceKind` | `OCIRepository` | `BootstrapConfig.SourceKind` does not name `GitRepository`, the empty string included | setting `BootstrapConfig.SourceKind` |
 | `DefaultFluxDirName` | `flux-system` | a separate Flux layout needs a directory | not overrideable |
 | `DefaultSourceRef` | `latest` | an OCI source, or an OCI `FluxInstance` sync, has no `SourceRef` | setting `BootstrapConfig.SourceRef` |
-| `DefaultSyncPath` | `./` | the root node has no name | not overrideable; it is the prefix a sync path is built from |
+| `DefaultSyncPath` | `./` | the bootstrap applies the root of the source (no root node, no `ClusterName`) | not overrideable; it is the prefix a sync path is built from |
 
 Three of these — `DefaultInterval`, `DefaultNamespace` and `DefaultBootstrapName` —
 are copied into exported generator fields by `NewResourceGenerator` / `NewBootstrapGenerator`, and
@@ -576,15 +576,20 @@ and an unstructured copy of it are the same.
 Under the integrated placements every Source the integration generates is hosted **once, in the
 root node's layout**, whichever layouts hold the Kustomizations that use it (go-kure/kure#876),
 and not in a `ClusterName` wrapper above it. For a named root node under the default rules that is
-the directory the bootstrap sync path `./<root>` names (see [Kustomization paths](#kustomization-paths)
-for other rules), so the Source is in one build, the root's, and exists before any Kustomization
-that uses it.
+the directory the bootstrap applies (see
+[The directory the bootstrap applies](#the-directory-the-bootstrap-applies), and
+[Kustomization paths](#kustomization-paths) for other rules), so the Source is in one build, the
+root's, and exists before any Kustomization that uses it. Below a `ClusterName` wrapper the
+bootstrap applies the wrapper, and the root node's directory with it or through that directory's
+own Kustomization (below).
 
 **No Kustomization takes its source from inside what it applies** (go-kure/kure#979). A generated
 Source is in a build that is applied before every Kustomization that names it, never in a
-directory that Kustomization delivers: where nothing else applies that directory (Flux pointed at
-the top of the written tree, the `ClusterName` directory), the Kustomization waits for a Source
-only its own apply creates and never reconciles. On a walked tree every bundle's Kustomization meets the rule
+directory that Kustomization delivers: the bootstrap applies the top of the written tree (the
+`ClusterName` directory, see
+[The directory the bootstrap applies](#the-directory-the-bootstrap-applies)), and where nothing
+there delivers that Source, the Kustomization waits for a Source only its own apply creates and
+never reconciles. On a walked tree every bundle's Kustomization meets the rule
 by construction, because the root node's directory renders no bundle. The one Kustomization that
 applies the root node's directory is that directory's layout Kustomization below a `ClusterName`
 wrapper under `FluxIntegratedPerLayout`, hosted in the wrapper. It takes no
@@ -603,30 +608,16 @@ the integration generates or keeps and the directories they apply: a Kustomizati
 placed inside one of them and pointing back up the tree is not followed (see below, the builds
 kure answers for).
 
-A Kustomization whose `spec.path` build holds that directory applies it beside the
-bootstrap: both hold the same objects, so neither prunes what the other keeps, but the
-Kustomization's patches and postBuild apply only in its own build. On a walked tree no bundle's
-Kustomization is one any more: the root node's directory renders no bundle (go-kure/kure#979;
-before, the root node's bundle rendered there, and its patches and postBuild met this check). What
-is left is the layout Kustomization of the root node's directory below a `ClusterName` wrapper
-under `FluxIntegratedPerLayout`, which carries patches or postBuild only when it is the caller's
-own, kept (below), and a tree built by hand. A Kustomization whose build holds
-the root node's layout is refused when one of its patches applies to a Source the
-integration hosts there — a target that selects it the way kustomize selects one, or a target-less
-strategic-merge patch whose body names its apiVersion, kind, name and effective namespace — or when
-its postBuild substitution changes one: Flux's own substitution, run offline with the inline
-`substitute` vars. When `substituteFrom` is set, whose values are only in the cluster, a `${...}`
-expression that reads a var the inline vars do not set is refused whatever the offline result; one
-that reads only inline vars, which override `substituteFrom`'s, is decided by it. Otherwise the two
-would apply the Source differently and keep
-overwriting each other. The error names the Kustomization, the Source and the patch index or
-postBuild; narrow the patch target so that it leaves the Source out, remove the patch or postBuild
-from that Kustomization, or drop the `${...}` from the `SourceRef` URL (the remedies are worded
-for the Kustomization that can still meet the check; before go-kure/kure#979 they told a root
-bundle to move the patch to a bundle below the root node). A patch that selects a hosted Source but leaves it
-unchanged is refused too. A copy the integration did not add, anywhere in the root build (see
-below), is its owner's: the integration hosts none of its own then and does not check what a
-Kustomization's patches do to it. A `sourceRef` names the object, not the layout holding it.
+Among the bootstrap and the Kustomizations the integration generates or keeps, each hosted Source
+has one applier. Without a `ClusterName` wrapper, and below a wrapper whose `kustomization.yaml`
+lists the root node's directory, that is the bootstrap, and none of those Kustomizations builds
+that directory. Below a wrapper under
+`FluxIntegratedPerLayout` it is the layout Kustomization of the root node's directory: the
+bootstrap applies the wrapper, which lists that Kustomization and not the directory. A
+Kustomization of your own kept in its place (below) may therefore carry patches or a postBuild
+that change a hosted Source; they are the only ones that Source gets (go-kure/kure#979: the
+bootstrap used to be pointed at the root node's directory, beside that Kustomization, and such a
+patch or postBuild was refused). A `sourceRef` names the object, not the layout holding it.
 
 The root build also covers the child directories the root's `kustomization.yaml` lists and the
 `AppFileSingle` files written into them. When that build already holds a copy the integration did
@@ -634,8 +625,8 @@ not add (an earlier integration's, the caller's or an application's), that copy 
 integration adds none, since kustomize refuses one object twice. Two copies the integration did
 not add, in any one build (the root's, a `ClusterName` wrapper's or a generated Kustomization's
 `spec.path`), are refused. So is one such copy in a wrapper whose `kustomization.yaml` lists the
-root node's directory: the root's copy cannot stay beside it, and without the root's copy no build
-the bootstrap applies holds the Source. A copy the caller or an application puts in any other
+root node's directory: the wrapper's build would hold it and the root's copy, and the integration
+removes neither; move the copy into the root node's build or remove it. A copy the caller or an application puts in any other
 build is theirs to keep, and the integration still hosts its own at the root: that Source then has
 two owners, one of them the caller's.
 Kustomizations the caller or an application places are not builds kure answers for. Under
@@ -772,7 +763,7 @@ bootstrapConfig := &stack.BootstrapConfig{
     SourceRef:   "latest",
 }
 
-objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
+objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode, layout.LayoutRules{})
 if err != nil {
     panic(err)
 }
@@ -786,14 +777,17 @@ for _, obj := range objects {
 
 ### The directory the bootstrap applies
 
-Both modes point Flux at the same directory for the same root node (go-kure/kure#979): the one
-named after the root node, relative to the root of the source, which is where a walk without a
-`ClusterName` writes a named root node. Each mode spells it the way its field requires:
+`GenerateBootstrap` and `GenerateFluxInstance` take the layout rules the tree is written with, and
+both modes point Flux at the top directory of that tree (go-kure/kure#979): the directory
+`layout.TopDirectory` returns for the root node and the rules, which is where `WalkCluster` takes
+its own top from, so the two cannot differ. Each mode spells it the way its field requires:
 
-| Root node | `"gotk"`: bootstrap Kustomization `spec.path` | `"flux-operator"`: `FluxInstance` `spec.sync.path` |
-|---|---|---|
-| named `prod` | `prod` | `./prod` |
-| unnamed, or none passed | `.` | `./` |
+| Root node | Rules | `"gotk"`: bootstrap Kustomization `spec.path` | `"flux-operator"`: `FluxInstance` `spec.sync.path` |
+|---|---|---|---|
+| named `prod` | no `ClusterName` | `prod` | `./prod` |
+| unnamed | no `ClusterName` | `cluster` | `./cluster` |
+| named, unnamed or none passed | `ClusterName` `clusters/prod` | `clusters/prod` | `./clusters/prod` |
+| none passed | no `ClusterName` | `.` | `./` |
 
 `spec.path` is spelled like every other Kustomization path this package writes (see
 [Kustomization paths](#kustomization-paths)): no leading `./`, and `.` for the root of the source.
@@ -801,12 +795,50 @@ named after the root node, relative to the root of the source, which is where a 
 `"gotk"` mode used to write `manifests/<root>`, a prefix none of the layout writers produces; a
 consumer that depends on such a prefix sets `spec.path` on the returned Kustomization.
 
-The bootstrap is given the root node, not the layout rules, and its path does not follow them, so
-the walked root can be somewhere else. A walk with a `ClusterName` writes the root in or under
-the cluster directory (`<ClusterName>/<root>`; the cluster directory itself for an unnamed root,
-or when its last segment is the root's name). A walk without one writes an unnamed root node to
-`cluster`, not to the root of the source. The table under
-[Kustomization paths](#kustomization-paths) has examples.
+With no root node there is no tree to walk: without a `ClusterName` the bootstrap applies the root
+of the source, and the caller writes there. The source's name and the bootstrap Kustomization's
+`sourceRef` stay on the root node's name whatever the rules are (see
+[Root node name](#root-node-name)).
+
+The rules are validated first, as a walk validates them, so invalid rules are an error whatever
+the `BootstrapConfig` is, a nil or disabled one included. `WorkflowEngine.GenerateBootstrap`
+takes them as `stack.LayoutRulesProvider` and refuses anything that is not a `layout.LayoutRules`
+value, nil included, as `GenerateFromCluster` does; it does not fall back to the defaults.
+
+The organisation layout document shows the bootstrap Kustomization's path as the `flux-system`
+directory. kure's bootstrap applies the top directory of the written tree, whose
+`kustomization.yaml` lists `flux-system` under the Separate placement, so the objects that
+directory holds are applied either way.
+
+Two limits. The directory is relative to the directory the tree is written into: a tree written
+below a sub-path of the repository (the base directory a writer is given is the caller's) is at
+that sub-path joined with it, and the caller sets `spec.path` or `spec.sync.path` accordingly.
+And it describes a `WalkCluster` tree only: `WalkClusterByPackage` writes one tree per package,
+placed without the `ClusterName`, and the bootstrap does not point at those.
+
+**Breaking change (go-kure/kure#979).** `GenerateBootstrap` (on `BootstrapGenerator`,
+`WorkflowEngine`, the ArgoCD engine and the `stack.Workflow` interface) and
+`GenerateFluxInstance` take the layout rules as a third argument. The directory used to be the
+root node's name whatever the rules were, so two outputs move:
+
+- with a `ClusterName`, both paths move from the root node's name (`.` and `./` for an unnamed or
+  absent one) to the cluster directory;
+- an unnamed root node without a `ClusterName` moves from the root of the source (`.`, `./`) to
+  `cluster` (`./cluster`), where the walk writes it.
+
+A named root node without a `ClusterName` keeps its path. Under a `ClusterName` the bootstrap no
+longer checks the root node's name as a directory name: its path is the cluster directory and
+takes no segment from the name. The name still becomes a directory of the walked tree
+(`<ClusterName>/<root>`), where the walk's cluster validation checks it. A cluster bootstrapped
+with the old path keeps applying the old directory until the regenerated bootstrap objects are
+applied.
+
+One refusal is no longer met (go-kure/kure#979). Below a `ClusterName` wrapper under
+`FluxIntegratedPerLayout`, a layout Kustomization of the root node's directory that you keep in
+place of the generated one was refused when a patch or postBuild of it changed a Source hosted
+there, because the bootstrap applied that directory too. The bootstrap now applies the wrapper,
+which lists the Kustomization, so it is accepted (see
+[Layout Integration](#layout-integration)).
 
 ### Sync name
 
@@ -831,7 +863,7 @@ bootstrapConfig := &stack.BootstrapConfig{
     SyncName:    "fleet",
 }
 
-fi, err := engine.GetBootstrapGenerator().GenerateFluxInstance(bootstrapConfig, rootNode)
+fi, err := engine.GetBootstrapGenerator().GenerateFluxInstance(bootstrapConfig, rootNode, layout.LayoutRules{})
 if err != nil {
     panic(err)
 }
@@ -849,11 +881,14 @@ fmt.Println(fi.Name, fi.Spec.Sync.Name, fi.Spec.Sync.Ref)
 
 ### Root node name
 
-The root node's name is a path segment of the gotk bootstrap Kustomization's `spec.path` and of
-the `FluxInstance`'s `spec.sync.path`. `GenerateBootstrap` and `GenerateFluxInstance` take a
-node, not a cluster, so they check that name themselves with `stack.ValidateDirectoryName`: a
-name holding `/`, `\` or a NUL byte, or `.` or `..`, is refused. No root node and an unnamed root
-are valid; neither adds a segment.
+Without a `ClusterName` the root node's name is the gotk bootstrap Kustomization's `spec.path`
+and the directory in the `FluxInstance`'s `spec.sync.path`. `GenerateBootstrap` and
+`GenerateFluxInstance` take a node, not a cluster, so they check that name themselves with
+`stack.ValidateDirectoryName`: a name holding `/`, `\` or a NUL byte, or `.` or `..`, is refused.
+No root node and an unnamed root are valid; neither is a path segment. Nor is any root node under
+rules with a `ClusterName`, where the path is the cluster directory: the bootstrap does not check
+the name as a directory name there. The walk does, in every case: under a `ClusterName` a named
+root node is the directory `<ClusterName>/<root>` of the written tree.
 
 The check runs only where a path is built. In `gotk` mode the bootstrap Kustomization always has
 a `spec.path`, so the name is always checked. A `FluxInstance` gets a `spec.sync` only when

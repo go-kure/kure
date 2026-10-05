@@ -7,7 +7,7 @@ import (
 )
 
 // LayoutRulesProvider is the interface for layout configuration passed to
-// GenerateFromCluster and CreateLayoutWithResources. The concrete
+// GenerateFromCluster, CreateLayoutWithResources and GenerateBootstrap. The concrete
 // implementation is layout.LayoutRules from pkg/stack/layout. Defined here to
 // avoid an import cycle between pkg/stack and pkg/stack/layout.
 type LayoutRulesProvider interface {
@@ -45,7 +45,11 @@ type Workflow interface {
 	// GenerateBootstrap creates bootstrap resources for initializing the
 	// GitOps system itself. This is used to set up the GitOps controller
 	// (Flux, ArgoCD, etc.) in the cluster.
-	GenerateBootstrap(*BootstrapConfig, *Node) ([]client.Object, error)
+	// The rules are the ones the tree is written with: the Flux bootstrap
+	// points Flux at the top directory of that tree. For Flux the rules
+	// parameter must be a layout.LayoutRules value; the ArgoCD engine reads
+	// nothing from it.
+	GenerateBootstrap(*BootstrapConfig, *Node, LayoutRulesProvider) ([]client.Object, error)
 }
 
 // NewWorkflow creates a workflow implementation based on the provider type.

@@ -264,9 +264,11 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 type integratedPlacement struct {
 	gen *ResourceGenerator
 	ix  *layout.OriginIndex
-	// root is the layout the Flux bootstrap applies: the root node's, which
-	// its sync path ./<root> names, and not a ClusterName wrapper above it.
-	// It hosts every Source this pass derives (go-kure/kure#876).
+	// root is the root node's layout. It hosts every Source this pass derives
+	// (go-kure/kure#876). The Flux bootstrap applies the top of the tree
+	// (layout.TopDirectory): root itself, or a ClusterName wrapper above it.
+	// A wrapper's build holds root's directory, unless the wrapper is
+	// FluxIntegratedPerLayout and lists root's own Kustomization instead.
 	root      *layout.ManifestLayout
 	perLayout bool
 	// nodes names the cluster's nodes and resolves a node to the layout
@@ -578,9 +580,9 @@ func buildDirectories(l *layout.ManifestLayout) []*layout.ManifestLayout {
 // hostSourcesOncePerBuild keeps each Source this pass derived once per
 // kustomize build, which refuses one object twice: add hosts every derived
 // Source in the root node's layout, and a build can include a copy the tree
-// already held. The builds are top's, the whole tree's top layout (a
-// ClusterName wrapper's kustomization.yaml can list the root node's
-// directory), the root node's (the Flux bootstrap applies it) and the spec.path of every
+// already held. The builds are top's, the whole tree's top layout, which the
+// Flux bootstrap applies (a ClusterName wrapper's kustomization.yaml can list
+// the root node's directory), the root node's and the spec.path of every
 // Kustomization this pass placed or kept, each with the directories
 // buildDirectories lists from it and the AppFileSingle files written into
 // them. Caller and application Kustomizations are not builds kure answers for.
@@ -591,11 +593,12 @@ func buildDirectories(l *layout.ManifestLayout) []*layout.ManifestLayout {
 // pass placed in that build is removed: a sourceRef names the object, not the
 // layout holding it. Two copies this pass did not place cannot be reduced to
 // one, so they are an error. So is such a copy outside the root node's build
-// in a build that also holds the root's copy (a ClusterName wrapper's): the
-// root's copy cannot stay, and dropping it would leave the Source out of every
-// build the bootstrap applies. A copy this pass did not place, in a build
-// other than the root's, is otherwise kept beside the root's copy: it is the
-// caller's.
+// in a build that also holds the root's copy (a ClusterName wrapper's that
+// lists the root node's directory): kustomize refuses one object twice in a
+// build, and the pass removes neither, the caller's copy or the one in the
+// layout that hosts every derived Source. A copy this pass did not place, in a
+// build other than the root's, is otherwise kept beside the root's copy: it is
+// the caller's.
 func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout) error {
 	if len(p.derived) == 0 {
 		return nil
@@ -650,7 +653,7 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout
 				keep = trees[0].obj
 				if t := trees[0]; !slices.Contains(rootScope, t.host) && slices.ContainsFunc(all, func(c hostedObject) bool { return c.host == p.root }) {
 					obj := t.obj
-					return errors.Errorf("layout %q holds %s %q, and the kustomize build of %q includes it and the copy the integration hosts in %q, the root node's layout the Flux bootstrap applies: kustomize refuses one object twice, and without the root's copy no build the bootstrap applies holds the Source; move the copy into %q's build or remove it", t.host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), b.FullRepoPath(), p.root.FullRepoPath(), p.root.FullRepoPath())
+					return errors.Errorf("layout %q holds %s %q, and the kustomize build of %q includes it and the copy the integration hosts in %q, the root node's layout: kustomize refuses one object twice in a build; move the copy into %q's build or remove it", t.host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), b.FullRepoPath(), p.root.FullRepoPath(), p.root.FullRepoPath())
 				}
 			}
 			for _, c := range all {
@@ -709,18 +712,31 @@ func buildScope(b *layout.ManifestLayout) []*layout.ManifestLayout {
 }
 
 // checkRootBuildKeepsHostedSources refuses a Kustomization this pass placed
-// or kept whose build holds the root node's layout, the directory the Flux
-// bootstrap applies, when one of its patches applies to, or its postBuild
-// substitution changes, a Source this pass hosted there (go-kure/kure#908).
-// The bootstrap applies that directory with neither, so the two would apply
-// the Source differently and keep overwriting each other.
+// or kept whose build holds the root node's layout, when the build the Flux
+// bootstrap applies holds it too and one of the Kustomization's patches
+// applies to, or its postBuild substitution changes, a Source this pass hosted
+// there (go-kure/kure#908). The bootstrap applies that directory with neither,
+// so the two would apply the Source differently and keep overwriting each
+// other.
 //
-// On a walked tree no bundle's Kustomization has such a build: the root
-// node's layout renders no bundle (go-kure/kure#979). What is left is the
-// layout Kustomization of the root node's layout below a ClusterName wrapper
-// under FluxIntegratedPerLayout, which has patches or postBuild only when it
-// is the caller's own, kept; and a tree built by hand in which the root
-// node's layout renders a bundle below another layout.
+// The bootstrap applies top, the top of the tree (layout.TopDirectory). Its
+// build holds the root node's layout when top is that layout or lists its
+// directory. Below a ClusterName wrapper under FluxIntegratedPerLayout it does
+// not: the wrapper lists the root node's layout Kustomization and not the
+// directory, so that Kustomization is the only one to apply the Sources hosted
+// there, and its patches and postBuild are its own (go-kure/kure#979: the
+// bootstrap used to be pointed at the root node's directory whatever the rules
+// were, and this check refused that Kustomization).
+//
+// No tree IntegrateWithLayout places reaches the refusal today. It sets one
+// placement on the whole tree, and a Kustomization this pass places or keeps
+// builds the root node's layout in two cases only. One is the layout
+// Kustomization of that layout: placed under FluxIntegratedPerLayout only,
+// where its host lists it and not the directory. The other is the
+// Kustomization of a bundle that layout renders, on a tree changed by hand
+// (the walker renders the root bundle one directory lower, go-kure/kure#979):
+// no parent lists a directory that renders a bundle, and a top that renders one
+// is refused. The check states the rule for a build that would break it.
 //
 // A patch with a target applies to the Source when the target selects it
 // (patchTargetMatcher); one without is a strategic-merge patch, which applies
@@ -745,7 +761,7 @@ func (p *integratedPlacement) checkRootBuildKeepsHostedSources(top *layout.Manif
 			hosted = append(hosted, obj)
 		}
 	}
-	if len(hosted) == 0 {
+	if len(hosted) == 0 || !slices.Contains(buildScope(top), p.root) {
 		return nil
 	}
 	layoutAt, crs, err := p.indexGenerated(top)
@@ -762,9 +778,9 @@ func (p *integratedPlacement) checkRootBuildKeepsHostedSources(top *layout.Manif
 			return errors.Errorf("Flux Kustomization %q (spec.path %q) builds %s %q, which the integration hosts in %q, the root node's layout the Flux bootstrap applies without patches or postBuild: its %s, so the two would apply the Source differently and keep overwriting each other; %s",
 				k.Name, k.Spec.Path, s.GetObjectKind().GroupVersionKind().Kind, s.GetName(), p.root.FullRepoPath(), cause, remedy)
 		}
-		// The remedies are worded for the Kustomization this check still
-		// meets on a walked tree: the caller's own, of the root node's
-		// layout, which renders no bundle to move a patch to.
+		// The remedies are worded for the Kustomization this check most
+		// plainly meets: the root node's layout Kustomization, a layout
+		// that renders no bundle to move a patch to.
 		const movePatch = "narrow the patch target so that it leaves the Source out, or remove the patch from this Kustomization"
 		for i, patch := range k.Spec.Patches {
 			if patch.Target != nil {
@@ -1092,10 +1108,11 @@ func unitSource(l *layout.ManifestLayout) (kustv1.CrossNamespaceSourceReference,
 // hosts its CR) or, on a tree built by hand, a layout above it, its CR applies
 // the directory that hosts every Source this pass derives (add), so it cannot
 // take one of them: a Kustomization does not deliver its own Source
-// (go-kure/kure#979). Where nothing else applies that directory (Flux pointed
-// at the top of the written tree, the wrapper), it would wait for a Source
-// that only its own apply creates. Such a reference is passed over, whichever
-// of the three it is, and when nothing else is left the refusal names it.
+// (go-kure/kure#979). The Flux bootstrap applies the top of the written tree,
+// the wrapper (bootstrapDir); where nothing there delivers that Source, the CR
+// would wait for a Source that only its own apply creates. Such a reference is
+// passed over, whichever of the three it is, and when nothing else is left the
+// refusal names it.
 func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope sourceScope) (kustv1.CrossNamespaceSourceReference, error) {
 	delivers := holdsLayout(child, p.root)
 	var own *kustv1.CrossNamespaceSourceReference
@@ -1176,9 +1193,10 @@ func (p *integratedPlacement) sourceInsideDelivery(name, specPath string, ref ku
 // spec.path is the root node's layout or a layout above it. The pass hosts
 // every derived Source in the root node's layout (add), which that
 // Kustomization applies, itself or through the Kustomizations it creates, and
-// a Kustomization does not deliver its own Source (go-kure/kure#979): where
-// nothing else applies that directory, it would wait for a Source that only
-// its own apply creates.
+// a Kustomization does not deliver its own Source (go-kure/kure#979): the
+// Flux bootstrap applies the top of the tree, and where that build does not
+// hold the directory, the Kustomization would wait for a Source that only its
+// own apply creates.
 //
 // On a walked tree the one such Kustomization is the layout Kustomization of
 // the root node's layout below a ClusterName wrapper under
@@ -1283,8 +1301,10 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 		} else if key, ok := sourceKey(obj); ok {
 			// One identity, one object: an identical Source (a repeated
 			// integration, or two bundles sharing a SourceRef) is hosted
-			// once, at the root, which the Flux bootstrap applies before any
-			// Kustomization that uses it: one build, where a copy beside each
+			// once, at the root, which is applied before any Kustomization
+			// that uses it (by the Flux bootstrap, or below a
+			// FluxIntegratedPerLayout wrapper by the root's own layout
+			// Kustomization): one build, where a copy beside each
 			// Kustomization would give each build its own. A different one
 			// anywhere in the pass would silently repoint a Kustomization,
 			// or leave two directories overwriting each other's Source.

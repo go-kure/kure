@@ -316,7 +316,7 @@ func Example_fluxWorkflowBootstrapNamespace() {
 
 	engine.GetBootstrapGenerator().DefaultNamespace = "custom-flux" // default: "flux-system"
 
-	objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
+	objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode, layout.LayoutRules{})
 	if err != nil {
 		panic(err)
 	}

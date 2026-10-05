@@ -121,7 +121,7 @@ func TestFullPipelineFlux(t *testing.T) {
 	}
 
 	// Test bootstrap generation
-	bootstrapResources, err := workflow.GenerateBootstrap(cluster.GitOps.Bootstrap, cluster.Node)
+	bootstrapResources, err := workflow.GenerateBootstrap(cluster.GitOps.Bootstrap, cluster.Node, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap failed: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestFullPipelineArgoCD(t *testing.T) {
 	}
 
 	// Test bootstrap generation
-	bootstrapResources, err := workflow.GenerateBootstrap(cluster.GitOps.Bootstrap, cluster.Node)
+	bootstrapResources, err := workflow.GenerateBootstrap(cluster.GitOps.Bootstrap, cluster.Node, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap failed: %v", err)
 	}
@@ -504,7 +504,7 @@ func TestBootstrapModes(t *testing.T) {
 
 	for _, tc := range bootstrapConfigs {
 		t.Run(tc.name, func(t *testing.T) {
-			resources, err := workflow.GenerateBootstrap(tc.config, rootNode)
+			resources, err := workflow.GenerateBootstrap(tc.config, rootNode, layout.LayoutRules{})
 			if err != nil {
 				t.Fatalf("GenerateBootstrap failed: %v", err)
 			}

@@ -238,7 +238,7 @@ func ExampleWorkflowEngine_GenerateBootstrap() {
 		SourceRef:   "latest",
 	}
 
-	objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
+	objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode, layout.LayoutRules{})
 	if err != nil {
 		panic(err)
 	}
@@ -263,7 +263,7 @@ func ExampleBootstrapGenerator_GenerateFluxInstance() {
 		SyncName:    "fleet",
 	}
 
-	fi, err := engine.GetBootstrapGenerator().GenerateFluxInstance(bootstrapConfig, rootNode)
+	fi, err := engine.GetBootstrapGenerator().GenerateFluxInstance(bootstrapConfig, rootNode, layout.LayoutRules{})
 	if err != nil {
 		panic(err)
 	}

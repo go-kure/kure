@@ -68,7 +68,7 @@ func TestBootstrapNameIsOverrideable(t *testing.T) {
 		SourceKind:  "GitRepository",
 		SourceURL:   "https://github.com/org/fleet.git",
 	}
-	objs, err := bg.GenerateBootstrap(config, &stack.Node{Name: "prod"})
+	objs, err := bg.GenerateBootstrap(config, &stack.Node{Name: "prod"}, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestBootstrapNameIsOverrideable(t *testing.T) {
 
 	// The override stops at the Kustomization. The FluxInstance's name is a CRD
 	// constraint, not a default, so BootstrapName must not reach it.
-	fi, err := bg.GenerateFluxInstance(config, &stack.Node{Name: "prod"})
+	fi, err := bg.GenerateFluxInstance(config, &stack.Node{Name: "prod"}, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateFluxInstance: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestBootstrapNameEmptyFallsBackToTheDefault(t *testing.T) {
 		SourceKind:  "GitRepository",
 		SourceURL:   "https://github.com/org/fleet.git",
 	}
-	objs, err := bg.GenerateBootstrap(config, &stack.Node{Name: "prod"})
+	objs, err := bg.GenerateBootstrap(config, &stack.Node{Name: "prod"}, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestBootstrapNameEmptyFallsBackToTheDefault(t *testing.T) {
 		t.Fatal("no bootstrap Kustomization emitted")
 	}
 
-	fi, err := bg.GenerateFluxInstance(config, &stack.Node{Name: "prod"})
+	fi, err := bg.GenerateFluxInstance(config, &stack.Node{Name: "prod"}, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateFluxInstance: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestFluxInstanceNameIsFluxRegardlessOfBootstrapName(t *testing.T) {
 			bg := NewBootstrapGenerator()
 			bg.BootstrapName = bootstrapName
 
-			fi, err := bg.GenerateFluxInstance(config, node)
+			fi, err := bg.GenerateFluxInstance(config, node, layout.LayoutRules{})
 			if err != nil {
 				t.Fatalf("GenerateFluxInstance: %v", err)
 			}
@@ -188,7 +188,7 @@ func TestFluxInstanceNameIsFluxRegardlessOfBootstrapName(t *testing.T) {
 				t.Errorf("GenerateFluxInstance name = %q, want %q (BootstrapName %q)", fi.Name, "flux", bootstrapName)
 			}
 
-			objs, err := bg.GenerateBootstrap(config, node)
+			objs, err := bg.GenerateBootstrap(config, node, layout.LayoutRules{})
 			if err != nil {
 				t.Fatalf("GenerateBootstrap: %v", err)
 			}
@@ -280,11 +280,11 @@ func TestDefaultFluxModeDrivesTheDispatch(t *testing.T) {
 
 	// An empty FluxMode must reach the same branch DefaultFluxMode names, and
 	// that branch must not be the error branch.
-	empty, err := bg.GenerateBootstrap(configFor(""), &stack.Node{Name: "prod"})
+	empty, err := bg.GenerateBootstrap(configFor(""), &stack.Node{Name: "prod"}, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("an empty FluxMode must resolve to DefaultFluxMode (%q): %v", DefaultFluxMode, err)
 	}
-	named, err := bg.GenerateBootstrap(configFor(DefaultFluxMode), &stack.Node{Name: "prod"})
+	named, err := bg.GenerateBootstrap(configFor(DefaultFluxMode), &stack.Node{Name: "prod"}, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap with FluxMode=DefaultFluxMode: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestDefaultFluxModeDrivesTheDispatch(t *testing.T) {
 		t.Errorf("SupportedBootstrapModes() = %v, want [%q %q]", modes, DefaultFluxMode, ModeGotk)
 	}
 	for _, mode := range modes {
-		if _, err := bg.GenerateBootstrap(configFor(mode), &stack.Node{Name: "prod"}); err != nil {
+		if _, err := bg.GenerateBootstrap(configFor(mode), &stack.Node{Name: "prod"}, layout.LayoutRules{}); err != nil {
 			t.Errorf("SupportedBootstrapModes reports %q but GenerateBootstrap rejects it: %v", mode, err)
 		}
 	}
@@ -307,7 +307,8 @@ func TestDefaultFluxModeDrivesTheDispatch(t *testing.T) {
 	// An unsupported mode still errors, and the error reports the supported set
 	// rather than a second hand-written copy of it.
 	_, err = bg.GenerateBootstrap(
-		&stack.BootstrapConfig{Enabled: true, FluxMode: "helm"}, &stack.Node{Name: "prod"})
+		&stack.BootstrapConfig{Enabled: true, FluxMode: "helm"}, &stack.Node{Name: "prod"}, layout.LayoutRules{})
+
 	if err == nil {
 		t.Fatal("an unrecognised FluxMode must be an error")
 	}
@@ -616,8 +617,8 @@ func TestGotkBootstrapWithoutASourceURLEmitsNoSource(t *testing.T) {
 	objs, err := bg.GenerateBootstrap(&stack.BootstrapConfig{
 		Enabled:  true,
 		FluxMode: "gotk",
-		// No SourceURL: the caller supplies the source themselves.
-	}, &stack.Node{Name: "prod"})
+	}, &stack.Node{Name: "prod"}, layout.LayoutRules{})
+
 	if err != nil {
 		t.Fatalf("an absent SourceURL must not be an error: %v", err)
 	}
@@ -660,7 +661,7 @@ func TestFluxInstanceSyncRefMatchesGotkSource(t *testing.T) {
 			}
 			// the FluxInstance requires a distribution; the source does not read it
 			cfg.FluxVersion, cfg.Registry = "v2.4.0", "ghcr.io/fluxcd"
-			fi, err := bg.GenerateFluxInstance(&cfg, node)
+			fi, err := bg.GenerateFluxInstance(&cfg, node, layout.LayoutRules{})
 			if err != nil {
 				t.Fatalf("GenerateFluxInstance() error = %v", err)
 			}
@@ -699,7 +700,8 @@ func TestFluxInstanceSyncRefKeepsAFullGitRef(t *testing.T) {
 			SourceKind:  "GitRepository",
 			SourceURL:   "https://example.test/repo.git",
 			SourceRef:   ref,
-		}, nil)
+		}, nil, layout.LayoutRules{})
+
 		if err != nil {
 			t.Fatalf("GenerateFluxInstance(%q) error = %v", ref, err)
 		}

@@ -35,7 +35,6 @@ func fluxSourceKind(kind string) *schema.GroupVersionKind {
 // writing anything, naming both layouts, the directory written and the
 // directory the parent lists.
 func TestWriters_RefuseDirectoryChildNestedBelowItsEntry(t *testing.T) {
-	diskAndTar := []string{"WriteToDisk", "WriteToTar"}
 	cases := map[string]struct {
 		tree    func() *layout.ManifestLayout
 		writers []string
@@ -43,16 +42,17 @@ func TestWriters_RefuseDirectoryChildNestedBelowItsEntry(t *testing.T) {
 		want []string
 	}{
 		// The probe: a root "." whose child sets Namespace to its own full
-		// path. WriteManifest writes no kustomization.yaml for a root that
-		// holds nothing itself, so it has no entry to dangle (see
-		// TestWriters_UnlistedDirectoryChildMayNest).
+		// path. WriteManifest used to write no kustomization.yaml for a root
+		// that holds nothing itself, so it had no entry to dangle and wrote
+		// the nested tree; it writes that file now (go-kure/kure#979) and
+		// refuses like the other two.
 		"unnamed root": {
 			tree: func() *layout.ManifestLayout {
 				return &layout.ManifestLayout{Name: "", Namespace: ".", Children: []*layout.ManifestLayout{
 					namedChild("flux-system", "flux-system"),
 				}}
 			},
-			writers: diskAndTar,
+			writers: allWriters,
 			want:    []string{`layout "flux-system/flux-system"`, `flux-system/flux-system", not to "`, `parent layout "."`, `lists as "flux-system"`, `Namespace "flux-system"`},
 		},
 		"named parent": {
@@ -309,15 +309,15 @@ func TestWriters_UnlistedDirectoryChildMayNest(t *testing.T) {
 		writers []string
 		written string
 	}{
-		// WriteManifest writes no kustomization.yaml for a root that holds
-		// nothing itself.
+		// No writer writes a kustomization.yaml for a KustomizationRecursive
+		// root, so none lists its child.
 		"root that writes no kustomization.yaml": {
 			tree: func() *layout.ManifestLayout {
-				return &layout.ManifestLayout{Name: "", Namespace: ".", Children: []*layout.ManifestLayout{
+				return &layout.ManifestLayout{Name: "", Namespace: ".", Mode: layout.KustomizationRecursive, Children: []*layout.ManifestLayout{
 					namedChild("flux-system", "flux-system"),
 				}}
 			},
-			writers: []string{"WriteManifest"},
+			writers: allWriters,
 			written: "flux-system/flux-system/kustomization.yaml",
 		},
 		// WriteToDisk and WriteToTar do not list a child of another package.

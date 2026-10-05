@@ -70,9 +70,17 @@ func (we *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rules stac
 
 // BootstrapGenerator interface implementation
 
-// GenerateBootstrap creates bootstrap resources for setting up Flux.
-func (we *WorkflowEngine) GenerateBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node) ([]client.Object, error) {
-	return we.BootstrapGen.GenerateBootstrap(config, rootNode)
+// GenerateBootstrap creates bootstrap resources for setting up Flux, pointed
+// at the top directory of the tree a walk with rules writes for rootNode (see
+// BootstrapGenerator.GenerateBootstrap). rules must be a layout.LayoutRules
+// value, the one the tree is written with: anything else, nil included, is
+// refused rather than replaced by defaults, whatever config is.
+func (we *WorkflowEngine) GenerateBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node, rules stack.LayoutRulesProvider) ([]client.Object, error) {
+	layoutRules, ok := rules.(layout.LayoutRules)
+	if !ok {
+		return nil, errors.New("rules must be of type layout.LayoutRules")
+	}
+	return we.BootstrapGen.GenerateBootstrap(config, rootNode, layoutRules)
 }
 
 // SupportedBootstrapModes returns the bootstrap modes supported by this engine.
