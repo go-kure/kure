@@ -237,6 +237,19 @@ func TestParse_DecoderPanicLeavesTheRest(t *testing.T) {
 			}
 		})
 
+		t.Run("items of a typed list, "+p.name, func(t *testing.T) {
+			doc := `{"apiVersion":"cilium.io/v2","kind":"CiliumNetworkPolicyList","items":[` +
+				ciliumPolicy("before", icmpTyped) + `,` + ciliumPolicy("p", icmpNoType) + `,` + ciliumPolicy("after", icmpTyped) + `]}`
+			objs, err := p.parse(t, doc, ParseOptions{})
+			errs := parseErrorsOf(t, err)
+			if len(errs) != 1 || !strings.Contains(errs[0].Error(), "item 1 of CiliumNetworkPolicyList") || !strings.Contains(errs[0].Error(), "the decoder panicked") {
+				t.Errorf("want the one panic reported for item 1, got %v", err)
+			}
+			if len(objs) != 2 || objs[0].GetName() != "before" || objs[1].GetName() != "after" {
+				t.Errorf("want the items before and after, got %d objects", len(objs))
+			}
+		})
+
 		t.Run("the same kind with a type, "+p.name, func(t *testing.T) {
 			objs, err := p.parse(t, ciliumPolicy("p", icmpTyped), ParseOptions{})
 			if err != nil {
