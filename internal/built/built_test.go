@@ -251,6 +251,10 @@ func TestObjects(t *testing.T) {
 			coreList(runtime.RawExtension{Object: (*corev1.ConfigMap)(nil)}, runtime.RawExtension{Object: configMap("a")}),
 			[]described{{"ConfigMap", "a", false}},
 		},
+		"a core List with an item that is a nil pointer to raw content": {
+			coreList(runtime.RawExtension{Object: (*runtime.Unknown)(nil)}, runtime.RawExtension{Object: configMap("a")}),
+			[]described{{"ConfigMap", "a", false}},
+		},
 		"a core List in a core List with an item that is a nil pointer": {
 			coreList(runtime.RawExtension{Object: coreList(runtime.RawExtension{Object: (*metav1.List)(nil)}, runtime.RawExtension{Object: configMap("a")})}),
 			[]described{{"ConfigMap", "a", false}},

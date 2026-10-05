@@ -172,9 +172,11 @@ carry object metadata to be read: a List without any, such as the core `v1` List
 (`metav1.List`), is opened like any other, and an item held as raw JSON is the object it encodes.
 An item that is none of these and has no object metadata is refused: its namespace and name cannot
 be read. An item that is a nil pointer is written as `null` and holds nothing. A List that holds
-itself among its items is refused: an unstructured one, and a typed one that holds itself as the
-object of an item. The Flux integration reads a resource by the same rule, so it and the writers
-agree on which objects a tree holds.
+itself among its items is refused in two forms: an unstructured one, and a typed list as
+apimachinery takes one (a pointer to a struct with an `Items` field, `metav1.List` for one) that
+holds itself as the object of an item, directly or through such lists. No other value that reaches
+itself is looked for: building one is the calling program's error. The Flux integration reads a
+resource by the same rule, so it and the writers agree on which objects a tree holds.
 
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)

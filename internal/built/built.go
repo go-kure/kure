@@ -58,7 +58,9 @@ type Object struct {
 // change to the List. They are read from its map and not from a written form,
 // so one that holds itself, directly or through the Lists it holds, would be
 // opened without end: it is refused. So is a typed List that holds itself as
-// the object of an item, which cannot be marshalled (refuseItemCycle).
+// the object of an item, which cannot be marshalled, where apimachinery takes
+// it and the Lists between for lists (refuseItemCycle). No other value that
+// reaches itself is looked for.
 func Objects(r runtime.Object) ([]Object, error) {
 	return objects(Object{Object: r}, map[uintptr]bool{})
 }
@@ -172,12 +174,14 @@ func writtenAs(items []runtime.Object, held any) bool {
 	}
 	for i, item := range items {
 		data := []byte("null")
-		if raw, ok := item.(*runtime.Unknown); ok {
-			data = raw.Raw
-		} else if !empty(item) {
-			var err error
-			if data, err = json.Marshal(item); err != nil {
-				return false
+		if !empty(item) {
+			if raw, ok := item.(*runtime.Unknown); ok {
+				data = raw.Raw
+			} else {
+				var err error
+				if data, err = json.Marshal(item); err != nil {
+					return false
+				}
 			}
 		}
 		var own any
@@ -200,9 +204,12 @@ type listRef struct {
 // (RawExtension.MarshalJSON), so the encoder never sees the whole path and
 // the marshalling does not end. open has the Lists being read around obj.
 //
-// Only what a List holds as its items is followed, read as the writers
-// serialize it, so an object beside an item's raw JSON is not. A value that
-// reaches itself another way is not looked for, here as in the writers.
+// A List is followed where apimachinery takes it for one (meta.IsListType: a
+// pointer to a struct with an Items field), through what it holds as its
+// items, read as the writers serialize them, so an object beside an item's
+// raw JSON is not. A value that reaches itself another way, through another
+// field, through an item that is no such List or through a List held as a
+// value, is not looked for; the writers look for none either.
 func refuseItemCycle(obj runtime.Object, open map[listRef]bool) error {
 	if _, ok := obj.(*unstructured.Unstructured); ok || !meta.IsListType(obj) {
 		return nil
