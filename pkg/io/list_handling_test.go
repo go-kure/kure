@@ -1,6 +1,8 @@
 package io
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -210,6 +212,27 @@ func TestParse_ListWithMetadataOfItsOwnIsRefused(t *testing.T) {
 			`{"apiVersion":"example.com/v1","kind":"WidgetList","metadata":{"labels":{"app":"x"}},"items":[`+widget+`]}`,
 			refuses(notRegistered("WidgetList", widgetV1)),
 			refuses(carries("WidgetList", "labels app"))),
+		// A key stated twice is read whole: what any of its occurrences carries
+		// is carried, whichever of them another reader would keep.
+		both("v1 List, annotations stated twice, the last empty",
+			`{"apiVersion":"v1","kind":"List","metadata":{`+hookAnnotation+`,"annotations":{}},"items":[`+held+`]}`,
+			refuses(carries("List", "annotations helm.sh/hook"))),
+		both("v1 List, annotations stated twice, named once",
+			`{"apiVersion":"v1","kind":"List","metadata":{"annotations":{"b":"1"},"annotations":{"a":"2","b":"3"}},"items":[`+held+`]}`,
+			refuses(carries("List", "annotations a, b"))),
+		both("v1 List, metadata stated twice, the last empty",
+			`{"apiVersion":"v1","kind":"List","metadata":{"labels":{"app":"x"}},"metadata":{},"items":[`+held+`]}`,
+			refuses(carries("List", "labels app"))),
+		both("typed list, labels stated twice, the last null",
+			`{"apiVersion":"v1","kind":"ConfigMapList","metadata":{"labels":{"app":"x"},"labels":null},"items":[{"metadata":{"name":"held"}}]}`,
+			refuses(carries("ConfigMapList", "labels app"))),
+		each("unregistered list, metadata stated twice, the last null",
+			`{"apiVersion":"example.com/v1","kind":"WidgetList","metadata":{`+hookAnnotation+`},"metadata":null,"items":[`+widget+`]}`,
+			refuses(notRegistered("WidgetList", widgetV1)),
+			refuses(carries("WidgetList", "annotations helm.sh/hook"))),
+		both("v1 List, metadata stated twice, the first a string",
+			`{"apiVersion":"v1","kind":"List","metadata":"x","metadata":{},"items":[`+held+`]}`,
+			refuses(inObject+"failed to read the metadata of List: …")),
 		// The list beside the refused one is not refused with it.
 		{
 			name: "a List with annotations inside a List",
@@ -264,6 +287,52 @@ func TestParse_ListWithMetadataOfItsOwnIsRefused(t *testing.T) {
 			`{"apiVersion":"v1","kind":"List","Metadata":{"annotations":{"a":"b"}},"items":[`+held+`]}`,
 			returns(heldConfigMap)),
 	})
+}
+
+// The refusal of metadata that cannot be read carries the JSON error of the
+// value that could not be: a caller can still ask it which type the document
+// states there, wherever among several values the unreadable one stands.
+func TestParse_UnreadableListMetadataKeepsItsCause(t *testing.T) {
+	const held = `{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"held"}}`
+	for _, tt := range []struct {
+		name, doc, stated string
+	}{
+		{"metadata a string",
+			`{"apiVersion":"v1","kind":"List","metadata":"x","items":[` + held + `]}`, "string"},
+		{"metadata an array",
+			`{"apiVersion":"v1","kind":"List","metadata":[],"items":[` + held + `]}`, "array"},
+		{"metadata a number",
+			`{"apiVersion":"v1","kind":"List","metadata":1,"items":[` + held + `]}`, "number"},
+		{"metadata a number no float holds",
+			`{"apiVersion":"v1","kind":"List","metadata":1e1000,"items":[` + held + `]}`, "number"},
+		{"metadata a boolean",
+			`{"apiVersion":"v1","kind":"List","metadata":true,"items":[` + held + `]}`, "bool"},
+		{"metadata stated twice, the first a string",
+			`{"apiVersion":"v1","kind":"List","metadata":"x","metadata":{},"items":[` + held + `]}`, "string"},
+		{"annotations a string",
+			`{"apiVersion":"v1","kind":"List","metadata":{"annotations":"x"},"items":[` + held + `]}`, "string"},
+		{"labels stated twice, the last an array",
+			`{"apiVersion":"v1","kind":"List","metadata":{"labels":{},"labels":[]},"items":[` + held + `]}`, "array"},
+	} {
+		for _, m := range parseModes {
+			t.Run(tt.name+"/"+m.name, func(t *testing.T) {
+				objs, err := ParseYAMLWithOptions([]byte(tt.doc), m.opts)
+				if err == nil || len(objs) != 0 {
+					t.Fatalf("the list must be refused whole, got %v and error %v", describe(objs), err)
+				}
+				if want := "failed to read the metadata of List: json: cannot unmarshal " + tt.stated + " "; !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not say what the document states (%q)", err, want)
+				}
+				var cause *json.UnmarshalTypeError
+				if !errors.As(err, &cause) {
+					t.Fatalf("error %q does not carry the JSON type error", err)
+				}
+				if cause.Value != tt.stated {
+					t.Errorf("the JSON type error names a %s, want a %s", cause.Value, tt.stated)
+				}
+			})
+		}
+	}
 }
 
 // A document has one reading. The Kubernetes decoder finds apiVersion and kind
