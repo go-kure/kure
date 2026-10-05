@@ -831,7 +831,7 @@ func (g *ResourceGenerator) createSource(ref *stack.SourceRef, name string) (cli
 		}
 		return or, nil
 	default:
-		return nil, errors.NewValidationError("kind", ref.Kind, "SourceRef", derivedSourceKinds)
+		return nil, errors.NewValidationError("kind", ref.Kind, "SourceRef", slices.Clone(derivedSourceKinds))
 	}
 }
 

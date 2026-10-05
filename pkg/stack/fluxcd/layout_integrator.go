@@ -1049,9 +1049,11 @@ func unitSource(l *layout.ManifestLayout) (kustv1.CrossNamespaceSourceReference,
 // When child is the root node's layout (below a ClusterName wrapper, which
 // hosts its CR) or, on a tree built by hand, a layout above it, its CR applies
 // the directory that hosts every Source this pass derives (add), so it cannot
-// take one of them: it would wait for a Source that only its own apply creates
-// (go-kure/kure#979). Such a reference is passed over, whichever of the three
-// it is, and when nothing else is left the refusal names it.
+// take one of them: a Kustomization does not deliver its own Source
+// (go-kure/kure#979). Where nothing else applies that directory (Flux pointed
+// at the top of the written tree, the wrapper), it would wait for a Source
+// that only its own apply creates. Such a reference is passed over, whichever
+// of the three it is, and when nothing else is left the refusal names it.
 func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope sourceScope) (kustv1.CrossNamespaceSourceReference, error) {
 	delivers := holdsLayout(child, p.root)
 	var own *kustv1.CrossNamespaceSourceReference
@@ -1123,7 +1125,7 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 // its source from ref, a Source this pass derives, while what it applies holds
 // the root node's layout, which hosts that Source. The caller adds the remedy.
 func (p *integratedPlacement) sourceInsideDelivery(name, specPath string, ref kustv1.CrossNamespaceSourceReference) string {
-	return fmt.Sprintf("Flux Kustomization %q (spec.path %q) would take its source from %s %q, which the integration generates from a SourceRef with a URL and hosts in %q, the root node's layout: that is inside what the Kustomization applies, and a Kustomization must not deliver its own Source (with no other copy of it, it would wait for a Source that only its own apply creates)",
+	return fmt.Sprintf("Flux Kustomization %q (spec.path %q) would take its source from %s %q, which the integration generates from a SourceRef with a URL and hosts in %q, the root node's layout: that is inside what the Kustomization applies, and a Kustomization must not deliver its own Source",
 		name, specPath, ref.Kind, ref.Name, p.root.FullRepoPath())
 }
 
@@ -1131,8 +1133,10 @@ func (p *integratedPlacement) sourceInsideDelivery(name, specPath string, ref ku
 // kept that takes its source from a Source the pass derived while its
 // spec.path is the root node's layout or a layout above it. The pass hosts
 // every derived Source in the root node's layout (add), which that
-// Kustomization applies, itself or through the Kustomizations it creates: it
-// would wait for a Source that only its own apply creates (go-kure/kure#979).
+// Kustomization applies, itself or through the Kustomizations it creates, and
+// a Kustomization does not deliver its own Source (go-kure/kure#979): where
+// nothing else applies that directory, it would wait for a Source that only
+// its own apply creates.
 //
 // On a walked tree the one such Kustomization is the layout Kustomization of
 // the root node's layout below a ClusterName wrapper under
