@@ -424,6 +424,9 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	if err := p.placeBundlePatches(); err != nil {
 		return err
 	}
+	if err := p.keepEmbeddedPostBuild(ml); err != nil {
+		return err
+	}
 	if err := p.checkRootBuildKeepsHostedSources(ml); err != nil {
 		return err
 	}
