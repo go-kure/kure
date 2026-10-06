@@ -405,6 +405,38 @@ func TestLayoutPatches_ARenameInALayoutsBuild(t *testing.T) {
 			t.Errorf("shop-00-pre builds the ConfigMaps %v, want %v", got, want)
 		}
 	})
+
+	// A target is a remedy for an entry of one document. Kustomize refuses
+	// one on an entry of several before it selects anything, so that entry,
+	// which is written on every Kustomization of the bundle, fails each of
+	// their builds, the ones whose objects it does not select included.
+	t.Run("a target on an entry of several documents", func(t *testing.T) {
+		const refused = "Multiple Strategic-Merge Patches in one `patches` entry is not allowed to set `patches.target` field"
+		entry := renameAllowed("pre", "renamed")
+		entry.Patch += "---\n" + cmDoc("main")
+		ml := integrated(t, oneBundleCluster(patchShop(nil, entry)), perLayoutRules())
+		built, failed := patchedBuilds(t, ml)
+		if len(built) != 0 {
+			t.Errorf("builds made %v, want none to build", built)
+		}
+		for name, err := range failed {
+			if !strings.Contains(err.Error(), refused) {
+				t.Errorf("kustomize build of %s: %v, want an error containing %q", name, err, refused)
+			}
+		}
+	})
+	t.Run("remedy: one entry for each document, with its target", func(t *testing.T) {
+		patched := stack.Patch{Patch: cmDoc("main"), Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "main"}}
+		patches := []stack.Patch{renameAllowed("pre", "renamed"), patched}
+		ml := integrated(t, oneBundleCluster(patchShop(nil, patches...)), perLayoutRules())
+		built := allBuild(t, ml)
+		if got, want := built["shop-00-pre"], (map[string]map[string]string{"renamed": {}}); !reflect.DeepEqual(got, want) {
+			t.Errorf("shop-00-pre builds the ConfigMaps %v, want %v", got, want)
+		}
+		if got := built["shop-01-main"]["main"]; !reflect.DeepEqual(got, patchedData) {
+			t.Errorf("shop-01-main builds ConfigMap main with data %v, want %v", got, patchedData)
+		}
+	})
 }
 
 // TestKustomize_APlainStrategicMergePatchKeepsTheIdentity pins what the

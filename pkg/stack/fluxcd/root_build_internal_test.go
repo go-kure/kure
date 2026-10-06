@@ -147,6 +147,12 @@ func TestCheckRootBuildKeepsHostedSources_FollowsTheBootstrapBuild(t *testing.T)
 			// document names no object of any build and the check returns.
 			{name: "target-less patch whose previous identities do not agree", url: plainURL,
 				change: patch(kustomize.Patch{Patch: annotatedSourcePatch("shared", previousIdentity("old,older")...)})},
+			// Only that document is passed over: the one after it in the same
+			// patch is read.
+			{name: "target-less patch whose previous identities do not agree, then a document naming the Source", url: plainURL,
+				change: patch(kustomize.Patch{Patch: annotatedSourcePatch("other", previousIdentity("old,older")...) +
+					"---\n" + annotatedSourcePatch("shared", "allowNameChange", "enabled")}),
+				cause: "patch 0 (no target) names it"},
 			{name: "postBuild over a plain Source", url: plainURL,
 				change: postBuild(kustv1.PostBuild{Substitute: map[string]string{"GIT_HOST": "git.example.com"}})},
 			{name: "postBuild substituting into the Source", url: templatedURL,
