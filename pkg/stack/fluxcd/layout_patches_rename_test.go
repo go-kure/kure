@@ -406,14 +406,15 @@ func TestLayoutPatches_ARenameInALayoutsBuild(t *testing.T) {
 		}
 	})
 
-	// A target is a remedy for an entry of one document. Kustomize refuses
-	// one on an entry of several before it selects anything, so that entry,
-	// which is written on every Kustomization of the bundle, fails each of
-	// their builds, the ones whose objects it does not select included.
-	t.Run("a target on an entry of several documents", func(t *testing.T) {
+	// A target is a remedy for an entry of one object. Kustomize refuses one
+	// on an entry of several before it selects anything, so that entry, which
+	// is written on every Kustomization of the bundle, fails each of their
+	// builds, the ones whose objects it does not select included. The objects
+	// of an entry are its documents, and for a document that is a List its
+	// items, which kustomize loads as a patch each.
+	noneBuilds := func(t *testing.T, entry stack.Patch) {
+		t.Helper()
 		const refused = "Multiple Strategic-Merge Patches in one `patches` entry is not allowed to set `patches.target` field"
-		entry := renameAllowed("pre", "renamed")
-		entry.Patch += "---\n" + cmDoc("main")
 		ml := integrated(t, oneBundleCluster(patchShop(nil, entry)), perLayoutRules())
 		built, failed := patchedBuilds(t, ml)
 		if len(built) != 0 {
@@ -424,8 +425,22 @@ func TestLayoutPatches_ARenameInALayoutsBuild(t *testing.T) {
 				t.Errorf("kustomize build of %s: %v, want an error containing %q", name, err, refused)
 			}
 		}
+	}
+	t.Run("a target on an entry of several documents", func(t *testing.T) {
+		entry := renameAllowed("pre", "renamed")
+		entry.Patch += "---\n" + cmDoc("main")
+		noneBuilds(t, entry)
 	})
-	t.Run("remedy: one entry for each document, with its target", func(t *testing.T) {
+	t.Run("a target on an entry of one List of several items", func(t *testing.T) {
+		item := func(name string) string {
+			return "- " + strings.ReplaceAll(strings.TrimSuffix(cmDoc(name), "\n"), "\n", "\n  ") + "\n"
+		}
+		noneBuilds(t, stack.Patch{
+			Patch:  "apiVersion: v1\nkind: List\nitems:\n" + item("pre") + item("main"),
+			Target: &stack.PatchSelector{Kind: "ConfigMap"},
+		})
+	})
+	t.Run("remedy: one entry for each object, with its target", func(t *testing.T) {
 		patched := stack.Patch{Patch: cmDoc("main"), Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "main"}}
 		patches := []stack.Patch{renameAllowed("pre", "renamed"), patched}
 		ml := integrated(t, oneBundleCluster(patchShop(nil, patches...)), perLayoutRules())
