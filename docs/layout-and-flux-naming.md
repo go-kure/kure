@@ -1563,21 +1563,30 @@ go-kure/kure#1015 that kept interval and prune the generator's.
   holds every object it names, and on no other. A build is the directories `buildScope` lists,
   the Kustomizations and Sources hosted there and the ConfigMap of each `configMapGenerator`
   entry included; objects are compared as kustomize compares them (`resid.ResId.Equals`).
-- **One limit:** an untargeted entry that is not strategic-merge (a JSON6902 patch) names no
-  object and stays on the bundle's own Kustomization. Kustomize refuses it without a target
-  wherever it is.
-- **A second limit, after a patch that can rename:** the objects of a build are compared as
-  generated, and a JSON6902 patch with a target can change an object's identity before a later
-  patch is applied (a strategic-merge patch cannot: kustomize keeps the `apiVersion`, kind, name
-  and namespace of the object it merges into). The operations are not read, so every JSON6902 patch with a
-  target counts. An untargeted strategic-merge patch that comes after one in the bundle's list
-  is not placed by object and never refused: it stays on the bundle's own Kustomization, as
-  before, and is written besides on each per-layout Kustomization whose build holds every object
-  it names as generated. For such a patch two cases are as they were, the build of the bundle's
-  own Kustomization failing on the cluster and nothing refused: a patch for an object only a
-  layout builds (put it before the JSON6902 patch, or give it a target), and a patch for the name
-  the JSON6902 patch gives an object of a layout, which is not written on that layout's
-  Kustomization (give it a target that selects the new name).
+- **Only while the list is plain:** the objects of a build are compared as generated, which is
+  what a patch names only while no earlier entry has changed an identity. Placement by object
+  holds for a patch while every entry before it, and the patch itself, is a plain strategic-merge
+  patch (`plainStrategicMerge`): it parses as resources and no document of it carries an
+  annotation of kustomize's build state (key prefix `internal.config.kubernetes.io/`). Kustomize
+  keeps the `apiVersion`, kind, name and namespace of the object a plain patch is merged into.
+  Any other entry is not known to: a JSON6902 patch with a target can replace them, and a build
+  annotation in the patch text lets a strategic-merge patch change a name or a kind, or names
+  its object by an identity it had. The rule is a whitelist, so an entry of a kind not thought
+  of takes the cautious path as well.
+- **An entry that is not plain** is not read, is never refused, and is written where it was
+  before: with a target on the bundle's own Kustomization and on every per-layout one, without
+  one on the bundle's own only. An untargeted strategic-merge patch that comes after it in the
+  bundle's list is not placed by object and never refused: it stays on the bundle's own
+  Kustomization, as before, and is written besides on each per-layout Kustomization whose build
+  holds every object it names as generated.
+- **The limit of that:** three cases are as they were, the build of the bundle's own
+  Kustomization failing on the cluster and nothing refused: a later untargeted patch for an
+  object only a layout builds (put it before the entry, or give it a target); a later untargeted
+  patch for the name the entry gives an object of a layout, which is not written on that
+  layout's Kustomization (give it a target that selects the new name); and an untargeted patch
+  with a build annotation for an object only a layout builds, which is on the bundle's own
+  alone (give it a target). An untargeted JSON6902 patch stays on the bundle's own as well;
+  kustomize refuses it without a target wherever it is.
 - **A patch on a Kustomization of the bundle** lands where that object is hosted: one that names
   the Kustomization of an application's layout is written on the bundle's own, one that names a
   layout's below is written on the Kustomization of the layout above it.
@@ -1600,18 +1609,21 @@ byte as before. One that sets any changes in three ways:
   name objects no one Kustomization builds together (write one patch per object). The error
   names the bundle, the patch's index and the object. A tree that built on the cluster before is
   not refused: its bundle's own Kustomization built every object its untargeted patches name,
-  as generated or as an earlier JSON6902 patch of the list renamed it, and each of those patches
-  stays there; the second limit above is what keeps the renamed case out of the refusals.
+  as generated or as an earlier entry of the list renamed it, and each of those patches stays
+  there; that only a plain list is placed by object is what keeps the renamed case out of the
+  refusals.
 
 **Tests.** `pkg/stack/fluxcd/layout_patches_test.go` covers the placement by object at each
 depth, the hosted Kustomizations and a generated ConfigMap as objects of a build, the order, both
 refusals with their remedies, the patch that stays on the bundle's own with the file it had
 before, the bundle without per-layout Kustomizations, the before and after of the bundle's own
 Kustomization that loses a patch, the other two placements, a second integration, merged bundles
-and an umbrella child. `layout_patches_rename_test.go` covers the patch after a JSON6902 patch
-with a target, and runs the build of kustomize-controller on the written tree: a rename followed
-by a patch of the new or the old name builds and leaves the file of the bundle's own
-Kustomization as it was before, the two cases of the limit fail in the bundle's own build as
-before, and each remedy builds. `layout_settings_test.go` covers the four layout fields, the
+and an umbrella child. `layout_patches_rename_test.go` covers the list that is not plain,
+and runs the build of kustomize-controller on the written tree: a rename (by a JSON6902 patch,
+by a patch whose text allows the change of name, by a patch that names the object by an
+identity it had) followed by a patch of the new or the old name builds and leaves the file of
+the bundle's own Kustomization as it was before, a patch with build annotations that do not
+agree is written as before without being read, the three cases of the limit fail in the
+bundle's own build as before, and each remedy builds. `layout_settings_test.go` covers the four layout fields, the
 inherited six with whole files, the fallback of interval and prune, and every file of a tree that
 sets none of the six; `duration_validation_test.go` the interval among the checked durations.
