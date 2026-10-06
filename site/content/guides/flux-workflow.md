@@ -657,10 +657,12 @@ whole, and the bundle's patches are placed by object. What to do:
   A bundle with `Prune` on turns garbage collection on for its applications' Kustomizations,
   where the generator's `Prune` applied before.
 - **Expect a patch to move.** A patch with a target is on the bundle's own Kustomization and on
-  every per-layout one. An untargeted strategic-merge patch is on the Kustomizations whose build
-  holds every object it names, so the bundle's own loses one whose object it does not build; its
-  build failed on the cluster before.
-- **An untargeted patch no build can take is refused** at integration instead of failing on the
+  every per-layout one. A plain untargeted strategic-merge patch is on the Kustomizations whose
+  build holds every object it names, so the bundle's own loses one whose object it does not build;
+  its build failed on the cluster before. An untargeted JSON6902 patch, or one carrying a build
+  annotation, stays on the bundle's own Kustomization alone and fails there when only a layout
+  builds its object: give it a target.
+- **A plain untargeted patch no build can take is refused** at integration instead of failing on the
   cluster: when no Kustomization of the bundle builds an object it names, give it a target or
   place the object in a build of the bundle; when no one Kustomization builds all the objects it
   names, write one patch per object. A target is for a patch of one object: kustomize refuses one
