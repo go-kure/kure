@@ -42,9 +42,10 @@ func durationRefusal(field, authored, from, written string) string {
 // not take as an interval. generator is the type that holds the field, as the
 // error names it. It is called at each place the interval is written into an
 // object: a bundle's Kustomization without an interval of its own, a
-// per-layout Kustomization, the gotk bootstrap Kustomization, a generated
-// GitRepository or OCIRepository and the FluxInstance sync. A generator whose
-// DefaultInterval no generated object takes is therefore not refused.
+// per-layout Kustomization whose layout and holding bundle set none, the gotk
+// bootstrap Kustomization, a generated GitRepository or OCIRepository and the
+// FluxInstance sync. A generator whose DefaultInterval no generated object
+// takes is therefore not refused.
 func checkDefaultInterval(generator string, d time.Duration) error {
 	written, ok := fluxDuration(d)
 	if ok {

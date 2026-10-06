@@ -194,17 +194,20 @@ func TestFluxDurations_BundleByPath(t *testing.T) {
 	}
 }
 
-// TestFluxDurations_Layout: the timeout and retryInterval a layout sets
-// itself, where its per-layout Kustomization is created. The refusal names
-// the layout by its directory and says nothing of an inherited value.
+// TestFluxDurations_Layout: the interval, timeout and retryInterval a layout
+// sets itself, where its per-layout Kustomization is created. The refusal
+// names the layout by its directory and says nothing of an inherited value.
 func TestFluxDurations_Layout(t *testing.T) {
-	for _, field := range []string{"timeout", "retryInterval"} {
+	for _, field := range []string{"interval", "timeout", "retryInterval"} {
 		for _, tc := range fluxDurationCases {
 			t.Run(field+"="+tc.value, func(t *testing.T) {
 				b := shopSettings(func(_, _, main, _ *layout.ManifestLayout) {
-					if field == "timeout" {
+					switch field {
+					case "interval":
+						main.Interval = tc.value
+					case "timeout":
 						main.Timeout = tc.value
-					} else {
+					default:
 						main.RetryInterval = tc.value
 					}
 				})
@@ -228,21 +231,24 @@ func TestFluxDurations_Layout(t *testing.T) {
 	}
 }
 
-// TestFluxDurations_InheritedByALayout: the timeout and retryInterval a
-// layout inherits from the bundle that holds its application. A value Flux
-// takes reaches every per-layout Kustomization. One it does not take is
-// refused on the bundle's own Kustomization, which is created before those of
-// the layouts below it, so the refusal names the bundle; the wording of the
-// refusal on the layout is pinned on its own
+// TestFluxDurations_InheritedByALayout: the interval, timeout and
+// retryInterval a layout inherits from the bundle that holds its application.
+// A value Flux takes reaches every per-layout Kustomization. One it does not
+// take is refused on the bundle's own Kustomization, which is created before
+// those of the layouts below it, so the refusal names the bundle; the wording
+// of the refusal on the layout is pinned on its own
 // (TestLayoutDurationRefusalNamesLayoutAndBundle).
 func TestFluxDurations_InheritedByALayout(t *testing.T) {
-	for _, field := range []string{"timeout", "retryInterval"} {
+	for _, field := range []string{"interval", "timeout", "retryInterval"} {
 		for _, tc := range fluxDurationCases {
 			t.Run(field+"="+tc.value, func(t *testing.T) {
 				b := shopSettings(nil)
-				if field == "timeout" {
+				switch field {
+				case "interval":
+					b.Interval = tc.value
+				case "timeout":
 					b.Timeout = tc.value
-				} else {
+				default:
 					b.RetryInterval = tc.value
 				}
 				ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(oneBundleCluster(b), perLayoutRules())
@@ -266,9 +272,10 @@ func TestFluxDurations_InheritedByALayout(t *testing.T) {
 
 // TestFluxDurations_DefaultInterval: a generator's DefaultInterval is held to
 // the same pattern wherever it is written into an object: on a bundle's
-// Kustomization when the bundle sets no interval, on every per-layout
-// Kustomization, on the gotk bootstrap Kustomization, on a generated source
-// and on the FluxInstance sync. Where no object takes it, nothing is refused.
+// Kustomization when the bundle sets no interval, on a per-layout
+// Kustomization when neither its layout nor a holding bundle sets one, on the
+// gotk bootstrap Kustomization, on a generated source and on the FluxInstance
+// sync. Where no object takes it, nothing is refused.
 // The five places that are no Kustomization are each called on their own in
 // TestDefaultIntervalOnSourcesAndSync.
 func TestFluxDurations_DefaultInterval(t *testing.T) {
@@ -303,15 +310,41 @@ func TestFluxDurations_DefaultInterval(t *testing.T) {
 		})
 		t.Run(name+"/a per-layout Kustomization", func(t *testing.T) {
 			// The bundle's own interval keeps its Kustomization clear of the
-			// DefaultInterval; the per-layout ones always take it.
-			b := shopSettings(nil)
-			b.Interval = "10m"
-			_, err := fluxstack.NewLayoutIntegrator(gen()).CreateLayoutWithResources(oneBundleCluster(b), perLayoutRules())
+			// DefaultInterval, and those of its applications' layouts, which
+			// inherit it. The Kustomization of a node's own layout inherits
+			// from no bundle and takes the DefaultInterval.
+			build := func() *stack.Cluster {
+				b := shopSettings(nil)
+				b.Interval = "10m"
+				leaf := &stack.Node{Name: "web", Bundle: b}
+				group := &stack.Node{Name: "apps", Children: []*stack.Node{leaf}}
+				root := &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("platform-app")), Children: []*stack.Node{group}}
+				root.Bundle.Interval = "10m"
+				leaf.SetParent(group)
+				group.SetParent(root)
+				return &stack.Cluster{Name: "demo", Node: root}
+			}
+			rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerLayout}
+			_, err := fluxstack.NewLayoutIntegrator(gen()).CreateLayoutWithResources(build(), rules)
 			mustContainAll(t, err, refusal("ResourceGenerator")...)
 
-			rules := perLayoutRules()
+			// Without that node, every per-layout Kustomization has the
+			// bundle's interval or its layout's own, and nothing is refused.
+			own := func(_, _, main, _ *layout.ManifestLayout) { main.Interval = "30m" }
+			b := shopSettings(own)
+			b.Interval = "10m"
+			ml, err := fluxstack.NewLayoutIntegrator(gen()).CreateLayoutWithResources(oneBundleCluster(b), perLayoutRules())
+			if err != nil {
+				t.Fatalf("refused, though no object takes the DefaultInterval: %v", err)
+			}
+			for name, want := range map[string]time.Duration{"shop-db": 10 * time.Minute, "shop-00-pre": 10 * time.Minute, "shop-01-main": 30 * time.Minute} {
+				if got := mustKustomization(t, ml, name).Spec.Interval.Duration; got != want {
+					t.Errorf("%s: interval = %v, want %v", name, got, want)
+				}
+			}
+
 			rules.FluxPlacement = layout.FluxIntegratedPerBundle
-			if _, err := fluxstack.NewLayoutIntegrator(gen()).CreateLayoutWithResources(oneBundleCluster(b), rules); err != nil {
+			if _, err := fluxstack.NewLayoutIntegrator(gen()).CreateLayoutWithResources(build(), rules); err != nil {
 				t.Fatalf("refused without a per-layout Kustomization, though no object takes the DefaultInterval: %v", err)
 			}
 		})

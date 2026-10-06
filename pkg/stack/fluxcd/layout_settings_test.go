@@ -2,6 +2,7 @@ package fluxcd_test
 
 import (
 	"bytes"
+	"fmt"
 	"maps"
 	"path/filepath"
 	"reflect"
@@ -19,9 +20,12 @@ import (
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
-// Tests for the settings of a per-layout Kustomization (go-kure/kure#1015):
-// wait, timeout, retry interval, labels and annotations, inherited from the
-// bundle that holds the layout's application and set on the layout itself.
+// Tests for the settings of a per-layout Kustomization: wait, timeout, retry
+// interval, labels and annotations (go-kure/kure#1015), and interval, prune,
+// force, suspend and the postBuild substitution (go-kure/kure#1021), inherited
+// from the bundle that holds the layout's application and, but for postBuild,
+// set on the layout itself. The bundle's patches are in
+// layout_patches_test.go.
 
 // settingsAugmenter is an application config that renders one ConfigMap and
 // adds three layouts below its own: 00-pre, 01-main (which depends on 00-pre)
@@ -171,10 +175,10 @@ spec:
 }
 
 // TestLayoutSettings_NoneSetRendersAsBefore is the control: a tree whose
-// bundle and layouts set none of the five gets per-layout Kustomizations with
-// a name, a namespace, the generator's interval and prune, a path, a source
-// and dependencies, and nothing else. The file compared is the one such a tree
-// had before the settings existed.
+// bundle and layouts set none of the settings gets per-layout Kustomizations
+// with a name, a namespace, the generator's interval and prune, a path, a
+// source and dependencies, and nothing else. The file compared is the one
+// such a tree had before the settings existed.
 func TestLayoutSettings_NoneSetRendersAsBefore(t *testing.T) {
 	b := srBundle("shop", stack.NewApplication("db", "default", settingsAugmenter{}))
 	ml := integrated(t, oneBundleCluster(b), perLayoutRules())
@@ -193,37 +197,103 @@ func TestLayoutSettings_NoneSetRendersAsBefore(t *testing.T) {
 		t.Errorf("shop-01-main:\n got %#v\nwant %#v", got, want)
 	}
 
-	const file = `apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: shop-00-pre
-  namespace: flux-system
-spec:
-  interval: 1h0m0s
-  path: prod/shop/db/00-pre
-  prune: false
-  sourceRef:
-    kind: GitRepository
-    name: flux-system
-    namespace: flux-system
-`
-	disk := treeFiles(t, writeAll(t, ml)["WriteToDisk"].root)
-	name := filepath.Join("prod", "shop", "db", "flux-system-kustomization-shop-00-pre.yaml")
-	if got := string(disk[name]); got != file {
-		t.Errorf("%s:\n%s\nwant:\n%s", name, got, file)
+	// Every file of the tree, as the code before the settings wrote it.
+	cr := func(name, path, dependsOn string) string {
+		if dependsOn != "" {
+			dependsOn = "  dependsOn:\n  - name: " + dependsOn + "\n"
+		}
+		return "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: " + name +
+			"\n  namespace: flux-system\nspec:\n" + dependsOn + "  interval: 1h0m0s\n  path: " + path +
+			"\n  prune: false\n  sourceRef:\n    kind: GitRepository\n    name: flux-system\n    namespace: flux-system\n"
+	}
+	cm := func(name string) string {
+		return "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: " + name + "\n  namespace: default\n"
+	}
+	index := func(resources ...string) string {
+		out := "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n"
+		for _, r := range resources {
+			out += "  - " + r + "\n"
+		}
+		return out
+	}
+	files := map[string]string{
+		"prod/kustomization.yaml":                                          index("flux-system-kustomization-shop.yaml"),
+		"prod/flux-system-kustomization-shop.yaml":                         cr("shop", "prod/shop", ""),
+		"prod/shop/kustomization.yaml":                                     index("flux-system-kustomization-shop-db.yaml"),
+		"prod/shop/flux-system-kustomization-shop-db.yaml":                 cr("shop-db", "prod/shop/db", ""),
+		"prod/shop/db/kustomization.yaml":                                  index("default-configmap-db.yaml", "flux-system-kustomization-shop-00-pre.yaml", "flux-system-kustomization-shop-01-main.yaml"),
+		"prod/shop/db/default-configmap-db.yaml":                           cm("db"),
+		"prod/shop/db/flux-system-kustomization-shop-00-pre.yaml":          cr("shop-00-pre", "prod/shop/db/00-pre", ""),
+		"prod/shop/db/flux-system-kustomization-shop-01-main.yaml":         cr("shop-01-main", "prod/shop/db/01-main", "shop-00-pre"),
+		"prod/shop/db/00-pre/kustomization.yaml":                           index("default-configmap-pre.yaml"),
+		"prod/shop/db/00-pre/default-configmap-pre.yaml":                   cm("pre"),
+		"prod/shop/db/01-main/kustomization.yaml":                          index("default-configmap-main.yaml", "flux-system-kustomization-shop-02-deep.yaml"),
+		"prod/shop/db/01-main/default-configmap-main.yaml":                 cm("main"),
+		"prod/shop/db/01-main/flux-system-kustomization-shop-02-deep.yaml": cr("shop-02-deep", "prod/shop/db/01-main/02-deep", ""),
+		"prod/shop/db/01-main/02-deep/kustomization.yaml":                  index("default-configmap-deep.yaml"),
+		"prod/shop/db/01-main/02-deep/default-configmap-deep.yaml":         cm("deep"),
+	}
+	for writer, tree := range writeAll(t, ml) {
+		written := treeFiles(t, tree.root)
+		if len(written) != len(files) {
+			t.Errorf("%s wrote %d files, want %d: %q", writer, len(written), len(files), slices.Sorted(maps.Keys(written)))
+		}
+		for name, want := range files {
+			if got := string(written[filepath.FromSlash(name)]); got != want {
+				t.Errorf("%s, %s:\n%s\nwant:\n%s", writer, name, got, want)
+			}
+		}
 	}
 }
 
 // TestLayoutSettings_TheLayoutsOwnOverTheBundles: a layout that sets one of
-// the five differs from its sibling, which sets none, in that setting alone.
-// A scalar replaces the bundle's; a label or annotation is merged with the
-// bundle's per key, the layout's value winning.
+// the settings differs from its sibling, which sets none, in that setting
+// alone. A scalar replaces the bundle's, a false one turning the bundle's
+// true off; a label or annotation is merged with the bundle's per key, the
+// layout's value winning.
 func TestLayoutSettings_TheLayoutsOwnOverTheBundles(t *testing.T) {
-	no := false
+	yes, no := true, false
 	for name, tc := range map[string]struct {
-		set  func(main *layout.ManifestLayout)
-		want func(k *kustv1.Kustomization)
+		bundle func(b *stack.Bundle)
+		set    func(main *layout.ManifestLayout)
+		want   func(k *kustv1.Kustomization)
 	}{
+		"another interval": {
+			bundle: func(b *stack.Bundle) { b.Interval = "10m" },
+			set:    func(main *layout.ManifestLayout) { main.Interval = "30m" },
+			want:   func(k *kustv1.Kustomization) { k.Spec.Interval = metav1.Duration{Duration: 30 * time.Minute} },
+		},
+		"an interval the bundle does not set": {
+			set:  func(main *layout.ManifestLayout) { main.Interval = "30m" },
+			want: func(k *kustv1.Kustomization) { k.Spec.Interval = metav1.Duration{Duration: 30 * time.Minute} },
+		},
+		"prune turned on": {
+			set:  func(main *layout.ManifestLayout) { main.Prune = &yes },
+			want: func(k *kustv1.Kustomization) { k.Spec.Prune = true },
+		},
+		"prune turned off": {
+			bundle: func(b *stack.Bundle) { b.Prune = &yes },
+			set:    func(main *layout.ManifestLayout) { main.Prune = &no },
+			want:   func(k *kustv1.Kustomization) { k.Spec.Prune = false },
+		},
+		"force turned on": {
+			set:  func(main *layout.ManifestLayout) { main.Force = &yes },
+			want: func(k *kustv1.Kustomization) { k.Spec.Force = true },
+		},
+		"force turned off": {
+			bundle: func(b *stack.Bundle) { b.Force = &yes },
+			set:    func(main *layout.ManifestLayout) { main.Force = &no },
+			want:   func(k *kustv1.Kustomization) { k.Spec.Force = false },
+		},
+		"suspend turned on": {
+			set:  func(main *layout.ManifestLayout) { main.Suspend = &yes },
+			want: func(k *kustv1.Kustomization) { k.Spec.Suspend = true },
+		},
+		"suspend turned off": {
+			bundle: func(b *stack.Bundle) { b.Suspend = &yes },
+			set:    func(main *layout.ManifestLayout) { main.Suspend = &no },
+			want:   func(k *kustv1.Kustomization) { k.Spec.Suspend = false },
+		},
 		"wait turned off": {
 			set:  func(main *layout.ManifestLayout) { main.Wait = &no },
 			want: func(k *kustv1.Kustomization) { k.Spec.Wait = false },
@@ -255,6 +325,9 @@ func TestLayoutSettings_TheLayoutsOwnOverTheBundles(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			b := shopSettings(func(_, _, main, _ *layout.ManifestLayout) { tc.set(main) })
+			if tc.bundle != nil {
+				tc.bundle(b)
+			}
 			ml := integrated(t, oneBundleCluster(b), perLayoutRules())
 			sibling, got := mustKustomization(t, ml, "shop-00-pre"), mustKustomization(t, ml, "shop-01-main")
 
@@ -282,12 +355,16 @@ func TestLayoutSettings_TheLayoutsOwnOverTheBundles(t *testing.T) {
 // refuse included: the tree is written as the one whose layouts set nothing.
 func TestLayoutSettings_OtherPlacementsUnchanged(t *testing.T) {
 	yes := true
-	set := func(app, pre, main, _ *layout.ManifestLayout) {
+	set := func(app, pre, main, deep *layout.ManifestLayout) {
 		app.Wait = &yes
 		app.Labels = map[string]string{"tier": "data"}
+		app.Suspend = &yes
 		pre.Timeout = "not a duration"
+		pre.Prune = &yes
 		main.RetryInterval = "30s"
 		main.Annotations = map[string]string{"bad key": "x"}
+		main.Force = &yes
+		deep.Interval = "not a duration"
 	}
 	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerBundle, layout.FluxSeparate} {
 		t.Run(string(placement), func(t *testing.T) {
@@ -313,8 +390,8 @@ func TestLayoutSettings_OtherPlacementsUnchanged(t *testing.T) {
 	}
 }
 
-// TestLayoutSettings_Refusals: a timeout or retry interval that is no
-// duration, and a label or annotation the Kubernetes API does not accept, are
+// TestLayoutSettings_Refusals: an interval, timeout or retry interval that is
+// no duration, and a label or annotation the Kubernetes API does not accept, are
 // refused where the Kustomization would be created, before anything is
 // written. The refusal names the layout by its directory and, for a value the
 // layout inherits, the bundle.
@@ -326,6 +403,11 @@ func TestLayoutSettings_Refusals(t *testing.T) {
 		wants  []string
 		not    string
 	}{
+		"a layout's interval": {
+			set:   func(_, pre, _, _ *layout.ManifestLayout) { pre.Interval = "hourly" },
+			wants: []string{"ManifestLayout", "prod/shop/db/00-pre", `interval "hourly" is not a valid duration`},
+			not:   "inherited",
+		},
 		"a layout's timeout": {
 			set:   func(_, _, main, _ *layout.ManifestLayout) { main.Timeout = "soon" },
 			wants: []string{"ManifestLayout", "prod/shop/db/01-main", `timeout "soon" is not a valid duration`},
@@ -460,8 +542,11 @@ func TestLayoutSettings_NodeLayout(t *testing.T) {
 	yes := true
 	build := func() *stack.Cluster {
 		leaf := &stack.Node{Name: "web", Bundle: shopSettings(nil)}
+		sixSettings(leaf.Bundle)
 		group := &stack.Node{Name: "apps", Children: []*stack.Node{leaf}}
 		root := &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("platform-app")), Children: []*stack.Node{group}}
+		sixSettings(root.Bundle)
+		root.Bundle.Prune = &yes
 		root.Bundle.Wait = &yes
 		root.Bundle.Labels = map[string]string{"team": "platform"}
 		leaf.SetParent(group)
@@ -476,6 +561,10 @@ func TestLayoutSettings_NodeLayout(t *testing.T) {
 		if k.Spec.Wait || k.Spec.Timeout != nil || k.Spec.RetryInterval != nil || len(k.Labels) != 0 || len(k.Annotations) != 0 {
 			t.Errorf("the node's Kustomization carries settings no one set on its layout: %#v", k)
 		}
+		if k.Spec.Interval.Duration != fluxstack.DefaultInterval || k.Spec.Prune || k.Spec.Force || k.Spec.Suspend ||
+			k.Spec.PostBuild != nil || len(k.Spec.Patches) != 0 {
+			t.Errorf("the node's Kustomization carries an interval, prune, force, suspend, postBuild or patch of a bundle: %#v", k.Spec)
+		}
 	})
 	t.Run("carries what its layout sets", func(t *testing.T) {
 		c := build()
@@ -486,10 +575,17 @@ func TestLayoutSettings_NodeLayout(t *testing.T) {
 		l.RetryInterval = "1m"
 		l.Labels = map[string]string{"tier": "apps"}
 		l.Annotations = map[string]string{"owner": "apps"}
+		l.Interval = "15m"
+		l.Prune = &yes
+		l.Force = &yes
+		l.Suspend = &yes
 		if err := integrate(ml, c, rules); err != nil {
 			t.Fatalf("IntegrateWithLayout: %v", err)
 		}
 		k := mustKustomization(t, ml, name)
+		if k.Spec.Interval.Duration != 15*time.Minute || !k.Spec.Prune || !k.Spec.Force || !k.Spec.Suspend {
+			t.Errorf("the node's Kustomization does not carry the interval, prune, force and suspend its layout sets: %#v", k.Spec)
+		}
 		if !k.Spec.Wait || k.Spec.Timeout == nil || k.Spec.Timeout.Duration != 10*time.Minute ||
 			k.Spec.RetryInterval == nil || k.Spec.RetryInterval.Duration != time.Minute ||
 			!reflect.DeepEqual(k.Labels, map[string]string{"tier": "apps"}) ||
@@ -536,53 +632,195 @@ func TestLayoutSettings_LayoutOutsideAnApplication(t *testing.T) {
 	}
 }
 
-// TestLayoutSettings_WhatDoesNotReachAnApplication pins what a bundle sets
-// and its applications' Kustomizations do not get under per-layout placement:
-// prune, interval, force, suspend, postBuild and patches stay on the bundle's
-// own Kustomization, which applies the applications' Kustomizations and none
-// of their objects. Interval and prune are the generator's.
-func TestLayoutSettings_WhatDoesNotReachAnApplication(t *testing.T) {
-	yes := true
-	b := shopSettings(nil)
-	b.Applications = []*stack.Application{cmApp("web")}
-	b.Prune = &yes
+// sixSettings sets on b the six settings a per-layout Kustomization takes
+// from its holding bundle besides the readiness ones: an interval, prune
+// turned off, force, suspend, a postBuild substitution and one patch with a
+// target.
+func sixSettings(b *stack.Bundle) {
+	yes, no := true, false
+	b.Interval = "10m"
+	b.Prune = &no
 	b.Force = &yes
 	b.Suspend = &yes
-	b.Interval = "10m"
-	b.PostBuild = &stack.PostBuild{Substitute: map[string]string{"REGION": "eu"}}
+	b.PostBuild = &stack.PostBuild{
+		Substitute:     map[string]string{"REGION": "eu"},
+		SubstituteFrom: []stack.SubstituteRef{{Kind: "ConfigMap", Name: "cluster-vars", Optional: true}},
+	}
 	b.Patches = []stack.Patch{{
-		Patch:  "- op: add\n  path: /metadata/labels/x\n  value: y\n",
-		Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "web-cm"},
+		Patch:  "- op: add\n  path: /metadata/labels/patched\n  value: \"yes\"\n",
+		Target: &stack.PatchSelector{Kind: "ConfigMap"},
 	}}
-	rules := perLayoutRules()
-	rules.ApplicationGrouping = layout.GroupByName
-	ml := integrated(t, oneBundleCluster(b), rules)
+}
+
+// TestLayoutSettings_SixMoreInheritedFromTheBundle: a bundle with suspend,
+// force, prune turned off, an interval, one patch with a target and a
+// postBuild substitution, holding an application with layouts below its own.
+// The Kustomization of the application's layout and those of the layouts
+// below it carry all six. The generator's prune is on, so the prune they carry
+// is the bundle's. The disk and tar writers write the same files, and three of
+// them are compared as a whole.
+func TestLayoutSettings_SixMoreInheritedFromTheBundle(t *testing.T) {
+	yes := true
+	b := shopSettings(nil)
+	sixSettings(b)
+	g := fluxstack.NewResourceGenerator()
+	g.Prune = &yes
+	ml, err := fluxstack.NewLayoutIntegrator(g).CreateLayoutWithResources(oneBundleCluster(b), perLayoutRules())
+	if err != nil {
+		t.Fatalf("CreateLayoutWithResources: %v", err)
+	}
 
 	own := mustKustomization(t, ml, "shop")
-	if !own.Spec.Prune || !own.Spec.Force || !own.Spec.Suspend || own.Spec.Interval.Duration != 10*time.Minute ||
-		own.Spec.PostBuild == nil || len(own.Spec.Patches) != 1 {
-		t.Fatalf("the bundle's own Kustomization lacks what the bundle sets: %#v", own.Spec)
+	for _, name := range shopLayoutNames {
+		k := mustKustomization(t, ml, name)
+		if k.Spec.Interval != own.Spec.Interval || k.Spec.Interval.Duration != 10*time.Minute {
+			t.Errorf("%s: interval = %v, want the bundle's 10m", name, k.Spec.Interval.Duration)
+		}
+		if k.Spec.Prune || !k.Spec.Force || !k.Spec.Suspend {
+			t.Errorf("%s: prune = %v, force = %v, suspend = %v, want the bundle's (off, on, on)", name, k.Spec.Prune, k.Spec.Force, k.Spec.Suspend)
+		}
+		if !reflect.DeepEqual(k.Spec.PostBuild, own.Spec.PostBuild) || k.Spec.PostBuild == nil {
+			t.Errorf("%s: postBuild = %#v, want the bundle's %#v", name, k.Spec.PostBuild, own.Spec.PostBuild)
+		} else if k.Spec.PostBuild == own.Spec.PostBuild {
+			t.Errorf("%s shares its postBuild with the bundle's own Kustomization", name)
+		}
+		if !reflect.DeepEqual(k.Spec.Patches, own.Spec.Patches) || len(k.Spec.Patches) != 1 {
+			t.Errorf("%s: patches = %#v, want the bundle's one", name, k.Spec.Patches)
+		}
 	}
-	app := mustKustomization(t, ml, "shop-web")
-	want := &kustv1.Kustomization{
-		TypeMeta: metav1.TypeMeta{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        "shop-web",
-			Namespace:   fluxstack.DefaultNamespace,
-			Labels:      map[string]string{"team": "shop"},
-			Annotations: map[string]string{"owner": "shop"},
-		},
-		Spec: kustv1.KustomizationSpec{
-			Interval:      metav1.Duration{Duration: fluxstack.DefaultInterval},
-			Path:          "prod/shop/web",
-			SourceRef:     kustv1.CrossNamespaceSourceReference{Kind: "GitRepository", Name: "flux-system", Namespace: "flux-system"},
-			Wait:          true,
-			Timeout:       &metav1.Duration{Duration: 5 * time.Minute},
-			RetryInterval: &metav1.Duration{Duration: 2 * time.Minute},
-		},
+	// One Kustomization's substitution is its own: changing it changes no
+	// other's, and not the bundle's.
+	mustKustomization(t, ml, "shop-db").Spec.PostBuild.Substitute["REGION"] = "us"
+	if got := mustKustomization(t, ml, "shop-00-pre").Spec.PostBuild.Substitute["REGION"]; got != "eu" || b.PostBuild.Substitute["REGION"] != "eu" {
+		t.Errorf("a change to shop-db's substitution reached shop-00-pre (%q) or the bundle (%q)", got, b.PostBuild.Substitute["REGION"])
 	}
-	if !reflect.DeepEqual(app, want) {
-		t.Errorf("shop-web:\n got %#v\nwant %#v", app, want)
+	mustKustomization(t, ml, "shop-db").Spec.PostBuild.Substitute["REGION"] = "eu"
+
+	trees := writeAll(t, ml)
+	disk, tar := treeFiles(t, trees["WriteToDisk"].root), treeFiles(t, trees["WriteToTar"].root)
+	if len(disk) != len(tar) {
+		t.Errorf("WriteToDisk wrote %d files, WriteToTar %d", len(disk), len(tar))
+	}
+	for p, content := range disk {
+		if other, ok := tar[p]; !ok || !bytes.Equal(content, other) {
+			t.Errorf("%s differs between WriteToDisk and WriteToTar", p)
+		}
+	}
+	// What the three files share, from the retry interval down but for the
+	// path, which each golden sets.
+	const settings = `  force: true
+  interval: 10m0s
+  patches:
+  - patch: |
+      - op: add
+        path: /metadata/labels/patched
+        value: "yes"
+    target:
+      kind: ConfigMap
+  path: %s
+  postBuild:
+    substitute:
+      REGION: eu
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-vars
+      optional: true
+  prune: false
+  retryInterval: 2m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
+  suspend: true
+  timeout: 5m0s
+  wait: true
+`
+	const head = `apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  annotations:
+    owner: shop
+  labels:
+    team: shop
+  name: %s
+  namespace: flux-system
+spec:
+`
+	for file, want := range map[string]string{
+		filepath.Join("prod", "shop", "flux-system-kustomization-shop-db.yaml"): fmt.Sprintf(head, "shop-db") +
+			fmt.Sprintf(settings, "prod/shop/db"),
+		filepath.Join("prod", "shop", "db", "flux-system-kustomization-shop-00-pre.yaml"): fmt.Sprintf(head, "shop-00-pre") +
+			fmt.Sprintf(settings, "prod/shop/db/00-pre"),
+		filepath.Join("prod", "shop", "db", "flux-system-kustomization-shop-01-main.yaml"): fmt.Sprintf(head, "shop-01-main") +
+			"  dependsOn:\n  - name: shop-00-pre\n" + fmt.Sprintf(settings, "prod/shop/db/01-main"),
+	} {
+		if got := string(disk[file]); got != want {
+			t.Errorf("%s:\n%s\nwant:\n%s", file, got, want)
+		}
+	}
+}
+
+// TestLayoutSettings_PruneAndInterval: prune and interval on a per-layout
+// Kustomization are the layout's, else the holding bundle's, else the
+// generator's. Before the bundle's were read they were the generator's
+// whatever the bundle set, so a bundle that sets one changes what its
+// applications' Kustomizations carry: a bundle's prune turns garbage
+// collection on for them where the generator's is unset.
+func TestLayoutSettings_PruneAndInterval(t *testing.T) {
+	yes, no := true, false
+	for name, tc := range map[string]struct {
+		generator, bundle, layout *bool
+		want                      bool
+	}{
+		"none set: off":                              {nil, nil, nil, false},
+		"the generator's alone":                      {&yes, nil, nil, true},
+		"the bundle's on, the generator's unset":     {nil, &yes, nil, true},
+		"the bundle's off over the generator's on":   {&yes, &no, nil, false},
+		"the layout's on over the bundle's off":      {&yes, &no, &yes, true},
+		"the layout's off over the bundle's on":      {nil, &yes, &no, false},
+		"the layout's off over the generator's on":   {&yes, nil, &no, false},
+		"the layout's on, bundle and generator both": {&no, &no, &yes, true},
+	} {
+		t.Run("prune/"+name, func(t *testing.T) {
+			b := shopSettings(func(_, _, main, _ *layout.ManifestLayout) { main.Prune = tc.layout })
+			b.Prune = tc.bundle
+			g := fluxstack.NewResourceGenerator()
+			g.Prune = tc.generator
+			ml, err := fluxstack.NewLayoutIntegrator(g).CreateLayoutWithResources(oneBundleCluster(b), perLayoutRules())
+			if err != nil {
+				t.Fatalf("CreateLayoutWithResources: %v", err)
+			}
+			if got := mustKustomization(t, ml, "shop-01-main").Spec.Prune; got != tc.want {
+				t.Errorf("shop-01-main: prune = %v, want %v", got, tc.want)
+			}
+			// The bundle's own Kustomization reads the bundle alone.
+			if got, want := mustKustomization(t, ml, "shop").Spec.Prune, tc.bundle != nil && *tc.bundle; got != want {
+				t.Errorf("shop: prune = %v, want the bundle's %v", got, want)
+			}
+		})
+	}
+	for name, tc := range map[string]struct {
+		bundle, layout string
+		want           time.Duration
+	}{
+		"none set: the generator's":        {"", "", 7 * time.Minute},
+		"the bundle's":                     {"10m", "", 10 * time.Minute},
+		"the layout's over the bundle's":   {"10m", "30m", 30 * time.Minute},
+		"the layout's, the bundle's unset": {"", "30m", 30 * time.Minute},
+	} {
+		t.Run("interval/"+name, func(t *testing.T) {
+			b := shopSettings(func(_, _, main, _ *layout.ManifestLayout) { main.Interval = tc.layout })
+			b.Interval = tc.bundle
+			g := fluxstack.NewResourceGenerator()
+			g.DefaultInterval = 7 * time.Minute
+			ml, err := fluxstack.NewLayoutIntegrator(g).CreateLayoutWithResources(oneBundleCluster(b), perLayoutRules())
+			if err != nil {
+				t.Fatalf("CreateLayoutWithResources: %v", err)
+			}
+			if got := mustKustomization(t, ml, "shop-01-main").Spec.Interval.Duration; got != tc.want {
+				t.Errorf("shop-01-main: interval = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 

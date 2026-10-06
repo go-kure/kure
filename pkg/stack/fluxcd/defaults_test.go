@@ -494,11 +494,13 @@ func TestOCISourceKeepsAnExplicitRef(t *testing.T) {
 }
 
 // TestLayoutKustomizationPruneIsAnInput pins the third prune site. A
-// layout.ManifestLayout carries no prune setting of its own, so Kustomizations
-// generated from one read ResourceGenerator.Prune; that site used to be an
-// unconditional true. It is reached only through the LayoutIntegrator in
-// FluxIntegratedPerLayout placement, and the two bundle-level prune tests do not
-// cover it, so reverting it alone would leave the suite green.
+// Kustomization generated from a layout.ManifestLayout that sets no prune, and
+// has no bundle to inherit one from, reads ResourceGenerator.Prune; that site
+// used to be an unconditional true. It is reached only through the
+// LayoutIntegrator in FluxIntegratedPerLayout placement, and the two
+// bundle-level prune tests do not cover it, so reverting it alone would leave
+// the suite green. What the layout and a holding bundle set over the
+// generator's is pinned in TestLayoutSettings_PruneAndInterval.
 func TestLayoutKustomizationPruneIsAnInput(t *testing.T) {
 	yes, no := true, false
 	for name, tc := range map[string]struct {
@@ -512,18 +514,33 @@ func TestLayoutKustomizationPruneIsAnInput(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			g := NewResourceGenerator()
 			g.Prune = tc.prune
-			ml := &layout.ManifestLayout{Name: "platform", Namespace: "clusters/prod"}
+			group := &stack.Node{Name: "apps"}
+			root := &stack.Node{Name: "platform", Children: []*stack.Node{group}}
+			group.SetParent(root)
+			c := &stack.Cluster{Name: "prod", Node: root}
+			tree, err := layout.WalkCluster(c, layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerLayout})
+			if err != nil {
+				t.Fatalf("WalkCluster: %v", err)
+			}
+			ix, err := layout.IndexOrigins(tree, c)
+			if err != nil {
+				t.Fatalf("IndexOrigins: %v", err)
+			}
+			ml := ix.NodeLayout(group)
+			settings, err := (&integratedPlacement{gen: g, ix: ix}).layoutSettings(ml)
+			if err != nil {
+				t.Fatalf("layoutSettings: %v", err)
+			}
 
-			obj := g.createKustomizationForLayout(ml.Name, ml, kustv1.CrossNamespaceSourceReference{
+			k := g.createKustomizationForLayout(ml.Name, ml, kustv1.CrossNamespaceSourceReference{
 				Kind: DefaultSourceKind,
 				Name: DefaultSourceName,
-			}, nil, layoutSettings{})
-			k, ok := obj.(*kustv1.Kustomization)
-			if !ok {
-				t.Fatalf("expected a Kustomization, got %T", obj)
-			}
+			}, nil, settings)
 			if k.Spec.Prune != tc.want {
 				t.Errorf("prune = %v, want %v", k.Spec.Prune, tc.want)
+			}
+			if k.Spec.Interval.Duration != g.DefaultInterval {
+				t.Errorf("interval = %v, want the generator's %v", k.Spec.Interval.Duration, g.DefaultInterval)
 			}
 		})
 	}
