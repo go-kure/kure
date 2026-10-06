@@ -256,7 +256,7 @@ func (p *integratedPlacement) placeBundlePatches() error {
 				}
 				if len(holders) == 0 && !identityChanged {
 					return errors.ResourceValidationError("Bundle", b.GetPath(), "patches",
-						fmt.Sprintf("patch %d has no target and names %s, which no Kustomization of the bundle builds (%s): kustomize fails the build of a Kustomization that holds a strategic-merge patch for an object it does not build; give the patch a target (for a patch of several documents: one patch per document first, each with its target), or place the object in a build of the bundle",
+						fmt.Sprintf("patch %d has no target and names %s, which no Kustomization of the bundle builds (%s): kustomize fails the build of a Kustomization that holds a strategic-merge patch for an object it does not build; give the patch a target (for a patch of several objects: one patch per object first, each with its target), or place the object in a build of the bundle",
 							i, describeID(id), describeBuilds(candidates)), nil)
 				}
 				split = append(split, fmt.Sprintf("%s is built by %s", describeID(id), describeBuilds(holders)))
