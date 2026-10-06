@@ -1559,11 +1559,13 @@ go-kure/kure#1015 that kept interval and prune the generator's.
 - **The parent's substitution leaves them as written** (`keepEmbeddedPostBuild` in
   `layout_postbuild.go`): a per-layout Kustomization is in its parent's build, whose postBuild
   substitution runs over its postBuild and patches first. Where that would change a substitute
-  value, or a patch in a way the Kustomization's own substitution changes again (an escape
-  `$${VAR}`), it gets Flux's opt-out annotation `kustomize.toolkit.fluxcd.io/substitute:
-  disabled`; the opt-out also stops the parent substituting its labels, annotations and path, so
-  where the parent substitutes one of those too the integration is refused. A plain `${VAR}` is
-  left alone. A variable only `SubstituteFrom` sets counts as a value without `$`, so one read from
+  value, or what the Kustomization's own substitution makes of a patch (an escape `$${VAR}`, or a
+  `${VAR}` the parent sets to another value), it gets Flux's opt-out annotation
+  `kustomize.toolkit.fluxcd.io/substitute: disabled`; the opt-out also stops the parent
+  substituting its labels, annotations and path, so where the parent substitutes one of those too
+  the integration is refused. A plain `${VAR}` under a parent of the same bundle, with the same
+  vars, is left alone; a caller's own Kustomization kept in that parent's place can set others. A
+  variable only `SubstituteFrom` sets counts as a value without `$`, so one read from
   the cluster that holds `${...}` or `$$` is substituted twice.
 - **Patches are placed by object** once every Kustomization and Source is placed
   (`placeBundlePatches` in `layout_patches.go`). A patch with a target goes on the bundle's own
