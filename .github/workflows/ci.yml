@@ -198,9 +198,9 @@ jobs:
 
     # Cache key derives from the read-step output above, so a mise-pin bump
     # can never silently keep restoring a stale cached binary.
-    - name: Cache yq
+    - name: Restore yq from cache
       id: yq-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
         key: yq-${{ steps.yq-version.outputs.version }}-linux-amd64
@@ -213,6 +213,15 @@ jobs:
           https://github.com/mikefarah/yq/releases/download/v${{ steps.yq-version.outputs.version }}/yq_linux_amd64
         chmod +x ~/bin/yq
         echo "$HOME/bin" >> $GITHUB_PATH
+
+    - name: Save yq to cache
+      # Default-branch only, as for the Go caches below: an entry saved from a PR or
+      # merge-queue ref can never be restored by anything else (go-kure/kure#969).
+      if: steps.yq-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/bin/yq
+        key: ${{ steps.yq-cache.outputs.cache-primary-key }}
 
     - name: Add yq to PATH
       if: steps.yq-cache.outputs.cache-hit == 'true'
@@ -262,18 +271,38 @@ jobs:
     - name: Run sync-versions.sh guard tests
       run: bash scripts/test/run-tests.sh
 
-    - name: Cache goimports
+    # goimports is installed at the version of golang.org/x/tools that go.mod
+    # requires, so the binary and its cache key change only when that requirement
+    # does. The key used to be the go.sum hash, which missed on every dependency
+    # bump while the install took @latest whatever go.sum said (go-kure/kure#969).
+    - name: Read goimports version from go.mod
+      id: goimports-version
+      run: |
+        GOIMPORTS_VER=$(go list -m -f '{{.Version}}' golang.org/x/tools)
+        if [ -z "$GOIMPORTS_VER" ]; then
+          echo "::error::Failed to read the golang.org/x/tools version from go.mod"
+          exit 1
+        fi
+        echo "version=$GOIMPORTS_VER" >> $GITHUB_OUTPUT
+
+    - name: Restore goimports from cache
       id: goimports-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/go/bin/goimports
-        key: goimports-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          goimports-
+        key: goimports-${{ steps.goimports-version.outputs.version }}
 
     - name: Install goimports
       if: steps.goimports-cache.outputs.cache-hit != 'true'
-      run: go install golang.org/x/tools/cmd/goimports@latest
+      run: go install golang.org/x/tools/cmd/goimports@${{ steps.goimports-version.outputs.version }}
+
+    - name: Save goimports to cache
+      # Default-branch only, same reasoning as the yq save above.
+      if: steps.goimports-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/go/bin/goimports
+        key: ${{ steps.goimports-cache.outputs.cache-primary-key }}
 
     - name: Check formatting
       run: |
@@ -681,9 +710,9 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gomod-
 
-    - name: Cache govulncheck binary
+    - name: Restore govulncheck binary from cache
       id: govulncheck-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/go/bin/govulncheck
         key: govulncheck-${{ env.GOVULNCHECK_VERSION }}
@@ -716,6 +745,15 @@ jobs:
     - name: Install govulncheck
       if: steps.govulncheck-cache.outputs.cache-hit != 'true'
       run: go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
+
+    - name: Save govulncheck binary to cache
+      # Default-branch only, as for the Go caches below: an entry saved from a PR or
+      # merge-queue ref can never be restored by anything else (go-kure/kure#969).
+      if: steps.govulncheck-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/go/bin/govulncheck
+        key: ${{ steps.govulncheck-cache.outputs.cache-primary-key }}
 
     - name: Run govulncheck
       run: |
@@ -1018,7 +1056,7 @@ jobs:
 
     - name: Restore Hugo from cache
       id: hugo-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ${{ runner.temp }}/hugo-bin
         key: hugo-${{ steps.hugo-version.outputs.version }}-linux-amd64
@@ -1032,6 +1070,15 @@ jobs:
         sudo dpkg -i ${{ runner.temp }}/hugo.deb
         mkdir -p ${{ runner.temp }}/hugo-bin
         cp /usr/local/bin/hugo ${{ runner.temp }}/hugo-bin/hugo
+
+    - name: Save Hugo to cache
+      # Default-branch only, as for the Go modules cache below: an entry saved from a PR
+      # or merge-queue ref can never be restored by anything else (go-kure/kure#969).
+      if: steps.hugo-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ${{ runner.temp }}/hugo-bin
+        key: ${{ steps.hugo-cache.outputs.cache-primary-key }}
 
     - name: Add cached Hugo to PATH
       if: steps.hugo-cache.outputs.cache-hit == 'true'
@@ -1052,8 +1099,9 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gomod-
 
-    - name: Cache Hugo modules
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+    - name: Restore Hugo modules cache
+      id: hugo-modules
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ${{ runner.temp }}/hugo_cache
         key: ${{ runner.os }}-hugo-${{ hashFiles('site/go.sum') }}
@@ -1072,9 +1120,9 @@ jobs:
 
     # Cache key derives from the read-step output above, so a mise-pin bump
     # can never silently keep restoring a stale cached binary.
-    - name: Cache yq
+    - name: Restore yq from cache
       id: yq-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
         key: yq-${{ steps.yq-version.outputs.version }}-linux-amd64
@@ -1087,6 +1135,14 @@ jobs:
           https://github.com/mikefarah/yq/releases/download/v${{ steps.yq-version.outputs.version }}/yq_linux_amd64
         chmod +x ~/bin/yq
         echo "$HOME/bin" >> $GITHUB_PATH
+
+    - name: Save yq to cache
+      # Default-branch only, same reasoning as the Hugo save above.
+      if: steps.yq-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/bin/yq
+        key: ${{ steps.yq-cache.outputs.cache-primary-key }}
 
     - name: Add yq to PATH
       if: steps.yq-cache.outputs.cache-hit == 'true'
@@ -1157,9 +1213,9 @@ jobs:
         fi
         echo "version=$LYCHEE_VER" >> $GITHUB_OUTPUT
 
-    - name: Cache lychee
+    - name: Restore lychee from cache
       id: lychee-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/lychee
         key: lychee-${{ steps.lychee-version.outputs.version }}-linux-amd64
@@ -1173,6 +1229,14 @@ jobs:
         tar xzf /tmp/lychee.tar.gz -C /tmp
         install -m755 /tmp/lychee-x86_64-unknown-linux-gnu/lychee ~/bin/lychee
         echo "$HOME/bin" >> $GITHUB_PATH
+
+    - name: Save lychee to cache
+      # Default-branch only, same reasoning as the Hugo save above.
+      if: steps.lychee-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/bin/lychee
+        key: ${{ steps.lychee-cache.outputs.cache-primary-key }}
 
     - name: Add lychee to PATH
       if: steps.lychee-cache.outputs.cache-hit == 'true'
@@ -1197,6 +1261,15 @@ jobs:
       with:
         path: ~/go/pkg/mod
         key: ${{ steps.gomod.outputs.cache-primary-key }}
+
+    - name: Save Hugo modules cache
+      # Default-branch only, same reasoning as the Go modules cache above. At the end of
+      # the job, after both Hugo builds have filled the directory.
+      if: success() && steps.hugo-modules.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ${{ runner.temp }}/hugo_cache
+        key: ${{ steps.hugo-modules.outputs.cache-primary-key }}
 
   # =============================================================================
   # PR-only Jobs (parallel, non-blocking)
@@ -1288,9 +1361,13 @@ jobs:
 
     # Cache key derives from the read-step output above, so a mise-pin bump
     # can never silently keep restoring a stale cached binary.
-    - name: Cache yq
+    # Restore only: this job runs on pull requests alone, and a save from a PR ref
+    # can never be restored by anything else. The entry it reads is the one the
+    # lint or docs-build job saved from main under the same key and path
+    # (go-kure/kure#969).
+    - name: Restore yq from cache
       id: yq-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
         key: yq-${{ steps.yq-version.outputs.version }}-linux-amd64

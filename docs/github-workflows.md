@@ -721,15 +721,21 @@ absolute cost but does not deduplicate the PR↔queue build (inherent to the mer
 in launcher: warmed cycles cut `test` ~50%, `build`/`lint` ~30%.
 
 **Saves are default-branch only.** Nothing but the PR itself can read a PR-scoped entry, and the
-`gh-readonly-queue/*` branch a queue run saves to is deleted right after the run, so every Go
-cache save is gated on `github.ref == 'refs/heads/main'`. Saving from those refs only fills the
-size-capped cache server, whose LRU eviction then pushes out the `main` entries runs restore. New
-cache steps follow the same rule: split restore/save with a `main`-gated save, never the combined
-`actions/cache` (which saves on a miss from any ref). The small tool-binary and Hugo-module caches
-are the exception: they are small and rarely re-keyed, so the combined form writes little.
+`gh-readonly-queue/*` branch a queue run saves to is deleted right after the run, so every cache
+save in `ci.yml` is gated on `github.ref == 'refs/heads/main'`: the Go caches, the tool binaries
+and the Hugo module cache alike. Saving from those refs only fills the size-capped cache server,
+whose LRU eviction then pushes out the `main` entries runs restore. New cache steps follow the
+same rule: split restore/save with a `main`-gated save, never the combined `actions/cache` (which
+saves on a miss from any ref). A job that runs on pull requests only (`doc-gate`) has a restore
+step and no save: it reads the entry another job saved from `main` under the same key and path.
+One combined step is left, the `yq` cache in `deploy-docs.yml`: that workflow has no
+`pull_request` or `merge_group` trigger. It runs on a push to `main`, or on a manual dispatch,
+which uses the branch or tag selected for it.
 
 Tool binaries are also cached to avoid reinstalling on every run:
-- `goimports` — keyed by `go.sum` hash (tied to `golang.org/x/tools` version)
+- `goimports` — keyed by the version of `golang.org/x/tools` that `go.mod` requires, which a
+  "Read goimports version from go.mod" step reads at run time; that version is the one installed
+  (the key used to be the `go.sum` hash, which missed on every dependency bump)
 - `yq`, `lychee` — keyed by the version a "Read `<tool>` version from mise.toml" step reads at run
   time (see [yq and lychee Versions](#yq-and-lychee-versions) below), never a hardcoded literal
 - `govulncheck` — keyed by pinned version (`v1.8.0`)
