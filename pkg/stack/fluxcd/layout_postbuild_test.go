@@ -99,8 +99,12 @@ func TestLayoutPostBuild_ThroughTheParentsBuild(t *testing.T) {
 			t.Fatalf("CreateLayoutWithResources: %v", err)
 		}
 		for _, name := range shopLayoutNames {
-			if got := mustKustomization(t, ml, name).Annotations; !maps.Equal(got, map[string]string{"owner": "shop"}) {
+			k := mustKustomization(t, ml, name)
+			if got := k.Annotations; !maps.Equal(got, map[string]string{"owner": "shop"}) {
 				t.Errorf("%s: annotations = %v, want the bundle's alone", name, got)
+			}
+			if len(k.Spec.Patches) != 1 || !strings.Contains(k.Spec.Patches[0].Patch, `"${REGION}"`) {
+				t.Errorf("%s: patches = %#v, want the bundle's one as written", name, k.Spec.Patches)
 			}
 		}
 	})
@@ -114,11 +118,39 @@ func TestLayoutPostBuild_ThroughTheParentsBuild(t *testing.T) {
 			t.Fatalf("CreateLayoutWithResources: %v", err)
 		}
 		for _, name := range shopLayoutNames {
-			if got := mustKustomization(t, ml, name).Annotations; !maps.Equal(got, map[string]string{"owner": "shop", "note": "${FROM_CLUSTER}"}) {
+			k := mustKustomization(t, ml, name)
+			if got := k.Annotations; !maps.Equal(got, map[string]string{"owner": "shop", "note": "${FROM_CLUSTER}"}) {
 				t.Errorf("%s: annotations = %v, want the bundle's alone", name, got)
+			}
+			if len(k.Spec.Patches) != 1 || !strings.Contains(k.Spec.Patches[0].Patch, `"${FROM_CLUSTER}"`) {
+				t.Errorf("%s: patches = %#v, want the bundle's one as written", name, k.Spec.Patches)
 			}
 		}
 	})
+
+	// An escape whose unescaped form is not a complete expression: the
+	// parent's substitution leaves ${BROKEN, which the second pass over a
+	// substitute value must not read, and over a patch fails, as the child's
+	// own substitution of what the patch writes would.
+	for name, tc := range map[string]struct {
+		pb    *stack.PostBuild
+		patch string
+	}{
+		"in a substitute value": {&stack.PostBuild{Substitute: map[string]string{"TEXT": "$${BROKEN"}}, "plain"},
+		"in a patch":            {&stack.PostBuild{Substitute: map[string]string{"VAR": "x"}}, "$${BROKEN"},
+	} {
+		t.Run("an incomplete escape "+name+": the opt-out", func(t *testing.T) {
+			ml, err := postBuildTree(tc.pb, tc.patch, nil)
+			if err != nil {
+				t.Fatalf("CreateLayoutWithResources: %v", err)
+			}
+			for _, k := range shopLayoutNames {
+				if got := mustKustomization(t, ml, k).Annotations[substituteOptOut]; got != "disabled" {
+					t.Errorf("%s: %s = %q, want disabled", k, substituteOptOut, got)
+				}
+			}
+		})
+	}
 
 	t.Run("an escape in a patch survives the parent's build", func(t *testing.T) {
 		ml, err := postBuildTree(&stack.PostBuild{Substitute: map[string]string{"VAR": "x"}}, "$${VAR}", nil)
