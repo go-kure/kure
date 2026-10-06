@@ -622,7 +622,7 @@ layout below it, now carries `wait`, `timeout`, `retryInterval`, labels and anno
 the bundle that holds the application, unless the layout sets its own (`ManifestLayout.Wait`,
 `Timeout`, `RetryInterval`, `Labels`, `Annotations`). They used to carry none, so a bundle with
 `Wait` was Ready once those Kustomizations had applied their directories, not once the workloads
-were. Interval and prune stay the generator's. What to do:
+were. Interval, prune and four more settings follow in the next section. What to do:
 
 - **Expect the new fields in the output.** A tree whose bundle sets one of the five gains it on
   those Kustomizations. A tree that sets none renders as before.
@@ -643,6 +643,34 @@ were. Interval and prune stay the generator's. What to do:
 - **A node's Kustomization inherits nothing.** Set the fields on the node's walked layout.
 
 What readiness through such a chain means, and where it stops, is in the
+[Flux Engine reference](/api-reference/flux-engine/#per-layout-settings).
+
+### Per-layout Kustomizations take the bundle's interval, prune, force, suspend, postBuild and patches (breaking change)
+
+Under `FluxIntegratedPerLayout` the same Kustomizations now also carry `interval`, `prune`,
+`force`, `suspend`, `postBuild` and `patches` (go-kure/kure#1021). Interval, prune, force and
+suspend are the layout's own (`ManifestLayout.Interval`, `Prune`, `Force`, `Suspend`), or else the
+bundle's; interval and prune fall back to the generator's. `postBuild` is the bundle's, copied
+whole, and the bundle's patches are placed by object. What to do:
+
+- **Expect the new fields in the output.** A tree that sets none of the six renders as before.
+  A bundle with `Prune` on turns garbage collection on for its applications' Kustomizations,
+  where the generator's `Prune` applied before.
+- **Expect a patch to move.** A patch with a target is on the bundle's own Kustomization and on
+  every per-layout one. An untargeted strategic-merge patch is on the Kustomizations whose build
+  holds every object it names, so the bundle's own loses one whose object it does not build; its
+  build failed on the cluster before.
+- **An untargeted patch no build can take is refused** at integration instead of failing on the
+  cluster: when no Kustomization of the bundle builds an object it names, give it a target or
+  place the object in a build of the bundle; when no one Kustomization builds all the objects it
+  names, write one patch per object. A target is for a patch of one object: kustomize refuses one
+  on an entry of several documents, or of a `List` of several items, so split such a patch first.
+- **After a JSON6902 patch or a patch with one of kustomize's build annotations**
+  (`internal.config.kubernetes.io/`), the patches that follow are not placed by object and stay
+  on the bundle's own Kustomization as well; one whose object only a layout builds still fails
+  there. Put it before that entry, or give it a target.
+
+The full rules, the refusals and the limit are in the
 [Flux Engine reference](/api-reference/flux-engine/#per-layout-settings).
 
 ## Umbrella Bundles — Readiness Aggregation
