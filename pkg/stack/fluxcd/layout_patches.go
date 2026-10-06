@@ -7,7 +7,9 @@ import (
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"github.com/fluxcd/pkg/apis/kustomize"
+	"sigs.k8s.io/kustomize/api/konfig"
 	"sigs.k8s.io/kustomize/api/provider"
+	"sigs.k8s.io/kustomize/api/resource"
 	"sigs.k8s.io/kustomize/kyaml/resid"
 
 	"github.com/go-kure/kure/pkg/errors"
@@ -113,11 +115,11 @@ func holds(host *layout.ManifestLayout, cr *kustv1.Kustomization) bool {
 // bundle, after the bundle's own: kustomize applies it to what the target
 // selects in that build and to nothing where it selects nothing.
 //
-// A patch without a target is a strategic-merge patch, and kustomize fails
-// the build of a Kustomization that does not hold the object each of its
-// documents names. It is therefore written on the Kustomizations, the
-// bundle's own among them, whose build holds every object it names, and on no
-// other. An object is compared as kustomize compares it (group, version, kind,
+// A patch without a target that kustomize can build is a strategic-merge
+// patch, and kustomize fails the build of a Kustomization that does not hold
+// the object each of its documents names. It is therefore written on the
+// Kustomizations, the bundle's own among them, whose build holds every object
+// it names, and on no other. An object is compared as kustomize compares it (group, version, kind,
 // name and effective namespace); a build holds the objects of the directories
 // buildScope lists, the Kustomizations and Sources hosted there included, and
 // the ConfigMap each configMapGenerator entry of those directories generates.
@@ -132,31 +134,56 @@ func holds(host *layout.ManifestLayout, cr *kustv1.Kustomization) bool {
 //     documents of one patch cannot be split, so the caller writes one patch
 //     per object.
 //
-// An untargeted entry that does not parse as strategic-merge documents (a
-// JSON6902 patch, which kustomize refuses without a target) is no object's:
-// it stays on the bundle's own Kustomization and reaches no layout's.
-//
 // The objects a build holds are compared as generated, and that is what a
-// patch names only until an earlier entry of the list changes an identity.
-// The one entry that can is a JSON6902 patch with a target: it may replace
-// metadata.name, metadata.namespace, kind or apiVersion, and kustomize then
-// matches a later strategic-merge patch against the new identity as well as
-// the one before. A strategic-merge patch cannot: without a target it is
-// merged into the object it names, and with one kustomize keeps the
-// apiVersion, kind, name and namespace of the object it selects (a Flux
-// patch has no options that allow the change; a build pins this in
-// TestKustomize_AStrategicMergePatchWithATargetKeepsTheIdentity).
+// patch names only while no earlier entry of the list has changed an
+// identity. Placement by object therefore holds for a patch only while every
+// entry of the list before it, and the patch itself, is a plain
+// strategic-merge patch (plainStrategicMerge): one that parses as resources
+// and of which no document carries an annotation of kustomize's own build
+// state. A plain patch keeps the identity of what it is merged into, by
+// kustomize api v0.21.2:
 //
-// An untargeted strategic-merge patch that comes after a targeted entry that
-// is not strategic-merge is therefore not placed by object and never refused:
-// it stays on the bundle's own Kustomization, where every patch was before,
-// and is written besides on each per-layout Kustomization whose build holds
-// every object it names as generated. The operations of the entry are not
-// read, so one that renames nothing counts as well. What
-// that leaves as it was: such a patch for an object only a layout builds, or
-// for the name such an entry gives an object in a layout's build, is on no
-// Kustomization that builds it, and the build of the bundle's own fails on
-// the cluster as it did.
+//   - without a target it is merged into the object of its own apiVersion,
+//     kind, name and namespace (PatchTransformer.transformStrategicMerge,
+//     internal/builtins/PatchTransformer.go:117-125, finds it by that
+//     identity, resid.ResId.Equals), and Resource.ApplySmPatch
+//     (resource/resource.go:495-516) then restores the kind, name and
+//     namespace the object had;
+//   - with a target it is given the apiVersion of each object it selects
+//     (resWrangler.ApplySmPatch, resmap/reswrangler.go:742-750) and merged
+//     by the same Resource.ApplySmPatch. A Flux patch has no options that
+//     allow a change of name or kind; a build pins this in
+//     TestKustomize_APlainStrategicMergePatchKeepsTheIdentity.
+//
+// Any other entry is not known to keep it. A JSON6902 patch with a target may
+// replace metadata.name, metadata.namespace, kind or apiVersion, and
+// kustomize then matches a later strategic-merge patch against the new
+// identity as well as the one before. A build-state annotation in the patch
+// text is read as kustomize reads its own: one allows the patch to change the
+// name or the kind of the object it is merged into, with a target or without,
+// and others give a document the identity it names its object by, which
+// kustomize panics on when they do not agree (Resource.OrgId).
+//
+// An entry that is not plain is therefore written where it was before
+// per-layout Kustomizations took patches, is never refused and is not read:
+// with a target on the bundle's own Kustomization and on every per-layout
+// one, without one on the bundle's own only (a JSON6902 patch without a
+// target, which kustomize refuses wherever it is, among them). Every
+// untargeted plain patch that comes after it is not placed by object and
+// never refused either: it stays on the bundle's own Kustomization, where
+// every patch was before, and is written besides on each per-layout
+// Kustomization whose build holds every object it names as generated. What
+// the entry does is not read, so one that changes no identity counts as
+// well. What that leaves as it was, the build of the bundle's own
+// Kustomization failing on the cluster as it did:
+//
+//   - such a later patch for an object only a layout builds: it is on that
+//     layout's Kustomization as well, which builds and patches the object,
+//     and on the bundle's own, which does not build it;
+//   - such a later patch for the identity an earlier entry gives an object in
+//     a layout's build: it is on no Kustomization that builds the object;
+//   - an untargeted patch with a build-state annotation for an object only a
+//     layout builds: it is on the bundle's own Kustomization alone.
 func (p *integratedPlacement) placeBundlePatches() error {
 	if !p.perLayout {
 		return nil
@@ -196,24 +223,21 @@ func (p *integratedPlacement) placeBundlePatches() error {
 			held        []patchBuild
 		}
 		placements := make([]placement, len(b.Patches))
-		// Set once an entry that can change an object's identity has passed:
-		// from there the identities as generated no longer say what an
-		// untargeted patch names.
+		// Set once an entry that is not a plain strategic-merge patch has
+		// passed: from there the identities as generated no longer say what
+		// an untargeted patch names.
 		identityChanged := false
 		for i, patch := range b.Patches {
-			// kustomize reads an entry as strategic-merge when it parses as
-			// resources, and as JSON6902 otherwise.
-			docs, err := rf.SliceFromBytes([]byte(patch.Patch))
-			strategicMerge := err == nil && len(docs) > 0
-			if patch.Target != nil {
-				placements[i] = placement{own: true, everyLayout: true}
-				if !strategicMerge {
-					identityChanged = true
-				}
+			docs, plain := plainStrategicMerge(rf, patch.Patch)
+			if !plain {
+				// Written where it was before, and its documents, if it has
+				// any, are not read.
+				placements[i] = placement{own: true, everyLayout: patch.Target != nil}
+				identityChanged = true
 				continue
 			}
-			if !strategicMerge {
-				placements[i] = placement{own: true}
+			if patch.Target != nil {
+				placements[i] = placement{own: true, everyLayout: true}
 				continue
 			}
 			on := candidates
@@ -276,6 +300,36 @@ func (p *integratedPlacement) placeBundlePatches() error {
 		}
 	}
 	return nil
+}
+
+// plainStrategicMerge reports whether text, the text of a patch, is a plain
+// strategic-merge patch, and returns its documents when it is. It is one when
+// it parses as resources, which is how kustomize takes an entry for a
+// strategic-merge patch and not for a JSON6902 one, and no document of it
+// carries an annotation of kustomize's own build state
+// (carriesBuildAnnotation). placeBundlePatches reads the documents of a plain
+// patch and of no other.
+func plainStrategicMerge(rf *resource.Factory, text string) ([]*resource.Resource, bool) {
+	docs, err := rf.SliceFromBytes([]byte(text))
+	if err != nil || len(docs) == 0 || slices.ContainsFunc(docs, carriesBuildAnnotation) {
+		return nil, false
+	}
+	return docs, true
+}
+
+// carriesBuildAnnotation reports whether doc, a document of a patch, has an
+// annotation in the domain kustomize keeps its own build state in
+// (konfig.ConfigAnnoDomain). Among them are the two that allow a patch to
+// change a name or a kind and the three that hold an object's previous
+// identities. The whole domain counts, not those five: none of it is a
+// caller's to write, and what kustomize reads from it may grow.
+func carriesBuildAnnotation(doc *resource.Resource) bool {
+	for key := range doc.GetAnnotations() {
+		if strings.HasPrefix(key, konfig.ConfigAnnoDomain+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // buildIDs returns the identity of every object a kustomize build of l holds:

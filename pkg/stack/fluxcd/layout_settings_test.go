@@ -689,12 +689,21 @@ func TestLayoutSettings_SixMoreInheritedFromTheBundle(t *testing.T) {
 		}
 	}
 	// One Kustomization's substitution is its own: changing it changes no
-	// other's, and not the bundle's.
-	mustKustomization(t, ml, "shop-db").Spec.PostBuild.Substitute["REGION"] = "us"
-	if got := mustKustomization(t, ml, "shop-00-pre").Spec.PostBuild.Substitute["REGION"]; got != "eu" || b.PostBuild.Substitute["REGION"] != "eu" {
-		t.Errorf("a change to shop-db's substitution reached shop-00-pre (%q) or the bundle (%q)", got, b.PostBuild.Substitute["REGION"])
+	// other's, and not the bundle's. That holds for the map and for the list
+	// of references alike.
+	db, pre := mustKustomization(t, ml, "shop-db").Spec.PostBuild, mustKustomization(t, ml, "shop-00-pre").Spec.PostBuild
+	db.Substitute["REGION"] = "us"
+	if got := pre.Substitute["REGION"]; got != "eu" || b.PostBuild.Substitute["REGION"] != "eu" || own.Spec.PostBuild.Substitute["REGION"] != "eu" {
+		t.Errorf("a change to shop-db's substitution reached shop-00-pre (%q), the bundle (%q) or its own Kustomization (%q)",
+			got, b.PostBuild.Substitute["REGION"], own.Spec.PostBuild.Substitute["REGION"])
 	}
-	mustKustomization(t, ml, "shop-db").Spec.PostBuild.Substitute["REGION"] = "eu"
+	db.Substitute["REGION"] = "eu"
+	db.SubstituteFrom[0].Name = "other-vars"
+	if got := pre.SubstituteFrom[0].Name; got != "cluster-vars" || b.PostBuild.SubstituteFrom[0].Name != "cluster-vars" || own.Spec.PostBuild.SubstituteFrom[0].Name != "cluster-vars" {
+		t.Errorf("a change to shop-db's substituteFrom reached shop-00-pre (%q), the bundle (%q) or its own Kustomization (%q)",
+			got, b.PostBuild.SubstituteFrom[0].Name, own.Spec.PostBuild.SubstituteFrom[0].Name)
+	}
+	db.SubstituteFrom[0].Name = "cluster-vars"
 
 	trees := writeAll(t, ml)
 	disk, tar := treeFiles(t, trees["WriteToDisk"].root), treeFiles(t, trees["WriteToTar"].root)

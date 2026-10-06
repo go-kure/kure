@@ -16,11 +16,14 @@ import (
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
-// Tests for a bundle's patch list in which an entry can change an object's
-// identity (go-kure/kure#1021): a JSON6902 patch with a target. An untargeted
-// strategic-merge patch after it is not placed by object and never refused,
-// since the identities as generated no longer say what it names. These tests
-// run the build of kustomize-controller on the tree the writers wrote.
+// Tests for a bundle's patch list in which an entry is not a plain
+// strategic-merge patch (go-kure/kure#1021): a JSON6902 patch, or a patch
+// whose text carries an annotation of kustomize's own build state. Such an
+// entry can change an object's identity, so it is written where it was
+// before, and an untargeted strategic-merge patch after it is not placed by
+// object and never refused, since the identities as generated no longer say
+// what it names. These tests run the build of kustomize-controller on the
+// tree the writers wrote.
 
 // patchedBuild builds the directory k's spec.path names in a copy of root as
 // kustomize-controller does, k's patches added to the directory's
@@ -71,41 +74,26 @@ func patchedBuilds(t *testing.T, ml *layout.ManifestLayout) (map[string]map[stri
 	return built, failed
 }
 
-// shopOwnWithPatches is the file of the bundle's own Kustomization of
-// patchShop with two patches, a rename of the ConfigMap from to the name to
-// and an untargeted patch for the ConfigMap patched, as the integration wrote
-// it before the per-layout Kustomizations took patches: both on it.
-func shopOwnWithPatches(from, to, patched string) string {
-	return `apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: shop
-  namespace: flux-system
-spec:
-  interval: 1h0m0s
-  patches:
-  - patch: |
-      - op: replace
-        path: /metadata/name
-        value: ` + to + `
-    target:
-      kind: ConfigMap
-      name: ` + from + `
-  - patch: |
-      apiVersion: v1
-      kind: ConfigMap
-      metadata:
-        name: ` + patched + `
-        namespace: default
-      data:
-        patched: "yes"
-  path: prod/shop
-  prune: false
-  sourceRef:
-    kind: GitRepository
-    name: flux-system
-    namespace: flux-system
-`
+// shopOwnHolding is the file of the bundle's own Kustomization of patchShop
+// holding every one of patches, in their order: the file the integration
+// wrote for that bundle before the per-layout Kustomizations took patches.
+// It is made here from the patches and not by the integration; for the patch
+// lists of these tests it was compared with what the code before
+// go-kure/kure#1021 writes.
+func shopOwnHolding(patches ...stack.Patch) string {
+	var b strings.Builder
+	b.WriteString("apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: shop\n  namespace: flux-system\nspec:\n  interval: 1h0m0s\n  patches:\n")
+	for _, p := range patches {
+		b.WriteString("  - patch: |\n")
+		for line := range strings.SplitSeq(strings.TrimSuffix(p.Patch, "\n"), "\n") {
+			b.WriteString("      " + line + "\n")
+		}
+		if p.Target != nil {
+			b.WriteString("    target:\n      kind: " + p.Target.Kind + "\n      name: " + p.Target.Name + "\n")
+		}
+	}
+	b.WriteString("  path: prod/shop\n  prune: false\n  sourceRef:\n    kind: GitRepository\n    name: flux-system\n    namespace: flux-system\n")
+	return b.String()
 }
 
 var patchedData = map[string]string{"patched": "yes"}
@@ -120,14 +108,41 @@ func annotateEveryConfigMap() stack.Patch {
 	}
 }
 
-// TestLayoutPatches_AfterAnEntryThatCanRename: an untargeted strategic-merge
-// patch that comes after a JSON6902 patch with a target stays on the bundle's
-// own Kustomization, is written besides on each per-layout Kustomization
-// whose build holds every object it names as generated, and is not refused,
-// whatever it names. One that comes before that entry is placed by object,
-// and so is one after a strategic-merge patch with a target or a JSON6902
-// entry without one, neither of which can change an identity.
-func TestLayoutPatches_AfterAnEntryThatCanRename(t *testing.T) {
+// renameAllowed is a strategic-merge patch with a target that gives the
+// ConfigMap from the name to: its text carries the annotation by which
+// kustomize allows a patch to change the name of the object it is merged
+// into.
+func renameAllowed(from, to string) stack.Patch {
+	return stack.Patch{
+		Patch:  "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: " + to + "\n  namespace: default\n  annotations:\n    internal.config.kubernetes.io/allowNameChange: enabled\n",
+		Target: &stack.PatchSelector{Kind: "ConfigMap", Name: from},
+	}
+}
+
+// renamePrevious is a strategic-merge patch without a target that gives the
+// ConfigMap from the name to: its text carries the annotations in which
+// kustomize keeps the identities an object had, by which it finds the object,
+// and the one that allows the change of name.
+func renamePrevious(from, to string) stack.Patch {
+	return stack.Patch{
+		Patch: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: " + to + "\n  namespace: default\n  annotations:\n" +
+			"    internal.config.kubernetes.io/allowNameChange: enabled\n" +
+			"    internal.config.kubernetes.io/previousKinds: ConfigMap\n" +
+			"    internal.config.kubernetes.io/previousNames: " + from + "\n" +
+			"    internal.config.kubernetes.io/previousNamespaces: default\n",
+	}
+}
+
+// TestLayoutPatches_AfterAnEntryThatIsNotPlain: placement by object holds
+// while every entry of the list is a plain strategic-merge patch. An entry
+// that is not is written where it was before, with a target on the bundle's
+// own Kustomization and on every per-layout one, without one on the bundle's
+// own only. An untargeted strategic-merge patch that comes after it stays on
+// the bundle's own Kustomization, is written besides on each per-layout
+// Kustomization whose build holds every object it names as generated, and is
+// not refused, whatever it names. One that comes before it is placed by
+// object.
+func TestLayoutPatches_AfterAnEntryThatIsNotPlain(t *testing.T) {
 	layouts := func(i ...int) map[string][]int {
 		out := map[string][]int{}
 		for _, name := range shopLayoutNames {
@@ -143,6 +158,10 @@ func TestLayoutPatches_AfterAnEntryThatCanRename(t *testing.T) {
 		patches []stack.Patch
 		want    map[string][]int
 	}{
+		"a plain list is placed by object": {
+			patches: []stack.Patch{everyConfigMapMerged("a"), untargeted(cmDoc("pre")), untargeted(cmDoc("web-cm"))},
+			want:    with(with(layouts(0), "shop", 0, 2), "shop-00-pre", 0, 1),
+		},
 		"an object the bundle's own builds": {
 			patches: []stack.Patch{annotateEveryConfigMap(), untargeted(cmDoc("web-cm"))},
 			want:    with(layouts(0), "shop", 0, 1),
@@ -163,13 +182,25 @@ func TestLayoutPatches_AfterAnEntryThatCanRename(t *testing.T) {
 			patches: []stack.Patch{untargeted(cmDoc("pre")), annotateEveryConfigMap(), untargeted(cmDoc("main"))},
 			want:    with(with(with(layouts(1), "shop", 1, 2), "shop-00-pre", 0, 1), "shop-01-main", 1, 2),
 		},
-		"a strategic-merge patch with a target is no such entry": {
-			patches: []stack.Patch{everyConfigMapMerged("a"), untargeted(cmDoc("pre"))},
-			want:    with(with(layouts(0), "shop", 0), "shop-00-pre", 0, 1),
+		"a JSON6902 entry without a target: the bundle's own, and what follows is not placed by object": {
+			patches: []stack.Patch{{Patch: json6902}, untargeted(cmDoc("pre")), untargeted(cmDoc("absent"))},
+			want:    map[string][]int{"shop": {0, 1, 2}, "shop-00-pre": {1}},
 		},
-		"a JSON6902 entry without a target is no such entry": {
-			patches: []stack.Patch{{Patch: json6902}, untargeted(cmDoc("pre"))},
-			want:    map[string][]int{"shop": {0}, "shop-00-pre": {1}},
+		"a build annotation in a patch with a target: as a JSON6902 one": {
+			patches: []stack.Patch{renameAllowed("web-cm", "renamed"), untargeted(cmDoc("absent")), untargeted(cmDoc("pre"))},
+			want:    with(with(layouts(0), "shop", 0, 1, 2), "shop-00-pre", 0, 2),
+		},
+		"a build annotation in a patch without a target: the bundle's own, whatever it names": {
+			patches: []stack.Patch{renamePrevious("pre", "renamed"), untargeted(cmDoc("pre")), untargeted(cmDoc("absent"))},
+			want:    map[string][]int{"shop": {0, 1, 2}, "shop-00-pre": {1}},
+		},
+		"a build annotation in one document of several": {
+			patches: []stack.Patch{untargeted(cmDoc("main"), renamePrevious("pre", "renamed").Patch), untargeted(cmDoc("absent"))},
+			want:    map[string][]int{"shop": {0, 1}},
+		},
+		"the patch before a build annotation is placed by object": {
+			patches: []stack.Patch{untargeted(cmDoc("pre")), renamePrevious("web-cm", "renamed")},
+			want:    map[string][]int{"shop": {1}, "shop-00-pre": {0}},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -187,37 +218,50 @@ func TestLayoutPatches_AfterAnEntryThatCanRename(t *testing.T) {
 // per-layout Kustomizations took patches. It is not refused, the file of the
 // bundle's own Kustomization is the one written then, byte for byte, and
 // kustomize builds every Kustomization of the tree: the renamed object is
-// patched.
+// patched. The rename is a JSON6902 patch with a target, a strategic-merge
+// patch with a target whose text allows the change of name, or a
+// strategic-merge patch without one that names the object by an identity it
+// had.
 //
-// The third case gives the object the name a ConfigMap of a layout has: the
-// patch stays on the bundle's own Kustomization, where it patches the renamed
-// object, and is written on the layout's too, whose own ConfigMap it names.
+// Where the object gets the name a ConfigMap of a layout has, the patch stays
+// on the bundle's own Kustomization, where it patches the renamed object, and
+// is written on the layout's too, whose own ConfigMap it names.
 func TestLayoutPatches_ARenameThenAPatchBuildsAsBefore(t *testing.T) {
 	for name, tc := range map[string]struct {
-		from, to, patched string
-		layoutToo         string
+		rename      stack.Patch
+		to, patched string
+		layoutToo   string
 	}{
-		"patched by its new name":                   {from: "web-cm", to: "renamed", patched: "renamed"},
-		"patched by the name it had":                {from: "web-cm", to: "renamed", patched: "web-cm"},
-		"renamed to the name an object of a layout": {from: "web-cm", to: "pre", patched: "pre", layoutToo: "shop-00-pre"},
+		"JSON6902, patched by its new name":                                    {rename: renameConfigMap("web-cm", "renamed"), to: "renamed", patched: "renamed"},
+		"JSON6902, patched by the name it had":                                 {rename: renameConfigMap("web-cm", "renamed"), to: "renamed", patched: "web-cm"},
+		"JSON6902, renamed to the name an object of a layout":                  {rename: renameConfigMap("web-cm", "pre"), to: "pre", patched: "pre", layoutToo: "shop-00-pre"},
+		"allowed in the patch text, patched by its new name":                   {rename: renameAllowed("web-cm", "renamed"), to: "renamed", patched: "renamed"},
+		"allowed in the patch text, patched by the name it had":                {rename: renameAllowed("web-cm", "renamed"), to: "renamed", patched: "web-cm"},
+		"allowed in the patch text, renamed to the name an object of a layout": {rename: renameAllowed("web-cm", "pre"), to: "pre", patched: "pre", layoutToo: "shop-00-pre"},
+		"by an identity it had, without a target":                              {rename: renamePrevious("web-cm", "renamed"), to: "renamed", patched: "renamed"},
+		"by an identity it had, renamed to the name an object of a layout":     {rename: renamePrevious("web-cm", "pre"), to: "pre", patched: "pre", layoutToo: "shop-00-pre"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			patches := []stack.Patch{renameConfigMap(tc.from, tc.to), untargeted(cmDoc(tc.patched))}
+			patches := []stack.Patch{tc.rename, untargeted(cmDoc(tc.patched))}
 			ml := integrated(t, oneBundleCluster(patchShop(nil, patches...)), perLayoutRules())
 
+			// The rename is on every per-layout Kustomization when it has a
+			// target, and on none when it has not.
 			want := map[string][]int{"shop": {0, 1}}
-			for _, l := range shopLayoutNames {
-				want[l] = []int{0}
+			if tc.rename.Target != nil {
+				for _, l := range shopLayoutNames {
+					want[l] = []int{0}
+				}
 			}
 			if tc.layoutToo != "" {
-				want[tc.layoutToo] = []int{0, 1}
+				want[tc.layoutToo] = append(want[tc.layoutToo], 1)
 			}
 			if got := patchPlacement(t, ml, patches); !reflect.DeepEqual(got, want) {
 				t.Errorf("patches are held by %v, want %v", got, want)
 			}
 
 			disk := treeFiles(t, writeAll(t, ml)["WriteToDisk"].root)
-			if got, before := string(disk[shopKustomizationFile]), shopOwnWithPatches(tc.from, tc.to, tc.patched); got != before {
+			if got, before := string(disk[shopKustomizationFile]), shopOwnHolding(patches...); got != before {
 				t.Errorf("%s:\n%s\nwant the file written before:\n%s", shopKustomizationFile, got, before)
 			}
 
@@ -237,14 +281,38 @@ func TestLayoutPatches_ARenameThenAPatchBuildsAsBefore(t *testing.T) {
 	}
 }
 
+// TestLayoutPatches_ABuildAnnotationThatDoesNotAgree: kustomize panics where
+// it reads the identities an object had from annotations that do not agree,
+// as many names as namespaces and kinds being its rule. The integration does
+// not read a patch that carries such an annotation: it returns, and the patch
+// is on the bundle's own Kustomization as it was before the per-layout
+// Kustomizations took patches. The tree is not built here, since kustomize
+// panics on it there as it did.
+func TestLayoutPatches_ABuildAnnotationThatDoesNotAgree(t *testing.T) {
+	patches := []stack.Patch{
+		{Patch: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: web-cm\n  namespace: default\n  annotations:\n    internal.config.kubernetes.io/previousNames: old,older\ndata:\n  patched: \"yes\"\n"},
+		untargeted(cmDoc("absent")),
+	}
+	ml := integrated(t, oneBundleCluster(patchShop(nil, patches...)), perLayoutRules())
+	if got, want := patchPlacement(t, ml, patches), (map[string][]int{"shop": {0, 1}}); !reflect.DeepEqual(got, want) {
+		t.Errorf("patches are held by %v, want %v", got, want)
+	}
+	disk := treeFiles(t, writeAll(t, ml)["WriteToDisk"].root)
+	if got, before := string(disk[shopKustomizationFile]), shopOwnHolding(patches...); got != before {
+		t.Errorf("%s:\n%s\nwant the file written before:\n%s", shopKustomizationFile, got, before)
+	}
+}
+
 // TestLayoutPatches_ARenameInALayoutsBuild is the limit of the rule: what an
-// untargeted patch after an entry that can rename names is not followed, so
-// the patch reaches a layout's Kustomization only for an object that build
-// holds as generated, and stays on the bundle's own in every case. Two trees
-// are left as they were, the build of the bundle's own Kustomization failing
-// on the cluster and nothing refused: a patch for an object only a layout
-// builds, and a patch for the name the entry gives an object of a layout.
-// Each has a remedy that builds.
+// entry that is not a plain strategic-merge patch does is not followed, so an
+// untargeted patch after it reaches a layout's Kustomization only for an
+// object that build holds as generated and stays on the bundle's own in every
+// case, and an untargeted entry that is not plain stays on the bundle's own
+// alone. Three trees are left as they were, the build of the bundle's own
+// Kustomization failing on the cluster and nothing refused: a later patch for
+// an object only a layout builds, a later patch for the name the entry gives
+// an object of a layout, and an untargeted entry with a build annotation for
+// an object only a layout builds. Each has a remedy that builds.
 func TestLayoutPatches_ARenameInALayoutsBuild(t *testing.T) {
 	const noMatch = "no resource matches strategic merge patch"
 	ownFails := func(t *testing.T, ml *layout.ManifestLayout) map[string]map[string]map[string]string {
@@ -298,7 +366,7 @@ func TestLayoutPatches_ARenameInALayoutsBuild(t *testing.T) {
 			t.Errorf("patches are held by %v, want %v", got, want)
 		}
 		disk := treeFiles(t, writeAll(t, ml)["WriteToDisk"].root)
-		if got, before := string(disk[shopKustomizationFile]), shopOwnWithPatches("pre", "renamed", "renamed"); got != before {
+		if got, before := string(disk[shopKustomizationFile]), shopOwnHolding(patches...); got != before {
 			t.Errorf("%s:\n%s\nwant the file written before:\n%s", shopKustomizationFile, got, before)
 		}
 		built := ownFails(t, ml)
@@ -316,25 +384,56 @@ func TestLayoutPatches_ARenameInALayoutsBuild(t *testing.T) {
 			t.Errorf("shop-00-pre builds the ConfigMaps %v, want %v", got, want)
 		}
 	})
+
+	t.Run("an untargeted entry with a build annotation for an object only a layout builds", func(t *testing.T) {
+		patches := []stack.Patch{renamePrevious("pre", "renamed")}
+		ml := integrated(t, oneBundleCluster(patchShop(nil, patches...)), perLayoutRules())
+		if got, want := patchPlacement(t, ml, patches), (map[string][]int{"shop": {0}}); !reflect.DeepEqual(got, want) {
+			t.Errorf("patches are held by %v, want %v", got, want)
+		}
+		built := ownFails(t, ml)
+		// The layout's build does not hold the patch: its ConfigMap keeps its name.
+		if got, want := built["shop-00-pre"], (map[string]map[string]string{"pre": {}}); !reflect.DeepEqual(got, want) {
+			t.Errorf("shop-00-pre builds the ConfigMaps %v, want %v", got, want)
+		}
+	})
+	t.Run("remedy: a target on the entry", func(t *testing.T) {
+		patches := []stack.Patch{renameAllowed("pre", "renamed")}
+		ml := integrated(t, oneBundleCluster(patchShop(nil, patches...)), perLayoutRules())
+		built := allBuild(t, ml)
+		if got, want := built["shop-00-pre"], (map[string]map[string]string{"renamed": {}}); !reflect.DeepEqual(got, want) {
+			t.Errorf("shop-00-pre builds the ConfigMaps %v, want %v", got, want)
+		}
+	})
 }
 
-// TestKustomize_AStrategicMergePatchWithATargetKeepsTheIdentity pins what
-// the placement relies on to count a JSON6902 patch with a target as the one
-// entry that can change an identity: kustomize merges a strategic-merge
-// patch with a target into the object the target selects and keeps that
-// object's apiVersion, kind, name and namespace, whatever the document
-// carries.
-func TestKustomize_AStrategicMergePatchWithATargetKeepsTheIdentity(t *testing.T) {
-	patch := stack.Patch{
-		Patch:  "apiVersion: example.com/v2\nkind: Other\nmetadata:\n  name: renamed\n  namespace: elsewhere\ndata:\n  patched: \"yes\"\n",
-		Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "web-cm"},
-	}
-	ml := integrated(t, oneBundleCluster(patchShop(nil, patch)), perLayoutRules())
-	built, failed := patchedBuilds(t, ml)
-	for k, err := range failed {
-		t.Errorf("kustomize build of %s: %v", k, err)
-	}
-	if got, want := built["shop"], (map[string]map[string]string{"web-cm": patchedData}); !reflect.DeepEqual(got, want) {
-		t.Errorf("the bundle's own Kustomization builds the ConfigMaps %v, want %v", got, want)
+// TestKustomize_APlainStrategicMergePatchKeepsTheIdentity pins what the
+// placement relies on to place by object after a plain strategic-merge patch
+// with a target: kustomize merges it into the object the target selects and
+// keeps that object's apiVersion, kind, name and namespace, whatever the
+// document carries. The same document with the annotation that allows the
+// change of name is not plain, and renames the object.
+func TestKustomize_APlainStrategicMergePatchKeepsTheIdentity(t *testing.T) {
+	const doc = "apiVersion: example.com/v2\nkind: Other\nmetadata:\n  name: renamed\n  namespace: elsewhere\n"
+	const data = "data:\n  patched: \"yes\"\n"
+	target := &stack.PatchSelector{Kind: "ConfigMap", Name: "web-cm"}
+	for name, tc := range map[string]struct {
+		patch string
+		want  string
+	}{
+		"plain":                              {patch: doc + data, want: "web-cm"},
+		"with the annotation that allows it": {patch: doc + "  annotations:\n    internal.config.kubernetes.io/allowNameChange: enabled\n" + data, want: "renamed"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			patch := stack.Patch{Patch: tc.patch, Target: target}
+			ml := integrated(t, oneBundleCluster(patchShop(nil, patch)), perLayoutRules())
+			built, failed := patchedBuilds(t, ml)
+			for k, err := range failed {
+				t.Errorf("kustomize build of %s: %v", k, err)
+			}
+			if got, want := built["shop"], (map[string]map[string]string{tc.want: patchedData}); !reflect.DeepEqual(got, want) {
+				t.Errorf("the bundle's own Kustomization builds the ConfigMaps %v, want %v", got, want)
+			}
+		})
 	}
 }
