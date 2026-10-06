@@ -677,7 +677,8 @@ whole, and the bundle's patches are placed by object. What to do:
   `${...}`, or an escape `$${VAR}` in a patch, it gets `kustomize.toolkit.fluxcd.io/substitute:
   disabled`. That also stops the parent substituting its labels, annotations and path, so a tree
   where the parent substitutes one of those too is refused: drop the `${...}` there, or the escape.
-  A plain `${VAR}` is left alone. A value `SubstituteFrom` reads from the cluster that itself holds
+  A plain `${VAR}` is left alone, unless the parent is a Kustomization of your own, kept in place
+  of the bundle's, that sets it to another value. A value `SubstituteFrom` reads from the cluster that itself holds
   `${...}` or `$$` is still substituted twice.
 
 The full rules, the refusals and the limit are in the

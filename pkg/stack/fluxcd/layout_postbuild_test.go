@@ -203,6 +203,37 @@ func TestLayoutPostBuild_ThroughTheParentsBuild(t *testing.T) {
 		}
 	})
 
+	t.Run("a plain ${VAR} in a patch, under a parent with other vars: the opt-out", func(t *testing.T) {
+		// The caller's own Kustomization, kept in place of the bundle's, sets
+		// VAR to another value: the parent's substitution would write its
+		// value into shop-db's patch, where shop-db's own would write x.
+		build := func() *stack.Cluster {
+			b := shopSettings(nil)
+			b.PostBuild = &stack.PostBuild{Substitute: map[string]string{"VAR": "x"}}
+			b.Patches = []stack.Patch{{
+				Patch:  "- op: add\n  path: /data/note\n  value: \"${VAR}\"\n",
+				Target: &stack.PatchSelector{Kind: "ConfigMap"},
+			}}
+			return oneBundleCluster(b)
+		}
+		ml, c := keptIn(t, build, perLayoutRules(), "shop", "typed", func(k *kustv1.Kustomization) {
+			k.Spec.PostBuild = &kustv1.PostBuild{Substitute: map[string]string{"VAR": "y"}}
+		}, nil)
+		if err := integrate(ml, c, perLayoutRules()); err != nil {
+			t.Fatalf("IntegrateWithLayout: %v", err)
+		}
+		if got := mustKustomization(t, ml, "shop-db").Annotations[substituteOptOut]; got != "disabled" {
+			t.Errorf("shop-db, built by the kept shop: %s = %q, want disabled", substituteOptOut, got)
+		}
+		// The others are built by a Kustomization of the same bundle, with
+		// the same vars.
+		for _, name := range shopLayoutNames[1:] {
+			if got, ok := mustKustomization(t, ml, name).Annotations[substituteOptOut]; ok {
+				t.Errorf("%s: %s = %q, want none", name, substituteOptOut, got)
+			}
+		}
+	})
+
 	t.Run("refused: an escape, and another field the parent substitutes", func(t *testing.T) {
 		_, err := postBuildTree(&stack.PostBuild{Substitute: map[string]string{"VAR": "x"}}, "$${VAR}", map[string]string{"note": "${VAR}"})
 		mustContainAll(t, err, `"shop-db"`, `"prod/shop/db"`, "(spec.patches)", "metadata.annotations", "opt-out")

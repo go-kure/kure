@@ -12,7 +12,6 @@ import (
 	fluxkustomize "github.com/fluxcd/pkg/kustomize"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/provider"
 	"sigs.k8s.io/kustomize/api/resource"
 
@@ -49,13 +48,18 @@ const substituteOptOut = "kustomize.toolkit.fluxcd.io/substitute"
 //
 // A change to the postBuild always matters: the Kustomization uses its
 // substitute values as written, so a value holding ${...} must not be expanded
-// before. A change to the patches matters only where the Kustomization's own
-// substitution, run over what the parent's left, would change it again: the
-// patched objects are substituted after the patches are applied, with the
-// same vars, so ${VAR} comes out the same whether the parent substituted it
+// before. A change to the patches matters only where it changes what the
+// Kustomization's own substitution makes of them: the patched objects are
+// substituted after the patches are applied, with the Kustomization's own
+// vars, so what counts is that substitution over the patches the parent left
+// against the same over the patches as written. With the vars of the same
+// bundle on both, ${VAR} comes out the same whether the parent substituted it
 // first or not, and an escape does not: $${VAR}, which the Kustomization's own
 // substitution writes as the literal ${VAR}, is unescaped by the parent and
-// substituted after all. A var that only substituteFrom sets cannot be read
+// substituted after all. The parent's vars are not always the child's: a
+// Kustomization of the caller's own, kept in the place of the generated one
+// of the bundle, carries its own postBuild, and with other values a plain
+// ${VAR} matters too. A var that only substituteFrom sets cannot be read
 // offline, and counts as a value with no $ in it, as the offline run sets it;
 // a value read from the cluster that itself holds ${...} or $$ is therefore
 // substituted twice, and that is not seen here.
@@ -116,16 +120,16 @@ func (p *integratedPlacement) keepEmbeddedPostBuild(top *layout.ManifestLayout) 
 	return nil
 }
 
-// parentSubstitution runs Flux's postBuild substitution with k's vars over obj,
-// a Kustomization in k's build, as Flux's own in dry-run mode, which reads no
-// cluster: a var only substituteFrom sets is substituted with nothing. It
-// returns the fields it changes by their path below the object's top
-// ("metadata.labels", "spec.path"; "kind" for a top-level value), in order:
-// own those of obj's postBuild and patches where the change matters (see
-// keepEmbeddedPostBuild), other every other field it changes. An object
+// parentSubstitution runs Flux's postBuild substitution with k's vars over
+// child, a Kustomization in k's build, as Flux's own in dry-run mode, which
+// reads no cluster: a var only substituteFrom sets is substituted with
+// nothing. It returns the fields it changes by their path below the object's
+// top ("metadata.labels", "spec.path"; "kind" for a top-level value), in
+// order: own those of child's postBuild and patches where the change matters
+// (see keepEmbeddedPostBuild), other every other field it changes. An object
 // Flux's opt-out excludes changes nothing.
-func parentSubstitution(rf *resource.Factory, k *kustv1.Kustomization, obj client.Object) (own, other []string, err error) {
-	content, err := comparableContent(obj)
+func parentSubstitution(rf *resource.Factory, k, child *kustv1.Kustomization) (own, other []string, err error) {
+	content, err := comparableContent(child)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -141,11 +145,11 @@ func parentSubstitution(rf *resource.Factory, k *kustv1.Kustomization, obj clien
 				own = append(own, f)
 			}
 		case "spec.patches":
-			again, err := patchesChangeAgain(rf, k, after)
+			matters, err := patchesChangeForChild(rf, child, before, after)
 			if err != nil {
 				return nil, nil, err
 			}
-			if again {
+			if matters {
 				own = append(own, f)
 			}
 		default:
@@ -157,33 +161,57 @@ func parentSubstitution(rf *resource.Factory, k *kustv1.Kustomization, obj clien
 	return own, other, nil
 }
 
-// patchesChangeAgain reports whether k's substitution, run over the patches
-// of after (an object it has already substituted), changes them again. Only
-// the patches are read again: the other fields are not substituted a second
-// time by anything. A run that fails counts as a change: it fails on what the
-// parent's substitution left, so the Kustomization's own substitution would
-// fail on the objects those patches write, where the patches as written
-// substitute.
-func patchesChangeAgain(rf *resource.Factory, k *kustv1.Kustomization, after map[string]any) (bool, error) {
-	patches := fieldAt(after, "spec.patches")
+// patchesChangeForChild reports whether child's own substitution makes
+// something else of the patches the parent's substitution left (in after)
+// than of the patches as written (in before): child(parent(p)) != child(p).
+// Only the patches are read: the other fields are not substituted a second
+// time by anything. A child without a postBuild substitutes nothing, so any
+// change the parent made counts. A run that fails on one side and not on the
+// other counts as a change: the child's own substitution would fail on the
+// objects one set of patches writes and not on those of the other.
+func patchesChangeForChild(rf *resource.Factory, child *kustv1.Kustomization, before, after map[string]any) (bool, error) {
+	written, left := fieldAt(before, "spec.patches"), fieldAt(after, "spec.patches")
+	if child.Spec.PostBuild == nil {
+		return !reflect.DeepEqual(written, left), nil
+	}
+	fromWritten, writtenFails, err := childSubstitution(rf, child, before, written)
+	if err != nil {
+		return false, err
+	}
+	fromLeft, leftFails, err := childSubstitution(rf, child, after, left)
+	if err != nil {
+		return false, err
+	}
+	if writtenFails || leftFails {
+		return writtenFails != leftFails, nil
+	}
+	return !reflect.DeepEqual(fromWritten, fromLeft), nil
+}
+
+// childSubstitution runs child's own substitution, offline, over patches, the
+// patches of content. fails is set when the substitution itself fails on them.
+func childSubstitution(rf *resource.Factory, child *kustv1.Kustomization, content map[string]any, patches any) (out any, fails bool, err error) {
 	if patches == nil {
-		return false, nil
+		return nil, false, nil
 	}
 	alone := map[string]any{
-		"apiVersion": after["apiVersion"],
-		"kind":       after["kind"],
-		"metadata":   map[string]any{"name": fieldAt(after, "metadata.name")},
+		"apiVersion": content["apiVersion"],
+		"kind":       content["kind"],
+		"metadata":   map[string]any{"name": fieldAt(content, "metadata.name")},
 		"spec":       map[string]any{"patches": patches},
 	}
-	before, twice, err := substituteOnce(rf, k, alone)
+	_, substituted, err := substituteOnce(rf, child, alone)
 	if err != nil {
 		var substitution *substitutionError
 		if stderrors.As(err, &substitution) {
-			return true, nil
+			return nil, true, nil
 		}
-		return false, err
+		return nil, false, err
 	}
-	return twice != nil && !reflect.DeepEqual(fieldAt(before, "spec.patches"), fieldAt(twice, "spec.patches")), nil
+	if substituted == nil {
+		return patches, false, nil
+	}
+	return fieldAt(substituted, "spec.patches"), false, nil
 }
 
 // substitutionError is a failure of Flux's substitution itself, as opposed to
