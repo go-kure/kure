@@ -1587,6 +1587,12 @@ go-kure/kure#1015 that kept interval and prune the generator's.
   with a build annotation for an object only a layout builds, which is on the bundle's own
   alone (give it a target). An untargeted JSON6902 patch stays on the bundle's own as well;
   kustomize refuses it without a target wherever it is.
+- **A target is for a patch of one document:** kustomize refuses a target on an entry of
+  several strategic-merge documents before it selects anything (``Multiple Strategic-Merge
+  Patches in one `patches` entry is not allowed to set `patches.target` field``), and a patch
+  with a target is on every Kustomization of the bundle, so each of their builds fails. Where a
+  target is the remedy, in the limit above and in the refusals below, a patch of several
+  documents is first written as one entry per document, each with its target.
 - **A patch on a Kustomization of the bundle** lands where that object is hosted: one that names
   the Kustomization of an application's layout is written on the bundle's own, one that names a
   layout's below is written on the Kustomization of the layout above it.

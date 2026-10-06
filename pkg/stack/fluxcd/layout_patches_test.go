@@ -214,7 +214,7 @@ func TestLayoutPatches_Refusals(t *testing.T) {
 				`"shop-01-main", spec.path "prod/shop/db/01-main"`,
 				`"shop-02-deep", spec.path "prod/shop/db/01-main/02-deep"`,
 				"kustomize fails the build of a Kustomization that holds a strategic-merge patch for an object it does not build",
-				"give the patch a target, or place the object in a build of the bundle",
+				"give the patch a target (for a patch of several documents: one patch per document first, each with its target), or place the object in a build of the bundle",
 			},
 		},
 		"the patch is named by its index among the bundle's": {
