@@ -242,7 +242,9 @@ go-kure/kure#979 (`v0.2.0-beta.15` wrote `manifests/<root>`). The Source and the
    `wait`, timeout, retry interval, label or annotation, whatever the bundle set, and no field to
    give it any. Ordering between such Kustomizations was apply order only. No longer so: they
    take the five from the bundle that holds the application and from the layout
-   ([go-kure/kure#1015](https://github.com/go-kure/kure/issues/1015), below).
+   ([go-kure/kure#1015](https://github.com/go-kure/kure/issues/1015), below), and interval,
+   prune, force, suspend, the post-build substitution and patches as well
+   ([go-kure/kure#1021](https://github.com/go-kure/kure/issues/1021), below).
 
 What a consumer can do today:
 - **Ordering inside an application** is expressible, as umbrella children with `DependsOn`.
@@ -470,10 +472,11 @@ name of its bundle's.
 - **Collisions:** a node's `KustomizationName` equal to another Kustomization name generated in
   the same integration is refused, naming both owners (`integratedPlacement.claim`).
 - **Reconciliation settings:** a node Kustomization inherits none and `Node` has no field for
-  any. Interval and prune are the generator's (`createKustomizationForLayout`); what a group
-  applies is the Kustomizations below it. `wait`, `timeout` and `retryInterval` stayed unset
-  until go-kure/kure#1015, which reads them, with labels and annotations, from the node's layout
-  (below).
+  any; what a group applies is the Kustomizations below it. Its settings are those of the node's
+  layout: `wait`, `timeout` and `retryInterval`, with labels and annotations, since
+  go-kure/kure#1015, and interval, prune, force and suspend since go-kure/kure#1021 (both
+  below). Where the layout sets no interval or no prune, that one is the generator's
+  (`createKustomizationForLayout`).
 - **A second integration** keeps the node Kustomization the first one placed, and is refused when
   the node's `DependsOn` or `NamedDependsOn` ask for a dependency the kept one lacks
   (`checkKeptNodeCR`).
@@ -1456,10 +1459,11 @@ layout. Readiness passes through the chain of Kustomizations a bundle with `Wait
   removed and an inherited key cannot be dropped. The fields are read on every layout that gets a
   Kustomization of its own, and dropped without an error elsewhere and under the other
   placements, as `DependsOn` and `KustomizationName` are.
-- **Interval and prune stay the generator's** (`createKustomizationForLayout`). An interval is a
-  cadence and changes nothing about the order of readiness; `ResourceGenerator.Prune` is the
-  documented input for these Kustomizations, and taking `Bundle.Prune` would switch garbage
-  collection on in trees that render without it.
+- **Interval and prune stayed the generator's** in this change (`createKustomizationForLayout`):
+  an interval is a cadence and changes nothing about the order of readiness, and taking
+  `Bundle.Prune` would switch garbage collection on in trees that render without it.
+  go-kure/kure#1021 reversed this: both are now the layout's or the bundle's, the generator's
+  only where neither sets one (below).
 - **No health checks:** `wait` is the readiness setting of a per-layout Kustomization, and Flux
   ignores health checks under `wait`.
 - **Nodes:** `Node` gets no field and a node's Kustomization inherits nothing. The five layout
@@ -1488,10 +1492,11 @@ layout. Readiness passes through the chain of Kustomizations a bundle with `Wait
   every Kustomization below it.
 - **A second integration** keeps a per-layout Kustomization the first one placed and does not
   write its settings again.
-- **What does not reach an application's directory:** `Bundle.Prune`, `Interval`, `Force`,
-  `Suspend`, `PostBuild` and `Patches` stay settings of the bundle's Kustomization, which applies
-  the Kustomizations of its applications' directories and not the objects in them. For patches
-  this is what item 5 of go-kure/kure#979 pinned.
+- **What did not reach an application's directory:** `Bundle.Prune`, `Interval`, `Force`,
+  `Suspend`, `PostBuild` and `Patches` stayed settings of the bundle's Kustomization in this
+  change, which applies the Kustomizations of its applications' directories and not the objects
+  in them. For patches this is what item 5 of go-kure/kure#979 pinned. go-kure/kure#1021 passes
+  all six on (below).
 - **Bundle labels and annotations in a walked tree** are on the bundle's Kustomization and on
   these per-layout Kustomizations, and on no object: the walker generates each application on
   its own and only `Bundle.Generate` adds them to objects. The comment on the two `Bundle` fields
@@ -1521,11 +1526,92 @@ produced an object the API takes.
 **Tests.** `pkg/stack/fluxcd/layout_settings_test.go` renders to disk and to tar and covers the
 inherited settings with the whole file of one per-layout Kustomization, the tree that sets none,
 each layout field against its sibling, the other two placements, every refusal with the layout
-and the bundle named, the merged directory, an umbrella child, a node's layout, a layout outside an application, the
-bundle settings that do not reach an application's directory, and wait beside a dependency on the
-layout above. `duration_validation_test.go` and `durations_test.go` cover the durations: `-1s`,
+and the bundle named, the merged directory, an umbrella child, a node's layout, a layout outside an application, and wait beside a dependency
+on the layout above (the test of the bundle settings that did not reach an application's
+directory went with go-kure/kure#1021). `duration_validation_test.go` and `durations_test.go` cover the durations: `-1s`,
 `1us`, `1d` and `1h30m` on a bundle and on a layout, own and inherited, the bundle named by its
 path on every generation path, the `DefaultInterval` at each place it is written, the pattern
 against the vendored CRDs, and the written form against what a `metav1.Duration` marshals to;
 the controls are `Bundle.Validate` (`bundle_test.go`) and the Argo CD workflow (`argo_test.go`),
 which take the same values as before.
+
+### Six more settings of a per-layout Kustomization ([go-kure/kure#1021](https://github.com/go-kure/kure/issues/1021))
+
+**Shipped.** Under `FluxIntegratedPerLayout` a per-layout Kustomization takes interval, prune,
+force, suspend, the post-build substitution and patches from the bundle that holds its
+application, and the first four from its layout as well. This reverses the part of
+go-kure/kure#1015 that kept interval and prune the generator's.
+
+**What it does.**
+
+- **Fields on the layout:** `ManifestLayout.Interval`, `Prune`, `Force` and `Suspend`
+  (`manifest.go`). A set field replaces the holding bundle's; unset inherits it
+  (`integratedPlacement.layoutSettings` in `layout_settings.go`). They are read where the five
+  of go-kure/kure#1015 are, a node's layout included.
+- **Interval and prune fall back to the generator's:** where neither the layout nor the holding
+  bundle sets one, they are `ResourceGenerator.DefaultInterval` and `Prune` as before, and the
+  `DefaultInterval` is checked only where it is the one written (`checkDefaultInterval`). Force
+  and suspend unset are left out.
+- **The substitution is inherited whole** (`fluxPostBuild` in `resource_generator.go`): the
+  bundle's inline variables and `SubstituteFrom` references, each Kustomization with its own
+  copy. No layout field. Every Kustomization of the integration is in the generator's namespace,
+  where Flux reads a referenced ConfigMap or Secret from.
+- **Patches are placed by object** once every Kustomization and Source is placed
+  (`placeBundlePatches` in `layout_patches.go`). A patch with a target goes on the bundle's own
+  Kustomization and on every per-layout Kustomization of the bundle. An untargeted
+  strategic-merge patch goes on the Kustomizations, the bundle's own among them, whose build
+  holds every object it names, and on no other. A build is the directories `buildScope` lists,
+  the Kustomizations and Sources hosted there and the ConfigMap of each `configMapGenerator`
+  entry included; objects are compared as kustomize compares them (`resid.ResId.Equals`).
+- **One limit:** an untargeted entry that is not strategic-merge (a JSON6902 patch) names no
+  object and stays on the bundle's own Kustomization. Kustomize refuses it without a target
+  wherever it is.
+- **A second limit, after a patch that can rename:** the objects of a build are compared as
+  generated, and a JSON6902 patch with a target can change an object's identity before a later
+  patch is applied (a strategic-merge patch cannot: kustomize keeps the `apiVersion`, kind, name
+  and namespace of the object it merges into). The operations are not read, so every JSON6902 patch with a
+  target counts. An untargeted strategic-merge patch that comes after one in the bundle's list
+  is not placed by object and never refused: it stays on the bundle's own Kustomization, as
+  before, and is written besides on each per-layout Kustomization whose build holds every object
+  it names as generated. For such a patch two cases are as they were, the build of the bundle's
+  own Kustomization failing on the cluster and nothing refused: a patch for an object only a
+  layout builds (put it before the JSON6902 patch, or give it a target), and a patch for the name
+  the JSON6902 patch gives an object of a layout, which is not written on that layout's
+  Kustomization (give it a target that selects the new name).
+- **A patch on a Kustomization of the bundle** lands where that object is hosted: one that names
+  the Kustomization of an application's layout is written on the bundle's own, one that names a
+  layout's below is written on the Kustomization of the layout above it.
+- **Left alone:** a bundle none of whose applications got a per-layout Kustomization, a
+  Kustomization an earlier integration placed, the shared Kustomization of bundles merged into
+  one directory, and the other two placements.
+
+**Breaking.** A tree under `FluxIntegratedPerLayout` that sets none of the six renders byte for
+byte as before. One that sets any changes in three ways:
+
+- A bundle's `Interval`, `Prune`, `Force`, `Suspend` and `PostBuild` are now on the
+  Kustomizations of its applications' layouts and of the layouts below them. A bundle with
+  `Prune` on turns garbage collection on there, where the generator's `Prune` applied before.
+- The bundle's own Kustomization loses an untargeted strategic-merge patch whose object it does
+  not build. The patch is on the Kustomization that builds the object. Before, it was on the
+  bundle's own, whose build then failed on the cluster.
+- A failure moves from the cluster's kustomize build to the integration: an untargeted
+  strategic-merge patch is refused when no Kustomization of the bundle builds an object it
+  names (give it a target, or place the object in a build of the bundle), and when its documents
+  name objects no one Kustomization builds together (write one patch per object). The error
+  names the bundle, the patch's index and the object. A tree that built on the cluster before is
+  not refused: its bundle's own Kustomization built every object its untargeted patches name,
+  as generated or as an earlier JSON6902 patch of the list renamed it, and each of those patches
+  stays there; the second limit above is what keeps the renamed case out of the refusals.
+
+**Tests.** `pkg/stack/fluxcd/layout_patches_test.go` covers the placement by object at each
+depth, the hosted Kustomizations and a generated ConfigMap as objects of a build, the order, both
+refusals with their remedies, the patch that stays on the bundle's own with the file it had
+before, the bundle without per-layout Kustomizations, the before and after of the bundle's own
+Kustomization that loses a patch, the other two placements, a second integration, merged bundles
+and an umbrella child. `layout_patches_rename_test.go` covers the patch after a JSON6902 patch
+with a target, and runs the build of kustomize-controller on the written tree: a rename followed
+by a patch of the new or the old name builds and leaves the file of the bundle's own
+Kustomization as it was before, the two cases of the limit fail in the bundle's own build as
+before, and each remedy builds. `layout_settings_test.go` covers the four layout fields, the
+inherited six with whole files, the fallback of interval and prune, and every file of a tree that
+sets none of the six; `duration_validation_test.go` the interval among the checked durations.

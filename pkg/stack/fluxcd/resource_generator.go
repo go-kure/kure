@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -30,9 +31,10 @@ type ResourceGenerator struct {
 	DefaultInterval time.Duration
 	// DefaultNamespace is the default namespace for generated Flux resources
 	DefaultNamespace string
-	// Prune is the garbage-collection input for Kustomizations generated from a
-	// layout.ManifestLayout (FluxIntegratedPerLayout mode), which carries no
-	// prune setting of its own. Kustomizations generated from a stack.Bundle
+	// Prune is the garbage-collection input for a Kustomization generated from
+	// a layout.ManifestLayout (FluxIntegratedPerLayout mode) where neither the
+	// layout (ManifestLayout.Prune) nor the bundle that holds its application
+	// (Bundle.Prune) sets one. Kustomizations generated from a stack.Bundle
 	// use that bundle's own Prune and ignore this field. nil emits
 	// prune: false — see pruneValue.
 	Prune *bool
@@ -725,36 +727,11 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string,
 
 	// Apply patches
 	for _, p := range b.Patches {
-		patch := kustomize.Patch{Patch: p.Patch}
-		if p.Target != nil {
-			patch.Target = &kustomize.Selector{
-				Group:              p.Target.Group,
-				Version:            p.Target.Version,
-				Kind:               p.Target.Kind,
-				Name:               p.Target.Name,
-				Namespace:          p.Target.Namespace,
-				LabelSelector:      p.Target.LabelSelector,
-				AnnotationSelector: p.Target.AnnotationSelector,
-			}
-		}
-		kust.Spec.Patches = append(kust.Spec.Patches, patch)
+		kust.Spec.Patches = append(kust.Spec.Patches, fluxPatch(p))
 	}
 
 	// Apply postBuild variable substitution
-	if b.PostBuild != nil {
-		pb := &kustv1.PostBuild{}
-		if len(b.PostBuild.Substitute) > 0 {
-			pb.Substitute = b.PostBuild.Substitute
-		}
-		for _, ref := range b.PostBuild.SubstituteFrom {
-			pb.SubstituteFrom = append(pb.SubstituteFrom, kustv1.SubstituteReference{
-				Kind:     ref.Kind,
-				Name:     ref.Name,
-				Optional: ref.Optional,
-			})
-		}
-		kust.Spec.PostBuild = pb
-	}
+	kust.Spec.PostBuild = fluxPostBuild(b.PostBuild)
 
 	// Add dependencies
 	for i, dep := range b.DependsOn {
@@ -780,6 +757,47 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string,
 	}
 
 	return kust, nil
+}
+
+// fluxPatch returns a bundle's patch as a Flux Kustomization holds it in
+// spec.patches.
+func fluxPatch(p stack.Patch) kustomize.Patch {
+	patch := kustomize.Patch{Patch: p.Patch}
+	if p.Target != nil {
+		patch.Target = &kustomize.Selector{
+			Group:              p.Target.Group,
+			Version:            p.Target.Version,
+			Kind:               p.Target.Kind,
+			Name:               p.Target.Name,
+			Namespace:          p.Target.Namespace,
+			LabelSelector:      p.Target.LabelSelector,
+			AnnotationSelector: p.Target.AnnotationSelector,
+		}
+	}
+	return patch
+}
+
+// fluxPostBuild returns a bundle's postBuild substitution as a Flux
+// Kustomization holds it in spec.postBuild, or nil when the bundle sets none.
+// It is a copy: each Kustomization it is written into (the bundle's own, and
+// under FluxIntegratedPerLayout that of each layout of its applications) holds
+// its own.
+func fluxPostBuild(pb *stack.PostBuild) *kustv1.PostBuild {
+	if pb == nil {
+		return nil
+	}
+	out := &kustv1.PostBuild{}
+	if len(pb.Substitute) > 0 {
+		out.Substitute = maps.Clone(pb.Substitute)
+	}
+	for _, ref := range pb.SubstituteFrom {
+		out.SubstituteFrom = append(out.SubstituteFrom, kustv1.SubstituteReference{
+			Kind:     ref.Kind,
+			Name:     ref.Name,
+			Optional: ref.Optional,
+		})
+	}
+	return out
 }
 
 // checkKustomizationName refuses a bundle whose name in effect
@@ -833,14 +851,17 @@ func parseBundleDuration(b *stack.Bundle, field, value string) (time.Duration, e
 // layout integrator resolved from ml.DependsOn and, for a node layout, from
 // the node's DependsOn (layoutDependsOn).
 //
-// settings are the wait, timeout, retry interval, labels and annotations in
-// effect on it: the layout's own over those of the bundle that holds its
-// application (integratedPlacement.layoutSettings). Interval and prune are
-// the generator's, whatever that bundle sets. An interval is a cadence, not a
-// readiness setting: it changes nothing about the order in which
-// Kustomizations become Ready. ResourceGenerator.Prune is the documented
-// input for these Kustomizations, and taking Bundle.Prune instead would
-// switch garbage collection on in trees that render without it today.
+// settings are the interval, prune, force, suspend, wait, timeout, retry
+// interval, labels, annotations and postBuild substitution in effect on it:
+// the layout's own over those of the bundle that holds its application, and
+// for interval and prune the generator's where neither sets one
+// (integratedPlacement.layoutSettings). A tree whose layouts and bundles set
+// none of interval, prune, force, suspend and postBuild therefore gets the
+// Kustomization it got before those were read (go-kure/kure#1021).
+//
+// It is created without patches: which of the holding bundle's patches it
+// takes depends on what its build holds, which is known once every
+// Kustomization is placed (integratedPlacement.placeBundlePatches).
 //
 // It gets no health checks: wait is its readiness setting, and with wait Flux
 // ignores health checks.
@@ -850,7 +871,7 @@ func (g *ResourceGenerator) createKustomizationForLayout(
 	sourceRef kustv1.CrossNamespaceSourceReference,
 	dependsOn []string,
 	settings layoutSettings,
-) client.Object {
+) *kustv1.Kustomization {
 	kust := &kustv1.Kustomization{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: kustv1.GroupVersion.String(),
@@ -863,13 +884,16 @@ func (g *ResourceGenerator) createKustomizationForLayout(
 			Annotations: settings.annotations,
 		},
 		Spec: kustv1.KustomizationSpec{
-			Interval:      metav1.Duration{Duration: g.DefaultInterval},
+			Interval:      metav1.Duration{Duration: settings.interval},
 			Path:          ml.FullRepoPath(),
-			Prune:         pruneValue(g.Prune),
+			Prune:         settings.prune,
 			SourceRef:     sourceRef,
 			Wait:          settings.wait,
 			Timeout:       settings.timeout,
 			RetryInterval: settings.retryInterval,
+			Force:         settings.force,
+			Suspend:       settings.suspend,
+			PostBuild:     settings.postBuild,
 		},
 	}
 	for _, dep := range dependsOn {

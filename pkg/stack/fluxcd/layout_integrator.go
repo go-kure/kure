@@ -302,6 +302,12 @@ type integratedPlacement struct {
 	// (applyDeliveryIntents): a Source this pass derives with that identity
 	// carries them as well.
 	delivery map[string]map[string]string
+	// patchBuilds maps each bundle to its own Kustomization and to those of
+	// the layouts of its applications, and patchOrder lists those bundles in
+	// the order the pass met them: placeBundlePatches writes each bundle's
+	// patches on them once every Kustomization is placed.
+	patchBuilds map[*stack.Bundle]*bundlePatchBuilds
+	patchOrder  []*stack.Bundle
 }
 
 // hostedObject is an object and the layout whose Resources hold it (directly
@@ -377,17 +383,18 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		return err
 	}
 	p := &integratedPlacement{
-		gen:       li.Generator,
-		ix:        ix,
-		root:      ix.NodeLayout(c.Node),
-		perLayout: perLayout,
-		nodes:     newNodeIndex(ix, c),
-		names:     map[string]claimant{},
-		generated: map[string]bool{},
-		derived:   map[string]bool{},
-		placed:    map[client.Object]bool{},
-		derivable: derivableSources(ml, li.Generator.DefaultNamespace),
-		delivery:  delivery,
+		gen:         li.Generator,
+		ix:          ix,
+		root:        ix.NodeLayout(c.Node),
+		perLayout:   perLayout,
+		nodes:       newNodeIndex(ix, c),
+		names:       map[string]claimant{},
+		generated:   map[string]bool{},
+		derived:     map[string]bool{},
+		placed:      map[client.Object]bool{},
+		derivable:   derivableSources(ml, li.Generator.DefaultNamespace),
+		delivery:    delivery,
+		patchBuilds: map[*stack.Bundle]*bundlePatchBuilds{},
 	}
 	existing, err := indexExistingKustomizations(ml, nil)
 	if err != nil {
@@ -409,6 +416,12 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		return err
 	}
 	if err := p.checkSourcesAreHostedBeforeUse(ml); err != nil {
+		return err
+	}
+	// Every Kustomization and Source sits where it stays: a bundle's patches
+	// go on the Kustomizations whose build they belong to, before the checks
+	// that read a Kustomization's patches.
+	if err := p.placeBundlePatches(); err != nil {
 		return err
 	}
 	if err := p.checkRootBuildKeepsHostedSources(ml); err != nil {
@@ -1023,8 +1036,21 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 		// The CR is hosted by the parent of the layout that renders the
 		// bundles. Every unit has one: IntegrateWithLayout refuses a top
 		// that renders a bundle (go-kure/kure#979).
-		if err := p.add(p.ix.Parent(l), objs, bundleOwner(bundles[0]), bundleNamed(bundles[0])); err != nil {
+		host := p.ix.Parent(l)
+		if err := p.add(host, objs, bundleOwner(bundles[0]), bundleNamed(bundles[0])); err != nil {
 			return err
+		}
+		if p.perLayout {
+			// generateForUnit returns the unit's Kustomization first.
+			var unit *kustv1.Kustomization
+			if len(objs) > 0 {
+				unit, _ = objs[0].(*kustv1.Kustomization)
+			}
+			if unit == nil {
+				return errors.ResourceValidationError("Bundle", bundles[0].GetPath(), "flux-resources",
+					fmt.Sprintf("the Flux resources generated for layout %q do not start with its Kustomization, so the bundle's patches cannot be placed", l.FullRepoPath()), nil)
+			}
+			p.recordUnitBuild(host, l, bundles, unit)
 		}
 	}
 
@@ -1055,6 +1081,7 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 					return err
 				}
 				p.generated[crKey(p.gen.DefaultNamespace, name)] = true
+				p.recordLayoutBuild(l, child, name, nil)
 				continue
 			}
 			ref, err := p.layoutSource(child, scope)
@@ -1069,14 +1096,11 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 			if err != nil {
 				return err
 			}
-			// The interval of a per-layout Kustomization is the generator's.
-			if err := checkDefaultInterval("ResourceGenerator", p.gen.DefaultInterval); err != nil {
-				return err
-			}
 			cr := p.gen.createKustomizationForLayout(name, child, ref, deps, settings)
 			if err := p.add(l, []client.Object{cr}, owner, p.layoutNamed(child)); err != nil {
 				return err
 			}
+			p.recordLayoutBuild(l, child, name, cr)
 		}
 	}
 

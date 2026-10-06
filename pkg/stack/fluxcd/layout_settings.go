@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	apivalidation "k8s.io/apimachinery/pkg/api/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1validation "k8s.io/apimachinery/pkg/apis/meta/v1/validation"
@@ -17,16 +18,23 @@ import (
 
 // layoutSettings are the settings in effect on a per-layout Kustomization,
 // besides its name, path, source and dependencies: what the layout sets
-// (ManifestLayout.Wait, Timeout, RetryInterval, Labels, Annotations) over what
-// it inherits from the bundle that holds its application (layoutSettings on
-// integratedPlacement). Interval and prune are not among them: they stay the
-// generator's (createKustomizationForLayout).
+// (ManifestLayout.Interval, Prune, Force, Suspend, Wait, Timeout,
+// RetryInterval, Labels, Annotations) over what it inherits from the bundle
+// that holds its application (layoutSettings on integratedPlacement). The
+// postBuild substitution has no layout field: it is that bundle's. The
+// bundle's patches are not among the settings: they are placed once every
+// Kustomization is (placeBundlePatches).
 type layoutSettings struct {
+	interval      time.Duration
+	prune         bool
+	force         bool
+	suspend       bool
 	wait          bool
 	timeout       *metav1.Duration
 	retryInterval *metav1.Duration
 	labels        map[string]string
 	annotations   map[string]string
+	postBuild     *kustv1.PostBuild
 }
 
 // holdingBundle returns the bundle that holds the application l belongs to, or
@@ -63,15 +71,28 @@ func (p *integratedPlacement) holdingBundle(l *layout.ManifestLayout) *stack.Bun
 }
 
 // layoutSettings returns the settings in effect on l's per-layout
-// Kustomization, and refuses those Flux or the Kubernetes API would: a timeout
-// or retry interval that is no duration, a label or annotation the API does
-// not accept. The refusal names the layout by its directory and, for a value
-// the layout inherits, the bundle it comes from.
+// Kustomization, and refuses those Flux or the Kubernetes API would: an
+// interval, timeout or retry interval that is no duration, a label or
+// annotation the API does not accept. The refusal names the layout by its
+// directory and, for a value the layout inherits, the bundle it comes from.
 //
 // A scalar the layout sets replaces the bundle's; one it leaves unset is the
 // bundle's. Labels and annotations are the bundle's with the layout's on top,
 // key by key. Without a holding bundle (holdingBundle) the layout's own are
 // all there is.
+//
+// Where neither sets one, interval and prune are the generator's
+// (ResourceGenerator.DefaultInterval, ResourceGenerator.Prune), as they were
+// for every per-layout Kustomization before the layout and the bundle were
+// read (go-kure/kure#1021): a tree that sets neither renders as it did. The
+// generator's interval is checked only where it is the one written
+// (checkDefaultInterval), as for a bundle's own Kustomization.
+//
+// The postBuild substitution is the holding bundle's, whole: its inline
+// variables and its substituteFrom references as they are. Flux reads a
+// referenced ConfigMap or Secret from the Kustomization's namespace, and
+// every Kustomization of the pass is in the generator's, so a reference the
+// bundle's own Kustomization resolves is one this one resolves.
 func (p *integratedPlacement) layoutSettings(l *layout.ManifestLayout) (layoutSettings, error) {
 	holder := p.holdingBundle(l)
 	inherit := stack.Bundle{}
@@ -79,13 +100,27 @@ func (p *integratedPlacement) layoutSettings(l *layout.ManifestLayout) (layoutSe
 		inherit = *holder
 	}
 
-	wait := l.Wait
-	if wait == nil {
-		wait = inherit.Wait
+	s := layoutSettings{
+		prune:     pruneValue(firstSet(l.Prune, inherit.Prune, p.gen.Prune)),
+		force:     isTrue(firstSet(l.Force, inherit.Force)),
+		suspend:   isTrue(firstSet(l.Suspend, inherit.Suspend)),
+		wait:      waitValue(firstSet(l.Wait, inherit.Wait)),
+		postBuild: fluxPostBuild(inherit.PostBuild),
 	}
-	s := layoutSettings{wait: waitValue(wait)}
 
 	var err error
+	if l.Interval == "" && inherit.Interval == "" {
+		if err = checkDefaultInterval("ResourceGenerator", p.gen.DefaultInterval); err != nil {
+			return layoutSettings{}, err
+		}
+		s.interval = p.gen.DefaultInterval
+	} else {
+		interval, err := layoutDuration(l, holder, "interval", l.Interval, inherit.Interval)
+		if err != nil {
+			return layoutSettings{}, err
+		}
+		s.interval = interval.Duration
+	}
 	if s.timeout, err = layoutDuration(l, holder, "timeout", l.Timeout, inherit.Timeout); err != nil {
 		return layoutSettings{}, err
 	}
@@ -103,6 +138,24 @@ func (p *integratedPlacement) layoutSettings(l *layout.ManifestLayout) (layoutSe
 		return layoutSettings{}, err
 	}
 	return s, nil
+}
+
+// firstSet returns the first of values that is set, or nil when none is: a
+// tri-state setting the layout sets, or else the one it inherits.
+func firstSet(values ...*bool) *bool {
+	for _, v := range values {
+		if v != nil {
+			return v
+		}
+	}
+	return nil
+}
+
+// isTrue resolves a tri-state force or suspend input to the bool the upstream
+// field holds. Both are optional with omitempty, so unset and false are the
+// same emitted YAML: the key is absent.
+func isTrue(v *bool) bool {
+	return v != nil && *v
 }
 
 // layoutDuration resolves one duration setting of l's per-layout

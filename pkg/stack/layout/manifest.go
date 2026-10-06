@@ -113,6 +113,27 @@ type ManifestLayout struct {
 	RetryInterval string
 	Labels        map[string]string
 	Annotations   map[string]string
+	// Interval, Prune, Force and Suspend are four more settings of that
+	// Kustomization (go-kure/kure#1021): its spec.interval, spec.prune,
+	// spec.force and spec.suspend. They are read where the five above are and
+	// dropped without an error anywhere else, and they follow the same rule:
+	// set here, a value replaces the one of the bundle that holds the
+	// application; left unset, it is that bundle's. A Prune, Force or Suspend
+	// that points at false turns an inherited true off.
+	//
+	// Where neither the layout nor a holding bundle sets one, Interval and
+	// Prune are the generator's (ResourceGenerator.DefaultInterval and
+	// ResourceGenerator.Prune), and Force and Suspend are left out. Interval
+	// must parse as a Go duration and be one Flux takes; the integrator
+	// refuses any other value where it creates the Kustomization.
+	//
+	// The patches and the postBuild substitution of that Kustomization have
+	// no field here: they are the holding bundle's (Bundle.Patches,
+	// Bundle.PostBuild), and a layout without a holding bundle has none.
+	Interval string
+	Prune    *bool
+	Force    *bool
+	Suspend  *bool
 	// origin records the stack objects this layout renders (see origin.go).
 	// Set only by the walkers and FlattenSingleTier; never serialised.
 	origin origin
