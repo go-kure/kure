@@ -14,6 +14,27 @@ import (
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
+// annotatedSourcePatch is a target-less strategic-merge patch written for the
+// GitRepository called name in flux-system, with annotations of kustomize's
+// own build state, given as key and value pairs without the domain.
+func annotatedSourcePatch(name string, annotations ...string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "apiVersion: source.toolkit.fluxcd.io/v1\nkind: GitRepository\nmetadata:\n  name: %s\n  namespace: flux-system\n  annotations:\n", name)
+	for i := 0; i < len(annotations); i += 2 {
+		fmt.Fprintf(&b, "    internal.config.kubernetes.io/%s: %q\n", annotations[i], annotations[i+1])
+	}
+	b.WriteString("spec:\n  interval: 5m\n")
+	return b.String()
+}
+
+// previousIdentity is the annotations by which kustomize records the
+// identities an object had: here the GitRepository of each comma-separated
+// name in flux-system. With more than one name they list more names than
+// kinds and namespaces, which kustomize cannot read.
+func previousIdentity(names string) []string {
+	return []string{"previousKinds", "GitRepository", "previousNames", names, "previousNamespaces", "flux-system"}
+}
+
 // TestCheckRootBuildKeepsHostedSources_FollowsTheBootstrapBuild: the check
 // refuses a Kustomization whose build holds the root node's layout and changes
 // a Source the pass hosted there (go-kure/kure#908) when the build the Flux
@@ -27,6 +48,13 @@ import (
 // wrapper, is run through the integration in
 // TestIntegrate_RootBuildChangesHostedSource and
 // TestKeptKustomization_RootBuildChangesHostedSource.
+//
+// The same holds for the patch whose previous-identity annotations do not
+// agree, on which the check used to panic: the documents of a target-less
+// patch are read only for a Kustomization whose build holds the root node's
+// layout while the bootstrap's build holds it too, which no single placement
+// produces, so no tree the integration places reaches that line and the case
+// has no run through the integration.
 func TestCheckRootBuildKeepsHostedSources_FollowsTheBootstrapBuild(t *testing.T) {
 	const (
 		crName       = "platform-node"
@@ -101,6 +129,24 @@ func TestCheckRootBuildKeepsHostedSources_FollowsTheBootstrapBuild(t *testing.T)
 				cause:  "patch 0 (no target) names it"},
 			{name: "target-less patch naming another object", url: plainURL,
 				change: patch(kustomize.Patch{Patch: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: cm\n  namespace: default\ndata:\n  patched: \"true\"\n"})},
+			// A target-less patch is looked up by the first identity its
+			// previous-identity annotations give it, or else by the one it
+			// is written with (patchDocumentID): an annotation of
+			// kustomize's own build state changes whom it names, not
+			// whether it is read.
+			{name: "target-less patch naming the Source, which may be renamed", url: plainURL,
+				change: patch(kustomize.Patch{Patch: annotatedSourcePatch("shared", "allowNameChange", "enabled")}),
+				cause:  "patch 0 (no target) names it"},
+			{name: "target-less patch naming the Source by an identity it had", url: plainURL,
+				change: patch(kustomize.Patch{Patch: annotatedSourcePatch("renamed", previousIdentity("shared")...)}),
+				cause:  "patch 0 (no target) names it"},
+			{name: "target-less patch written as the Source, naming another by an identity it had", url: plainURL,
+				change: patch(kustomize.Patch{Patch: annotatedSourcePatch("shared", previousIdentity("other")...)})},
+			// Two names and one kind: kustomize cannot read an identity from
+			// these, here or in its own build, which panics on the patch. The
+			// document names no object of any build and the check returns.
+			{name: "target-less patch whose previous identities do not agree", url: plainURL,
+				change: patch(kustomize.Patch{Patch: annotatedSourcePatch("shared", previousIdentity("old,older")...)})},
 			{name: "postBuild over a plain Source", url: plainURL,
 				change: postBuild(kustv1.PostBuild{Substitute: map[string]string{"GIT_HOST": "git.example.com"}})},
 			{name: "postBuild substituting into the Source", url: templatedURL,

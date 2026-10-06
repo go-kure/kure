@@ -818,8 +818,12 @@ func (p *integratedPlacement) checkRootBuildKeepsHostedSources(top *layout.Manif
 				continue
 			}
 			for _, doc := range docs {
+				id, ok := patchDocumentID(doc)
+				if !ok {
+					continue
+				}
 				for _, s := range hosted {
-					if doc.OrgId().Equals(resourceID(s)) {
+					if id.Equals(resourceID(s)) {
 						return refuse(s, fmt.Sprintf("patch %d (no target) names it", i), movePatch)
 					}
 				}
@@ -840,6 +844,29 @@ func (p *integratedPlacement) checkRootBuildKeepsHostedSources(top *layout.Manif
 		}
 	}
 	return nil
+}
+
+// patchDocumentID is the identity by which kustomize looks up the object an
+// untargeted strategic-merge patch document is merged into: the first of the
+// identities its previous-identity annotations
+// (internal.config.kubernetes.io/previousKinds, previousNames and
+// previousNamespaces) give it, or else the one it is written with. ok is false
+// for a document kustomize cannot read them from, where they do not list
+// equally many values: OrgId panics on it, and so does kustomize's own build
+// of a Kustomization with that patch, so the document names no object of any
+// build.
+//
+// The reader of those annotations is internal to kustomize, so its rule is
+// not copied here, where the copy would have to follow kustomize's: the call
+// is made and its panic recovered. The recover is around that one call and
+// nothing else.
+func patchDocumentID(doc *resource.Resource) (id resid.ResId, ok bool) {
+	defer func() {
+		if recover() != nil {
+			id, ok = resid.ResId{}, false
+		}
+	}()
+	return doc.OrgId(), true
 }
 
 // resourceID is obj's identity as kustomize reads it from the object's
