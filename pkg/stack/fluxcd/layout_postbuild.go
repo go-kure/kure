@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"context"
+	stderrors "errors"
 	"path"
 	"reflect"
 	"slices"
@@ -132,13 +133,6 @@ func parentSubstitution(rf *resource.Factory, k *kustv1.Kustomization, obj clien
 	if err != nil || after == nil {
 		return nil, nil, err
 	}
-	_, twice, err := substituteOnce(rf, k, after)
-	if err != nil {
-		return nil, nil, err
-	}
-	if twice == nil {
-		twice = after
-	}
 	for _, f := range fieldPaths(before, after) {
 		changed := !reflect.DeepEqual(fieldAt(before, f), fieldAt(after, f))
 		switch f {
@@ -147,7 +141,11 @@ func parentSubstitution(rf *resource.Factory, k *kustv1.Kustomization, obj clien
 				own = append(own, f)
 			}
 		case "spec.patches":
-			if !reflect.DeepEqual(fieldAt(after, f), fieldAt(twice, f)) {
+			again, err := patchesChangeAgain(rf, k, after)
+			if err != nil {
+				return nil, nil, err
+			}
+			if again {
 				own = append(own, f)
 			}
 		default:
@@ -158,6 +156,42 @@ func parentSubstitution(rf *resource.Factory, k *kustv1.Kustomization, obj clien
 	}
 	return own, other, nil
 }
+
+// patchesChangeAgain reports whether k's substitution, run over the patches
+// of after (an object it has already substituted), changes them again. Only
+// the patches are read again: the other fields are not substituted a second
+// time by anything. A run that fails counts as a change: it fails on what the
+// parent's substitution left, so the Kustomization's own substitution would
+// fail on the objects those patches write, where the patches as written
+// substitute.
+func patchesChangeAgain(rf *resource.Factory, k *kustv1.Kustomization, after map[string]any) (bool, error) {
+	patches := fieldAt(after, "spec.patches")
+	if patches == nil {
+		return false, nil
+	}
+	alone := map[string]any{
+		"apiVersion": after["apiVersion"],
+		"kind":       after["kind"],
+		"metadata":   map[string]any{"name": fieldAt(after, "metadata.name")},
+		"spec":       map[string]any{"patches": patches},
+	}
+	before, twice, err := substituteOnce(rf, k, alone)
+	if err != nil {
+		var substitution *substitutionError
+		if stderrors.As(err, &substitution) {
+			return true, nil
+		}
+		return false, err
+	}
+	return twice != nil && !reflect.DeepEqual(fieldAt(before, "spec.patches"), fieldAt(twice, "spec.patches")), nil
+}
+
+// substitutionError is a failure of Flux's substitution itself, as opposed to
+// one reading or converting the object.
+type substitutionError struct{ err error }
+
+func (e *substitutionError) Error() string { return e.err.Error() }
+func (e *substitutionError) Unwrap() error { return e.err }
 
 // substituteOnce runs k's postBuild substitution, offline, over content. It
 // returns content as read, and as substituted, which is nil when the
@@ -181,8 +215,11 @@ func substituteOnce(rf *resource.Factory, k *kustv1.Kustomization, content map[s
 		opts = append(opts, fluxkustomize.SubstituteWithAlways(true))
 	}
 	out, err := fluxkustomize.SubstituteVariables(context.Background(), nil, unstructured.Unstructured{Object: kust}, res, opts...)
-	if err != nil || out == nil {
-		return before, nil, err
+	if err != nil {
+		return nil, nil, &substitutionError{err: err}
+	}
+	if out == nil {
+		return before, nil, nil
 	}
 	after, err = out.Map()
 	if err != nil {
