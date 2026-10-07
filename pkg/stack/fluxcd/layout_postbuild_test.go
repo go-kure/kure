@@ -4,10 +4,12 @@ import (
 	"context"
 	"maps"
 	"path"
+	"reflect"
 	"strings"
 	"testing"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"github.com/fluxcd/pkg/apis/kustomize"
 	fluxkustomize "github.com/fluxcd/pkg/kustomize"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -126,7 +128,11 @@ func TestLayoutPostBuild_ThroughTheParentsBuild(t *testing.T) {
 			if pb := k.Spec.PostBuild; pb == nil || !maps.Equal(pb.Substitute, map[string]string{"REGION": "eu"}) || len(pb.SubstituteFrom) != 0 {
 				t.Errorf("%s: postBuild = %#v, want the bundle's", name, pb)
 			}
-			if len(k.Spec.Patches) != 1 || !strings.Contains(k.Spec.Patches[0].Patch, `value: "plain"`) {
+			want := []kustomize.Patch{{
+				Patch:  "- op: add\n  path: /data/note\n  value: \"plain\"\n",
+				Target: &kustomize.Selector{Kind: "ConfigMap"},
+			}}
+			if !reflect.DeepEqual(k.Spec.Patches, want) {
 				t.Errorf("%s: patches = %#v, want the bundle's one as written", name, k.Spec.Patches)
 			}
 		}
