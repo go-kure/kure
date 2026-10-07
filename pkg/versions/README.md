@@ -66,10 +66,11 @@ caches the result — in a config file, a constant, a test fixture — will sile
 what `Get`/`All` report on kure's next release; call them at the point of use instead of
 hoisting the values out.
 
-The assessment behind a widening is not reachable through this API. `--note` is written to
-`versions.yaml`'s unexported `notes` key and rendered into the Notes column of
-`docs/compatibility.md`; `SupportedRange` records only the conclusion. A consumer asking why a
-range covers a given version reads one of those two, not this package.
+The assessment behind a widening is not reachable through this API. `--note` is appended to
+`versions.yaml`'s unexported `notes` key (`--replace-notes` overwrites it instead) and rendered
+into the Notes column of `docs/compatibility.md`, so that column accumulates the assessments of
+successive widenings; `SupportedRange` records only the conclusion. A consumer asking why a range covers a
+given version reads one of those two, not this package.
 
 What a range does and does not promise: the assessment is made against the YAML kure
 generates and the deployed tool's CRDs, so `SupportedRange` says that generated YAML applies
