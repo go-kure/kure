@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"reflect"
 	"slices"
@@ -9,8 +10,10 @@ import (
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	fluxkustomize "github.com/fluxcd/pkg/kustomize"
+	apivalidation "k8s.io/apimachinery/pkg/api/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/kustomize/api/provider"
 	"sigs.k8s.io/kustomize/api/resource"
 
@@ -43,7 +46,8 @@ const optOutRemedy = "remove the ${...} expressions from its %s (written from th
 //     written as before;
 //   - when one changes either and none changes another field, the
 //     Kustomization gets Flux's opt-out annotation, so that every build
-//     holding it applies it as written;
+//     holding it applies it as written; the integration is refused when its
+//     annotations with the opt-out are more than the API accepts;
 //   - when one changes either and one, the same or another, changes another
 //     field as well (a label, an annotation, the path), the integration is
 //     refused: the opt-out would drop that substitution, which the parent's
@@ -138,6 +142,14 @@ func (p *integratedPlacement) keepEmbeddedPostBuild(top *layout.ManifestLayout) 
 				annotations = map[string]string{}
 			}
 			annotations[substituteOptOut] = fluxkustomize.DisabledValue
+			// The layout's annotations were checked before the opt-out was
+			// added (layoutMetadata); with it they can pass the total size
+			// the API accepts, which the parent's build would then fail on.
+			if errs := apivalidation.ValidateAnnotations(annotations, field.NewPath("metadata", "annotations")); len(errs) > 0 {
+				return errors.ResourceValidationError("ManifestLayout", child.layout.FullRepoPath(), "annotations",
+					fmt.Sprintf("the annotations of the layout's Flux Kustomization %q, with Flux's opt-out from the substitution (%s: %s) that Flux Kustomization %q (spec.path %q) makes it need, are not what the Kubernetes API accepts: %v; shorten the layout's or the bundle's annotations",
+						child.name, substituteOptOut, fluxkustomize.DisabledValue, ownBy.Name, ownBy.Spec.Path, errs.ToAggregate()), nil)
+			}
 			child.cr.SetAnnotations(annotations)
 		}
 	}
