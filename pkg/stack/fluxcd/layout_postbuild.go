@@ -23,9 +23,9 @@ import (
 // as built, without substitution (fluxcd/pkg/kustomize, SubstituteVariables).
 const substituteOptOut = "kustomize.toolkit.fluxcd.io/substitute"
 
-// optOutRefusal ends keepEmbeddedPostBuild's refusal; its %s takes the other
-// fields the parent's substitution changes.
-const optOutRefusal = "Flux's opt-out from the substitution would keep the first as written and drop the second, which the build substitutes today; remove the ${...} expressions from its %s (written from the bundle's labels and annotations and the layout's path), or the ${...} expressions and escapes ($${...}) from the bundle's patches and postBuild substitute values"
+// optOutRemedy ends keepEmbeddedPostBuild's refusal; its %s takes the other
+// fields the parents' substitution changes.
+const optOutRemedy = "remove the ${...} expressions from its %s (written from the bundle's labels and annotations and the layout's path), or the ${...} expressions and escapes ($${...}) from the bundle's patches and postBuild substitute values"
 
 // keepEmbeddedPostBuild keeps the postBuild and the patches of each per-layout
 // Kustomization this pass created as they were written, through the build of
@@ -125,11 +125,11 @@ func (p *integratedPlacement) keepEmbeddedPostBuild(top *layout.ManifestLayout) 
 			}
 		}
 		if ownBy != nil && otherBy == ownBy {
-			return errors.Errorf("Flux Kustomization %q (spec.path %q) builds Flux Kustomization %q, of layout %q, and its postBuild substitution changes what the latter applies to its own build (%s) as well as its %s: "+optOutRefusal,
+			return errors.Errorf("Flux Kustomization %q (spec.path %q) builds Flux Kustomization %q, of layout %q, and its postBuild substitution changes what the latter applies to its own build (%s) as well as its %s: Flux's opt-out from the substitution would keep the first as written and drop the second, which the build substitutes today; "+optOutRemedy,
 				otherBy.Name, otherBy.Spec.Path, child.name, child.layout.FullRepoPath(), strings.Join(own, " and "), strings.Join(other, ", "), strings.Join(other, ", "))
 		}
 		if ownBy != nil && otherBy != nil {
-			return errors.Errorf("Flux Kustomizations %q (spec.path %q) and %q (spec.path %q) both build Flux Kustomization %q, of layout %q: the postBuild substitution of the first changes what the latter applies to its own build (%s), that of the second its %s: "+optOutRefusal,
+			return errors.Errorf("Flux Kustomizations %q (spec.path %q) and %q (spec.path %q) both build Flux Kustomization %q, of layout %q, and their postBuild substitutions change what the latter applies to its own build (%s) as well as its %s: Flux's opt-out from the substitution would keep the postBuild and patches as written and drop the substitution of the other fields, which those builds make today; "+optOutRemedy,
 				ownBy.Name, ownBy.Spec.Path, otherBy.Name, otherBy.Spec.Path, child.name, child.layout.FullRepoPath(), strings.Join(own, " and "), strings.Join(other, ", "), strings.Join(other, ", "))
 		}
 		if ownBy != nil {
