@@ -668,7 +668,8 @@ whole, and the bundle's patches are placed by object. What to do:
   names, write one patch per object. A target is for a patch of one object: kustomize refuses one
   on an entry of several documents, or of a `List` of several items, so split such a patch first.
 - **After a JSON6902 patch, a patch with one of kustomize's build annotations**
-  (`internal.config.kubernetes.io/`) **or a patch that deletes an object** (`$patch: delete`),
+  (`internal.config.kubernetes.io/`) **or a patch that removes an object from the build**
+  (`$patch: delete`, or `config.kubernetes.io/local-config` at any value but `"false"`),
   the patches that follow are not placed by object and stay
   on the bundle's own Kustomization as well; one whose object only a layout builds still fails
   there. Put it before that entry, or give it a target.
