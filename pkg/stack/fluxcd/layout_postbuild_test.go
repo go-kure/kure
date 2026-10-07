@@ -11,6 +11,7 @@ import (
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"github.com/fluxcd/pkg/apis/kustomize"
 	fluxkustomize "github.com/fluxcd/pkg/kustomize"
+	apivalidation "k8s.io/apimachinery/pkg/api/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -280,5 +281,29 @@ func TestLayoutPostBuild_ThroughTheParentsBuild(t *testing.T) {
 	t.Run("refused: an escape, and another field the parent substitutes", func(t *testing.T) {
 		_, err := postBuildTree(&stack.PostBuild{Substitute: map[string]string{"VAR": "x"}}, "$${VAR}", map[string]string{"note": "${VAR}"})
 		mustContainAll(t, err, `"shop-db"`, `"prod/shop/db"`, "(spec.patches)", "metadata.annotations", "opt-out")
+	})
+
+	// The annotations are checked against the total size the API accepts
+	// with the opt-out in them: filler sized so that the bundle's annotations
+	// and the opt-out come to the limit exactly, then to one byte more.
+	pb := &stack.PostBuild{Substitute: map[string]string{"REGION": "eu"}}
+	optOutSize := len(substituteOptOut) + len("disabled")
+	filler := func(over int) map[string]string {
+		return map[string]string{"filler": strings.Repeat("a", apivalidation.TotalAnnotationSizeLimitB-len("owner")-len("shop")-len("filler")-optOutSize+over)}
+	}
+	t.Run("annotations at the size limit with the opt-out: written", func(t *testing.T) {
+		ml, err := postBuildTree(pb, "${REGION}", filler(0))
+		if err != nil {
+			t.Fatalf("CreateLayoutWithResources: %v", err)
+		}
+		for _, name := range shopLayoutNames {
+			if got := mustKustomization(t, ml, name).Annotations[substituteOptOut]; got != "disabled" {
+				t.Errorf("%s: %s = %q, want disabled", name, substituteOptOut, got)
+			}
+		}
+	})
+	t.Run("refused: annotations one byte over the size limit with the opt-out", func(t *testing.T) {
+		_, err := postBuildTree(pb, "${REGION}", filler(1))
+		mustContainAll(t, err, `layout's Flux Kustomization "shop-`, substituteOptOut, "Too long", "shorten the layout's or the bundle's annotations")
 	})
 }
