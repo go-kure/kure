@@ -598,9 +598,11 @@ func checkResourceTypes(l *ManifestLayout) error {
 				continue
 			}
 			held := describeWritten(obj.Object, kind)
+			// r is the resource, the List that holds obj directly or the one
+			// whose Lists hold it however deep.
 			if obj.Object != runtime.Object(r) {
 				listKind, _, _ := built.WrittenType(r)
-				held += ", an item of " + describeWritten(r, listKind)
+				held += ", held in " + describeWritten(r, listKind)
 			}
 			return errors.NewFileError("write", l.FullRepoPath(), fmt.Sprintf(
 				"layout %q holds %s, which is written without %s: a resource file must state both for each object a build reads from it, a List's items in place of the List; set the object's TypeMeta, as this library's Create constructors do, or the two fields of an unstructured object",
