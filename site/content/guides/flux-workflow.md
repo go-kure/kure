@@ -637,7 +637,7 @@ were. Interval, prune and four more settings follow in the next section. What to
   Kustomization takes it, naming the layout and, for one it inherits, the bundle.
 - **A duration Flux does not take is refused**, on every placement and on the bootstrap: a
   negative one (`"-1s"`) or a positive one under a millisecond (`"1us"`), in a bundle's `Interval`,
-  `Timeout` or `RetryInterval`, a layout's `Timeout` or `RetryInterval`, or a generator's
+  `Timeout` or `RetryInterval`, a layout's `Interval`, `Timeout` or `RetryInterval`, or a generator's
   `DefaultInterval`. The Flux API refuses the object such a value is written into, so no
   object it ever accepted changes. `Bundle.Validate` still accepts these values.
 - **A node's Kustomization inherits nothing.** Set the fields on the node's walked layout.
@@ -678,7 +678,8 @@ whole, and the bundle's patches are placed by object. What to do:
   and applies them as if no parent had run. That also stops the parent substituting its labels,
   annotations and path, so a tree where the parent's substitution changes a `${...}` in the
   bundle's patches or substitute values and one in its labels, annotations or the layout's path
-  is refused, where it rendered before: drop one of the two.
+  is refused, where it rendered before: drop one of the two. A tree whose annotations leave no
+  room for the opt-out under the Kubernetes API's total size is refused as well: shorten them.
 
 The full rules, the refusals and the limit are in the
 [Flux Engine reference](/api-reference/flux-engine/#per-layout-settings).
