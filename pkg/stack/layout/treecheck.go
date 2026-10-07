@@ -557,7 +557,10 @@ func layoutPath(l *ManifestLayout, plan writerPlan) string {
 // written with a kind, or it would not be a List (built.Objects takes an
 // object for one by its written kind), and a build drops the envelope without
 // reading its apiVersion, so a List without one builds and applies as its
-// items do.
+// items do. An object written with kustomize's local-config annotation at any
+// string value but "false" is not judged on its apiVersion either: a build drops it
+// without requiring one (built.LocalConfig). It is still judged on its kind,
+// which a build reads before it drops anything.
 //
 // Only an empty field is refused. Whether a kind exists in any API, and
 // whether an apiVersion is well formed, is not looked at. The type is not
@@ -583,6 +586,13 @@ func checkResourceTypes(l *ManifestLayout) error {
 			case kind == "":
 				missing = "a kind"
 			case apiVersion == "":
+				local, err := built.LocalConfig(obj.Object)
+				if err != nil {
+					return errors.Wrapf(err, "layout %q: read an object as written", l.FullRepoPath())
+				}
+				if local {
+					continue
+				}
 				missing = "an apiVersion"
 			default:
 				continue

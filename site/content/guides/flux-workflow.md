@@ -286,6 +286,14 @@ What changed, and what to do:
 - **Kustomization names are unique in a tree.** Two Flux Kustomizations with one namespace and
   name are refused wherever they sit, also in directories that are applied separately and inside
   a `List`: they are one object in the cluster.
+- **Objects without a kind or an apiVersion are refused** (breaking change in go-kure/kure#1020).
+  Each resource, and each item of a `List` however deep, must be written with both; a typed
+  object whose `TypeMeta` is unset has neither. kustomize fails on a document without a kind, and
+  one without an apiVersion builds into an object nothing applies. Set the `TypeMeta`, as the
+  `Create*` constructors do, or the two fields of an unstructured object. A `List`'s own
+  apiVersion is not required, nor the apiVersion of an object with the
+  `config.kubernetes.io/local-config` annotation at any string value but `"false"`, which kustomize
+  drops from the build.
 - **No `..` in a layout's name or namespace.** Every writer refuses a layout whose `Name` or
   `Namespace` has a `..` path segment, with or without extra files.
 - **The walk validates its rules.** `WalkCluster` and `WalkClusterByPackage` run

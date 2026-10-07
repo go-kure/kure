@@ -192,7 +192,10 @@ only an empty field is refused: whether the kind exists or the apiVersion is wel
 looked at. A kustomize build fails on a document without a kind, and one without an apiVersion
 builds into an object of no version that nothing applies. A List's own `apiVersion` is exempt:
 kustomize drops the envelope without reading it, so a List without one whose items are complete
-builds and applies as its items do, and is written as before.
+builds and applies as its items do, and is written as before. So is the `apiVersion` of an object
+with kustomize's `config.kubernetes.io/local-config` annotation at any string value but `"false"`:
+kustomize drops such an object from the build without requiring one, so it is written as before. Its
+`kind` is still required, since kustomize reads the kind before it drops anything.
 
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)
