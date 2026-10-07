@@ -29,7 +29,13 @@ const substituteOptOut = "kustomize.toolkit.fluxcd.io/substitute"
 // patch with a target that writes value into each ConfigMap's data, and extra
 // bundle annotations.
 func postBuildTree(pb *stack.PostBuild, value string, annotations map[string]string) (*layout.ManifestLayout, error) {
-	b := shopSettings(nil)
+	return postBuildTreeWith(nil, pb, value, annotations)
+}
+
+// postBuildTreeWith is postBuildTree with set editing the layouts, as
+// shopSettings does.
+func postBuildTreeWith(set func(app, pre, main, deep *layout.ManifestLayout), pb *stack.PostBuild, value string, annotations map[string]string) (*layout.ManifestLayout, error) {
+	b := shopSettings(set)
 	b.PostBuild = pb
 	b.Patches = []stack.Patch{{
 		Patch:  "- op: add\n  path: /data/note\n  value: \"" + value + "\"\n",
@@ -92,9 +98,23 @@ func firstPatch(t *testing.T, content map[string]any) string {
 	return patches[0].(map[string]any)["patch"].(string)
 }
 
+// optOutObjects gives every object of the four layouts Flux's opt-out.
+func optOutObjects(app, pre, main, deep *layout.ManifestLayout) {
+	for _, l := range []*layout.ManifestLayout{app, pre, main, deep} {
+		for _, obj := range l.Resources {
+			annotations := obj.GetAnnotations()
+			if annotations == nil {
+				annotations = map[string]string{}
+			}
+			annotations[substituteOptOut] = "disabled"
+			obj.SetAnnotations(annotations)
+		}
+	}
+}
+
 func TestLayoutPostBuild_ThroughTheParentsBuild(t *testing.T) {
-	t.Run("a plain ${VAR} in a patch: written as before", func(t *testing.T) {
-		ml, err := postBuildTree(&stack.PostBuild{Substitute: map[string]string{"REGION": "eu"}}, "${REGION}", nil)
+	t.Run("nothing the parent substitutes: written as before", func(t *testing.T) {
+		ml, err := postBuildTree(&stack.PostBuild{Substitute: map[string]string{"REGION": "eu"}}, "plain", nil)
 		if err != nil {
 			t.Fatalf("CreateLayoutWithResources: %v", err)
 		}
@@ -103,35 +123,49 @@ func TestLayoutPostBuild_ThroughTheParentsBuild(t *testing.T) {
 			if got := k.Annotations; !maps.Equal(got, map[string]string{"owner": "shop"}) {
 				t.Errorf("%s: annotations = %v, want the bundle's alone", name, got)
 			}
-			if len(k.Spec.Patches) != 1 || !strings.Contains(k.Spec.Patches[0].Patch, `"${REGION}"`) {
-				t.Errorf("%s: patches = %#v, want the bundle's one as written", name, k.Spec.Patches)
-			}
 		}
 	})
 
-	t.Run("a var only substituteFrom sets, in a patch and an annotation: written as before", func(t *testing.T) {
-		// The value from the cluster is taken to hold no $; one that does is
-		// substituted twice, the stated limit.
-		pb := &stack.PostBuild{SubstituteFrom: []stack.SubstituteRef{{Kind: "ConfigMap", Name: "cluster-vars"}}}
-		ml, err := postBuildTree(pb, "${FROM_CLUSTER}", map[string]string{"note": "${FROM_CLUSTER}"})
-		if err != nil {
-			t.Fatalf("CreateLayoutWithResources: %v", err)
-		}
-		for _, name := range shopLayoutNames {
-			k := mustKustomization(t, ml, name)
-			if got := k.Annotations; !maps.Equal(got, map[string]string{"owner": "shop", "note": "${FROM_CLUSTER}"}) {
-				t.Errorf("%s: annotations = %v, want the bundle's alone", name, got)
+	// Any ${...} in a patch is substituted by the parent first; what the
+	// child's own substitution then makes of the patched objects can differ,
+	// so each gets the opt-out and the patch reaches the child as written.
+	for name, tc := range map[string]struct {
+		set   func(app, pre, main, deep *layout.ManifestLayout)
+		pb    *stack.PostBuild
+		value string
+	}{
+		"a plain ${VAR}": {nil, &stack.PostBuild{Substitute: map[string]string{"REGION": "eu"}}, "${REGION}"},
+		"a var only substituteFrom sets": {nil,
+			&stack.PostBuild{SubstituteFrom: []stack.SubstituteRef{{Kind: "ConfigMap", Name: "cluster-vars"}}}, "${FROM_CLUSTER}"},
+		// The parent would write x into the patch; the child skips the
+		// ConfigMaps it patches, which keep ${REGION} as written.
+		"a ${VAR} for objects that carry the opt-out": {optOutObjects,
+			&stack.PostBuild{Substitute: map[string]string{"REGION": "x"}}, "${REGION}"},
+		// The parent would write the string "true" into the patch; the child
+		// substitutes the unquoted ${FLAG} the patch writes into the boolean.
+		"a ${VAR} whose value reads as another YAML type": {nil,
+			&stack.PostBuild{Substitute: map[string]string{"FLAG": "true"}}, "${FLAG}"},
+	} {
+		t.Run(name+" in a patch: the opt-out", func(t *testing.T) {
+			ml, err := postBuildTreeWith(tc.set, tc.pb, tc.value, nil)
+			if err != nil {
+				t.Fatalf("CreateLayoutWithResources: %v", err)
 			}
-			if len(k.Spec.Patches) != 1 || !strings.Contains(k.Spec.Patches[0].Patch, `"${FROM_CLUSTER}"`) {
-				t.Errorf("%s: patches = %#v, want the bundle's one as written", name, k.Spec.Patches)
+			for _, name := range shopLayoutNames {
+				k := mustKustomization(t, ml, name)
+				if got := k.Annotations[substituteOptOut]; got != "disabled" {
+					t.Errorf("%s: %s = %q, want disabled", name, substituteOptOut, got)
+				}
+				parent := parentOf(t, ml, k)
+				if got := firstPatch(t, substituted(t, parent, k)); !strings.Contains(got, `"`+tc.value+`"`) {
+					t.Errorf("%s through %s's build: patch %q, want it as written", name, parent.Name, got)
+				}
 			}
-		}
-	})
+		})
+	}
 
 	// An escape whose unescaped form is not a complete expression: the
-	// parent's substitution leaves ${BROKEN, which the second pass over a
-	// substitute value must not read, and over a patch fails, as the child's
-	// own substitution of what the patch writes would.
+	// parent's substitution leaves ${BROKEN, a change like any other.
 	for name, tc := range map[string]struct {
 		pb    *stack.PostBuild
 		patch string
@@ -222,14 +256,11 @@ func TestLayoutPostBuild_ThroughTheParentsBuild(t *testing.T) {
 		if err := integrate(ml, c, perLayoutRules()); err != nil {
 			t.Fatalf("IntegrateWithLayout: %v", err)
 		}
-		if got := mustKustomization(t, ml, "shop-db").Annotations[substituteOptOut]; got != "disabled" {
-			t.Errorf("shop-db, built by the kept shop: %s = %q, want disabled", substituteOptOut, got)
-		}
-		// The others are built by a Kustomization of the same bundle, with
-		// the same vars.
-		for _, name := range shopLayoutNames[1:] {
-			if got, ok := mustKustomization(t, ml, name).Annotations[substituteOptOut]; ok {
-				t.Errorf("%s: %s = %q, want none", name, substituteOptOut, got)
+		// shop-db is built by the kept shop, the others by a Kustomization of
+		// the bundle, with the bundle's vars.
+		for _, name := range shopLayoutNames {
+			if got := mustKustomization(t, ml, name).Annotations[substituteOptOut]; got != "disabled" {
+				t.Errorf("%s: %s = %q, want disabled", name, substituteOptOut, got)
 			}
 		}
 	})
