@@ -44,8 +44,10 @@ type Object struct {
 //
 // For a typed object the kind and the items field are read from its written
 // form, the JSON the writers marshal it to, not from its Go value: one whose
-// TypeMeta is left out of that JSON is no List, whatever kind its Go value
-// reports, and one that writes a kind ending in "List" is opened as one. Of
+// written kind does not end in "List" is no List, whatever kind its Go value
+// reports (one whose TypeMeta is left out of that JSON writes no kind, unless
+// another field writes one), and one that writes a kind ending in "List" is
+// opened as one. Of
 // the items field, a field left out when empty counts as absent,
 // and one written as null or as something that is no array is read as that,
 // whatever the Go value holds beside it. The items are the ones its Go value
@@ -129,7 +131,7 @@ func listItems(obj runtime.Object) (items []Object, isList bool, err error) {
 	if !has {
 		return nil, false, nil
 	}
-	if !meta.IsListType(obj) {
+	if !isTypedList(obj) {
 		return readItems(written)
 	}
 	extracted, err := typedListItems(obj)
@@ -205,6 +207,35 @@ func writtenAs(items []runtime.Object, held any) bool {
 	return true
 }
 
+// isTypedList is meta.IsListType, false where apimachinery cannot read the
+// Items field of obj's value. For an Items field of interface type it reads
+// the element type of what the field holds (getItemsPtr,
+// k8s.io/apimachinery/pkg/api/meta/help.go:101), which panics when the
+// field is nil or holds a value of a kind that has none, and it keeps its
+// answer per type, so a value of a type once taken for a List panics later
+// where its items are read; so does a field reached through an unexported
+// embedded struct. Such an object is read from what it writes, as any typed
+// object apimachinery takes for no List.
+func isTypedList(obj runtime.Object) bool {
+	if v := reflect.ValueOf(obj); v.Kind() == reflect.Pointer && !v.IsNil() && v.Elem().Kind() == reflect.Struct {
+		items := v.Elem().FieldByName("Items")
+		if items.IsValid() && !items.CanInterface() {
+			return false
+		}
+		if items.Kind() == reflect.Interface {
+			if items.IsNil() {
+				return false
+			}
+			switch items.Elem().Kind() {
+			case reflect.Array, reflect.Chan, reflect.Map, reflect.Pointer, reflect.Slice:
+			default:
+				return false
+			}
+		}
+	}
+	return meta.IsListType(obj)
+}
+
 // listRef names a typed List by its type and address.
 type listRef struct {
 	typ reflect.Type
@@ -218,17 +249,17 @@ type listRef struct {
 // the encoder never sees the whole path and the marshalling does not end.
 // Where one of them does not write its Items, the List may have a written
 // form and is refused all the same: the rule is on the list as apimachinery
-// reads it (meta.IsListType), not on what it writes. open has the Lists
-// being read around obj.
+// reads it (isTypedList), not on what it writes. open has the Lists being
+// read around obj.
 //
-// A List is followed where apimachinery takes it for one (meta.IsListType: a
+// A List is followed where apimachinery takes it for one (isTypedList: a
 // pointer to a struct with an Items field), through what it holds as its
 // items, read as the writers serialize them, so an object beside an item's
 // raw JSON is not. A value that reaches itself another way, through another
 // field, through an item that is no such List or through a List held as a
 // value, is not looked for; the writers look for none either.
 func refuseItemCycle(obj runtime.Object, open map[listRef]bool) error {
-	if _, ok := obj.(*unstructured.Unstructured); ok || !meta.IsListType(obj) {
+	if _, ok := obj.(*unstructured.Unstructured); ok || !isTypedList(obj) {
 		return nil
 	}
 	v := reflect.ValueOf(obj)
