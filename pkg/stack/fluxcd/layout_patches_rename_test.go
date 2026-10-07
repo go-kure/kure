@@ -17,9 +17,10 @@ import (
 )
 
 // Tests for a bundle's patch list in which an entry is not a plain
-// strategic-merge patch (go-kure/kure#1021): a JSON6902 patch, or a patch
-// whose text carries an annotation of kustomize's own build state. Such an
-// entry can change an object's identity, so it is written where it was
+// strategic-merge patch (go-kure/kure#1021): a JSON6902 patch, a patch whose
+// text carries an annotation of kustomize's own build state, or one that
+// deletes an object ($patch: delete). Such an entry can change an object's
+// identity or remove the object, so it is written where it was
 // before, and an untargeted strategic-merge patch after it is not placed by
 // object and never refused, since the identities as generated no longer say
 // what it names. These tests run the build of kustomize-controller on the
@@ -133,6 +134,12 @@ func renamePrevious(from, to string) stack.Patch {
 	}
 }
 
+// deleteKust is a strategic-merge patch document that deletes the Flux
+// Kustomization name from the build that holds it.
+func deleteKust(name string) string {
+	return "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: " + name + "\n  namespace: flux-system\n$patch: delete\n"
+}
+
 // TestLayoutPatches_AfterAnEntryThatIsNotPlain: placement by object holds
 // while every entry of the list is a plain strategic-merge patch. An entry
 // that is not is written where it was before, with a target on the bundle's
@@ -201,6 +208,18 @@ func TestLayoutPatches_AfterAnEntryThatIsNotPlain(t *testing.T) {
 		"the patch before a build annotation is placed by object": {
 			patches: []stack.Patch{untargeted(cmDoc("pre")), renamePrevious("web-cm", "renamed")},
 			want:    map[string][]int{"shop": {1}, "shop-00-pre": {0}},
+		},
+		"a deletion of a layout's Kustomization: the bundle's own, and what follows is not placed by object": {
+			patches: []stack.Patch{untargeted(deleteKust("shop-00-pre")), untargeted(cmDoc("pre"))},
+			want:    map[string][]int{"shop": {0, 1}, "shop-00-pre": {1}},
+		},
+		"a deletion in one document of several": {
+			patches: []stack.Patch{untargeted(cmDoc("db"), deleteKust("shop-00-pre")), untargeted(cmDoc("pre"))},
+			want:    map[string][]int{"shop": {0, 1}, "shop-00-pre": {1}},
+		},
+		"a deletion inside a document, of a field, is plain": {
+			patches: []stack.Patch{untargeted("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: pre\n  namespace: default\ndata:\n  $patch: delete\n"), untargeted(cmDoc("main"))},
+			want:    map[string][]int{"shop-00-pre": {0}, "shop-01-main": {1}},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

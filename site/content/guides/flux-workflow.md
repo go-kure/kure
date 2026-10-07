@@ -667,8 +667,9 @@ whole, and the bundle's patches are placed by object. What to do:
   place the object in a build of the bundle; when no one Kustomization builds all the objects it
   names, write one patch per object. A target is for a patch of one object: kustomize refuses one
   on an entry of several documents, or of a `List` of several items, so split such a patch first.
-- **After a JSON6902 patch or a patch with one of kustomize's build annotations**
-  (`internal.config.kubernetes.io/`), the patches that follow are not placed by object and stay
+- **After a JSON6902 patch, a patch with one of kustomize's build annotations**
+  (`internal.config.kubernetes.io/`) **or a patch that deletes an object** (`$patch: delete`),
+  the patches that follow are not placed by object and stay
   on the bundle's own Kustomization as well; one whose object only a layout builds still fails
   there. Put it before that entry, or give it a target.
 - **Expect Flux's opt-out on a Kustomization whose postBuild or patches the parent would
