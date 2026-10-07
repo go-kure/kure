@@ -38,7 +38,7 @@ require (
 	github.com/cloudnative-pg/plugin-barman-cloud v0.15.1
 	github.com/controlplaneio-fluxcd/flux-operator v0.58.1
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0
-	github.com/external-secrets/external-secrets/apis v0.0.0-20260918141056-e8f12e1f1646
+	github.com/external-secrets/external-secrets/apis v0.0.0-20261006075617-9d17906e8e4c
 	github.com/fluxcd/flux2/v2 v2.9.5
 	github.com/fluxcd/helm-controller/api v1.6.4
 	github.com/fluxcd/image-automation-controller/api v1.2.5
