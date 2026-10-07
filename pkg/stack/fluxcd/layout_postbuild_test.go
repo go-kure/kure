@@ -123,6 +123,12 @@ func TestLayoutPostBuild_ThroughTheParentsBuild(t *testing.T) {
 			if got := k.Annotations; !maps.Equal(got, map[string]string{"owner": "shop"}) {
 				t.Errorf("%s: annotations = %v, want the bundle's alone", name, got)
 			}
+			if pb := k.Spec.PostBuild; pb == nil || !maps.Equal(pb.Substitute, map[string]string{"REGION": "eu"}) || len(pb.SubstituteFrom) != 0 {
+				t.Errorf("%s: postBuild = %#v, want the bundle's", name, pb)
+			}
+			if len(k.Spec.Patches) != 1 || !strings.Contains(k.Spec.Patches[0].Patch, `value: "plain"`) {
+				t.Errorf("%s: patches = %#v, want the bundle's one as written", name, k.Spec.Patches)
+			}
 		}
 	})
 
