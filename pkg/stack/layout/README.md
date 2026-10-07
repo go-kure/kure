@@ -178,6 +178,19 @@ holds itself as the object of an item, directly or through such lists. No other 
 itself is looked for: building one is the calling program's error. The Flux integration reads a
 resource by the same rule, so it and the writers agree on which objects a tree holds.
 
+Read the same way, every object a build takes in must be written with a `kind` and an
+`apiVersion` (go-kure/kure#1020): each resource, and each item of a List however many Lists deep,
+typed or unstructured, judged on what is written for it, not on its Go type. A typed object is
+written as it is, so one whose `TypeMeta` is unset becomes a document with neither; the writers
+refuse a layout that holds one before anything is written, naming the layout, the object and what
+it lacks. Set the `TypeMeta`, as this library's `Create*` constructors do, or the two fields of an
+unstructured object. The type is not filled in from a scheme, which would hide the mistake, and
+only an empty field is refused: whether the kind exists or the apiVersion is well formed is not
+looked at. A kustomize build fails on a document without a kind, and one without an apiVersion
+builds into an object of no version that nothing applies. A List's own `apiVersion` is exempt:
+kustomize drops the envelope without reading it, so a List without one whose items are complete
+builds and applies as its items do, and is written as before.
+
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)
 - **BundleGrouping**: whether each bundle gets a directory inside its node's (`GroupByName`) or renders in the node's directory (`GroupFlat`, default; the root node's bundles get one directory inside the root's, see [The root node's bundles](#the-root-nodes-bundles))

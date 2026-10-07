@@ -34,6 +34,8 @@ import (
 //   - a directory child, which its parent's kustomization.yaml lists by its
 //     Name, has its own path as Namespace and so is written below the
 //     directory listed (see checkDirectoryChildEntry);
+//   - a layout holds an object that is written without a kind or without an
+//     apiVersion (see checkResourceTypes);
 //   - a layout holds one object twice, counting the ConfigMaps its
 //     kustomization.yaml generates (see checkResourceIdentities);
 //   - an extra file takes a path the writer owns (see checkExtraFiles);
@@ -86,6 +88,11 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 			dirs[key] = l
 		}
 		if err := checkUnwrittenGenerators(l, plan, l == root); err != nil {
+			return err
+		}
+		// Before the identity checks, which have no identity to read from an
+		// object without a kind.
+		if err := checkResourceTypes(l); err != nil {
 			return err
 		}
 		if err := checkResourceIdentities(l, plan.writesKustomization(l, l == root)); err != nil {
@@ -536,6 +543,80 @@ func layoutPath(l *ManifestLayout, plan writerPlan) string {
 	return dir
 }
 
+// checkResourceTypes refuses a layout that holds an object written without a
+// kind or without an apiVersion (go-kure/kure#1020). The writers write an
+// object as it is, so a typed object whose TypeMeta is unset becomes a document
+// with neither. A kustomize build fails on a document without a kind, and one
+// without an apiVersion builds into an object of no version, which nothing
+// applies; the tree is refused before anything of it is written.
+//
+// The objects are the ones a build reads from l's resources (see
+// builtObjects): each resource, or each item of a List, however many Lists
+// deep, typed or unstructured. Each is judged on what is written for it
+// (built.WrittenType), not on its Go type. A List itself is not judged: it has
+// a kind, or it would not be a List, and a build drops the envelope without
+// reading its apiVersion, so a List without one builds and applies as its
+// items do.
+//
+// Only an empty field is refused. Whether a kind exists in any API, and
+// whether an apiVersion is well formed, is not looked at. The type is not
+// filled in from a scheme either: that would hide the caller's mistake.
+func checkResourceTypes(l *ManifestLayout) error {
+	for _, r := range l.Resources {
+		if r == nil {
+			continue
+		}
+		objs, err := built.Objects(r)
+		if err != nil {
+			return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+		}
+		for _, obj := range objs {
+			kind, apiVersion, err := built.WrittenType(obj.Object)
+			if err != nil {
+				return errors.Wrapf(err, "layout %q: read an object as written", l.FullRepoPath())
+			}
+			var missing string
+			switch {
+			case kind == "" && apiVersion == "":
+				missing = "a kind and an apiVersion"
+			case kind == "":
+				missing = "a kind"
+			case apiVersion == "":
+				missing = "an apiVersion"
+			default:
+				continue
+			}
+			held := describeWritten(obj.Object, kind)
+			if obj.Object != runtime.Object(r) {
+				listKind, _, _ := built.WrittenType(r)
+				held += ", an item of " + describeWritten(r, listKind)
+			}
+			return errors.NewFileError("write", l.FullRepoPath(), fmt.Sprintf(
+				"layout %q holds %s, which is written without %s: a resource file must state both for every object in it; set the object's TypeMeta, as this library's Create constructors do, or the two fields of an unstructured object",
+				l.FullRepoPath(), held, missing), nil)
+		}
+	}
+	return nil
+}
+
+// describeWritten names an object in a refusal by the kind it is written with,
+// if any, its namespace and name where it has them, and its Go type, which is
+// all there is to tell an object without a kind by.
+func describeWritten(obj runtime.Object, kind string) string {
+	if kind == "" {
+		kind = "an object"
+	}
+	name := "without a name"
+	if acc, err := meta.Accessor(obj); err == nil && acc.GetName() != "" {
+		name = acc.GetName()
+		if acc.GetNamespace() != "" {
+			name = acc.GetNamespace() + "/" + name
+		}
+		name = fmt.Sprintf("%q", name)
+	}
+	return fmt.Sprintf("%s %s (Go type %T)", kind, name, obj)
+}
+
 // checkResourceIdentities refuses a layout that holds two resources with one
 // identity as layoutIdentity defines it (group, kind, namespace and name).
 // Resources that share a file name are legitimately written into one
@@ -632,7 +713,8 @@ func buildIdentity(gvk schema.GroupVersionKind, namespace, name string) string {
 // object kustomize builds from l's resources (see builtObjects). A List is an
 // envelope: kustomize builds what it holds, so that is what must be unique,
 // not the (usually unnamed) List, however many Lists deep an object sits. An
-// object without a kind has no identity and is skipped.
+// object without a kind has no identity and is skipped: in a tree a writer
+// checks, checkResourceTypes has refused it before.
 func eachIdentity(l *ManifestLayout, key identityKey, fn func(id string) error) error {
 	objs, err := builtObjects(l)
 	if err != nil {
@@ -647,7 +729,7 @@ func eachIdentity(l *ManifestLayout, key identityKey, fn func(id string) error) 
 		if gvk.Kind == "" {
 			// A typed object with an unset TypeMeta has no kind to
 			// identify it by; two of different Go types would share an
-			// empty key. It is not this check's to judge.
+			// empty key. It is checkResourceTypes' to refuse.
 			continue
 		}
 		if err := fn(key(gvk, acc.GetNamespace(), acc.GetName())); err != nil {

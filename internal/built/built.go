@@ -282,6 +282,25 @@ func unstructuredItems(u *unstructured.Unstructured) (items []Object, isList boo
 	return items, true, nil
 }
 
+// WrittenType returns the kind and the apiVersion obj is written with: the
+// two top-level fields of the JSON the writers marshal it to, which is what a
+// kustomize build reads them from. Each is empty where the field is absent,
+// null, empty or no string. A typed object is read from its written form and
+// not from its Go value, so one whose TypeMeta is unset has neither, whatever
+// its Go type is.
+func WrittenType(obj runtime.Object) (kind, apiVersion string, err error) {
+	var written map[string]any
+	if u, ok := obj.(*unstructured.Unstructured); ok {
+		// Written from its map as it is.
+		written = u.Object
+	} else if written, err = writtenForm(obj); err != nil {
+		return "", "", err
+	}
+	kind, _ = written["kind"].(string)
+	apiVersion, _ = written["apiVersion"].(string)
+	return kind, apiVersion, nil
+}
+
 // writtenForm returns a typed object as it is written: the writers marshal an
 // object to JSON first.
 func writtenForm(obj runtime.Object) (map[string]any, error) {
