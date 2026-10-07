@@ -2,6 +2,7 @@ package built
 
 import (
 	"runtime/debug"
+	"slices"
 	"strings"
 	"testing"
 
@@ -77,6 +78,16 @@ type unwrittenItems struct {
 }
 
 func (u *unwrittenItems) DeepCopyObject() runtime.Object { c := *u; return &c }
+
+// anyItems holds its items in a field of interface type, which apimachinery
+// takes for a list's items only when it holds a pointer to a slice.
+type anyItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             any `json:"items,omitempty"`
+}
+
+func (a *anyItems) DeepCopyObject() runtime.Object { c := *a; return &c }
 
 // unwrittenType reports a kind through a TypeMeta it leaves out of what is
 // written, and writes the kind field from a field of its own.
@@ -507,5 +518,49 @@ func TestObjects_NoKind(t *testing.T) {
 	}
 	if gvk := objs[0].GetObjectKind().GroupVersionKind(); gvk != (schema.GroupVersionKind{}) {
 		t.Errorf("kind %v, want none", gvk)
+	}
+}
+
+// An Items field apimachinery cannot read, nil or holding no pointer to a
+// slice, is no List's items: the object is read from what it writes, whatever
+// kind it reports and whatever apimachinery has taken its type for before.
+// The steps run in order: the third has apimachinery take the type for a
+// List, which it keeps for the fourth.
+func TestObjects_ItemsOfInterfaceType(t *testing.T) {
+	typeMeta := func(kind string) metav1.TypeMeta { return metav1.TypeMeta{APIVersion: "v1", Kind: kind} }
+	steps := []struct {
+		name     string
+		resource *anyItems
+		want     []described
+	}{
+		{
+			"an object of another kind whose items are nil",
+			&anyItems{TypeMeta: typeMeta("ConfigMap"), ObjectMeta: metav1.ObjectMeta{Name: "a"}},
+			[]described{{"ConfigMap", "a", false}},
+		},
+		{
+			"an object of another kind whose items are a string",
+			&anyItems{TypeMeta: typeMeta("ConfigMap"), ObjectMeta: metav1.ObjectMeta{Name: "b"}, Items: "none"},
+			[]described{{"ConfigMap", "b", false}},
+		},
+		{
+			"a List whose items are a pointer to a slice",
+			&anyItems{TypeMeta: typeMeta("ConfigMapList"), Items: &[]corev1.ConfigMap{*typedConfigMap("c")}},
+			[]described{{"ConfigMap", "c", false}},
+		},
+		{
+			"a List of the same type whose items are nil",
+			&anyItems{TypeMeta: typeMeta("ConfigMapList"), ObjectMeta: metav1.ObjectMeta{Name: "d"}},
+			[]described{{"ConfigMapList", "d", false}},
+		},
+	}
+	for _, s := range steps {
+		objs, err := Objects(s.resource)
+		if err != nil {
+			t.Fatalf("%s: Objects: %v", s.name, err)
+		}
+		if got := describe(t, objs); !slices.Equal(got, s.want) {
+			t.Errorf("%s: got %v, want %v", s.name, got, s.want)
+		}
 	}
 }

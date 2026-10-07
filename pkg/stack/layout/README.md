@@ -166,9 +166,10 @@ Every check above that compares objects reads a resource that way (go-kure/kure#
 of one layout, the check of one build and the check of Kustomization names take a resource for the
 objects kustomize builds from it, so two objects of one identity are refused however many Lists
 deep one of them sits. For a typed object the kind and the `items` field are the ones in the
-written file, not what its Go value reports: a typed object whose `TypeMeta` is left out of what
-is written is one object without a kind, whatever its Go type, and one that writes a kind ending
-in `List` is opened as a List. A typed List kind that leaves an empty `items` out is one object, and one that writes other items
+written file, not what its Go value reports: a typed object written without a kind, as one whose
+`TypeMeta` is left out of what is written is unless another field writes a kind, is one object
+without a kind, whatever its Go type, and one that writes a kind ending in `List` is opened as a
+List. A typed List kind that leaves an empty `items` out is one object, and one that writes other items
 than its Go value holds is read for the ones it writes. An item of a typed List need not
 carry object metadata to be read: a List without any, such as the core `v1` List as a Go value
 (`metav1.List`), is opened like any other, and an item held as raw JSON is the object it encodes.
