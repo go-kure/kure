@@ -140,7 +140,7 @@ func holds(host *layout.ManifestLayout, cr *kustv1.Kustomization) bool {
 // entry of the list before it, and the patch itself, is a plain
 // strategic-merge patch (plainStrategicMerge): one that parses as resources,
 // of which no document carries an annotation of kustomize's own build state
-// and none removes its object from the build ($patch: delete, or the
+// and none can remove its object from the build ($patch: delete, or the
 // local-config annotation). A plain patch keeps the
 // identity of what it is merged into, by
 // kustomize api v0.21.2:
@@ -166,8 +166,8 @@ func holds(host *layout.ManifestLayout, cr *kustv1.Kustomization) bool {
 // and others give a document the identity it names its object by, which
 // kustomize panics on when they do not agree (Resource.OrgId). A document
 // with $patch: delete, or one that gives its object kustomize's local-config
-// annotation, removes the object from the build altogether, a per-layout
-// Kustomization in its parent's build among them.
+// annotation at any value but "false", can remove the object from the build
+// altogether, a per-layout Kustomization in its parent's build among them.
 //
 // An entry that is not plain is therefore written where it was before
 // per-layout Kustomizations took patches, is never refused and is not read:
@@ -313,7 +313,7 @@ func (p *integratedPlacement) placeBundlePatches() error {
 // it parses as resources, which is how kustomize takes an entry for a
 // strategic-merge patch and not for a JSON6902 one, no document of it carries
 // an annotation of kustomize's own build state (carriesBuildAnnotation) and
-// none removes the object it is merged into from the build (removesObject).
+// none can remove the object it is merged into from the build (removesObject).
 // placeBundlePatches reads the documents of a plain patch and of no other.
 func plainStrategicMerge(rf *resource.Factory, text string) ([]*resource.Resource, bool) {
 	docs, err := rf.SliceFromBytes([]byte(text))
@@ -324,8 +324,8 @@ func plainStrategicMerge(rf *resource.Factory, text string) ([]*resource.Resourc
 	return docs, true
 }
 
-// removesObject reports whether doc, a document of a patch, removes the object
-// it is merged into from the build, by kustomize api and kyaml v0.21.2:
+// removesObject reports whether doc, a document of a patch, can remove the
+// object it is merged into from the build, by kustomize api and kyaml v0.21.2:
 //
 //   - its top-level strategic-merge directive is $patch: delete, which
 //     kustomize reads as the deletion of the whole object
@@ -335,9 +335,13 @@ func plainStrategicMerge(rf *resource.Factory, text string) ([]*resource.Resourc
 //     patch gives the object that annotation, and kustomize drops every object
 //     that has it once the build has run its patches (KustTarget.IgnoreLocal,
 //     internal/target/kusttarget.go:162; Factory.DropLocalNodes,
-//     resource/factory.go:149-151). A document that sets it to null, which
-//     removes the annotation, counts as well: what the merge leaves is not
-//     read.
+//     resource/factory.go:149-151).
+//
+// A document counts by what it carries, not by what the merge leaves, which
+// is not read: one that sets the annotation to null, which removes it,
+// counts, and so does one whose annotations also carry $patch: delete,
+// which deletes them and leaves the object
+// (kyaml yaml/merge2/merge2.go:60-86).
 //
 // The object is then in no build, so what an untargeted patch after it
 // names, as generated, no longer says where it is built: one for an object

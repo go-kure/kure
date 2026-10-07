@@ -19,7 +19,7 @@ import (
 // Tests for a bundle's patch list in which an entry is not a plain
 // strategic-merge patch (go-kure/kure#1021): a JSON6902 patch, a patch whose
 // text carries an annotation of kustomize's own build state, or one that
-// removes an object from the build ($patch: delete, or kustomize's
+// can remove an object from the build ($patch: delete, or kustomize's
 // local-config annotation). Such an entry can change an object's
 // identity or remove the object, so it is written where it was
 // before, and an untargeted strategic-merge patch after it is not placed by
@@ -143,7 +143,7 @@ func deleteKust(name string) string {
 
 // localKust is a strategic-merge patch document that gives the Flux
 // Kustomization name kustomize's local-config annotation with value, which
-// drops the object from the build unless it is "false".
+// drops the object from the build unless it is "false" or null.
 func localKust(name, value string) string {
 	return "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: " + name + "\n  namespace: flux-system\n  annotations:\n    config.kubernetes.io/local-config: " + value + "\n"
 }
