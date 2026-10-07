@@ -140,9 +140,9 @@ func parentSubstitution(rf *resource.Factory, k, child *kustv1.Kustomization) (o
 }
 
 // substituteOnce runs k's postBuild substitution, offline, over content. It
-// returns content as read, and as substituted, which is nil when the
-// substitution does not run (Flux's opt-out, or no vars and no
-// substituteFrom).
+// returns content as read, and as substituted, which is nil when Flux's
+// opt-out excludes the object; with no vars and no substituteFrom it is
+// content unchanged.
 func substituteOnce(rf *resource.Factory, k *kustv1.Kustomization, content map[string]any) (before, after map[string]any, err error) {
 	res, err := rf.FromMap(content)
 	if err != nil {
