@@ -673,13 +673,12 @@ whole, and the bundle's patches are placed by object. What to do:
   there. Put it before that entry, or give it a target.
 - **Expect Flux's opt-out on a Kustomization whose postBuild or patches the parent would
   change.** A per-layout Kustomization is in its parent's build, whose postBuild substitution runs
-  over its own postBuild and patches first. Where that would change a substitute value holding
-  `${...}`, or an escape `$${VAR}` in a patch, it gets `kustomize.toolkit.fluxcd.io/substitute:
-  disabled`. That also stops the parent substituting its labels, annotations and path, so a tree
-  where the parent substitutes one of those too is refused: drop the `${...}` there, or the escape.
-  A plain `${VAR}` is left alone, unless the parent is a Kustomization of your own, kept in place
-  of the bundle's, that sets it to another value. A value `SubstituteFrom` reads from the cluster that itself holds
-  `${...}` or `$$` is still substituted twice.
+  over its own postBuild and patches first. Where that would change either at all, a plain
+  `${VAR}` in a bundle patch included, it gets `kustomize.toolkit.fluxcd.io/substitute: disabled`
+  and applies them as if no parent had run. That also stops the parent substituting its labels,
+  annotations and path, so a tree with a `${...}` in the bundle's patches or substitute values and
+  one in its labels, annotations or the layout's path is refused, where it rendered before: drop
+  one of the two.
 
 The full rules, the refusals and the limit are in the
 [Flux Engine reference](/api-reference/flux-engine/#per-layout-settings).

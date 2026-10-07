@@ -1558,15 +1558,12 @@ go-kure/kure#1015 that kept interval and prune the generator's.
   where Flux reads a referenced ConfigMap or Secret from.
 - **The parent's substitution leaves them as written** (`keepEmbeddedPostBuild` in
   `layout_postbuild.go`): a per-layout Kustomization is in its parent's build, whose postBuild
-  substitution runs over its postBuild and patches first. Where that would change a substitute
-  value, or what the Kustomization's own substitution makes of a patch (an escape `$${VAR}`, or a
-  `${VAR}` the parent sets to another value), it gets Flux's opt-out annotation
-  `kustomize.toolkit.fluxcd.io/substitute: disabled`; the opt-out also stops the parent
-  substituting its labels, annotations and path, so where the parent substitutes one of those too
-  the integration is refused. A plain `${VAR}` under a parent of the same bundle, with the same
-  vars, is left alone; a caller's own Kustomization kept in that parent's place can set others. A
-  variable only `SubstituteFrom` sets counts as a value without `$`, so one read from
-  the cluster that holds `${...}` or `$$` is substituted twice.
+  substitution runs over its postBuild and patches first. Where that would change either at all
+  (a `${VAR}`, plain or not, or an escape `$${VAR}`), it gets Flux's opt-out annotation
+  `kustomize.toolkit.fluxcd.io/substitute: disabled` and applies them as if no parent had run;
+  what a substituted patch comes to depends on the objects it patches, so any change counts. The
+  opt-out also stops the parent substituting its labels, annotations and path, so where the parent
+  substitutes one of those too the integration is refused.
 - **Patches are placed by object** once every Kustomization and Source is placed
   (`placeBundlePatches` in `layout_patches.go`). A patch with a target goes on the bundle's own
   Kustomization and on every per-layout Kustomization of the bundle. An untargeted
