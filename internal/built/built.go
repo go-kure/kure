@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/kustomize/api/konfig"
 
 	"github.com/go-kure/kure/pkg/errors"
 )
@@ -348,16 +349,44 @@ func unstructuredItems(u *unstructured.Unstructured) (items []Object, isList boo
 // not from its Go value, so one whose TypeMeta is unset has neither, whatever
 // its Go type is.
 func WrittenType(obj runtime.Object) (kind, apiVersion string, err error) {
-	var written map[string]any
-	if u, ok := obj.(*unstructured.Unstructured); ok {
-		// Written from its map as it is.
-		written = u.Object
-	} else if written, err = writtenForm(obj); err != nil {
+	written, err := writtenObject(obj)
+	if err != nil {
 		return "", "", err
 	}
 	kind, _ = written["kind"].(string)
 	apiVersion, _ = written["apiVersion"].(string)
 	return kind, apiVersion, nil
+}
+
+// LocalConfig reports whether obj is written with kustomize's local-config
+// annotation (konfig.IgnoredByKustomizeAnnotation) at any string value but
+// "false". A kustomize build drops such an object once it has run its
+// transformers, and does not require an apiVersion: by kustomize api v0.21.2 it
+// reads the kind of every object it takes in, and the name of every one whose
+// kind does not end in "List", and refuses one without
+// (Factory.dropBadNodes, resource/factory.go:253-268), and then drops
+// the object (KustTarget.IgnoreLocal, internal/target/kusttarget.go:255-265;
+// Factory.DropLocalNodes, resource/factory.go:134-155). Like WrittenType it
+// reads what is written, not the Go value; an annotation value that is no
+// string is not taken for one.
+func LocalConfig(obj runtime.Object) (bool, error) {
+	written, err := writtenObject(obj)
+	if err != nil {
+		return false, err
+	}
+	metadata, _ := written["metadata"].(map[string]any)
+	annotations, _ := metadata["annotations"].(map[string]any)
+	value, ok := annotations[konfig.IgnoredByKustomizeAnnotation].(string)
+	return ok && value != "false", nil
+}
+
+// writtenObject returns obj as it is written: an unstructured object from its
+// map as it is, a typed one from its written form.
+func writtenObject(obj runtime.Object) (map[string]any, error) {
+	if u, ok := obj.(*unstructured.Unstructured); ok {
+		return u.Object, nil
+	}
+	return writtenForm(obj)
 }
 
 // writtenForm returns a typed object as it is written: the writers marshal an

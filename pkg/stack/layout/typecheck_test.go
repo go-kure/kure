@@ -113,6 +113,17 @@ func TestWriters_RefuseObjectWithoutKindOrAPIVersion(t *testing.T) {
 			},
 			[]string{`an object "default/cm" (Go type *v1.ConfigMap)`, `an item of ConfigMapList "default/holder"`, "written without a kind and an apiVersion"},
 		},
+		// A build reads the kind of a local-config object before it drops it,
+		// and refuses one without.
+		"a local-config object without a kind": {
+			func(t *testing.T) client.Object { return localConfig(withoutField("cm", "kind"), "true") },
+			[]string{`an object "default/cm"`, "written without a kind:"},
+		},
+		// "false" keeps the object in the build.
+		"an object without an apiVersion whose local-config annotation is false": {
+			func(t *testing.T) client.Object { return localConfig(withoutField("cm", "apiVersion"), "false") },
+			[]string{`ConfigMap "default/cm"`, "written without an apiVersion:"},
+		},
 	}
 	for name, tc := range cases {
 		for _, writer := range allWriters {
@@ -123,6 +134,47 @@ func TestWriters_RefuseObjectWithoutKindOrAPIVersion(t *testing.T) {
 					if err == nil || !strings.Contains(err.Error(), want) {
 						t.Errorf("err = %v, want it to contain %q", err, want)
 					}
+				}
+			})
+		}
+	}
+}
+
+// localConfig gives obj kustomize's local-config annotation at value.
+func localConfig(obj *unstructured.Unstructured, value string) *unstructured.Unstructured {
+	obj.SetAnnotations(map[string]string{"config.kubernetes.io/local-config": value})
+	return obj
+}
+
+// TestWriters_LocalConfigWithoutAPIVersion: an object with kustomize's
+// local-config annotation at any string value but "false" is not judged on its
+// apiVersion. A build drops it without requiring one, so it is written as
+// before.
+func TestWriters_LocalConfigWithoutAPIVersion(t *testing.T) {
+	cases := map[string]func(t *testing.T) client.Object{
+		"an unstructured object": func(t *testing.T) client.Object {
+			return localConfig(withoutField("held", "apiVersion"), "true")
+		},
+		"an item of an unstructured List, at a value that is not true": func(t *testing.T) client.Object {
+			return listOf("List", localConfig(withoutField("held", "apiVersion"), "x"))
+		},
+		"a typed object with a kind and no apiVersion": func(t *testing.T) client.Object {
+			cm := untypedConfigMap("held")
+			cm.Kind = "ConfigMap"
+			cm.Annotations = map[string]string{"config.kubernetes.io/local-config": ""}
+			return cm
+		},
+	}
+	for name, build := range cases {
+		for _, writer := range allWriters {
+			t.Run(name+"/"+writer, func(t *testing.T) {
+				ml := &layout.ManifestLayout{Name: "p", Namespace: ".", Resources: []client.Object{build(t)}}
+				found := 0
+				for _, content := range writtenFiles(t, writer, layout.DefaultLayoutConfig(), ml) {
+					found += strings.Count(content, "name: held")
+				}
+				if found != 1 {
+					t.Errorf("the local-config object is written %d times, want once", found)
 				}
 			})
 		}

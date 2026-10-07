@@ -650,3 +650,38 @@ func TestObjects_ShapesApimachineryCannotRead(t *testing.T) {
 		}
 	}
 }
+
+// TestLocalConfig: the local-config annotation is read from what is written,
+// at any string value but "false".
+func TestLocalConfig(t *testing.T) {
+	annotated := func(value any) *unstructured.Unstructured {
+		cm := configMap("c")
+		cm.Object["metadata"].(map[string]any)["annotations"] = map[string]any{"config.kubernetes.io/local-config": value}
+		return cm
+	}
+	typed := typedConfigMap("c")
+	typed.Annotations = map[string]string{"config.kubernetes.io/local-config": "true"}
+	cases := []struct {
+		name string
+		obj  runtime.Object
+		want bool
+	}{
+		{"no annotation", configMap("c"), false},
+		{"true", annotated("true"), true},
+		{"another value", annotated("x"), true},
+		{"the empty string", annotated(""), true},
+		{"false", annotated("false"), false},
+		{"null", annotated(nil), false},
+		{"no string", annotated(true), false},
+		{"a typed object", typed, true},
+	}
+	for _, c := range cases {
+		got, err := LocalConfig(c.obj)
+		if err != nil {
+			t.Fatalf("%s: LocalConfig: %v", c.name, err)
+		}
+		if got != c.want {
+			t.Errorf("%s: LocalConfig = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
