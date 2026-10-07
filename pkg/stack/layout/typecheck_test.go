@@ -79,25 +79,28 @@ func TestWriters_RefuseObjectWithoutKindOrAPIVersion(t *testing.T) {
 		},
 		"an item of an unstructured List without an apiVersion": {
 			func(t *testing.T) client.Object { return listOf("List", withoutField("cm", "apiVersion")) },
-			[]string{`ConfigMap "default/cm"`, `an item of List without a name (Go type *unstructured.Unstructured)`, "written without an apiVersion:"},
+			[]string{`ConfigMap "default/cm"`, `held in List without a name (Go type *unstructured.Unstructured)`, "written without an apiVersion:"},
 		},
 		"a typed object without TypeMeta in a typed List": {
 			func(t *testing.T) client.Object {
 				return rawListOf("holder", runtime.RawExtension{Object: untypedConfigMap("cm")})
 			},
-			[]string{`an object "default/cm"`, `an item of List "default/holder"`, "written without a kind and an apiVersion"},
+			[]string{`an object "default/cm"`, `held in List "default/holder"`, "written without a kind and an apiVersion"},
 		},
 		"raw JSON without a kind in a typed List": {
 			func(t *testing.T) client.Object {
 				return rawListOf("holder", rawJSON(t, withoutField("cm", "kind")))
 			},
-			[]string{`an object "default/cm"`, `an item of List "default/holder"`, "written without a kind:"},
+			[]string{`an object "default/cm"`, `held in List "default/holder"`, "written without a kind:"},
 		},
 		"an object without an apiVersion two Lists deep": {
+			// Named by the resource that holds it, not by the List between.
 			func(t *testing.T) client.Object {
-				return listOf("List", listOf("List", withoutField("cm", "apiVersion")))
+				outer := listOf("List", listOf("List", withoutField("cm", "apiVersion")))
+				outer.SetName("outer")
+				return outer
 			},
-			[]string{`ConfigMap "default/cm"`, "an item of List", "written without an apiVersion:"},
+			[]string{`ConfigMap "default/cm"`, `held in List "outer" (Go type *unstructured.Unstructured)`, "written without an apiVersion:"},
 		},
 		// The written kind decides whether an object is a List, not the one
 		// its Go value reports. A List kind left out of what is written is
@@ -111,7 +114,7 @@ func TestWriters_RefuseObjectWithoutKindOrAPIVersion(t *testing.T) {
 			func(t *testing.T) client.Object {
 				return unwrittenTypeOf("Inventory", "ConfigMapList", *untypedConfigMap("cm"))
 			},
-			[]string{`an object "default/cm" (Go type *v1.ConfigMap)`, `an item of ConfigMapList "default/holder"`, "written without a kind and an apiVersion"},
+			[]string{`an object "default/cm" (Go type *v1.ConfigMap)`, `held in ConfigMapList "default/holder"`, "written without a kind and an apiVersion"},
 		},
 		// A build reads the kind of a local-config object before it drops it,
 		// and refuses one without.
