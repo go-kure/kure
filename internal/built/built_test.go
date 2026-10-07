@@ -78,6 +78,18 @@ type unwrittenItems struct {
 
 func (u *unwrittenItems) DeepCopyObject() runtime.Object { c := *u; return &c }
 
+// unwrittenType reports a kind through a TypeMeta it leaves out of what is
+// written, and writes the kind field from a field of its own.
+type unwrittenType struct {
+	metav1.TypeMeta   `json:"-"`
+	WrittenAPIVersion string `json:"apiVersion,omitempty"`
+	WrittenKind       string `json:"kind,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []corev1.ConfigMap `json:"items"`
+}
+
+func (u *unwrittenType) DeepCopyObject() runtime.Object { c := *u; return &c }
+
 // unwritable cannot be marshalled.
 type unwritable struct {
 	metav1.TypeMeta `json:",inline"`
@@ -173,6 +185,24 @@ func TestObjects(t *testing.T) {
 				return l
 			}(),
 			[]described{{"Inventory", "inv", false}},
+		},
+		// The kind it is written with decides, not the one its Go value
+		// reports.
+		"a typed List kind left out of what is written": {
+			&unwrittenType{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMapList"},
+				ObjectMeta: metav1.ObjectMeta{Name: "hidden"},
+				Items:      []corev1.ConfigMap{*typedConfigMap("a")},
+			},
+			[]described{{"ConfigMapList", "hidden", false}},
+		},
+		"a typed object of another kind written as a List kind": {
+			&unwrittenType{
+				TypeMeta:    metav1.TypeMeta{APIVersion: "v1", Kind: "Inventory"},
+				WrittenKind: "ConfigMapList",
+				Items:       []corev1.ConfigMap{*typedConfigMap("a"), *typedConfigMap("b")},
+			},
+			[]described{{"ConfigMap", "a", false}, {"ConfigMap", "b", false}},
 		},
 		"a typed List that writes items its Go value does not give": {
 			&hiddenItems{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMapList"}, Entries: []corev1.ConfigMap{*typedConfigMap("a")}},

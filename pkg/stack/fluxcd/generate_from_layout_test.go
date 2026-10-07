@@ -1390,6 +1390,17 @@ func TestIntegrateWithLayout_OpensListsAsKustomizeDoes(t *testing.T) {
 		"a typed list without a kind": {
 			emitted: func(t *testing.T) client.Object { return typedListOf("", webKs(t)) },
 		},
+		// The kind it is written with decides, not the one its Go value
+		// reports: a List kind left out of what is written is one object
+		// without a kind, which the writers refuse
+		// (TestIntegrateWithLayout_UnwrittenListKindIsRefusedByTheWriters).
+		"a typed List kind left out of what is written": {
+			emitted: func(t *testing.T) client.Object { return unwrittenTypeListOf("HolderList", "", webKs(t)) },
+		},
+		"a typed non-List kind written as a List kind": {
+			emitted:  func(t *testing.T) client.Object { return unwrittenTypeListOf("Holder", "HolderList", webKs(t)) },
+			collides: true,
+		},
 		// A typed List can hold an item as raw JSON; the writers serialize it
 		// as the object it encodes.
 		"a typed List holding a raw Kustomization": {
@@ -1479,6 +1490,38 @@ func TestIntegrateWithLayout_OpensListsAsKustomizeDoes(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestIntegrateWithLayout_UnwrittenListKindIsRefusedByTheWriters: a typed
+// List whose kind is left out of what is written is one object without a
+// kind for the integrator, as for kustomize, so the Kustomization it holds
+// is not read; the writers refuse the tree for that object before anything
+// is written (go-kure/kure#1020).
+func TestIntegrateWithLayout_UnwrittenListKindIsRefusedByTheWriters(t *testing.T) {
+	ks, ok := fluxKustomization("web", "elsewhere").(*unstructured.Unstructured)
+	if !ok {
+		t.Fatal("fluxKustomization is not unstructured")
+	}
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		t.Run(string(placement), func(t *testing.T) {
+			var obj client.Object = unwrittenTypeListOf("HolderList", "", ks)
+			platformApp := stack.NewApplication("platform-ks", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+			web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
+			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
+			rules := propertyGroupings["nodeOnly"]
+			rules.FluxPlacement = placement
+			ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+			if err != nil {
+				t.Fatalf("integration: %v", err)
+			}
+			err = ml.WriteToDisk(t.TempDir())
+			for _, want := range []string{`an object "default/holder"`, "written without a kind and an apiVersion"} {
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Errorf("WriteToDisk: %v, want an error containing %q", err, want)
+				}
+			}
+		})
 	}
 }
 

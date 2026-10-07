@@ -42,8 +42,11 @@ type Object struct {
 // and is returned as the one object it is, since there is nothing in it to
 // read.
 //
-// For a typed object the items field is read from its written form, the JSON
-// the writers marshal it to, so a field left out when empty counts as absent,
+// For a typed object the kind and the items field are read from its written
+// form, the JSON the writers marshal it to, not from its Go value: one whose
+// TypeMeta is left out of that JSON is no List, whatever kind its Go value
+// reports, and one that writes a kind ending in "List" is opened as one. Of
+// the items field, a field left out when empty counts as absent,
 // and one written as null or as something that is no array is read as that,
 // whatever the Go value holds beside it. The items are the ones its Go value
 // gives access to, read as the writers serialize them (typedListItems): an
@@ -100,18 +103,27 @@ func objects(obj Object, open map[uintptr]bool) ([]Object, error) {
 // listItems returns the items of obj when it is a List as Objects defines
 // one, and whether it is.
 func listItems(obj runtime.Object) (items []Object, isList bool, err error) {
-	if !strings.HasSuffix(obj.GetObjectKind().GroupVersionKind().Kind, "List") {
-		return nil, false, nil
-	}
 	if u, ok := obj.(*unstructured.Unstructured); ok {
+		// Written from its map as it is, so its kind is the written one.
+		if !strings.HasSuffix(u.GetKind(), "List") {
+			return nil, false, nil
+		}
 		return unstructuredItems(u)
 	}
+	// Before the marshalling, which does not end for a List that holds
+	// itself; whatever kind it is written with.
 	if err := refuseItemCycle(obj, map[listRef]bool{}); err != nil {
 		return nil, false, err
 	}
 	written, err := writtenForm(obj)
 	if err != nil {
 		return nil, false, err
+	}
+	// The kind it is written with decides, not the one its Go value reports:
+	// a TypeMeta the writers leave out, or one that disagrees with the kind
+	// field written, would otherwise hide a List or make one of an object.
+	if kind, _ := written["kind"].(string); !strings.HasSuffix(kind, "List") {
+		return nil, false, nil
 	}
 	held, has := written["items"]
 	if !has {
@@ -150,8 +162,8 @@ func listItems(obj runtime.Object) (items []Object, isList bool, err error) {
 	return items, true, nil
 }
 
-// readItems is listItems on the written form of a typed object whose kind
-// ends in "List": the items are read from it, so they are copies.
+// readItems is listItems on the written form of a typed object written with a
+// kind that ends in "List": the items are read from it, so they are copies.
 func readItems(written map[string]any) (items []Object, isList bool, err error) {
 	items, isList, err = unstructuredItems(&unstructured.Unstructured{Object: written})
 	for i := range items {

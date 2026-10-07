@@ -42,6 +42,38 @@ func typedListOf(kind string, items ...*unstructured.Unstructured) *typedItems {
 	return l
 }
 
+// unwrittenTypeItems is typedItems whose TypeMeta, the kind its Go value
+// reports, is left out of what is written: it writes the kind and apiVersion
+// fields from two fields of its own.
+type unwrittenTypeItems struct {
+	metav1.TypeMeta   `json:"-"`
+	WrittenAPIVersion string `json:"apiVersion,omitempty"`
+	WrittenKind       string `json:"kind,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []unstructured.Unstructured `json:"items"`
+}
+
+func (l *unwrittenTypeItems) DeepCopyObject() runtime.Object {
+	c := *l
+	c.Items = slices.Clone(l.Items)
+	return &c
+}
+
+// unwrittenTypeListOf returns an unwrittenTypeItems whose Go value reports the
+// kind reported, written with the kind written (and the apiVersion
+// example.com/v1 when that is set), holding items.
+func unwrittenTypeListOf(reported, written string, items ...*unstructured.Unstructured) *unwrittenTypeItems {
+	l := &unwrittenTypeItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: reported}, WrittenKind: written}
+	if written != "" {
+		l.WrittenAPIVersion = "example.com/v1"
+	}
+	l.Name, l.Namespace = "holder", "default"
+	for _, it := range items {
+		l.Items = append(l.Items, *it)
+	}
+	return l
+}
+
 // rawItems is a typed List whose items are runtime.RawExtension values, each
 // either an object or the raw JSON of one, as the core v1 List holds them.
 type rawItems struct {
