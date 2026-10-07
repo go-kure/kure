@@ -571,7 +571,9 @@ jobs:
   test:
     name: test
     runs-on: autops-kube-kure
-    timeout-minutes: 20
+    # Race compile plus the run now reaches ~19-20 min on this runner; at 20 a
+    # run was cancelled before completion with no test failure. 30 leaves headroom.
+    timeout-minutes: 30
     needs: [changes]
     if: github.event_name != 'pull_request' || needs.changes.outputs.go == 'true'
 
