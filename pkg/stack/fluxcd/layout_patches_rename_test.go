@@ -19,7 +19,8 @@ import (
 // Tests for a bundle's patch list in which an entry is not a plain
 // strategic-merge patch (go-kure/kure#1021): a JSON6902 patch, a patch whose
 // text carries an annotation of kustomize's own build state, or one that
-// deletes an object ($patch: delete). Such an entry can change an object's
+// removes an object from the build ($patch: delete, or kustomize's
+// local-config annotation). Such an entry can change an object's
 // identity or remove the object, so it is written where it was
 // before, and an untargeted strategic-merge patch after it is not placed by
 // object and never refused, since the identities as generated no longer say
@@ -140,6 +141,13 @@ func deleteKust(name string) string {
 	return "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: " + name + "\n  namespace: flux-system\n$patch: delete\n"
 }
 
+// localKust is a strategic-merge patch document that gives the Flux
+// Kustomization name kustomize's local-config annotation with value, which
+// drops the object from the build unless it is "false".
+func localKust(name, value string) string {
+	return "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: " + name + "\n  namespace: flux-system\n  annotations:\n    config.kubernetes.io/local-config: " + value + "\n"
+}
+
 // TestLayoutPatches_AfterAnEntryThatIsNotPlain: placement by object holds
 // while every entry of the list is a plain strategic-merge patch. An entry
 // that is not is written where it was before, with a target on the bundle's
@@ -216,6 +224,18 @@ func TestLayoutPatches_AfterAnEntryThatIsNotPlain(t *testing.T) {
 		"a deletion in one document of several": {
 			patches: []stack.Patch{untargeted(cmDoc("db"), deleteKust("shop-00-pre")), untargeted(cmDoc("pre"))},
 			want:    map[string][]int{"shop": {0, 1}, "shop-00-pre": {1}},
+		},
+		"the local-config annotation on a layout's Kustomization: as a deletion": {
+			patches: []stack.Patch{untargeted(localKust("shop-00-pre", `"true"`)), untargeted(cmDoc("pre"))},
+			want:    map[string][]int{"shop": {0, 1}, "shop-00-pre": {1}},
+		},
+		"the local-config annotation set to null: as a deletion": {
+			patches: []stack.Patch{untargeted(localKust("shop-00-pre", "null")), untargeted(cmDoc("pre"))},
+			want:    map[string][]int{"shop": {0, 1}, "shop-00-pre": {1}},
+		},
+		"the local-config annotation set to false is plain": {
+			patches: []stack.Patch{untargeted(localKust("shop-00-pre", `"false"`)), untargeted(cmDoc("pre"))},
+			want:    map[string][]int{"shop-db": {0}, "shop-00-pre": {1}},
 		},
 		"a deletion inside a document, of a field, is plain": {
 			patches: []stack.Patch{untargeted("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: pre\n  namespace: default\ndata:\n  $patch: delete\n"), untargeted(cmDoc("main"))},

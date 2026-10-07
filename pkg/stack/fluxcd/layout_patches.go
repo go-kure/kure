@@ -140,7 +140,8 @@ func holds(host *layout.ManifestLayout, cr *kustv1.Kustomization) bool {
 // entry of the list before it, and the patch itself, is a plain
 // strategic-merge patch (plainStrategicMerge): one that parses as resources,
 // of which no document carries an annotation of kustomize's own build state
-// and none deletes its object ($patch: delete). A plain patch keeps the
+// and none removes its object from the build ($patch: delete, or the
+// local-config annotation). A plain patch keeps the
 // identity of what it is merged into, by
 // kustomize api v0.21.2:
 //
@@ -164,8 +165,9 @@ func holds(host *layout.ManifestLayout, cr *kustv1.Kustomization) bool {
 // name or the kind of the object it is merged into, with a target or without,
 // and others give a document the identity it names its object by, which
 // kustomize panics on when they do not agree (Resource.OrgId). A document
-// with $patch: delete removes its object from the build altogether, a
-// per-layout Kustomization in its parent's build among them.
+// with $patch: delete, or one that gives its object kustomize's local-config
+// annotation, removes the object from the build altogether, a per-layout
+// Kustomization in its parent's build among them.
 //
 // An entry that is not plain is therefore written where it was before
 // per-layout Kustomizations took patches, is never refused and is not read:
@@ -185,7 +187,7 @@ func holds(host *layout.ManifestLayout, cr *kustv1.Kustomization) bool {
 //     and on the bundle's own, which does not build it;
 //   - such a later patch for the identity an earlier entry gives an object in
 //     a layout's build: it is on no Kustomization that builds the object;
-//   - an untargeted patch with a build-state annotation, or one that deletes
+//   - an untargeted patch with a build-state annotation, or one that removes
 //     its object, for an object only a layout builds: it is on the bundle's
 //     own Kustomization alone.
 func (p *integratedPlacement) placeBundlePatches() error {
@@ -311,28 +313,42 @@ func (p *integratedPlacement) placeBundlePatches() error {
 // it parses as resources, which is how kustomize takes an entry for a
 // strategic-merge patch and not for a JSON6902 one, no document of it carries
 // an annotation of kustomize's own build state (carriesBuildAnnotation) and
-// none deletes the object it is merged into (deletesObject).
+// none removes the object it is merged into from the build (removesObject).
 // placeBundlePatches reads the documents of a plain patch and of no other.
 func plainStrategicMerge(rf *resource.Factory, text string) ([]*resource.Resource, bool) {
 	docs, err := rf.SliceFromBytes([]byte(text))
 	if err != nil || len(docs) == 0 ||
-		slices.ContainsFunc(docs, carriesBuildAnnotation) || slices.ContainsFunc(docs, deletesObject) {
+		slices.ContainsFunc(docs, carriesBuildAnnotation) || slices.ContainsFunc(docs, removesObject) {
 		return nil, false
 	}
 	return docs, true
 }
 
-// deletesObject reports whether doc, a document of a patch, deletes the object
-// it is merged into: its top-level strategic-merge directive is $patch:
-// delete, which kustomize reads as the deletion of the whole object
-// (merge2.Merger.VisitMap, kyaml v0.21.2 yaml/merge2/merge2.go:53-91). The object is
-// then in no build, so what an untargeted patch after it names, as generated,
-// no longer says where it is built: one for an object inside a deleted
-// Kustomization's build would land on that Kustomization alone, which nothing
-// applies any more.
-func deletesObject(doc *resource.Resource) bool {
-	directive := doc.Field("$patch")
-	return directive != nil && directive.Value.YNode().Value == "delete"
+// removesObject reports whether doc, a document of a patch, removes the object
+// it is merged into from the build, by kustomize api and kyaml v0.21.2:
+//
+//   - its top-level strategic-merge directive is $patch: delete, which
+//     kustomize reads as the deletion of the whole object
+//     (merge2.Merger.VisitMap, kyaml yaml/merge2/merge2.go:53-91);
+//   - it carries the annotation config.kubernetes.io/local-config
+//     (konfig.IgnoredByKustomizeAnnotation) with any value but "false": the
+//     patch gives the object that annotation, and kustomize drops every object
+//     that has it once the build has run its patches (KustTarget.IgnoreLocal,
+//     internal/target/kusttarget.go:162; Factory.DropLocalNodes,
+//     resource/factory.go:149-151). A document that sets it to null, which
+//     removes the annotation, counts as well: what the merge leaves is not
+//     read.
+//
+// The object is then in no build, so what an untargeted patch after it
+// names, as generated, no longer says where it is built: one for an object
+// inside a removed Kustomization's build would land on that Kustomization
+// alone, which nothing applies any more.
+func removesObject(doc *resource.Resource) bool {
+	if directive := doc.Field("$patch"); directive != nil && directive.Value.YNode().Value == "delete" {
+		return true
+	}
+	local, ok := doc.GetAnnotations()[konfig.IgnoredByKustomizeAnnotation]
+	return ok && local != "false"
 }
 
 // carriesBuildAnnotation reports whether doc, a document of a patch, has an
