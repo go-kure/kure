@@ -89,6 +89,37 @@ type anyItems struct {
 
 func (a *anyItems) DeepCopyObject() runtime.Object { c := *a; return &c }
 
+// itemsHolder holds the items of embeddedItems.
+type itemsHolder struct {
+	Items []corev1.ConfigMap `json:"items,omitempty"`
+}
+
+// embeddedItems reaches its Items field through an embedded pointer, which
+// apimachinery cannot follow when it is nil.
+type embeddedItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	*itemsHolder
+}
+
+func (e *embeddedItems) DeepCopyObject() runtime.Object { c := *e; return &c }
+
+// mapObject is an object that is no struct.
+type mapObject map[string]any
+
+func (m *mapObject) GetObjectKind() schema.ObjectKind { return schema.EmptyObjectKind }
+func (m *mapObject) DeepCopyObject() runtime.Object   { c := *m; return &c }
+
+// objectItems holds its items as runtime.Object values, an entry of which
+// apimachinery cannot read when it is nil.
+type objectItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []runtime.Object `json:"items"`
+}
+
+func (o *objectItems) DeepCopyObject() runtime.Object { c := *o; return &c }
+
 // unwrittenType reports a kind through a TypeMeta it leaves out of what is
 // written, and writes the kind field from a field of its own.
 type unwrittenType struct {
@@ -556,6 +587,61 @@ func TestObjects_ItemsOfInterfaceType(t *testing.T) {
 	}
 	for _, s := range steps {
 		objs, err := Objects(s.resource)
+		if err != nil {
+			t.Fatalf("%s: Objects: %v", s.name, err)
+		}
+		if got := describe(t, objs); !slices.Equal(got, s.want) {
+			t.Errorf("%s: got %v, want %v", s.name, got, s.want)
+		}
+	}
+}
+
+// An object apimachinery's list reading panics on is no List it can read:
+// it is read from what it writes, and refused as an unstructured List would
+// be where what it writes cannot be read. The steps run in order: the first
+// has apimachinery take embeddedItems for a List, which it keeps for the
+// second.
+func TestObjects_ShapesApimachineryCannotRead(t *testing.T) {
+	typeMeta := func(kind string) metav1.TypeMeta { return metav1.TypeMeta{APIVersion: "v1", Kind: kind} }
+	steps := []struct {
+		name     string
+		resource runtime.Object
+		want     []described
+		wantErr  string
+	}{
+		{
+			"a List whose items are behind an embedded pointer",
+			&embeddedItems{TypeMeta: typeMeta("ConfigMapList"), itemsHolder: &itemsHolder{Items: []corev1.ConfigMap{*typedConfigMap("a")}}},
+			[]described{{"ConfigMap", "a", false}},
+			"",
+		},
+		{
+			"an object of another kind whose embedded pointer to its items is nil",
+			&embeddedItems{TypeMeta: typeMeta("ConfigMap"), ObjectMeta: metav1.ObjectMeta{Name: "b"}},
+			[]described{{"ConfigMap", "b", false}},
+			"",
+		},
+		{
+			"an object that is no struct",
+			&mapObject{"apiVersion": "v1", "kind": "ConfigMap", "metadata": map[string]any{"name": "c"}},
+			[]described{{"", "", false}},
+			"",
+		},
+		{
+			"a List with a nil runtime.Object item, written as null",
+			&objectItems{TypeMeta: typeMeta("ConfigMapList"), Items: []runtime.Object{nil, typedConfigMap("d")}},
+			nil,
+			"items member is not an object",
+		},
+	}
+	for _, s := range steps {
+		objs, err := Objects(s.resource)
+		if s.wantErr != "" {
+			if err == nil || !strings.Contains(err.Error(), s.wantErr) {
+				t.Errorf("%s: error %v, want one containing %q", s.name, err, s.wantErr)
+			}
+			continue
+		}
 		if err != nil {
 			t.Fatalf("%s: Objects: %v", s.name, err)
 		}
