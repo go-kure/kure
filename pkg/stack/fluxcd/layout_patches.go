@@ -338,10 +338,10 @@ func plainStrategicMerge(rf *resource.Factory, text string) ([]*resource.Resourc
 //     resource/factory.go:149-151).
 //
 // A document counts by what it carries, not by what the merge leaves, which
-// is not read: one that sets the annotation to null, which removes it,
-// counts, and so does one whose annotations also carry $patch: delete,
-// which deletes them and leaves the object
-// (kyaml yaml/merge2/merge2.go:60-86).
+// is not read: one that sets the annotation to null, which removes it
+// (kyaml yaml/merge2/merge2.go:102-103, yaml/fns.go:733-734), counts, and
+// so does one whose annotations also carry $patch: delete, which deletes
+// them and leaves the object (yaml/merge2/merge2.go:60-86).
 //
 // When the object is removed it is in no build, so what an untargeted patch
 // after it names, as generated, no longer says where it is built: one for an
