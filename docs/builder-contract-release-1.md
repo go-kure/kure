@@ -66,11 +66,13 @@ measure and still breaks caller *code*: `CreateConfigMap` stopped initialising `
 panics. That failure is immediate, and in your own process rather than in a cluster —
 which is why it is not **silent** — but it is not nothing, and the row says so.
 
-Every `file:line` below is in the module version this repository **pins** — `k8s.io/api`
-v0.37.0, `sigs.k8s.io/gateway-api` v1.6.2, `github.com/cilium/cilium` v1.20.1,
-prometheus-operator `monitoring` v0.93.1 — not in whichever copy is newest on the machine
-you read it from. Defaulting text moves between versions; a citation against the wrong
-one is worth less than no citation, because it looks checked.
+Every `file:line` below is in the module version it was **read at** — the version a
+citation names, or else `k8s.io/api` v0.37.0, `sigs.k8s.io/gateway-api` v1.6.3,
+`github.com/cilium/cilium` v1.20.1, prometheus-operator `monitoring` v0.93.1 — not in
+whichever copy is newest on the machine you read it from. `go.mod` is the source of truth
+for what the repository pins now; a later pin does not re-read these citations. Defaulting
+text moves between versions; a citation against the wrong one is worth less than no
+citation, because it looks checked.
 
 #### Rejected by the API server
 
@@ -241,7 +243,7 @@ PodDisruptionBudget — one whose own definition names the kind it selects, the 
 `Service.spec.selector` names pods and `namespaceSelector` names namespaces. Gateway API
 comes closest and does not qualify: both of its label selectors pick *namespaces*, not
 routes — *"only Routes in Namespaces matching this Selector will be selected by this
-Gateway"* (`gateway-api@v1.6.2` `apis/v1/gateway_types.go:892-893`). So those four rows
+Gateway"* (`gateway-api@v1.6.3` `apis/v1/gateway_types.go:892-893`). So those four rows
 stay **no-op** and simply name this removal: for `CreateConfigMap` and `CreateHTTPRoute`
 that is the class their other removals already give them, and for
 `CreateHorizontalPodAutoscaler` and `CreatePodDisruptionBudget` — where the label and
