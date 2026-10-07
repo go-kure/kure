@@ -343,10 +343,10 @@ func plainStrategicMerge(rf *resource.Factory, text string) ([]*resource.Resourc
 // which deletes them and leaves the object
 // (kyaml yaml/merge2/merge2.go:60-86).
 //
-// The object is then in no build, so what an untargeted patch after it
-// names, as generated, no longer says where it is built: one for an object
-// inside a removed Kustomization's build would land on that Kustomization
-// alone, which nothing applies any more.
+// When the object is removed it is in no build, so what an untargeted patch
+// after it names, as generated, no longer says where it is built: one for an
+// object inside a removed Kustomization's build would land on that
+// Kustomization alone, which nothing applies any more.
 func removesObject(doc *resource.Resource) bool {
 	if directive := doc.Field("$patch"); directive != nil && directive.Value.YNode().Value == "delete" {
 		return true
