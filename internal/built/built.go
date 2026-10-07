@@ -51,7 +51,7 @@ type Object struct {
 // the items field, a field left out when empty counts as absent,
 // and one written as null or as something that is no array is read as that,
 // whatever the Go value holds beside it. The items are the ones its Go value
-// gives access to, read as the writers serialize them (typedListItems): an
+// gives access to, read as the writers serialize them (rawItems): an
 // item held as raw JSON is the object that JSON encodes, and an empty item
 // holds nothing, as does one that is a nil pointer, which is written as null.
 // A List among them need not carry object metadata (metav1.List has none) to
@@ -131,12 +131,12 @@ func listItems(obj runtime.Object) (items []Object, isList bool, err error) {
 	if !has {
 		return nil, false, nil
 	}
-	if !isTypedList(obj) {
-		return readItems(written)
-	}
-	extracted, err := typedListItems(obj)
+	extracted, isList, err := apimachineryItems(obj)
 	if err != nil {
 		return nil, false, err
+	}
+	if !isList {
+		return readItems(written)
 	}
 	// What is written under items decides, as it does for an unstructured
 	// List: the Go value's items are the List's only where they are what is
@@ -207,33 +207,49 @@ func writtenAs(items []runtime.Object, held any) bool {
 	return true
 }
 
-// isTypedList is meta.IsListType, false where apimachinery cannot read the
-// Items field of obj's value. For an Items field of interface type it reads
-// the element type of what the field holds (getItemsPtr,
-// k8s.io/apimachinery/pkg/api/meta/help.go:101), which panics when the
-// field is nil or holds a value of a kind that has none, and it keeps its
-// answer per type, so a value of a type once taken for a List panics later
-// where its items are read; so does a field reached through an unexported
-// embedded struct. Such an object is read from what it writes, as any typed
-// object apimachinery takes for no List.
-func isTypedList(obj runtime.Object) bool {
-	if v := reflect.ValueOf(obj); v.Kind() == reflect.Pointer && !v.IsNil() && v.Elem().Kind() == reflect.Struct {
-		items := v.Elem().FieldByName("Items")
-		if items.IsValid() && !items.CanInterface() {
-			return false
-		}
-		if items.Kind() == reflect.Interface {
-			if items.IsNil() {
-				return false
+// apimachineryItems returns the items of obj where apimachinery reads it as a
+// typed List (meta.IsListType, then meta.ExtractList and meta.GetItemsPtr,
+// with rawItems), and whether it does. Its reflection panics on shapes it
+// does not expect, by
+// k8s.io/apimachinery v0.37.1 pkg/api/meta/help.go: a pointer to a value
+// that is no struct, or a nil embedded pointer on the way to Items
+// (getItemsPtr, :95, reflect.Value.FieldByName); an Items field of interface
+// type that is nil or holds a value of a kind without an element type
+// (:101); a nil entry of an Items slice of runtime.Object (ExtractList,
+// :248-249). It keeps its answer per type (IsListType, :44-67), so a value
+// of a type once taken for a List can panic where its items are read. An
+// object it panics on is no List it can read, and is read from what it
+// writes, as any typed object apimachinery takes for no List. Only those
+// calls are recovered from; rawItems runs after them.
+func apimachineryItems(obj runtime.Object) ([]runtime.Object, bool, error) {
+	var (
+		isList   bool
+		items    []runtime.Object
+		itemsPtr any
+		err      error
+	)
+	read := func() (ok bool) {
+		defer func() {
+			if recover() != nil {
+				ok = false
 			}
-			switch items.Elem().Kind() {
-			case reflect.Array, reflect.Chan, reflect.Map, reflect.Pointer, reflect.Slice:
-			default:
-				return false
-			}
+		}()
+		if isList = meta.IsListType(obj); !isList {
+			return true
 		}
+		if items, err = meta.ExtractList(obj); err != nil || len(items) == 0 {
+			return true
+		}
+		itemsPtr, err = meta.GetItemsPtr(obj)
+		return true
 	}
-	return meta.IsListType(obj)
+	if !read() || !isList {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, true, err
+	}
+	return rawItems(items, itemsPtr), true, nil
 }
 
 // listRef names a typed List by its type and address.
@@ -249,17 +265,22 @@ type listRef struct {
 // the encoder never sees the whole path and the marshalling does not end.
 // Where one of them does not write its Items, the List may have a written
 // form and is refused all the same: the rule is on the list as apimachinery
-// reads it (isTypedList), not on what it writes. open has the Lists being
-// read around obj.
+// reads it (apimachineryItems), not on what it writes. open has the Lists
+// being read around obj.
 //
-// A List is followed where apimachinery takes it for one (isTypedList: a
-// pointer to a struct with an Items field), through what it holds as its
+// A List is followed where apimachinery reads it as one (apimachineryItems:
+// a pointer to a struct with an Items field), through what it holds as its
 // items, read as the writers serialize them, so an object beside an item's
 // raw JSON is not. A value that reaches itself another way, through another
 // field, through an item that is no such List or through a List held as a
 // value, is not looked for; the writers look for none either.
 func refuseItemCycle(obj runtime.Object, open map[listRef]bool) error {
-	if _, ok := obj.(*unstructured.Unstructured); ok || !isTypedList(obj) {
+	if _, ok := obj.(*unstructured.Unstructured); ok {
+		return nil
+	}
+	items, isList, err := apimachineryItems(obj)
+	if !isList || err != nil {
+		// An error is refused where the List is read.
 		return nil
 	}
 	v := reflect.ValueOf(obj)
@@ -273,11 +294,6 @@ func refuseItemCycle(obj runtime.Object, open map[listRef]bool) error {
 			kind = "List"
 		}
 		return errors.Errorf("a %s holds itself among its items", kind)
-	}
-	items, err := typedListItems(obj)
-	if err != nil {
-		// Refused where the List is read.
-		return nil
 	}
 	open[ref] = true
 	defer delete(open, ref)
@@ -359,35 +375,32 @@ func writtenForm(obj runtime.Object) (map[string]any, error) {
 	return written, nil
 }
 
-// typedListItems returns the items of a typed List as the writers serialize
-// them. An item held as a runtime.RawExtension is serialized from its raw
-// JSON when it has any and from its object otherwise
+// rawItems returns items, the items meta.ExtractList read from a typed List,
+// as the writers serialize them, with itemsPtr, what meta.GetItemsPtr
+// returned for that List. An item held as a runtime.RawExtension is
+// serialized from its raw JSON when it has any and from its object otherwise
 // (RawExtension.MarshalJSON), so it is read in that order: meta.ExtractList
 // reads the object first, and would name an object the written file does not
 // hold when the two differ. The raw JSON is returned as a runtime.Unknown.
 //
 // meta.ExtractList reads the list, so whatever it accepts as a list of items
-// is accepted here and whatever it refuses (an Items pointer that is nil,
-// among others) is refused with its error. It decides by the element type of
-// the Items slice, and so does the correction: a named slice type and a
-// pointer to the slice are read alike. An empty item is a nil entry.
-func typedListItems(list runtime.Object) ([]runtime.Object, error) {
-	items, err := meta.ExtractList(list)
-	if err != nil || len(items) == 0 {
-		return items, err
+// is accepted and whatever it refuses (an Items pointer that is nil, among
+// others) is refused with its error (apimachineryItems). It decides by the
+// element type of the Items slice, and so does the correction: a named slice
+// type and a pointer to the slice are read alike. An empty item is a nil
+// entry.
+func rawItems(items []runtime.Object, itemsPtr any) []runtime.Object {
+	if len(items) == 0 {
+		return items
 	}
-	ptr, err := meta.GetItemsPtr(list)
-	if err != nil {
-		return nil, err
-	}
-	slice := reflect.ValueOf(ptr).Elem()
+	slice := reflect.ValueOf(itemsPtr).Elem()
 	if slice.Type().Elem() != reflect.TypeFor[runtime.RawExtension]() {
-		return items, nil
+		return items
 	}
 	for i := range items {
 		if raw := slice.Index(i).Interface().(runtime.RawExtension).Raw; raw != nil {
 			items[i] = &runtime.Unknown{Raw: raw}
 		}
 	}
-	return items, nil
+	return items
 }
