@@ -757,7 +757,14 @@ spec:
 User-supplied `HealthChecks` on the umbrella bundle are appended AFTER the
 auto entries. `Wait` on an umbrella is the caller's choice like on any other
 bundle: unset and `Wait: false` emit the same `spec`, and the umbrella still
-becomes `Ready` only when every child is, through those health checks.
+becomes `Ready` only when every child is, through those health checks. With
+`Wait: true` no entry is written for the children, since Flux ignores
+`healthChecks` under `wait`; the user-supplied entries are handled as before. The
+integrated placements then still wait for the children, whose Kustomization
+objects the umbrella applies; `FluxSeparate` does not, so leave `Wait` unset
+there for the umbrella to wait for them. With `GenerateForBundle` alone it
+depends on whether the caller's build at the given path applies the children's
+Kustomization objects.
 
 Umbrella children must be **standalone** — a bundle cannot simultaneously be
 the `Bundle` of a `stack.Node` and appear in another bundle's `Children`.

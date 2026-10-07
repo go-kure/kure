@@ -152,7 +152,7 @@ From `kustomizationForBundle` (`resource_generator.go`):
 | `Wait` | `spec.wait` | omitted (`waitValue` in `defaults.go`) |
 | `Timeout`, `RetryInterval`, `Force`, `Suspend` | same | omitted |
 | `SourceRef` | `spec.sourceRef` | namespace omitted when empty |
-| `Children` (umbrella) | one `healthChecks` entry per child, in the generator's namespace; `wait` is not set | the umbrella branch of `kustomizationForBundle` |
+| `Children` (umbrella) | one `healthChecks` entry per child, in the generator's namespace, none when `Wait` is true since go-kure/kure#1022 (below); `wait` is not set | the umbrella branch of `kustomizationForBundle` |
 | `HealthChecks`, `Patches`, `PostBuild` | same | omitted |
 | `DependsOn`, `NamedDependsOn` | `spec.dependsOn[].name` | omitted |
 
@@ -1642,3 +1642,41 @@ agree is written as before without being read, the three cases of the limit fail
 bundle's own build as before, and each remedy builds. `layout_settings_test.go` covers the four layout fields, the
 inherited six with whole files, the fallback of interval and prune, and every file of a tree that
 sets none of the six; `duration_validation_test.go` the interval among the checked durations.
+
+### No child health checks under wait ([go-kure/kure#1022](https://github.com/go-kure/kure/issues/1022))
+
+**Shipped.** An umbrella bundle whose `Wait` is true gets no per-child `healthChecks` entry, in
+every placement and from `GenerateForBundle` alone. kustomize-controller ignores
+`spec.healthChecks` under `spec.wait`, so the entries made nothing wait in any placement.
+
+**What it does.**
+
+- **The entries:** written only while `Wait` is unset or false, one per child ahead of the
+  caller's own, as before (the umbrella branch of `kustomizationForBundle` in
+  `resource_generator.go`). The placement is not consulted.
+- **The caller's own `HealthChecks`** are handled as before this change: written, mapped to
+  units and checked as they were, including the one exception `Wait` already made
+  (`GenerateForBundle` accepts a check on the bundle's own Kustomization only with `Wait` true).
+- **Each child's Kustomization name** is checked whatever `Wait` says: the child's own
+  Kustomization is written with it.
+- **What `wait: true` waits for** is every object the umbrella's own build applied:
+  - `FluxIntegratedPerBundle`, `FluxIntegratedPerLayout`: each child's Kustomization object is
+    written in the umbrella's directory and applied by it, so the umbrella's wait covers the
+    child's `Ready`.
+  - `FluxSeparate`: the children's Kustomization objects are not in the umbrella's build (they
+    are written to `flux-system/`, which the root applies), so `wait: true` does not wait for
+    the children. A caller who needs the umbrella to wait there leaves `Wait` unset or false, so
+    the generated entries take effect. This gap was there before, when Flux ignored the entries,
+    and this change does not alter it.
+  - `GenerateForBundle` alone neither generates nor places the children's Kustomization objects
+    and takes the path as given, so whether the wait covers them depends on the caller's build at
+    that path; where it does not apply them, leave `Wait` unset or false.
+
+**Breaking.** An umbrella with `Wait` true loses the per-child entries from its Kustomization;
+nothing on the cluster changes, since Flux ignored them. Every other tree renders byte for byte
+as before.
+
+**Tests.** `pkg/stack/fluxcd/umbrella_wait_test.go`: the whole Kustomization of a waiting
+umbrella with two children and a check of its own, the entries with `Wait` unset and false, the
+child-name check under `Wait`, and the umbrella's checks in each of the three placements with and
+without `Wait`.

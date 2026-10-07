@@ -53,11 +53,14 @@ A deployment unit corresponding to a single GitOps reconciliation resource (e.g.
 `DependsOn` and `Children` answer different questions. `DependsOn` is about
 **ordering** between siblings: "reconcile X only after Y is Ready".
 `Children` is about **containment**: the parent Bundle becomes an umbrella
-whose Flux Kustomization renders its child Kustomization CRs and aggregates
-each child's Ready condition via `spec.healthChecks`. The parent is Ready iff
+whose Flux Kustomization aggregates each child's Ready condition via
+`spec.healthChecks`. With `Bundle.Wait` unset or false, the parent is Ready iff
 all children are Ready. `spec.wait` is left to `Bundle.Wait` — upstream ignores
 `healthChecks` when `wait` is enabled, so forcing it would defeat the
-aggregation.
+aggregation. With `Wait` true no child entry is written, and the wait covers
+the children only where the parent's build applies their Kustomization CRs: the
+integrated Flux placements render them into the parent's directory,
+`FluxSeparate` does not (see the Flux engine's "Umbrella Bundles").
 
 This gives downstream consumers a single stable anchor — for example, a
 `platform` umbrella with tier children `infra`, `services`, `apps` lets an

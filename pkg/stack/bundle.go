@@ -70,10 +70,14 @@ type Bundle struct {
 	// is that value, not the bundle's Name.
 	// Both fields are merged into Kustomization.Spec.DependsOn.
 	NamedDependsOn []string
-	// Children holds bundles whose Flux Kustomization CRs are rendered into
-	// this bundle's tar path and whose readiness is aggregated into this
-	// bundle's HealthChecks. When non-empty, this bundle acts as an umbrella:
-	// it is Ready only when all Children are Ready. Children bundles must be
+	// Children holds bundles whose readiness this bundle aggregates. When
+	// non-empty, this bundle acts as an umbrella: with Wait unset or false the
+	// Flux engine writes a health check per child, so the umbrella is Ready
+	// only when all Children are. With Wait true it writes none, and the
+	// umbrella's wait covers the children only where its build applies their
+	// Flux Kustomization CRs: under the integrated placements, which render
+	// them into this bundle's directory, not under FluxSeparate (pkg/stack/fluxcd
+	// README, "Umbrella Bundles"). Children bundles must be
 	// standalone — they cannot simultaneously be the Bundle of a stack.Node.
 	Children []*Bundle
 	// Interval controls how often Flux reconciles the bundle. It must parse as

@@ -689,11 +689,14 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string,
 	// Kustomization, so the umbrella is Ready only when every child is.
 	// User-supplied HealthChecks are appended AFTER the auto entries.
 	//
-	// Wait is no longer forced to true here. It was, and that made these
-	// HealthChecks dead weight: upstream documents that "when enabled, the
-	// HealthChecks are ignored" (kustomize-controller
-	// api/v1/kustomization_types.go:175-177). Leaving Wait to the caller's
-	// tri-state input is what makes the entries below take effect.
+	// With Wait true none is written: upstream documents that "when enabled,
+	// the HealthChecks are ignored" (kustomize-controller
+	// api/v1/kustomization_types.go:175-176), so the entries would make
+	// nothing wait in any placement. The placement is not consulted: where the
+	// umbrella's own build applies the children's Kustomizations, its wait
+	// covers them; where it does not, Wait unset or false is what makes the
+	// entries take effect. Each child's name is checked either way: the
+	// child's own Kustomization is written with it.
 	if len(b.Children) > 0 {
 		b.InitializeUmbrella()
 		for _, child := range b.Children {
@@ -704,6 +707,9 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string,
 				if err := checkKustomizationName(child); err != nil {
 					return nil, err
 				}
+			}
+			if kust.Spec.Wait {
+				continue
 			}
 			kust.Spec.HealthChecks = append(kust.Spec.HealthChecks, metaapi.NamespacedObjectKindReference{
 				APIVersion: kustv1.GroupVersion.String(),
