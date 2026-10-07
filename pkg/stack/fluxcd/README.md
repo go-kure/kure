@@ -963,25 +963,45 @@ External augmenters may add child layouts that are not represented in the bundle
 ## Umbrella Bundles
 
 A `Bundle` with a non-empty `Children` slice becomes an **umbrella**: a parent
-Flux Kustomization that aggregates the readiness of its children via
-auto-generated `spec.healthChecks`. This gives downstream
+Flux Kustomization that aggregates the readiness of its children, via
+auto-generated `spec.healthChecks` or, where its build applies them, via
+`spec.wait`. This gives downstream
 consumers a single stable anchor regardless of how many internal tiers the
 umbrella contains.
 
 ### Resource generation
 
-`ResourceGenerator.GenerateForBundle` detects umbrella bundles and:
+`ResourceGenerator.GenerateForBundle` detects umbrella bundles and, when `Bundle.Wait` is unset
+or false:
 - prepends one `HealthChecks` entry per direct child (referencing the child's
   own Kustomization by name/namespace; the name is the child's `KustomizationName` when it sets
   one)
 - leaves user-supplied `HealthChecks` appended after the auto entries
 
-`spec.wait` is **not** forced to `true` here; it is the caller's `Bundle.Wait` input like any
-other field. Forcing it was self-defeating: upstream documents that when `wait` is enabled
-"the HealthChecks are ignored", so the auto entries the generator had just built were inert.
-Leaving `wait` unset is what makes them take effect. A caller who does set `Wait=true` gets
-upstream's whole-of-resources health assessment instead, which also gates on the child
-Kustomizations.
+With `Wait` true it writes no entry for the children: upstream documents that when `wait` is
+enabled "the HealthChecks are ignored", so an entry would make nothing wait. Each child's
+Kustomization name is checked all the same. The caller's own `HealthChecks` are handled as
+they were before the child entries were dropped under `wait`, including the exception `Wait`
+already made for a check on `b`'s own Kustomization (below); "One Kustomization per directory"
+says how the other entry points map them.
+
+`spec.wait` is **not** forced to `true`; it is the caller's `Bundle.Wait` input like any other
+field. With `wait`, a Kustomization waits for every object its own build applied (see
+"Readiness through the chain" under [Per-layout settings](#per-layout-settings)), so whether that
+covers the children depends on where their Kustomization objects are written:
+
+- **`FluxIntegratedPerBundle` and `FluxIntegratedPerLayout`:** each child's Kustomization object
+  is written in the umbrella's directory (see [Placement in layouts](#placement-in-layouts)),
+  so the umbrella applies it and its wait covers the child's `Ready`, with the two limits of
+  "Readiness through the chain".
+- **`FluxSeparate`:** the children's Kustomization objects are not in the umbrella's build
+  (they are in `flux-system`, which the root applies), so `wait: true` does not wait for the
+  children. A caller who needs the umbrella to wait for them there leaves `Wait` unset or false,
+  so the generated entries take effect. This gap was there before the entries were dropped
+  under `wait`, when Flux ignored them, and dropping them does not change it.
+- **`GenerateForBundle` alone** neither generates nor places the children's Kustomization
+  objects, and takes `path` as given, so whether `wait: true` covers them depends on whether the
+  caller's build at that path applies them. Where it does not, leave `Wait` unset or false.
 
 `GenerateForBundle(b, path)` is strictly self-only — it never recurses into
 `b.Children`. `GenerateFromLayout` and `GenerateFromCluster` cover the whole
@@ -994,7 +1014,8 @@ bundle or a child that would get `b`'s own Kustomization name
 Kustomization, is an error, since the Kustomization would otherwise depend on
 itself or wait for itself. A longer cycle of `Children` is `Bundle.Validate`'s
 to refuse. Two children that would get one Kustomization name are an error as
-well: the umbrella would health-check one Kustomization twice. The health
+well, whatever `Wait` says: two Kustomizations would share the name, and
+without `wait` the umbrella would health-check it twice. The health
 check on `b`'s own Kustomization stays accepted when `b.Wait` is true, and is
 written as given: Flux ignores `spec.healthChecks` under `spec.wait`, so
 nothing waits for itself. `GenerateFromLayout` and `GenerateFromCluster` drop
@@ -1020,7 +1041,8 @@ Which names are checked follows from what the entry point returns:
 
 - `GenerateForBundle` takes a bundle no validation has seen and returns one
   Kustomization. It checks the bundle's own name and the names that
-  Kustomization refers to: each umbrella child, named in a health check, and
+  Kustomization refers to: each umbrella child, named in a health check
+  (checked with `Wait` true too, where no health check is written), and
   each `DependsOn` bundle, named in `spec.dependsOn`. It builds no
   Kustomization for them, so it refuses an umbrella whose child's name Flux
   cannot reconcile instead of returning a reference to it.

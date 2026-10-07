@@ -170,12 +170,16 @@ Flux's (see the Flux engine's "Durations").
 
 Bundles also support an **umbrella pattern** via `Bundle.Children`. When a
 bundle has non-empty `Children`, its generated Flux Kustomization automatically
-gets an entry in `spec.healthChecks` for each child,
+gets an entry in `spec.healthChecks` for each child while `Bundle.Wait` is unset
+or false,
 giving external consumers a single readiness anchor for a group of bundles.
 `spec.wait` is left to `Bundle.Wait`: the generator no longer forces it, because
-upstream ignores `healthChecks` when `wait` is enabled.
-The child bundles' Flux Kustomization CRs are rendered into the parent
-bundle's directory. Children must be standalone bundles — they cannot
+upstream ignores `healthChecks` when `wait` is enabled, and with `Wait` true it
+writes no entry for the children. Whether `wait` then covers the children
+depends on the Flux placement (see the Flux engine's "Umbrella Bundles").
+Under the integrated Flux placements the child bundles' Flux Kustomization CRs
+are rendered into the parent bundle's directory; under `FluxSeparate` they go to
+`flux-system/` with every other one. Children must be standalone bundles — they cannot
 simultaneously be attached as the `Bundle` of any `stack.Node`.
 
 `Bundle.HealthChecks` can also be set explicitly to monitor specific resources
@@ -192,8 +196,10 @@ fmt.Println(bundle.HealthChecks[0].Kind, bundle.HealthChecks[0].Name)
 ```
 <!-- doc-example:end -->
 
-When Children is non-empty, health checks for each child Kustomization are
-auto-generated and merged with any user-supplied entries.
+When Children is non-empty and `Wait` is not true, health checks for each child
+Kustomization are auto-generated and merged with any user-supplied entries.
+The user-supplied entries are handled as before; dropping the child entries
+under `Wait` does not touch them.
 
 **Validation:** `ValidateCluster()` runs automatically in all layout entry
 points (`WalkCluster`, `WalkClusterByPackage`) and rejects invalid umbrella
