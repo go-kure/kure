@@ -331,9 +331,9 @@ func plainStrategicMerge(rf *resource.Factory, text string) ([]*resource.Resourc
 //     kustomize reads as the deletion of the whole object
 //     (merge2.Merger.VisitMap, kyaml yaml/merge2/merge2.go:53-91);
 //   - it carries the annotation config.kubernetes.io/local-config
-//     (konfig.IgnoredByKustomizeAnnotation) with any value but "false": the
-//     patch gives the object that annotation, and kustomize drops every object
-//     that has it once the build has run its patches (KustTarget.IgnoreLocal,
+//     (konfig.IgnoredByKustomizeAnnotation) with any value but "false": where
+//     the merge gives the object that annotation, kustomize drops the object
+//     once the build has run its patches (KustTarget.IgnoreLocal,
 //     internal/target/kusttarget.go:162; Factory.DropLocalNodes,
 //     resource/factory.go:149-151).
 //
