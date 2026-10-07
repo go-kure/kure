@@ -155,8 +155,8 @@ kustomize build takes in; two Kustomizations in directories that are applied sep
 those, yet they are one object in the cluster, where each apply replaces what the other wrote. A
 Kustomization is matched by the group `kustomize.toolkit.fluxcd.io` and its kind, at any version,
 and an omitted namespace counts as `default`. The error names both layouts. A Kustomization inside
-a List counts, where a List is what kustomize opens as one: an object whose kind ends in `List`
-and that has an `items` field, opened again when an item is itself such a List. A kind that does
+a List counts, where a List is what kustomize opens as one: an object written with a kind ending
+in `List` and that has an `items` field, opened again when an item is itself such a List. A kind that does
 not end in `List` is one object, whatever fields it has, and so is a List kind without `items`; a
 List whose `items` is null holds nothing. An item a typed List holds as raw JSON
 (`runtime.RawExtension`) is read as the object it encodes, also when the item carries an object
@@ -165,8 +165,10 @@ beside the raw JSON: the raw JSON is what is written.
 Every check above that compares objects reads a resource that way (go-kure/kure#1006): the check
 of one layout, the check of one build and the check of Kustomization names take a resource for the
 objects kustomize builds from it, so two objects of one identity are refused however many Lists
-deep one of them sits. For a typed object the `items` field is the one in the written file, so a
-typed List kind that leaves an empty `items` out is one object, and one that writes other items
+deep one of them sits. For a typed object the kind and the `items` field are the ones in the
+written file, not what its Go value reports: a typed object whose `TypeMeta` is left out of what
+is written is one object without a kind, whatever its Go type, and one that writes a kind ending
+in `List` is opened as a List. A typed List kind that leaves an empty `items` out is one object, and one that writes other items
 than its Go value holds is read for the ones it writes. An item of a typed List need not
 carry object metadata to be read: a List without any, such as the core `v1` List as a Go value
 (`metav1.List`), is opened like any other, and an item held as raw JSON is the object it encodes.

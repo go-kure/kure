@@ -1504,11 +1504,12 @@ func indexExistingSources(ml, skip *layout.ManifestLayout) (map[string][]hostedO
 // resourceItems returns l's resources as kustomize builds them, by the rule
 // the layout package's pre-write check reads them by (built.Objects,
 // go-kure/kure#977): a List is an envelope, and kustomize builds its items. A
-// List is an object whose kind ends in "List" and that has items; a List
-// among the items is opened as well, and one whose items are null holds
-// nothing. Any other object is returned as itself, whatever fields it has: a
-// kind that does not end in "List", a List kind without an items field, and
-// one whose items are not a list.
+// List is an object written with a kind that ends in "List", whatever kind its
+// Go value reports, and that has items; a List among the items is opened as
+// well, and one whose items are null holds nothing. Any other object is
+// returned as itself, whatever fields it has: a kind that does not end in
+// "List", a List kind without an items field, and one whose items are not a
+// list.
 //
 // A typed List can hold an item as raw JSON (runtime.RawExtension), which the
 // writers serialize as the object it encodes: it is returned as that object.

@@ -31,6 +31,35 @@ func withoutField(name, field string) *unstructured.Unstructured {
 	return cm
 }
 
+// unwrittenType reports a kind through a TypeMeta it leaves out of what is
+// written, and writes the kind and apiVersion fields from two fields of its
+// own: what its Go value reports and what is written disagree.
+type unwrittenType struct {
+	metav1.TypeMeta   `json:"-"`
+	WrittenAPIVersion string `json:"apiVersion,omitempty"`
+	WrittenKind       string `json:"kind,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []corev1.ConfigMap `json:"items"`
+}
+
+func (u *unwrittenType) DeepCopyObject() runtime.Object { c := *u; return &c }
+
+// unwrittenTypeOf is an unwrittenType named holder whose Go value reports the
+// kind reported, written with the kind written and no apiVersion, holding
+// items.
+func unwrittenTypeOf(reported, written string, items ...corev1.ConfigMap) *unwrittenType {
+	u := &unwrittenType{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: reported}, WrittenKind: written, Items: items}
+	u.Name, u.Namespace = "holder", "default"
+	return u
+}
+
+// typedConfigMap is a typed ConfigMap with its TypeMeta set.
+func typedConfigMap(name string) corev1.ConfigMap {
+	cm := untypedConfigMap(name)
+	cm.TypeMeta = metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"}
+	return *cm
+}
+
 func TestWriters_RefuseObjectWithoutKindOrAPIVersion(t *testing.T) {
 	cases := map[string]struct {
 		build func(t *testing.T) client.Object
@@ -70,6 +99,20 @@ func TestWriters_RefuseObjectWithoutKindOrAPIVersion(t *testing.T) {
 			},
 			[]string{`ConfigMap "default/cm"`, "an item of List", "written without an apiVersion:"},
 		},
+		// The written kind decides whether an object is a List, not the one
+		// its Go value reports. A List kind left out of what is written is
+		// one object without a kind, refused before the identity check could
+		// find its item, a copy of the layout's ConfigMap "fine", twice.
+		"a List kind its TypeMeta leaves out of what is written": {
+			func(t *testing.T) client.Object { return unwrittenTypeOf("ConfigMapList", "", typedConfigMap("fine")) },
+			[]string{`an object "default/holder" (Go type *layout_test.unwrittenType)`, "written without a kind and an apiVersion"},
+		},
+		"an item without TypeMeta of an object written as a List kind its Go value does not report": {
+			func(t *testing.T) client.Object {
+				return unwrittenTypeOf("Inventory", "ConfigMapList", *untypedConfigMap("cm"))
+			},
+			[]string{`an object "default/cm" (Go type *v1.ConfigMap)`, `an item of ConfigMapList "default/holder"`, "written without a kind and an apiVersion"},
+		},
 	}
 	for name, tc := range cases {
 		for _, writer := range allWriters {
@@ -105,6 +148,11 @@ func TestWriters_ListWithoutAPIVersion(t *testing.T) {
 			inner := listOf("List", configMapNamed("held"))
 			delete(inner.Object, "apiVersion")
 			return listOf("List", inner)
+		},
+		// A List by the kind it is written with, whatever kind its Go value
+		// reports.
+		"an object written as a List kind its Go value does not report": func(t *testing.T) client.Object {
+			return unwrittenTypeOf("Inventory", "ConfigMapList", typedConfigMap("held"))
 		},
 	}
 	for name, build := range cases {

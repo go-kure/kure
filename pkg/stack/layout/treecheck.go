@@ -553,8 +553,9 @@ func layoutPath(l *ManifestLayout, plan writerPlan) string {
 // The objects are the ones a build reads from l's resources (see
 // builtObjects): each resource, or each item of a List, however many Lists
 // deep, typed or unstructured. Each is judged on what is written for it
-// (built.WrittenType), not on its Go type. A List itself is not judged: it has
-// a kind, or it would not be a List, and a build drops the envelope without
+// (built.WrittenType), not on its Go type. A List itself is not judged: it is
+// written with a kind, or it would not be a List (built.Objects takes an
+// object for one by its written kind), and a build drops the envelope without
 // reading its apiVersion, so a List without one builds and applies as its
 // items do.
 //
@@ -592,7 +593,7 @@ func checkResourceTypes(l *ManifestLayout) error {
 				held += ", an item of " + describeWritten(r, listKind)
 			}
 			return errors.NewFileError("write", l.FullRepoPath(), fmt.Sprintf(
-				"layout %q holds %s, which is written without %s: a resource file must state both for every object in it; set the object's TypeMeta, as this library's Create constructors do, or the two fields of an unstructured object",
+				"layout %q holds %s, which is written without %s: a resource file must state both for each object a build reads from it, a List's items in place of the List; set the object's TypeMeta, as this library's Create constructors do, or the two fields of an unstructured object",
 				l.FullRepoPath(), held, missing), nil)
 		}
 	}
