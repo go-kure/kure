@@ -23,6 +23,10 @@ import (
 // as built, without substitution (fluxcd/pkg/kustomize, SubstituteVariables).
 const substituteOptOut = "kustomize.toolkit.fluxcd.io/substitute"
 
+// optOutRefusal ends keepEmbeddedPostBuild's refusal; its %s takes the other
+// fields the parent's substitution changes.
+const optOutRefusal = "Flux's opt-out from the substitution would keep the first as written and drop the second, which the build substitutes today; remove the ${...} expressions from its %s (written from the bundle's labels and annotations and the layout's path), or the ${...} expressions and escapes ($${...}) from the bundle's patches and postBuild substitute values"
+
 // keepEmbeddedPostBuild keeps the postBuild and the patches of each per-layout
 // Kustomization this pass created as they were written, through the build of
 // the Kustomization that applies it (go-kure/kure#1021). A per-layout
@@ -33,17 +37,17 @@ const substituteOptOut = "kustomize.toolkit.fluxcd.io/substitute"
 //
 // The substitution of every Kustomization this pass placed or kept whose build
 // holds the per-layout one is run over it as Flux's own, offline
-// (parentSubstitution), and that run decides:
+// (parentSubstitution), and those runs together decide:
 //
-//   - when it changes neither the postBuild nor the patches, the Kustomization
-//     is written as before;
-//   - when it changes one of them and no other field, the Kustomization gets
-//     Flux's opt-out annotation, so that every build holding it applies it as
-//     written;
-//   - when it changes one of them and another field as well (a label, an
-//     annotation, the path), the integration is refused: the opt-out would
-//     drop that substitution, which the parent's build has made until now,
-//     without a word.
+//   - when none changes the postBuild or the patches, the Kustomization is
+//     written as before;
+//   - when one changes either and none changes another field, the
+//     Kustomization gets Flux's opt-out annotation, so that every build
+//     holding it applies it as written;
+//   - when one changes either and one, the same or another, changes another
+//     field as well (a label, an annotation, the path), the integration is
+//     refused: the opt-out would drop that substitution, which the parent's
+//     build has made until now, without a word.
 //
 // Any change to the postBuild or the patches counts. The Kustomization
 // substitutes what its patches write with its own vars, over the serialized
@@ -78,7 +82,18 @@ func (p *integratedPlacement) keepEmbeddedPostBuild(top *layout.ManifestLayout) 
 	}
 	rf := provider.NewDefaultDepProvider().GetResourceFactory()
 	for _, child := range children {
-		optOut := false
+		// own and other gather over every Kustomization whose build holds the
+		// child: the opt-out drops the substitution of each, so one that
+		// changes only its postBuild or patches and another that changes only
+		// another field are refused as one that changes both. No tree the
+		// writers accept has two: the integration places every layout
+		// PerLayout (setPlacement), so a build holds its own directory and
+		// the AppFileSingle files in it, which hold no child layouts; no two
+		// layouts share a directory (both checked by the writers before they
+		// write); and each layout has one Kustomization, since add keeps one
+		// already there only at the generated one's host and spec.path.
+		var own, other []string
+		var ownBy, otherBy *kustv1.Kustomization
 		for _, k := range crs {
 			if k.Spec.PostBuild == nil {
 				continue
@@ -87,18 +102,37 @@ func (p *integratedPlacement) keepEmbeddedPostBuild(top *layout.ManifestLayout) 
 			if b == nil || !slices.ContainsFunc(buildScope(b), func(l *layout.ManifestLayout) bool { return holds(l, child.cr) }) {
 				continue
 			}
-			own, other, err := parentSubstitution(rf, k, child.cr)
+			kOwn, kOther, err := parentSubstitution(rf, k, child.cr)
 			if err != nil {
 				return errors.Wrapf(err, "Flux Kustomization %q (spec.path %q) builds Flux Kustomization %q, of layout %q, and its postBuild substitution fails on it",
 					k.Name, k.Spec.Path, child.name, child.layout.FullRepoPath())
 			}
-			if len(own) > 0 && len(other) > 0 {
-				return errors.Errorf("Flux Kustomization %q (spec.path %q) builds Flux Kustomization %q, of layout %q, and its postBuild substitution changes what the latter applies to its own build (%s) as well as its %s: Flux's opt-out from the substitution would keep the first as written and drop the second, which the build substitutes today; remove the ${...} expressions from its %s (written from the bundle's labels and annotations and the layout's path), or the ${...} expressions and escapes ($${...}) from the bundle's patches and postBuild substitute values",
-					k.Name, k.Spec.Path, child.name, child.layout.FullRepoPath(), strings.Join(own, " and "), strings.Join(other, ", "), strings.Join(other, ", "))
+			if len(kOwn) > 0 && ownBy == nil {
+				ownBy = k
 			}
-			optOut = optOut || len(own) > 0
+			if len(kOther) > 0 && otherBy == nil {
+				otherBy = k
+			}
+			for _, f := range kOwn {
+				if !slices.Contains(own, f) {
+					own = append(own, f)
+				}
+			}
+			for _, f := range kOther {
+				if !slices.Contains(other, f) {
+					other = append(other, f)
+				}
+			}
 		}
-		if optOut {
+		if ownBy != nil && otherBy == ownBy {
+			return errors.Errorf("Flux Kustomization %q (spec.path %q) builds Flux Kustomization %q, of layout %q, and its postBuild substitution changes what the latter applies to its own build (%s) as well as its %s: "+optOutRefusal,
+				otherBy.Name, otherBy.Spec.Path, child.name, child.layout.FullRepoPath(), strings.Join(own, " and "), strings.Join(other, ", "), strings.Join(other, ", "))
+		}
+		if ownBy != nil && otherBy != nil {
+			return errors.Errorf("Flux Kustomizations %q (spec.path %q) and %q (spec.path %q) both build Flux Kustomization %q, of layout %q: the postBuild substitution of the first changes what the latter applies to its own build (%s), that of the second its %s: "+optOutRefusal,
+				ownBy.Name, ownBy.Spec.Path, otherBy.Name, otherBy.Spec.Path, child.name, child.layout.FullRepoPath(), strings.Join(own, " and "), strings.Join(other, ", "), strings.Join(other, ", "))
+		}
+		if ownBy != nil {
 			annotations := child.cr.GetAnnotations()
 			if annotations == nil {
 				annotations = map[string]string{}
