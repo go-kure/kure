@@ -63,6 +63,18 @@ func validateKustomizationNameField(name string) error {
 	return nil
 }
 
+// ValidateServiceAccountName reports whether name can be a bundle's
+// ServiceAccountName: the name of a Kubernetes ServiceAccount, which the API
+// server accepts as a DNS-1123 subdomain. Flux's Kustomization does not check
+// spec.serviceAccountName itself, so a name no ServiceAccount can have is
+// admitted there and fails only when the controller impersonates it.
+func ValidateServiceAccountName(name string) error {
+	if problems := validation.IsDNS1123Subdomain(name); len(problems) > 0 {
+		return errors.Errorf("%q is not a valid service account name: %s", name, strings.Join(problems, "; "))
+	}
+	return nil
+}
+
 // ValidateDirectoryName reports whether name can be the name of one directory
 // in a rendered tree: a single path segment. It refuses an empty name, "."
 // and "..", a name containing a path separator, and a name containing a NUL

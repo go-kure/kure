@@ -156,6 +156,30 @@ func TestBundleValidate_Names(t *testing.T) {
 			&Bundle{Name: "Y-infra", KustomizationName: "y-infra"},
 			[]string{`'Y-infra'`, "field 'name'", "RFC 1123 subdomain"},
 		},
+		// ServiceAccountName names a ServiceAccount, a DNS-1123 subdomain
+		// (go-kure/kure#1034).
+		{"ServiceAccountName dotted subdomain", &Bundle{Name: "web", ServiceAccountName: "web.deployer"}, nil},
+		{"ServiceAccountName at the subdomain limit", &Bundle{Name: "web", ServiceAccountName: longest}, nil},
+		{
+			"ServiceAccountName over the subdomain limit",
+			&Bundle{Name: "web", ServiceAccountName: long},
+			[]string{"'web'", "field 'serviceAccountName'", long, "no more than 253 characters"},
+		},
+		{
+			"ServiceAccountName uppercase",
+			&Bundle{Name: "web", ServiceAccountName: "Web_Deployer"},
+			[]string{"'web'", "field 'serviceAccountName'", `"Web_Deployer" is not a valid service account name`, "RFC 1123 subdomain"},
+		},
+		{
+			"ServiceAccountName with a colon",
+			&Bundle{Name: "web", ServiceAccountName: "system:serviceaccount:apps:web"},
+			[]string{"'web'", "field 'serviceAccountName'", "RFC 1123 subdomain"},
+		},
+		{
+			"umbrella grandchild ServiceAccountName",
+			&Bundle{Name: "platform", Children: []*Bundle{{Name: "infra", Children: []*Bundle{{Name: "db", ServiceAccountName: "DB"}}}}},
+			[]string{"'platform/infra/db'", "field 'serviceAccountName'", `"DB"`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

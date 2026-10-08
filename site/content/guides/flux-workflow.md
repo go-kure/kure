@@ -713,6 +713,35 @@ names the first such layout, every field it sets and why it has no Kustomization
 - **A node's own fields are refused on the node,** once: a value the walk copies from a node to
   its layout is not refused a second time on the layout.
 
+### A bundle can name the service account Flux applies it with
+
+`Bundle.ServiceAccountName` (go-kure/kure#1034) is written to `spec.serviceAccountName` of the
+bundle's Kustomization in every placement, and kustomize-controller impersonates that account when
+it applies the bundle. Under `FluxIntegratedPerLayout` the Kustomization of each of the bundle's
+applications that has a directory of its own, and of each layout below it, carries the same
+account; a layout has no field to change it. Unset, nothing changes in the output.
+
+```go
+shop := &stack.Bundle{Name: "shop", ServiceAccountName: "shop-deployer"}
+```
+
+- **Create the account and its RBAC yourself.** Flux looks it up in the Kustomization's own
+  namespace, the generator's `DefaultNamespace` (`flux-system` by default), and kure writes the
+  name only.
+- **Under the integrated placements the account also applies Kustomization objects.** A bundle's
+  directory holds the CRs of its umbrella children and, under `FluxIntegratedPerLayout`, of its
+  application layouts, so the bundle's account needs RBAC to manage Kustomizations in that
+  namespace.
+- **Set it on every bundle that needs one.** An umbrella's account is not passed to its children:
+  a child without its own is applied with the controller's identity.
+- **Bundles that share a directory share one account.** Bundles a `GroupFlat` merge puts in one
+  directory must set the same value, or the integration is refused, naming both.
+- **The name is checked.** It must be a DNS-1123 subdomain; `Bundle.Validate` and the generator
+  refuse another, naming the bundle by its path.
+
+The table of which Kustomization carries which account is in the
+[Flux Engine reference](/api-reference/flux-engine/#service-account).
+
 ## Umbrella Bundles — Readiness Aggregation
 
 A bundle with non-empty `Children` becomes an **umbrella**: Flux will only mark

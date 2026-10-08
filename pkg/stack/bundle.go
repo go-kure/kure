@@ -128,6 +128,20 @@ type Bundle struct {
 	Patches []Patch
 	// PostBuild configures variable substitution performed after kustomize build.
 	PostBuild *PostBuild
+	// ServiceAccountName is the service account the Flux workflow has
+	// kustomize-controller impersonate when it applies the bundle: it is
+	// written to spec.serviceAccountName of the bundle's Kustomization and,
+	// under FluxIntegratedPerLayout, of the Kustomization of each application
+	// of the bundle that has a directory of its own and of each layout below
+	// it. Empty writes nothing, and the controller applies with its own
+	// identity. Flux looks the account up in the namespace of the
+	// Kustomization, the generator's DefaultNamespace; creating the account
+	// and its RBAC is the caller's. An umbrella's value is not passed to its
+	// Children: each bundle carries its own. A value set here must be a
+	// DNS-1123 subdomain, the rule Kubernetes sets for a service account name
+	// (ValidateServiceAccountName, checked by Validate). The ArgoCD workflow
+	// does not read it.
+	ServiceAccountName string
 
 	// Internal fields for runtime hierarchy navigation (not serialized)
 	parent  *Bundle            `yaml:"-"` // Runtime parent reference for efficient traversal
@@ -265,7 +279,8 @@ func (a *Bundle) Validate() error {
 // that directory instead and is checked as a directory name
 // (ValidateDirectoryName) only: it is no object's name, so it is no DNS-1123
 // subdomain and may hold upper case. It is checked whether or not the layout
-// rules give the bundle a directory, as a name is. The
+// rules give the bundle a directory, as a name is. A ServiceAccountName, when
+// set, is checked as a service account name (ValidateServiceAccountName). The
 // 63-character limit of a Flux Kustomization name is Flux's and is checked by
 // the Flux workflow where it builds the Kustomization, on the name in effect
 // (UnitName), not here: a longer name is valid for the ArgoCD workflow.
@@ -293,6 +308,11 @@ func (a *Bundle) validateNames(path string, seen map[*Bundle]bool) error {
 	if a.DirName != "" {
 		if err := ValidateDirectoryName(a.DirName); err != nil {
 			return errors.ResourceValidationError("Bundle", path, "dirName", err.Error(), nil)
+		}
+	}
+	if a.ServiceAccountName != "" {
+		if err := ValidateServiceAccountName(a.ServiceAccountName); err != nil {
+			return errors.ResourceValidationError("Bundle", path, "serviceAccountName", err.Error(), nil)
 		}
 	}
 	for _, c := range a.Children {

@@ -153,19 +153,20 @@ func deepCopyBundle(b *Bundle) *Bundle {
 		return nil
 	}
 	newBundle := &Bundle{
-		Name:              b.Name,
-		KustomizationName: b.KustomizationName,
-		DirName:           b.DirName,
-		ParentPath:        b.ParentPath,
-		SourceRef:         b.SourceRef,
-		Interval:          b.Interval,
-		Labels:            b.Labels,
-		Annotations:       b.Annotations,
-		Description:       b.Description,
-		Prune:             b.Prune,
-		Wait:              b.Wait,
-		Timeout:           b.Timeout,
-		RetryInterval:     b.RetryInterval,
+		Name:               b.Name,
+		KustomizationName:  b.KustomizationName,
+		DirName:            b.DirName,
+		ParentPath:         b.ParentPath,
+		SourceRef:          b.SourceRef,
+		Interval:           b.Interval,
+		Labels:             b.Labels,
+		Annotations:        b.Annotations,
+		Description:        b.Description,
+		Prune:              b.Prune,
+		Wait:               b.Wait,
+		Timeout:            b.Timeout,
+		RetryInterval:      b.RetryInterval,
+		ServiceAccountName: b.ServiceAccountName,
 	}
 	// Shallow copy: allocate a new slice so appends in the copy do not affect
 	// the original, but the *Application pointers themselves are shared.

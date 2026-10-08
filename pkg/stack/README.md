@@ -169,6 +169,16 @@ take, a negative one or a positive one under a millisecond (`"-1s"`, `"1us"`), w
 writes the bundle's Kustomization; `Bundle.Validate` accepts those, since the rule is
 Flux's (see the Flux engine's "Durations").
 
+`ServiceAccountName` names the service account kustomize-controller impersonates when it
+applies the bundle: the Flux workflow writes it to `spec.serviceAccountName` of the bundle's
+Kustomization and, under `FluxPlacement: FluxIntegratedPerLayout`, of the Kustomization of each
+of the bundle's applications that has a directory of its own and of each layout below it. Empty
+writes nothing, and the controller applies with its own identity, as before. Flux looks the
+account up in the Kustomization's own namespace, the generator's `DefaultNamespace`; creating the
+account and its RBAC is the caller's. An umbrella's value is not passed to its `Children`: each
+bundle carries its own. The value must be a DNS-1123 subdomain (see "Service account name"
+below). The ArgoCD workflow does not read it.
+
 Bundles also support an **umbrella pattern** via `Bundle.Children`. When a
 bundle has non-empty `Children`, its generated Flux Kustomization automatically
 gets an entry in `spec.healthChecks` for each child while `Bundle.Wait` is unset
@@ -257,6 +267,13 @@ rule").
   leave its directory where the backslash is a separator. A NUL byte is refused
   because a directory with one in its name cannot be created; characters that
   only some file systems refuse are not checked.
+- **Service account name** (`ValidateServiceAccountName`): a DNS-1123
+  subdomain, the rule Kubernetes sets for a ServiceAccount's name. `Bundle.Validate`
+  checks a `ServiceAccountName` on the bundle and on every umbrella child, and
+  the error names the bundle by its path. The Flux generator checks it again
+  where it writes the bundle's Kustomization, for a bundle generated without
+  `Validate`. Flux's Kustomization does not check the field, so a name no
+  ServiceAccount can have would be admitted there and fail only at reconcile.
 
 A node name is checked whatever the layout rules are, also where flat node
 grouping absorbs the node into its parent's directory. The name is a segment

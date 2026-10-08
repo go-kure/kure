@@ -309,7 +309,7 @@ The bundles merged into one directory combine as follows:
 
 | Bundle setting | In the shared Kustomization |
 |---|---|
-| `SourceRef`, `Interval`, `Timeout`, `RetryInterval`, `Prune`, `Wait`, `Force`, `Suspend`, `PostBuild` | must be the same for every merged bundle (unset compares as the default; an omitted `SourceRef` namespace is the generator's `DefaultNamespace`; without a `URL` only its kind, name and namespace are compared, the fields a Kustomization carries), else an error naming the setting and the bundles |
+| `SourceRef`, `Interval`, `Timeout`, `RetryInterval`, `Prune`, `Wait`, `Force`, `Suspend`, `PostBuild`, `ServiceAccountName` | must be the same for every merged bundle (unset compares as the default; an omitted `SourceRef` namespace is the generator's `DefaultNamespace`; without a `URL` only its kind, name and namespace are compared, the fields a Kustomization carries), else an error naming the setting and the bundles |
 | `HealthChecks`, umbrella health checks | combined, each listed once; a check on a Flux Kustomization names the unit that applies that bundle, and one on the unit itself is dropped |
 | `Labels`, `Annotations` | combined; one key with two values is an error |
 | `Patches` | combined, but only when every patch has a `Target` that selects none of the other merged bundles' objects (see [Patches in a shared directory](#patches-in-a-shared-directory)) |
@@ -960,6 +960,39 @@ Controls where Flux Kustomization resources are placed:
 
 External augmenters may add child layouts that are not represented in the bundle model; integrated placement discovers those layouts and emits the required Flux resources.
 
+## Service account
+
+`Bundle.ServiceAccountName` names the service account kustomize-controller impersonates when it
+applies the bundle (go-kure/kure#1034). Unset, no Kustomization carries `spec.serviceAccountName`
+and the output is what it was before the field existed; the controller then applies with its own
+identity.
+
+| Kustomization | `spec.serviceAccountName` |
+|---|---|
+| a bundle's, in every placement | the bundle's own `ServiceAccountName` |
+| an umbrella child's | the child's own; the umbrella's is not passed down |
+| one that bundles a `GroupFlat` merge share | the one value every merged bundle sets; two values are refused, naming the field and both bundles |
+| a per-layout one, under `FluxIntegratedPerLayout` | that of the bundle holding the layout's application; no layout field (see [Per-layout settings](#per-layout-settings)) |
+| a node's, under `FluxIntegratedPerLayout` | none: a node Kustomization inherits no settings |
+
+Flux looks the account up in the Kustomization's own namespace, the generator's
+`DefaultNamespace`, for every Kustomization kure generates. Creating the account and its RBAC is
+the caller's; kure writes the name only. Under the integrated placements a bundle's directory
+holds the CRs of its umbrella children and, under `FluxIntegratedPerLayout`, of its application
+layouts, so a bundle's account applies those Kustomization objects and needs the RBAC for them.
+Each of those Kustomizations then applies its own build under its own account: an umbrella child
+without one is applied with the controller's identity, whatever its umbrella sets, so give each
+bundle that needs an account its own.
+
+The name must be a DNS-1123 subdomain, the rule Kubernetes sets for a ServiceAccount's name
+(`stack.ValidateServiceAccountName`). `Bundle.Validate` refuses another, and so does the
+generator where it writes the bundle's Kustomization, for a bundle generated without
+`Validate`; the error names the bundle by its path and the field `serviceAccountName`. Flux does
+not check the field itself, so such a name would be admitted and fail at reconcile.
+
+Flux-operator's multi-tenant lockdown (a default service account for every Kustomization) is a
+cluster setting outside kure.
+
 ## Umbrella Bundles
 
 A `Bundle` with a non-empty `Children` slice becomes an **umbrella**: a parent
@@ -1130,9 +1163,9 @@ The integrator applies this rule at any depth. The CR's `spec.sourceRef` is the 
 
 ### Per-layout settings
 
-Besides its name, path, source and dependencies, a per-layout Kustomization carries eleven settings. Five came with go-kure/kure#1015: `spec.wait`, `spec.timeout`, `spec.retryInterval`, `metadata.labels` and `metadata.annotations`. Six came with go-kure/kure#1021: `spec.interval`, `spec.prune`, `spec.force`, `spec.suspend`, `spec.postBuild` and `spec.patches`. They come from the bundle and, all but the last two, from the layout.
+Besides its name, path, source and dependencies, a per-layout Kustomization carries twelve settings. Five came with go-kure/kure#1015: `spec.wait`, `spec.timeout`, `spec.retryInterval`, `metadata.labels` and `metadata.annotations`. Six came with go-kure/kure#1021: `spec.interval`, `spec.prune`, `spec.force`, `spec.suspend`, `spec.postBuild` and `spec.patches`. One came with go-kure/kure#1034: `spec.serviceAccountName`. They come from the bundle and, all but `spec.postBuild`, `spec.patches` and `spec.serviceAccountName`, from the layout.
 
-**From the bundle.** The Kustomization of an application's own layout, and of every layout below it at any depth (the ones the application's `LayoutAugmenter` added), takes them from the bundle that holds the application: `Bundle.Wait`, `Timeout`, `RetryInterval`, `Labels`, `Annotations`, `Interval`, `Prune`, `Force`, `Suspend`, `PostBuild` and `Patches`. Where a grouping axis merged several bundles into the directory above the application's, that bundle is the one whose `Applications` lists the application, not the first of them and not the merged set. An application of an umbrella child inherits from the child bundle, not from the umbrella above it.
+**From the bundle.** The Kustomization of an application's own layout, and of every layout below it at any depth (the ones the application's `LayoutAugmenter` added), takes them from the bundle that holds the application: `Bundle.Wait`, `Timeout`, `RetryInterval`, `Labels`, `Annotations`, `Interval`, `Prune`, `Force`, `Suspend`, `PostBuild`, `Patches` and `ServiceAccountName`. Where a grouping axis merged several bundles into the directory above the application's, that bundle is the one whose `Applications` lists the application, not the first of them and not the merged set. An application of an umbrella child inherits from the child bundle, not from the umbrella above it.
 
 **From the layout.** `layout.ManifestLayout` has nine of the fields, set by an augmenter on a layout it creates or by a caller on a walked layout before integration:
 
@@ -1150,6 +1183,8 @@ A layout's own fields apply to that layout's Kustomization only: a layout below 
 **Interval and prune fall back to the generator's.** Where neither the layout nor the holding bundle sets one, `spec.interval` is `ResourceGenerator.DefaultInterval` and `spec.prune` is `ResourceGenerator.Prune`, the values every per-layout Kustomization had before the two were read from the bundle: a tree that sets none of the six renders byte for byte as it did. A bundle that does set one now passes it on. In particular a bundle with `Prune` on turns garbage collection on for the Kustomizations of its applications' layouts, which rendered with the generator's `Prune` before, and a bundle's `Interval` replaces the generator's on them.
 
 **The substitution is the bundle's, whole.** A per-layout Kustomization takes the holding bundle's `PostBuild` as it is, the inline variables and the `SubstituteFrom` references, each Kustomization with a copy of its own. There is no layout field for it. Flux reads a referenced ConfigMap or Secret from the Kustomization's namespace, and every Kustomization of the integration is in the generator's, so a reference the bundle's own Kustomization resolves is one the per-layout ones resolve.
+
+**The service account is the bundle's.** A per-layout Kustomization takes the holding bundle's `ServiceAccountName`, and there is no layout field for it: the layout's objects are the application's, and the bundle names the account they are applied under. Unset, the field is left out. See [Service account](#service-account).
 
 **The parent's substitution leaves them as written.** A per-layout Kustomization is a resource of its parent's build, whose postBuild substitution runs over it before it applies its own postBuild and patches. Where that would change its postBuild or its patches at all (a `${VAR}`, plain or not, or an escape `$${VAR}`), the integration writes Flux's opt-out annotation `kustomize.toolkit.fluxcd.io/substitute: disabled` on it, and the Kustomization applies them as if no parent had run. What a patch the parent substituted first comes to depends on the objects it patches (one may carry the opt-out itself, and a value's YAML type is read from the object), so any change counts. The opt-out also stops the parent substituting the Kustomization's labels, annotations and path, so where the parent substitutes one of those as well the integration is refused, naming the Kustomization, its layout and the fields. The annotations are checked once more with the opt-out in them, and the integration is refused, naming the layout, where they are then more than the total size the Kubernetes API accepts.
 
@@ -1276,7 +1311,7 @@ Set `KustomizationName` and `NamedDependsOn` before the cluster is walked. The w
 
 A second integration of the same tree keeps the node Kustomization the first one placed. If the node sets `DependsOn` or `NamedDependsOn` and that Kustomization's `spec.dependsOn` lacks one of the Kustomizations they ask for (in the Kustomization's own namespace), the integration is refused rather than dropping the dependency: remove the kept Kustomization, add the entry to it, or walk the cluster again.
 
-A node Kustomization inherits no settings and `stack.Node` has no field for any. `spec.interval` and `spec.prune` are those the node's layout sets (`ManifestLayout.Interval`, `Prune`) or else the generator's (`ResourceGenerator.DefaultInterval` and `Prune`). `spec.wait`, `spec.timeout`, `spec.retryInterval`, `spec.force`, `spec.suspend`, labels and annotations are those the node's layout sets (`ManifestLayout.Wait`, `Timeout`, `RetryInterval`, `Force`, `Suspend`, `Labels`, `Annotations`, on the walked layout before integration: see [Per-layout settings](#per-layout-settings)) and are left out otherwise. It takes no `spec.postBuild` and no `spec.patches`: those are a bundle's, and a node's layout has no holding bundle. What a group node applies is the Kustomizations of the nodes below it; the settings of the workloads stay on their bundles. Without `Wait` on its layout, a node Kustomization is therefore Ready once those Kustomization objects are applied, and a dependency on it (`Node.DependsOn`) waits for that, not for the workloads below.
+A node Kustomization inherits no settings and `stack.Node` has no field for any. `spec.interval` and `spec.prune` are those the node's layout sets (`ManifestLayout.Interval`, `Prune`) or else the generator's (`ResourceGenerator.DefaultInterval` and `Prune`). `spec.wait`, `spec.timeout`, `spec.retryInterval`, `spec.force`, `spec.suspend`, labels and annotations are those the node's layout sets (`ManifestLayout.Wait`, `Timeout`, `RetryInterval`, `Force`, `Suspend`, `Labels`, `Annotations`, on the walked layout before integration: see [Per-layout settings](#per-layout-settings)) and are left out otherwise. It takes no `spec.postBuild`, no `spec.patches` and no `spec.serviceAccountName`: those are a bundle's, and a node's layout has no holding bundle. What a group node applies is the Kustomizations of the nodes below it; the settings of the workloads stay on their bundles. Without `Wait` on its layout, a node Kustomization is therefore Ready once those Kustomization objects are applied, and a dependency on it (`Node.DependsOn`) waits for that, not for the workloads below.
 
 ## Validation
 

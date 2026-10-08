@@ -1008,8 +1008,12 @@ func TestDeepCopyBundle_PreservesNewFields(t *testing.T) {
 			Substitute:     map[string]string{"VAR": "val"},
 			SubstituteFrom: []SubstituteRef{{Kind: "ConfigMap", Name: "cfg"}},
 		},
+		ServiceAccountName: "deployer",
 	}
 	got := deepCopyBundle(b)
+	if got.ServiceAccountName != "deployer" {
+		t.Errorf("ServiceAccountName: got %q, want deployer", got.ServiceAccountName)
+	}
 	if got.Force == nil {
 		t.Fatal("Force not copied (nil)")
 	}

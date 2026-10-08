@@ -337,6 +337,7 @@ func (g *ResourceGenerator) mergeIntoUnit(unit, other *kustv1.Kustomization, fir
 		{"force", unit.Spec.Force, other.Spec.Force},
 		{"suspend", unit.Spec.Suspend, other.Spec.Suspend},
 		{"postBuild", unit.Spec.PostBuild, other.Spec.PostBuild},
+		{"serviceAccountName", unit.Spec.ServiceAccountName, other.Spec.ServiceAccountName},
 	}
 	for _, s := range same {
 		if !reflect.DeepEqual(s.a, s.b) {
@@ -656,6 +657,16 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string,
 		},
 	}
 
+	// The service account is the bundle's own, an umbrella's not passed to
+	// its children; unset leaves the field out. Bundle.Validate refuses a
+	// name no ServiceAccount can have; GenerateForBundle is reached without it.
+	if b.ServiceAccountName != "" {
+		if err := stack.ValidateServiceAccountName(b.ServiceAccountName); err != nil {
+			return nil, errors.ResourceValidationError("Bundle", b.GetPath(), "serviceAccountName", err.Error(), nil)
+		}
+		kust.Spec.ServiceAccountName = b.ServiceAccountName
+	}
+
 	// Set timeout if specified
 	if b.Timeout != "" {
 		d, err := parseBundleDuration(b, "timeout", b.Timeout)
@@ -868,8 +879,9 @@ func parseBundleDuration(b *stack.Bundle, field, value string) (time.Duration, e
 // the node's DependsOn (layoutDependsOn).
 //
 // settings are the interval, prune, force, suspend, wait, timeout, retry
-// interval, labels, annotations and postBuild substitution in effect on it:
-// the layout's own over those of the bundle that holds its application, and
+// interval, labels, annotations, postBuild substitution and service account in
+// effect on it: the layout's own over those of the bundle that holds its
+// application (the substitution and the account are the bundle's alone), and
 // for interval and prune the generator's where neither sets one
 // (integratedPlacement.layoutSettings). A tree whose layouts and bundles set
 // none of interval, prune, force, suspend and postBuild therefore gets the
@@ -900,16 +912,17 @@ func (g *ResourceGenerator) createKustomizationForLayout(
 			Annotations: settings.annotations,
 		},
 		Spec: kustv1.KustomizationSpec{
-			Interval:      metav1.Duration{Duration: settings.interval},
-			Path:          ml.FullRepoPath(),
-			Prune:         settings.prune,
-			SourceRef:     sourceRef,
-			Wait:          settings.wait,
-			Timeout:       settings.timeout,
-			RetryInterval: settings.retryInterval,
-			Force:         settings.force,
-			Suspend:       settings.suspend,
-			PostBuild:     settings.postBuild,
+			Interval:           metav1.Duration{Duration: settings.interval},
+			Path:               ml.FullRepoPath(),
+			Prune:              settings.prune,
+			SourceRef:          sourceRef,
+			Wait:               settings.wait,
+			Timeout:            settings.timeout,
+			RetryInterval:      settings.retryInterval,
+			Force:              settings.force,
+			Suspend:            settings.suspend,
+			PostBuild:          settings.postBuild,
+			ServiceAccountName: settings.serviceAccountName,
 		},
 	}
 	for _, dep := range dependsOn {
