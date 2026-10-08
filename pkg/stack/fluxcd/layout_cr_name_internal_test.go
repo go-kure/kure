@@ -34,7 +34,8 @@ func shortHash(composed string) string {
 // call. With a name of at most 54 characters it keeps its "-<name>" tail
 // behind a prefix of the unit name and a hash of the whole default; with a
 // longer name it is the name's first 54 characters, without the hyphens and
-// dots that end them, and that hash.
+// dots that end them, and that hash, or the hash alone where nothing is left
+// of them.
 func TestUnitLayoutCRName(t *testing.T) {
 	for _, tc := range []struct {
 		desc, unit, name, want string
