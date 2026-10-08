@@ -210,8 +210,11 @@ cycle closes.
 **Names:** a bundle name and a node name are checked when the model is
 validated, and a limit that only one delivery engine has is checked by that
 engine's workflow when it generates, so a name that could never be applied is
-refused before anything is written. Nothing is shortened or rewritten: the
-caller chooses a valid name.
+refused before anything is written. A name the caller sets is never shortened
+or rewritten: the caller chooses a valid name. The one name shortened is one
+kure composes itself, the Flux workflow's default `<unit name>-<layout name>`
+for a layout's own Kustomization (`pkg/stack/fluxcd` README, "Per-layout name
+rule").
 
 | Name | Rule | Checked by |
 |---|---|---|

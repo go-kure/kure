@@ -2,6 +2,8 @@ package fluxcd
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -1707,8 +1709,12 @@ func hasLayoutCR(child *layout.ManifestLayout) bool {
 // replaced by ->-node" (see addIntegratedFluxToLayout), and any other layout
 // "<unit>-<Name>", unit being the Kustomization name of the nearest layout at
 // or above its parent that renders bundles: an application named like its
-// bundle then does not take the bundle's Kustomization name. Below no such
-// layout (unit is empty) it is the layout's Name.
+// bundle then does not take the bundle's Kustomization name; one over the
+// limit is shortened (unitLayoutCRName). Below no such layout (unit is empty)
+// it is the layout's Name.
+//
+// Every reference to the CR (the CR itself, and the dependsOn entries that
+// name it) takes its name from here, so a shortened name is the same in all.
 func layoutCRName(l *layout.ManifestLayout, unit string) string {
 	switch {
 	case l.KustomizationName != "":
@@ -1716,9 +1722,53 @@ func layoutCRName(l *layout.ManifestLayout, unit string) string {
 	case len(l.OriginNodes()) > 0:
 		return strings.ReplaceAll(l.FullRepoPath(), "/", "-") + "-node"
 	case unit != "":
-		return unit + "-" + l.Name
+		return unitLayoutCRName(unit, l.Name)
 	}
 	return l.Name
+}
+
+// layoutNameHashLength is the number of hexadecimal characters of the hash in
+// a shortened "<unit>-<name>" default (unitLayoutCRName).
+const layoutNameHashLength = 8
+
+// layoutNameShortenMax is the longest layout name whose "<unit>-<name>"
+// default can be shortened: the hash, a hyphen, and the hyphen and name it
+// keeps fill the 63 characters of a Flux Kustomization name.
+const layoutNameShortenMax = stack.KustomizationNameMaxLength - layoutNameHashLength - 1
+
+// unitLayoutCRName is the default name "<unit>-<name>" of a layout's CR,
+// shortened where it is longer than a Flux Kustomization name may be
+// (stack.KustomizationNameMaxLength, 63 characters). A default that fits is
+// returned unchanged. One over the limit keeps its "-<name>" tail and has the
+// unit name replaced by a prefix of it and the first 8 hexadecimal characters
+// of the SHA-256 of the whole default: "<unit prefix>-<hash>-<name>", at most
+// 63 characters. The prefix takes the 63 - len(name) - 10 leading bytes of
+// the unit name, without the hyphens and dots that end them (so the result can
+// be shorter than 63); where no byte is left for it (a name of 53 or 54
+// characters), the result is "<hash>-<name>".
+//
+// The hash is of the whole default, so the result is the same on every run
+// for the same unit and name. Two defaults that differ only in the shortened
+// part almost always differ in their hash, but 8 hexadecimal characters are
+// 32 bits and two can collide; a name used twice, by a collision or
+// otherwise, is refused by the duplicate-name check, which names both
+// owners. A name longer than
+// layoutNameShortenMax (54) leaves no room for the hash beside it: the default
+// is returned unshortened, and checkLayoutCRName refuses it.
+func unitLayoutCRName(unit, name string) string {
+	composed := unit + "-" + name
+	if len(composed) <= stack.KustomizationNameMaxLength || len(name) > layoutNameShortenMax {
+		return composed
+	}
+	sum := sha256.Sum256([]byte(composed))
+	hash := hex.EncodeToString(sum[:])[:layoutNameHashLength]
+	// The default is over the limit, so keep is shorter than unit.
+	if keep := stack.KustomizationNameMaxLength - len(name) - layoutNameHashLength - 2; keep > 0 {
+		if prefix := strings.TrimRight(unit[:keep], "-."); prefix != "" {
+			return prefix + "-" + hash + "-" + name
+		}
+	}
+	return hash + "-" + name
 }
 
 // checkLayoutCRName refuses a name for l's per-layout CR that Flux cannot
@@ -1733,9 +1783,12 @@ func layoutCRName(l *layout.ManifestLayout, unit string) string {
 //     Node.KustomizationName as the field to set;
 //   - the default of an application or augmenter layout, "<unit name>-<layout
 //     name>": the layout, and ManifestLayout.KustomizationName as the field
-//     to set.
+//     to set. That default is shortened where it is over the limit
+//     (unitLayoutCRName), so one over it here has a layout name too long to
+//     shorten it, and the error says so.
 //
-// kure does not shorten or rewrite a name.
+// kure shortens no other name: a name set on a node or a layout, and the
+// name derived for a node, are checked as they are.
 func (p *integratedPlacement) checkLayoutCRName(l *layout.ManifestLayout, name string) error {
 	err := stack.ValidateKustomizationName(name)
 	if err == nil {
@@ -1751,8 +1804,15 @@ func (p *integratedPlacement) checkLayoutCRName(l *layout.ManifestLayout, name s
 		return errors.ResourceValidationError("Node", p.nodes.path(nodes[0]), "kustomizationName",
 			fmt.Sprintf("the node sets no name for its Flux Kustomization, and the name derived from its directory %q cannot be used: %v; set Node.KustomizationName", l.FullRepoPath(), err), nil)
 	}
+	// A name other than the layout's own is a "<unit>-<name>" default, which
+	// is over the limit here only where it could not be shortened.
+	var unshortened string
+	if len(name) > stack.KustomizationNameMaxLength && name != l.Name {
+		unshortened = fmt.Sprintf(" (a default over %d characters is shortened only where the layout name has at most %d, and %q has %d)",
+			stack.KustomizationNameMaxLength, layoutNameShortenMax, l.Name, len(l.Name))
+	}
 	return errors.ResourceValidationError("ManifestLayout", l.FullRepoPath(), "kustomizationName",
-		fmt.Sprintf("the layout sets no name for its Flux Kustomization, and the default cannot be used: %v; set ManifestLayout.KustomizationName", err), nil)
+		fmt.Sprintf("the layout sets no name for its Flux Kustomization, and the default cannot be used: %v%s; set ManifestLayout.KustomizationName", err, unshortened), nil)
 }
 
 // layoutOwner names a layout that gets a per-layout CR, for claim: the node

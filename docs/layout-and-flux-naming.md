@@ -499,10 +499,12 @@ name of its bundle's.
   sibling among them are refused. Any other entry is written as given.
 - **The name rule:** the name in effect of every per-layout Kustomization is checked with
   `stack.ValidateKustomizationName` where the Kustomization is created (`checkLayoutCRName`).
-  kure shortens nothing, and the error names what to set: the node and `Node.KustomizationName`
-  for a node's name, set or derived; the layout and `ManifestLayout.KustomizationName` for a
-  layout's, set or default. The default is longer than the layout's name by the unit name, so a
-  directory name within the limit can give a default over it.
+  The error names what to set: the node and `Node.KustomizationName` for a node's name, set or
+  derived; the layout and `ManifestLayout.KustomizationName` for a layout's, set or default. The
+  default is longer than the layout's name by the unit name, so a directory name within the
+  limit can give a default over it; since go-kure/kure#1030 kure shortens that default, and only
+  that one, to `<unit prefix>-<hash>-<layout name>` (`unitLayoutCRName`), refusing it only where
+  the layout name has more than 54 characters.
 
 **Breaking.** With the node fields unset, a node's Kustomization and every bundle's are unchanged.
 Under `FluxIntegratedPerLayout` the Kustomization of every application and augmenter layout is
@@ -728,7 +730,9 @@ item is raw JSON or a List without object metadata is no longer refused for that
 
 **Shipped.** A name that cannot work is refused before anything is written, not after the cluster
 rejects it: when the model is validated, or, for a limit only Flux has, when the Flux workflow
-generates. kure shortens and rewrites nothing; the caller chooses a valid name.
+generates. kure shortens and rewrites nothing; the caller chooses a valid name. (A later change,
+go-kure/kure#1030, shortens the one name kure composes itself, a layout's
+`<unit name>-<layout name>` default; see "The name rule" above.)
 
 **What it does.**
 
