@@ -163,7 +163,7 @@ func TestLayoutFields_NoOwnKustomizationUnderPerLayout(t *testing.T) {
 				l.UmbrellaChild = true
 				return l
 			},
-			why: "it is an umbrella child, which its bundle's Kustomization applies",
+			why: "it is marked UmbrellaChild, which gives a layout no Kustomization of its own",
 		},
 		{
 			name:    "an AppFileSingle layout",
@@ -174,7 +174,7 @@ func TestLayoutFields_NoOwnKustomizationUnderPerLayout(t *testing.T) {
 				l.ApplicationFileMode = layout.AppFileSingle
 				return l
 			},
-			why: "it is AppFileSingle, written as a file into its parent's directory",
+			why: "it is AppFileSingle, written as one file into its Namespace, normally its parent's directory",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

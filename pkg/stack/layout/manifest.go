@@ -68,9 +68,8 @@ type ManifestLayout struct {
 	// other case the integrator, and ResourceGenerator.GenerateFromLayout,
 	// refuse the field (go-kure/kure#1032): under FluxIntegratedPerBundle and
 	// FluxSeparate an augmenter that orders its layouts is refused, and only
-	// FluxIntegratedPerLayout carries the ordering. An augmenter cannot see
-	// the placement, so the caller picks FluxIntegratedPerLayout for one that
-	// orders. What a node sets is refused on the node's own fields, by the
+	// FluxIntegratedPerLayout carries the ordering: integrate an augmenter
+	// that orders its layouts with FluxIntegratedPerLayout. What a node sets is refused on the node's own fields, by the
 	// node's path, and not again on the layout that carries it.
 	DependsOn []string
 	// KustomizationName names the Flux Kustomization the layout integrator
