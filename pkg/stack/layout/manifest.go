@@ -84,8 +84,10 @@ type ManifestLayout struct {
 	// (stack.ValidateKustomizationName): the integrator refuses any other
 	// where it creates the Kustomization. It shortens a "<unit>-<Name>"
 	// default over the limit, keeping the "-<Name>" tail where Name has at
-	// most 54 characters, and keeping the first 54 bytes of a longer Name. A
-	// name set here is not shortened, so one that is too long is refused.
+	// most 54 characters, and keeping the first 54 bytes of a longer Name,
+	// without the hyphens and dots that end them, before the hash (the hash
+	// alone where nothing is left of them). A name set here is not
+	// shortened, so one that is too long is refused.
 	KustomizationName string
 	// Wait, Timeout, RetryInterval, Labels and Annotations are settings of the
 	// Flux Kustomization the layout integrator generates for this layout in
