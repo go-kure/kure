@@ -1732,8 +1732,8 @@ func layoutCRName(l *layout.ManifestLayout, unit string) string {
 const layoutNameHashLength = 8
 
 // layoutNameShortenMax is the longest layout name whose "<unit>-<name>"
-// default can be shortened: the hash, a hyphen, and the hyphen and name it
-// keeps fill the 63 characters of a Flux Kustomization name.
+// default can be shortened: the hash and the "-<name>" tail it keeps fill the
+// 63 characters of a Flux Kustomization name.
 const layoutNameShortenMax = stack.KustomizationNameMaxLength - layoutNameHashLength - 1
 
 // unitLayoutCRName is the default name "<unit>-<name>" of a layout's CR,
