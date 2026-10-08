@@ -10,7 +10,17 @@ import (
 )
 
 // Tests for the shortening of a layout CR's "<unit>-<name>" default
-// (unitLayoutCRName, go-kure/kure#1030).
+// (unitLayoutCRName, go-kure/kure#1030, and for a name over 54 characters
+// go-kure/kure#1036).
+
+// Layout names over 54 characters, composed from several parts as a caller
+// composes a hook group's, of 76 and 113 characters.
+const (
+	name76  = "checkout-service-payments-reconciler-worker-pre-install-hooks-schema-migrate"
+	name113 = "checkout-service-payments-reconciler-worker-pre-install-hooks-schema-migration-batch-jobs-and-post-install-checks"
+	// prefix54 is the first 54 characters of both.
+	prefix54 = "checkout-service-payments-reconciler-worker-pre-instal"
+)
 
 // shortHash is the hash part of a shortened default, computed apart from the
 // code under test.
@@ -20,9 +30,10 @@ func shortHash(composed string) string {
 }
 
 // TestUnitLayoutCRName: a default that fits is returned unchanged; one over
-// the limit keeps its "-<name>" tail behind a prefix of the unit name and a
-// hash of the whole default, is at most 63 characters and a valid name; a name
-// over 54 characters is not shortened.
+// the limit is at most 63 characters and a valid name, the same on every
+// call. With a name of at most 54 characters it keeps its "-<name>" tail
+// behind a prefix of the unit name and a hash of the whole default; with a
+// longer name it is the name's first 54 characters and that hash.
 func TestUnitLayoutCRName(t *testing.T) {
 	for _, tc := range []struct {
 		desc, unit, name, want string
@@ -70,9 +81,51 @@ func TestUnitLayoutCRName(t *testing.T) {
 			want: shortHash("platform-services-"+strings.Repeat("n", 54)) + "-" + strings.Repeat("n", 54),
 		},
 		{
-			desc: "name of 55 not shortened",
+			desc: "name of 55 that fits",
+			unit: "web", name: strings.Repeat("n", 55),
+			want: "web-" + strings.Repeat("n", 55),
+		},
+		{
+			desc: "name of 55",
 			unit: "platform-services", name: strings.Repeat("n", 55),
-			want: "platform-services-" + strings.Repeat("n", 55),
+			want: strings.Repeat("n", 54) + "-" + shortHash("platform-services-"+strings.Repeat("n", 55)),
+		},
+		{
+			desc: "name of 63, one-character unit",
+			unit: "a", name: strings.Repeat("n", 63),
+			want: strings.Repeat("n", 54) + "-" + shortHash("a-"+strings.Repeat("n", 63)),
+		},
+		{
+			desc: "name of 76",
+			unit: "platform-services-payments", name: name76,
+			want: prefix54 + "-" + shortHash("platform-services-payments-"+name76),
+		},
+		{
+			desc: "name of 76, short unit",
+			unit: "web", name: name76,
+			want: prefix54 + "-" + shortHash("web-"+name76),
+		},
+		{
+			desc: "name of 113",
+			unit: "platform-services-payments", name: name113,
+			want: prefix54 + "-" + shortHash("platform-services-payments-"+name113),
+		},
+		{
+			// The longest DNS-1123 subdomain; kure sets no limit of its own
+			// on a layout name, and the rule has none either.
+			desc: "name of 253",
+			unit: "platform-services-payments", name: strings.Repeat("n", 253),
+			want: strings.Repeat("n", 54) + "-" + shortHash("platform-services-payments-"+strings.Repeat("n", 253)),
+		},
+		{
+			desc: "name prefix ending in a hyphen",
+			unit: "web", name: strings.Repeat("n", 53) + "-tail-of-the-name",
+			want: strings.Repeat("n", 53) + "-" + shortHash("web-"+strings.Repeat("n", 53)+"-tail-of-the-name"),
+		},
+		{
+			desc: "name prefix ending in a dot and a hyphen",
+			unit: "web", name: strings.Repeat("n", 52) + ".-tail-of-the-name",
+			want: strings.Repeat("n", 52) + "-" + shortHash("web-"+strings.Repeat("n", 52)+".-tail-of-the-name"),
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -83,16 +136,35 @@ func TestUnitLayoutCRName(t *testing.T) {
 			if again := unitLayoutCRName(tc.unit, tc.name); again != got {
 				t.Errorf("a second call gives %q, the first %q", again, got)
 			}
-			if len(tc.name) > layoutNameShortenMax {
-				return
-			}
 			if err := stack.ValidateKustomizationName(got); err != nil {
 				t.Errorf("%q is not a Flux Kustomization name: %v", got, err)
 			}
-			if !strings.HasSuffix(got, "-"+tc.name) {
+			if len(tc.name) <= layoutNameShortenMax && !strings.HasSuffix(got, "-"+tc.name) {
 				t.Errorf("%q does not keep the tail -%s", got, tc.name)
 			}
 		})
+	}
+}
+
+// TestUnitLayoutCRName_PinnedLongName pins the hash of one name over 54
+// characters, so that the form cannot move between versions.
+func TestUnitLayoutCRName_PinnedLongName(t *testing.T) {
+	got := unitLayoutCRName("platform-services-payments", name76)
+	if want := prefix54 + "-5c8f049d"; got != want {
+		t.Fatalf("unitLayoutCRName = %q, want %q", got, want)
+	}
+}
+
+// TestUnitLayoutCRName_DistinctLongNames: two names over 54 characters that
+// share their first 54 below one unit get different names, by the hash.
+func TestUnitLayoutCRName_DistinctLongNames(t *testing.T) {
+	a := unitLayoutCRName("platform-services-payments", name76)
+	b := unitLayoutCRName("platform-services-payments", name113)
+	if a == b {
+		t.Fatalf("%q and %q both give %q", name76, name113, a)
+	}
+	if !strings.HasPrefix(a, prefix54+"-") || !strings.HasPrefix(b, prefix54+"-") {
+		t.Fatalf("got %q and %q; want both to start with %s-", a, b, prefix54)
 	}
 }
 
