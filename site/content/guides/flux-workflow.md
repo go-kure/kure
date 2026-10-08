@@ -593,8 +593,10 @@ layout, and a value the node gets after the walk is refused too. See the
 ### Application layout Kustomizations are named after their unit (breaking change)
 
 Under `FluxIntegratedPerLayout` the Kustomization of an application layout or of an augmenter's
-child layout is now named `<unit name>-<layout name>`, the unit being the Kustomization of the
-bundle it belongs to. It used to be the layout's name alone, so an application named like its
+child layout is now named `<unit name>-<layout name>`, the unit name being the name of the
+Kustomization that applies the bundles it belongs to: the first bundle's where a grouping axis
+merged several into one directory, not necessarily that of the bundle holding the application.
+It used to be the layout's name alone, so an application named like its
 bundle gave two Kustomizations one name and was refused. What to do:
 
 - **Expect the rename on upgrade.** The application `web-app` of the bundle `web` is now applied
@@ -619,6 +621,11 @@ bundle gave two Kustomizations one name and was refused. What to do:
   54 bytes, without the hyphens and dots that end them, and the hash:
   `<layout name prefix>-<hash>`, or the hash alone where nothing is left of those bytes
   (go-kure/kure#1036; it was refused before). Set `ManifestLayout.KustomizationName` on the layout for a name of your own.
+- **Compute the default instead of composing it.** `fluxcd.DefaultLayoutKustomizationName(unit,
+  layoutName)` returns the name the integration gives a layout without `KustomizationName`,
+  shortened or not, so a check of your own Kustomization names (collisions, length) sees the name
+  kure writes (go-kure/kure#1040). `unit` is the unit name above (`Bundle.UnitName()` of the first
+  bundle in a merge), `layoutName` the layout's `Name`.
 - **A new name another Kustomization already has is refused.** The application `web` of the
   bundle `platform` is now applied by `platform-web`. If a bundle, a node or another layout
   already has a Kustomization of that name, the integration refuses the tree and names both,
