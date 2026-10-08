@@ -141,7 +141,7 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 	gotkResources, err := bg.generateGotkComponents(config)
 	if err != nil {
 		return nil, errors.ResourceValidationError("BootstrapConfig", "gotk", "components",
-			fmt.Sprintf("failed to generate gotk components: %v", err), err)
+			"failed to generate gotk components", err)
 	}
 	resources = append(resources, gotkResources...)
 
@@ -186,7 +186,7 @@ func (bg *BootstrapGenerator) generateFluxOperatorBootstrap(config *stack.Bootst
 	installObjs, err := FluxOperatorInstallObjects()
 	if err != nil {
 		return nil, errors.ResourceValidationError("BootstrapConfig", "flux-operator", "install",
-			fmt.Sprintf("failed to load vendored flux-operator install bundle: %v", err), err)
+			"failed to load vendored flux-operator install bundle", err)
 	}
 
 	fluxInstance, err := bg.generateFluxInstance(config, dir)
@@ -237,7 +237,7 @@ func (bg *BootstrapGenerator) generateGotkComponents(config *stack.BootstrapConf
 	manifestsBase, cleanup, err := gotkManifestsBase(config.FluxVersion)
 	if err != nil {
 		return nil, errors.ResourceValidationError("BootstrapConfig", "gotk", "install",
-			fmt.Sprintf("failed to prepare Flux installation manifests: %v", err), err)
+			"failed to prepare Flux installation manifests", err)
 	}
 	defer cleanup()
 	if manifestsBase != "" {
@@ -265,7 +265,7 @@ func (bg *BootstrapGenerator) generateGotkComponents(config *stack.BootstrapConf
 	content, err := install.Generate(opts, manifestsBase)
 	if err != nil {
 		return nil, errors.ResourceValidationError("BootstrapConfig", "gotk", "install",
-			fmt.Sprintf("failed to generate Flux installation manifests: %v", err), err)
+			"failed to generate Flux installation manifests", err)
 	}
 
 	// Parse the generated manifests

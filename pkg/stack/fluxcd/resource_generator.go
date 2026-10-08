@@ -100,7 +100,7 @@ func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.L
 	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {
 		return nil, errors.ResourceValidationError("Cluster", c.Name, "layout",
-			fmt.Sprintf("failed to walk the cluster with the given layout rules: %v", err), err)
+			"failed to walk the cluster with the given layout rules", err)
 	}
 	if err := refuseDeliveryIntent(ml); err != nil {
 		return nil, err
@@ -312,7 +312,7 @@ func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout
 		source, err := g.createSource(first.SourceRef, first.Name)
 		if err != nil {
 			return nil, errors.ResourceValidationError("Bundle", first.Name, "source",
-				fmt.Sprintf("failed to create source: %v", err), err)
+				"failed to create source", err)
 		}
 		if source != nil {
 			resources = append(resources, source)
@@ -577,7 +577,7 @@ func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]c
 		source, err := g.createSource(b.SourceRef, b.Name)
 		if err != nil {
 			return nil, errors.ResourceValidationError("Bundle", b.Name, "source",
-				fmt.Sprintf("failed to create source: %v", err), err)
+				"failed to create source", err)
 		}
 		if source != nil {
 			resources = append(resources, source)
