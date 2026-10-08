@@ -24,8 +24,10 @@ const KustomizationNameMaxLength = 63
 
 // ValidateKustomizationName reports whether name can be the metadata.name of
 // a Flux Kustomization that kustomize-controller can reconcile: a DNS-1123
-// subdomain of at most KustomizationNameMaxLength characters. kure does not
-// shorten or rewrite a name; the caller chooses a valid one.
+// subdomain of at most KustomizationNameMaxLength characters. It does not
+// shorten or rewrite name; the caller chooses a valid one. The one name kure
+// shortens is one it composes itself, the Flux workflow's "<unit>-<layout
+// name>" default for a layout's own Kustomization, before it is checked here.
 func ValidateKustomizationName(name string) error {
 	if len(name) > KustomizationNameMaxLength {
 		return errors.Errorf("%q is %d characters long: a Flux Kustomization name is at most %d characters, because Flux writes it into a label value", name, len(name), KustomizationNameMaxLength)

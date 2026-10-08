@@ -612,10 +612,11 @@ bundle gave two Kustomizations one name and was refused. What to do:
   both apply that directory until you remove the old one or set
   `ManifestLayout.KustomizationName` on the layout to the old name, which keeps yours and
   generates no second one.
-- **A new name over 63 characters is refused.** The new name is longer than the old one by the
+- **A new name over 63 characters is shortened.** The new name is longer than the old one by the
   unit name, and Flux cannot reconcile a Kustomization whose name is over 63 characters, so the
-  integration refuses it and names the layout. Set `ManifestLayout.KustomizationName` on that
-  layout; kure shortens nothing.
+  integration shortens it to `<unit prefix>-<hash>-<layout name>`, keeping the layout's name. A
+  layout name over 54 characters leaves no room for the hash: that one is refused, naming the
+  layout, and you set `ManifestLayout.KustomizationName` on it.
 - **A new name another Kustomization already has is refused.** The application `web` of the
   bundle `platform` is now applied by `platform-web`. If a bundle, a node or another layout
   already has a Kustomization of that name, the integration refuses the tree and names both,

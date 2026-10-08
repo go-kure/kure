@@ -1106,16 +1106,24 @@ The unit name is the name in effect of the Kustomization that applies the bundle
 
 ### Per-layout name rule
 
-The name in effect of a per-layout CR is a Flux Kustomization name: a DNS-1123 subdomain of at most 63 characters (`stack.ValidateKustomizationName`). It is checked where the CR is created, so nothing is written for a tree with a name Flux could not reconcile. kure does not shorten a name: the error names the object and the field that changes it.
+The name in effect of a per-layout CR is a Flux Kustomization name: a DNS-1123 subdomain of at most 63 characters (`stack.ValidateKustomizationName`). It is checked where the CR is created, so nothing is written for a tree with a name Flux could not reconcile. kure shortens one name only, the default of an application or augmenter layout (below); any other name is checked as it is, and the error names the object and the field that changes it.
 
 | Where the name comes from | The error names |
 |---|---|
 | `Node.KustomizationName` | the node by its path (`Node 'prod/apps'`) and the field `kustomizationName` |
 | the name derived for a node, `<path>-node` | the node, and `Node.KustomizationName` as the field to set |
 | `ManifestLayout.KustomizationName`, set by an augmenter or on a walked layout | the layout by its directory (`ManifestLayout 'prod/web/api'`) and the field `kustomizationName` |
-| the default of an application or augmenter layout, `<unit name>-<layout name>` | the layout, and `ManifestLayout.KustomizationName` as the field to set |
+| the default of an application or augmenter layout, `<unit name>-<layout name>` (over the limit only where the layout name has more than 54 characters; a default with a shorter one is shortened) | the layout, and `ManifestLayout.KustomizationName` as the field to set |
 
-The default of an application or augmenter layout is longer than the layout's own name by the unit name, so a directory name within the limit can give a default over it: the application `checkout-service-payments-reconciler-worker` (43 characters) of the bundle `platform-services-payments` (26) gets a default of 70 characters and is refused until its layout sets a `KustomizationName`.
+The default of an application or augmenter layout is longer than the layout's own name by the unit name, so a directory name within the limit can give a default over it. kure shortens such a default, the same way for every caller, and leaves one that fits byte for byte as it is (go-kure/kure#1030):
+
+- The `-<layout name>` tail is kept. The unit name is replaced by a prefix of it and the first 8 hexadecimal characters of the SHA-256 of the whole default: `<unit prefix>-<hash>-<layout name>`, at most 63 characters.
+- The prefix is the leading `63 - len(layout name) - 10` bytes of the unit name, without the hyphens and dots that end them, so the name can be shorter than 63. A layout name of 53 or 54 characters leaves no byte for it, and the name is `<hash>-<layout name>`.
+- A layout name over 54 characters leaves no room for the hash, so its default over the limit is refused as before: set `ManifestLayout.KustomizationName`.
+- The hash is of the whole default, so the name is the same on every run for the same unit and layout names. Two defaults that differ only in the replaced part almost always get different hashes, but 8 hexadecimal characters are 32 bits and two can collide (the units `platform-services-65327` and `platform-services-103659` do, beside the layout `checkout-service-payments-reconciler-worker`). A name used twice, by a collision or otherwise, is refused, naming both owners (below); set `ManifestLayout.KustomizationName` on one of them.
+- A `DependsOn` entry that names the layout is written as the shortened name.
+
+The application `checkout-service-payments-reconciler-worker` (43 characters) of the bundle `platform-services-payments` (26) has a default of 70 characters, so its Kustomization is `platform-s-7365aca5-checkout-service-payments-reconciler-worker`.
 
 A `ManifestLayout.DependsOn` entry on an application or augmenter layout is a layout name. Where it names a layout of the same unit that has a CR of its own, the entry is written as that layout's CR name: a sibling first, else the one layout with that name elsewhere below the unit's directory (the parent application layout of a hook group, for instance). Two such layouts with no sibling among them are refused, since the entry does not say which: set `KustomizationName` on the one meant and list that name. Any other entry is written as given, as the name of a Kustomization.
 
