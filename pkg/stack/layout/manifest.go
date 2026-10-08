@@ -65,10 +65,13 @@ type ManifestLayout struct {
 	// generates for this layout itself, which it does only under
 	// FluxIntegratedPerLayout and only for a child layout that is not an
 	// umbrella child, is not AppFileSingle and renders no bundle. In every
-	// other case the field is dropped without an error: under
-	// FluxIntegratedPerBundle and FluxSeparate an augmenter's ordering
-	// produces nothing. (What a node sets is refused there instead, on the
-	// node's own fields.)
+	// other case the integrator, and ResourceGenerator.GenerateFromLayout,
+	// refuse the field (go-kure/kure#1032): under FluxIntegratedPerBundle and
+	// FluxSeparate an augmenter that orders its layouts is refused, and only
+	// FluxIntegratedPerLayout carries the ordering. An augmenter cannot see
+	// the placement, so the caller picks FluxIntegratedPerLayout for one that
+	// orders. What a node sets is refused on the node's own fields, by the
+	// node's path, and not again on the layout that carries it.
 	DependsOn []string
 	// KustomizationName names the Flux Kustomization the layout integrator
 	// generates for this layout in FluxIntegratedPerLayout mode, instead of
@@ -79,7 +82,8 @@ type ManifestLayout struct {
 	// wins over the node's; a node that has a name while its layout carries
 	// none (the node got it after the walk) is refused by the integrator.
 	// Like DependsOn it is read only where the
-	// layout gets a Kustomization of its own. The name in effect, set or
+	// layout gets a Kustomization of its own, and refused anywhere else.
+	// The name in effect, set or
 	// default, must be one Flux can reconcile
 	// (stack.ValidateKustomizationName): the integrator refuses any other
 	// where it creates the Kustomization. It shortens a "<unit>-<Name>"
@@ -93,8 +97,7 @@ type ManifestLayout struct {
 	// spec.retryInterval, and the labels and annotations of the Kustomization
 	// object itself. No object in the layout's directory gets them. Like
 	// KustomizationName they are read only where the layout gets a
-	// Kustomization of its own, and are dropped without an error anywhere
-	// else.
+	// Kustomization of its own, and are refused anywhere else.
 	//
 	// An application's own layout, and every layout below it (the ones its
 	// LayoutAugmenter added), inherits the five from the bundle that holds the
@@ -118,7 +121,7 @@ type ManifestLayout struct {
 	// Interval, Prune, Force and Suspend are four more settings of that
 	// Kustomization (go-kure/kure#1021): its spec.interval, spec.prune,
 	// spec.force and spec.suspend. They are read where the five above are and
-	// dropped without an error anywhere else, and they follow the same rule:
+	// refused anywhere else, and they follow the same rule:
 	// set here, a value replaces the one of the bundle that holds the
 	// application; left unset, it is that bundle's. A Prune, Force or Suspend
 	// that points at false turns an inherited true off.

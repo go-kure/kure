@@ -78,6 +78,18 @@ func shopSettings(set func(app, pre, main, deep *layout.ManifestLayout)) *stack.
 	return b
 }
 
+// unordered is set, after the DependsOn settingsAugmenter gives 01-main is
+// cleared: only FluxIntegratedPerLayout carries a layout's DependsOn, and the
+// other placements refuse it (go-kure/kure#1032).
+func unordered(set func(app, pre, main, deep *layout.ManifestLayout)) func(app, pre, main, deep *layout.ManifestLayout) {
+	return func(app, pre, main, deep *layout.ManifestLayout) {
+		main.DependsOn = nil
+		if set != nil {
+			set(app, pre, main, deep)
+		}
+	}
+}
+
 func oneBundleCluster(b *stack.Bundle) *stack.Cluster {
 	return stack.NewCluster("prod", &stack.Node{Name: "prod", Bundle: b})
 }
@@ -349,11 +361,13 @@ func TestLayoutSettings_TheLayoutsOwnOverTheBundles(t *testing.T) {
 	}
 }
 
-// TestLayoutSettings_OtherPlacementsUnchanged: under FluxIntegratedPerBundle
+// TestLayoutSettings_OtherPlacementsRefused: under FluxIntegratedPerBundle
 // and FluxSeparate no layout gets a Kustomization of its own, so what the
-// layouts set is dropped without an error, a value the integrator would
-// refuse included: the tree is written as the one whose layouts set nothing.
-func TestLayoutSettings_OtherPlacementsUnchanged(t *testing.T) {
+// layouts set is refused (go-kure/kure#1032): the first such layout in
+// pre-order, with every field it sets, before any value is checked as a
+// Kustomization would check it. Without the settings the tree holds the
+// bundle's Kustomization alone.
+func TestLayoutSettings_OtherPlacementsRefused(t *testing.T) {
 	yes := true
 	set := func(app, pre, main, deep *layout.ManifestLayout) {
 		app.Wait = &yes
@@ -370,21 +384,15 @@ func TestLayoutSettings_OtherPlacementsUnchanged(t *testing.T) {
 		t.Run(string(placement), func(t *testing.T) {
 			rules := layout.DefaultLayoutRules()
 			rules.FluxPlacement = placement
-			with := integrated(t, oneBundleCluster(shopSettings(set)), rules)
-			without := integrated(t, oneBundleCluster(shopSettings(nil)), rules)
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(oneBundleCluster(shopSettings(unordered(set))), rules)
+			mustContainAll(t, err, `layout "prod/shop/db" sets Wait, Labels, Suspend, but has no Flux Kustomization of its own`, `FluxPlacement "integrated" (FluxIntegratedPerLayout)`)
+			if err != nil && strings.Contains(err.Error(), "not a duration") {
+				t.Errorf("a value was checked as a Kustomization's, though none carries it:\n%v", err)
+			}
 
-			if names := slices.Sorted(maps.Keys(kustomizationsByName(with))); !slices.Equal(names, []string{"shop"}) {
+			without := integrated(t, oneBundleCluster(shopSettings(unordered(nil))), rules)
+			if names := slices.Sorted(maps.Keys(kustomizationsByName(without))); !slices.Equal(names, []string{"shop"}) {
 				t.Fatalf("Kustomizations = %q, want the bundle's alone", names)
-			}
-			got := treeFiles(t, writeAll(t, with)["WriteToDisk"].root)
-			want := treeFiles(t, writeAll(t, without)["WriteToDisk"].root)
-			if len(got) == 0 || len(got) != len(want) {
-				t.Fatalf("wrote %d files, the tree whose layouts set nothing %d", len(got), len(want))
-			}
-			for p, content := range want {
-				if !bytes.Equal(got[p], content) {
-					t.Errorf("%s differs from the tree whose layouts set nothing:\n%s", p, got[p])
-				}
 			}
 		})
 	}

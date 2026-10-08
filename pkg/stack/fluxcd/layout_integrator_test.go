@@ -1217,11 +1217,14 @@ func TestAugmenterGrandchildErrorWhenNoSourceRef(t *testing.T) {
 // adds two hook-group child layouts to it (pre-install, then hooks depending
 // on it), as an external chart augmenter does. It renders no resources of its
 // own, so the app layout's Resources hold only the CRs placed there.
-type hookGroupAugmenter struct{}
+//
+// unordered leaves the dependency out: only FluxIntegratedPerLayout carries a
+// layout's DependsOn, and the other placements refuse it (go-kure/kure#1032).
+type hookGroupAugmenter struct{ unordered bool }
 
 func (hookGroupAugmenter) Generate(*stack.Application) ([]*client.Object, error) { return nil, nil }
 
-func (hookGroupAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
+func (a hookGroupAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
 	pre := &layout.ManifestLayout{
 		Name:          ml.Name + "-00-pre-install",
 		Namespace:     ml.FullRepoPath(),
@@ -1235,6 +1238,9 @@ func (hookGroupAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
 		DependsOn:     []string{pre.Name},
 		Resources:     []client.Object{*cmObj(ml.Name + "-hook")},
 	}
+	if a.unordered {
+		hooks.DependsOn = nil
+	}
 	ml.Children = append(ml.Children, pre, hooks)
 	return nil
 }
@@ -1242,12 +1248,14 @@ func (hookGroupAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
 // buildAugmenterTestTree walks a node "prod" whose bundle "apps" holds the
 // augmenter app "myapp": the root node's layout holds the bundle's directory
 // (go-kure/kure#979), which has one app layout, which has two hook-group
-// sub-layouts (pre-install and hooks with DependsOn). root is the walked root;
-// nodeLayout is the bundle's directory, the layout that holds the app layout.
+// sub-layouts (pre-install and hooks, with DependsOn where placement carries
+// it). root is the walked root; nodeLayout is the bundle's directory, the
+// layout that holds the app layout.
 func buildAugmenterTestTree(t *testing.T, placement layout.FluxPlacement, sr *stack.SourceRef) (root, nodeLayout, app, preInstall, hooks *layout.ManifestLayout, cluster *stack.Cluster) {
 	t.Helper()
+	aug := hookGroupAugmenter{unordered: placement != layout.FluxIntegratedPerLayout}
 	bundle := &stack.Bundle{Name: "apps", SourceRef: sr, Applications: []*stack.Application{
-		stack.NewApplication("myapp", "default", hookGroupAugmenter{}),
+		stack.NewApplication("myapp", "default", aug),
 	}}
 	cluster = &stack.Cluster{Name: "prod", Node: &stack.Node{Name: "prod", Bundle: bundle}}
 	root = mustWalk(t, cluster, layout.LayoutRules{FluxPlacement: placement})

@@ -281,7 +281,8 @@ what the text said and what it says now.
    also said the entries are sibling layout names; they were Kustomization names, copied
    verbatim, which differ from the layout's name for a node layout. (Since go-kure/kure#973 an
    entry on an application or augmenter layout that names a layout of the same unit is written
-   as that layout's Kustomization name; any other entry is still written as given.)
+   as that layout's Kustomization name; any other entry is still written as given. Since
+   go-kure/kure#1032 the field is refused, not dropped, where no Kustomization carries it.)
 
 ## Part 2: target behaviour
 
@@ -1364,7 +1365,8 @@ symbol name instead of by line.
    which layouts it applies to, that it is dropped elsewhere without an error, and that its
    entries are Kustomization names copied verbatim. (Since go-kure/kure#973 they state the
    translation instead: an entry on an application or augmenter layout that names a layout of
-   the same unit is written as that layout's Kustomization name.)
+   the same unit is written as that layout's Kustomization name. Since go-kure/kure#1032 they
+   state that it is refused elsewhere.)
 
 The fluxcd README claims tied to the behaviour bugs change with
 [go-kure/kure#979](https://github.com/go-kure/kure/issues/979).
@@ -1462,7 +1464,8 @@ layout. Readiness passes through the chain of Kustomizations a bundle with `Wait
   layout's value winning (`integratedPlacement.layoutSettings`). An inherited duration cannot be
   removed and an inherited key cannot be dropped. The fields are read on every layout that gets a
   Kustomization of its own, and dropped without an error elsewhere and under the other
-  placements, as `DependsOn` and `KustomizationName` are.
+  placements, as `DependsOn` and `KustomizationName` are. (go-kure/kure#1032 refuses all
+  eleven layout fields there instead.)
 - **Interval and prune stayed the generator's** in this change (`createKustomizationForLayout`):
   an interval is a cadence and changes nothing about the order of readiness, and taking
   `Bundle.Prune` would switch garbage collection on in trees that render without it.

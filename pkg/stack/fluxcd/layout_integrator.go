@@ -375,7 +375,9 @@ type claimant struct {
 // KustomizationName, which the walker takes from Node.KustomizationName
 // (layoutCRName), and a node's CR depends on what the node's DependsOn and
 // NamedDependsOn say (layoutDependsOn). Those three node fields are refused
-// on a node that gets no CR of its own, and under PerBundle (checkFields).
+// on a node that gets no CR of its own, and under PerBundle (checkFields);
+// after them, the eleven settings of a layout's own CR on a layout that gets
+// none (checkLayoutFields).
 //
 // delivery is what applyDeliveryIntents recorded for the Sources of
 // applications with a delivery intent.
@@ -404,6 +406,13 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	}
 	p.existing = existing
 	if err := p.nodes.checkFields(perLayout); err != nil {
+		return err
+	}
+	noneHere := ""
+	if !perLayout {
+		noneHere = fmt.Sprintf("FluxPlacement %q gives a Kustomization to bundles alone", string(layout.FluxIntegratedPerBundle))
+	}
+	if err := checkLayoutFields(ml, noneHere); err != nil {
 		return err
 	}
 	sources, err := indexExistingSources(ml, nil)
