@@ -29,7 +29,8 @@ func shortHash(composed string) string {
 	return hex.EncodeToString(sum[:])[:8]
 }
 
-// TestUnitLayoutCRName: a default that fits is returned unchanged; one over
+// TestUnitLayoutCRName: every row also holds for the exported
+// DefaultLayoutKustomizationName. A default that fits is returned unchanged; one over
 // the limit is at most 63 characters and a valid name, the same on every
 // call. With a name of at most 54 characters it keeps its "-<name>" tail
 // behind a prefix of the unit name and a hash of the whole default; with a
@@ -137,6 +138,10 @@ func TestUnitLayoutCRName(t *testing.T) {
 			}
 			if again := unitLayoutCRName(tc.unit, tc.name); again != got {
 				t.Errorf("a second call gives %q, the first %q", again, got)
+			}
+			// The exported name is this one (go-kure/kure#1040).
+			if exported := DefaultLayoutKustomizationName(tc.unit, tc.name); exported != tc.want {
+				t.Errorf("DefaultLayoutKustomizationName(%q, %q) = %q, want %q", tc.unit, tc.name, exported, tc.want)
 			}
 			if err := stack.ValidateKustomizationName(got); err != nil {
 				t.Errorf("%q is not a Flux Kustomization name: %v", got, err)

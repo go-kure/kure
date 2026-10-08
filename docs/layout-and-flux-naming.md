@@ -507,7 +507,9 @@ name of its bundle's.
   that one, to `<unit prefix>-<hash>-<layout name>` (`unitLayoutCRName`). Since
   go-kure/kure#1036 a layout name over 54 characters, which leaves no room for the hash beside it,
   gives `<first 54 bytes of the layout name>-<hash>` instead of a refusal, without the hyphens
-  and dots that end those bytes (the hash alone where nothing is left of them).
+  and dots that end those bytes (the hash alone where nothing is left of them). Since
+  go-kure/kure#1040 `fluxcd.DefaultLayoutKustomizationName(unit, layoutName)` returns that
+  default, shortened or not, so a caller can predict the name instead of composing it.
 
 **Breaking.** With the node fields unset, a node's Kustomization and every bundle's are unchanged.
 Under `FluxIntegratedPerLayout` the Kustomization of every application and augmenter layout is
