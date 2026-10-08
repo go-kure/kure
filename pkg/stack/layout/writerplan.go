@@ -43,10 +43,12 @@ type writerPlan struct {
 // childFileEntry: "<Name>.yaml" in the parent's directory, "sub/<Name>.yaml"
 // below it, go-kure/kure#879); "<Name>" for a directory child; and "" for a
 // child it does not list:
-//   - an umbrella child: under FluxIntegratedPerLayout its Kustomization CR is
-//     already in the parent's Resources, whose file the parent lists; under
-//     FluxSeparate its CR in flux-system names its directory, so the parent
-//     must not reference it at all;
+//   - an umbrella child: one that renders bundles (as the walker makes it) is
+//     applied by its bundles' Kustomization, whose CR under
+//     FluxIntegratedPerLayout is already in the parent's Resources, whose
+//     file the parent lists, and under FluxSeparate sits in flux-system and
+//     names its directory, so the parent must not reference it at all; one
+//     that renders none gets no Kustomization and is not listed either;
 //   - a child that renders bundles: it is a reconciliation unit, applied by its
 //     own Flux Kustomization (or ArgoCD Application) and only that one, and
 //     listing it here too would apply its objects twice, under two owners, and
