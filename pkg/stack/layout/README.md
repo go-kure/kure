@@ -495,7 +495,7 @@ files by name. An augmenter that needs the old names sets `FileNamingDefault` on
   - a resource file whose name does not end in `.yaml` or `.yml` (only a `Config.ManifestFileName`
     can produce one): Flux would skip it, where Explicit mode lists it;
   - the file of an `AppFileSingle` umbrella child, or of one that renders bundles, in its build:
-    Flux would apply it, where Explicit mode leaves it to the child's own Kustomization;
+    Flux would apply it, where Explicit mode does not list it;
   - the file of an `AppFileSingle` child in its build that a `kustomization.yaml` at or above the
     Recursive directory lists (the child's parent lists it by its path below the parent's
     directory, see "Layout paths"): both builds would apply it;

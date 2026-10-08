@@ -68,8 +68,8 @@ func shieldedIn(kdirs []string, base, p string, strict bool) bool {
 //     can produce either;
 //   - the file of an AppFileSingle child in D's build that its parent's
 //     kustomization.yaml does not list (an umbrella child, or one that
-//     renders bundles): Flux would apply it, where the Explicit mode leaves
-//     it to the child's own Kustomization;
+//     renders bundles): Flux would apply it, where the Explicit mode does
+//     not list it;
 //   - the file of an AppFileSingle child in D's build that a kustomization.yaml
 //     outside D's build lists: its parent's, which lists the file by its path
 //     below the parent's directory (go-kure/kure#879), so the parent's

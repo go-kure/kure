@@ -672,7 +672,7 @@ type LayoutRules struct {
 }
 ```
 
-A `ManifestLayout` is one directory (or, in `AppFileSingle` mode, one file in its parent's): its own resources and files, and its child directories. The
+A `ManifestLayout` is one directory (or, in `AppFileSingle` mode, one file in its `Namespace`, normally its parent's directory): its own resources and files, and its child directories. The
 walkers build the tree from a `stack.Cluster` according to `LayoutRules`.
 
 ### Grouping Strategies

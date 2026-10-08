@@ -222,9 +222,8 @@ func TestWriters_RecursiveRefusals(t *testing.T) {
 
 // TestWriters_RecursiveRefusesUnlistedSingleChildFile: an AppFileSingle
 // umbrella child writes its file into its parent's directory, and its
-// parent's Explicit kustomization.yaml does not list it (the umbrella's own
-// Kustomization applies it). The Flux build of a marked Recursive parent
-// would apply that file too.
+// parent's Explicit kustomization.yaml does not list it. The Flux build of a
+// marked Recursive parent would apply that file.
 func TestWriters_RecursiveRefusesUnlistedSingleChildFile(t *testing.T) {
 	for _, writer := range allWriters {
 		r := recursiveTree()
