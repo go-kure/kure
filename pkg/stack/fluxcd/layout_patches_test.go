@@ -457,7 +457,7 @@ func TestLayoutPatches_OtherPlacementsUnchanged(t *testing.T) {
 		t.Run(string(placement), func(t *testing.T) {
 			rules := layout.DefaultLayoutRules()
 			rules.FluxPlacement = placement
-			ml := integrated(t, oneBundleCluster(patchShop(nil, patches...)), rules)
+			ml := integrated(t, oneBundleCluster(patchShop(unordered(nil), patches...)), rules)
 			if names := slices.Sorted(maps.Keys(kustomizationsByName(ml))); !slices.Equal(names, []string{"shop"}) {
 				t.Fatalf("Kustomizations = %q, want the bundle's alone", names)
 			}

@@ -126,6 +126,12 @@ func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.L
 // per-layout tree without such a child is refused too, and so is one the
 // integrator already placed, which holds every Kustomization it needs. The
 // error names the first such layout in pre-order.
+//
+// Only bundles get a Kustomization here, so a node's KustomizationName,
+// DependsOn and NamedDependsOn are refused, and so is any of the eleven
+// settings of a layout's own Kustomization a layout sets
+// (go-kure/kure#1032): the error names the first such layout in pre-order
+// and every such field it sets.
 func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, error) {
 	out, _, err := g.generateFromLayout(root, c)
 	return out, err
@@ -148,6 +154,10 @@ func (g *ResourceGenerator) generateFromLayout(root *layout.ManifestLayout, c *s
 	// Only bundles get a Kustomization here: a node's name or dependencies
 	// would be dropped.
 	if err := newNodeIndex(ix, c).checkFields(false); err != nil {
+		return nil, nil, err
+	}
+	// Nor does a layout: what it sets for one would be dropped.
+	if err := checkLayoutFields(root, fmt.Sprintf("ResourceGenerator.GenerateFromLayout, which FluxPlacement %q uses, gives a Kustomization to bundles alone", string(layout.FluxSeparate))); err != nil {
 		return nil, nil, err
 	}
 	var out []client.Object

@@ -314,7 +314,9 @@ func TestFluxDurations_DefaultInterval(t *testing.T) {
 			// inherit it. The Kustomization of a node's own layout inherits
 			// from no bundle and takes the DefaultInterval.
 			build := func() *stack.Cluster {
-				b := shopSettings(nil)
+				// Unordered, so that the tree holds under the per-bundle
+				// placement below as well.
+				b := shopSettings(unordered(nil))
 				b.Interval = "10m"
 				leaf := &stack.Node{Name: "web", Bundle: b}
 				group := &stack.Node{Name: "apps", Children: []*stack.Node{leaf}}
