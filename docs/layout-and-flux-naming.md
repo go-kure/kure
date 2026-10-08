@@ -91,8 +91,9 @@ node with the bundle-less nodes below it merged into it.
   `OriginIndex.UnitName` and `UnitOfName` in `pkg/stack/layout/origin.go`).
 - Under `FluxIntegratedPerLayout`, a bundle-less node layout gets a Kustomization named
   `<path with / replaced by ->-node`, and an application or augmenter layout one named
-  `<unit name>-<layout name>`, the unit name being the Kustomization name of the bundle the layout
-  belongs to (`layoutCRName` in `layout_integrator.go`). `v0.2.0-beta.15` named the second after
+  `<unit name>-<layout name>`, the unit name being the name of the Kustomization that applies the
+  bundles the layout belongs to: the first bundle's in a merge, as above, not necessarily that of
+  the bundle holding the application (`layoutCRName` in `layout_integrator.go`). `v0.2.0-beta.15` named the second after
   the layout alone. Since go-kure/kure#973 a node's `KustomizationName` and a layout's replace
   either default.
 
@@ -487,8 +488,10 @@ name of its bundle's.
   does not, is refused, naming the node and the layout (`nodeIndex.checkCarried`). A name a
   caller sets on the walked layout wins over the node's.
 - **Application and augmenter layouts:** their Kustomization is named
-  `<unit name>-<layout name>`, the unit name being the Kustomization name in effect of the bundle
-  the layout belongs to, so the application `web` of the bundle `web` gets `web-web` and no
+  `<unit name>-<layout name>`, the unit name being the name in effect of the Kustomization that
+  applies the bundles the layout belongs to: the bundle's, or the first bundle's where a grouping
+  axis merged several into one directory (not necessarily that of the bundle holding the
+  application). The application `web` of the bundle `web` therefore gets `web-web` and no
   longer collides with it (section 1.7).
 - **`ManifestLayout.KustomizationName`** replaces that default, and a node's derived name on a
   node's own layout: an augmenter sets it on a layout it creates, a caller on a walked layout
