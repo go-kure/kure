@@ -965,7 +965,8 @@ External augmenters may add child layouts that are not represented in the bundle
 `Bundle.ServiceAccountName` names the service account kustomize-controller impersonates when it
 applies the bundle (go-kure/kure#1034). Unset, no Kustomization carries `spec.serviceAccountName`
 and the output is what it was before the field existed; the controller then applies with its own
-identity.
+identity, or with the default service account it is started with (`--default-service-account`),
+if any.
 
 | Kustomization | `spec.serviceAccountName` |
 |---|---|
@@ -981,7 +982,7 @@ the caller's; kure writes the name only. Under the integrated placements a bundl
 holds the CRs of its umbrella children and, under `FluxIntegratedPerLayout`, of its application
 layouts, so a bundle's account applies those Kustomization objects and needs the RBAC for them.
 Each of those Kustomizations then applies its own build under its own account: an umbrella child
-without one is applied with the controller's identity, whatever its umbrella sets, so give each
+without one is applied as an unset one is, whatever its umbrella sets, so give each
 bundle that needs an account its own.
 
 The name must be a DNS-1123 subdomain, the rule Kubernetes sets for a ServiceAccount's name
