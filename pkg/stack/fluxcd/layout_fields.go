@@ -92,8 +92,8 @@ func noLayoutKustomization(l *layout.ManifestLayout, top bool, noneHere string) 
 	case len(l.OriginBundles()) > 0:
 		return fmt.Sprintf("it renders bundle %q, and that bundle's Kustomization applies it", l.OriginBundles()[0].GetPath())
 	case l.UmbrellaChild:
-		return "it is an umbrella child, which its bundle's Kustomization applies"
+		return "it is marked UmbrellaChild, which gives a layout no Kustomization of its own"
 	default:
-		return "it is AppFileSingle, written as a file into its parent's directory"
+		return "it is AppFileSingle, written as one file into its Namespace, normally its parent's directory"
 	}
 }
