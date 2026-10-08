@@ -386,7 +386,7 @@ func TestLayoutSettings_OtherPlacementsRefused(t *testing.T) {
 			rules.FluxPlacement = placement
 			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(oneBundleCluster(shopSettings(unordered(set))), rules)
 			mustContainAll(t, err, `layout "prod/shop/db" sets Wait, Labels, Suspend, but has no Flux Kustomization of its own`, `FluxPlacement "integrated" (FluxIntegratedPerLayout)`)
-			if err != nil && strings.Contains(err.Error(), "not a duration") {
+			if err != nil && strings.Contains(err.Error(), "is not a valid duration") {
 				t.Errorf("a value was checked as a Kustomization's, though none carries it:\n%v", err)
 			}
 			// Each wrapper on the way out adds its context once and the
