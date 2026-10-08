@@ -21,20 +21,21 @@ import (
 // (ManifestLayout.Interval, Prune, Force, Suspend, Wait, Timeout,
 // RetryInterval, Labels, Annotations) over what it inherits from the bundle
 // that holds its application (layoutSettings on integratedPlacement). The
-// postBuild substitution has no layout field: it is that bundle's. The
-// bundle's patches are not among the settings: they are placed once every
-// Kustomization is (placeBundlePatches).
+// postBuild substitution and the service account have no layout field: they
+// are that bundle's. The bundle's patches are not among the settings: they
+// are placed once every Kustomization is (placeBundlePatches).
 type layoutSettings struct {
-	interval      time.Duration
-	prune         bool
-	force         bool
-	suspend       bool
-	wait          bool
-	timeout       *metav1.Duration
-	retryInterval *metav1.Duration
-	labels        map[string]string
-	annotations   map[string]string
-	postBuild     *kustv1.PostBuild
+	interval           time.Duration
+	prune              bool
+	force              bool
+	suspend            bool
+	wait               bool
+	timeout            *metav1.Duration
+	retryInterval      *metav1.Duration
+	labels             map[string]string
+	annotations        map[string]string
+	postBuild          *kustv1.PostBuild
+	serviceAccountName string
 }
 
 // holdingBundle returns the bundle that holds the application l belongs to, or
@@ -93,6 +94,12 @@ func (p *integratedPlacement) holdingBundle(l *layout.ManifestLayout) *stack.Bun
 // referenced ConfigMap or Secret from the Kustomization's namespace, and
 // every Kustomization of the pass is in the generator's, so a reference the
 // bundle's own Kustomization resolves is one this one resolves.
+//
+// The service account is the holding bundle's too, with no layout field: the
+// layout's objects are the bundle's application's, applied under the account
+// the bundle names. Flux looks it up in the Kustomization's namespace, the
+// same for every Kustomization of the pass. The bundle's Validate has checked
+// the name.
 func (p *integratedPlacement) layoutSettings(l *layout.ManifestLayout) (layoutSettings, error) {
 	holder := p.holdingBundle(l)
 	inherit := stack.Bundle{}
@@ -101,11 +108,12 @@ func (p *integratedPlacement) layoutSettings(l *layout.ManifestLayout) (layoutSe
 	}
 
 	s := layoutSettings{
-		prune:     pruneValue(firstSet(l.Prune, inherit.Prune, p.gen.Prune)),
-		force:     isTrue(firstSet(l.Force, inherit.Force)),
-		suspend:   isTrue(firstSet(l.Suspend, inherit.Suspend)),
-		wait:      waitValue(firstSet(l.Wait, inherit.Wait)),
-		postBuild: fluxPostBuild(inherit.PostBuild),
+		prune:              pruneValue(firstSet(l.Prune, inherit.Prune, p.gen.Prune)),
+		force:              isTrue(firstSet(l.Force, inherit.Force)),
+		suspend:            isTrue(firstSet(l.Suspend, inherit.Suspend)),
+		wait:               waitValue(firstSet(l.Wait, inherit.Wait)),
+		postBuild:          fluxPostBuild(inherit.PostBuild),
+		serviceAccountName: inherit.ServiceAccountName,
 	}
 
 	var err error
