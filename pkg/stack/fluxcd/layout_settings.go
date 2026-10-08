@@ -175,7 +175,7 @@ func layoutDuration(l *layout.ManifestLayout, holder *stack.Bundle, name, own, i
 	d, err := time.ParseDuration(value)
 	if err != nil {
 		return nil, errors.ResourceValidationError("ManifestLayout", l.FullRepoPath(), name,
-			fmt.Sprintf("%s %q%s is not a valid duration: %v", name, value, from, err), err)
+			fmt.Sprintf("%s %q%s is not a valid duration", name, value, from), err)
 	}
 	if written, ok := fluxDuration(d); !ok {
 		return nil, errors.ResourceValidationError("ManifestLayout", l.FullRepoPath(), name,
