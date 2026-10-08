@@ -852,7 +852,7 @@ func parseBundleDuration(b *stack.Bundle, field, value string) (time.Duration, e
 	d, err := time.ParseDuration(value)
 	if err != nil {
 		return 0, errors.ResourceValidationError("Bundle", b.Name, field,
-			fmt.Sprintf("%s %q is not a valid duration: %v", field, value, err), err)
+			fmt.Sprintf("%s %q is not a valid duration", field, value), err)
 	}
 	if written, ok := fluxDuration(d); !ok {
 		return 0, errors.ResourceValidationError("Bundle", b.GetPath(), field,

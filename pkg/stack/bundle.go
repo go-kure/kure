@@ -421,7 +421,7 @@ func (a *Bundle) validateDurations() error {
 		}
 		if _, err := time.ParseDuration(f.value); err != nil {
 			return errors.ResourceValidationError("Bundle", a.Name, f.field,
-				fmt.Sprintf("%s %q is not a valid duration: %v", f.field, f.value, err), err)
+				fmt.Sprintf("%s %q is not a valid duration", f.field, f.value), err)
 		}
 	}
 	return nil
