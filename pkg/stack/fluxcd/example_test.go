@@ -160,6 +160,28 @@ func ExampleEngine_dirName() {
 	// shop-services apps/shop/10-services
 }
 
+func Example_fluxWorkflowServiceAccount() {
+	// The umbrella names an account for its own Kustomization; a child gets
+	// one only where it names its own.
+	infra := &stack.Bundle{Name: "shop-infra", ServiceAccountName: "infra-deployer"}
+	services := &stack.Bundle{Name: "shop-services"}
+	shop := &stack.Bundle{Name: "shop", ServiceAccountName: "shop-deployer", Children: []*stack.Bundle{infra, services}}
+	cluster := &stack.Cluster{Name: "prod", Node: &stack.Node{Name: "apps", Bundle: shop}}
+
+	objects, err := fluxcd.Engine().GenerateFromCluster(cluster, layout.DefaultLayoutRules())
+	if err != nil {
+		panic(err)
+	}
+	for _, obj := range objects {
+		kust := obj.(*kustv1.Kustomization)
+		fmt.Printf("%s %q\n", kust.Name, kust.Spec.ServiceAccountName)
+	}
+	// Output:
+	// shop "shop-deployer"
+	// shop-infra "infra-deployer"
+	// shop-services ""
+}
+
 func ExampleLayoutIntegrator_nodeKustomization() {
 	// Two groups of nodes, neither with a bundle of its own. Each group gets
 	// a Kustomization that applies its directory; the one for apps waits for

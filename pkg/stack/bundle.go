@@ -134,13 +134,14 @@ type Bundle struct {
 	// under FluxIntegratedPerLayout, of the Kustomization of each application
 	// of the bundle that has a directory of its own and of each layout below
 	// it. Empty writes nothing, and the controller applies with its own
-	// identity. Flux looks the account up in the namespace of the
-	// Kustomization, the generator's DefaultNamespace; creating the account
-	// and its RBAC is the caller's. An umbrella's value is not passed to its
-	// Children: each bundle carries its own. A value set here must be a
-	// DNS-1123 subdomain, the rule Kubernetes sets for a service account name
-	// (ValidateServiceAccountName, checked by Validate). The ArgoCD workflow
-	// does not read it.
+	// identity, or with the default service account it is started with
+	// (--default-service-account), if any. Flux looks the account up in the
+	// namespace of the Kustomization, the generator's DefaultNamespace;
+	// creating the account and its RBAC is the caller's. An umbrella's value
+	// is not passed to its Children: each bundle carries its own. A value
+	// set here must be a DNS-1123 subdomain, the rule Kubernetes sets for a
+	// service account name (ValidateServiceAccountName, checked by Validate).
+	// The ArgoCD workflow does not read it.
 	ServiceAccountName string
 
 	// Internal fields for runtime hierarchy navigation (not serialized)

@@ -721,9 +721,29 @@ it applies the bundle. Under `FluxIntegratedPerLayout` the Kustomization of each
 applications that has a directory of its own, and of each layout below it, carries the same
 account; a layout has no field to change it. Unset, nothing changes in the output.
 
+<!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowServiceAccount -->
 ```go
-shop := &stack.Bundle{Name: "shop", ServiceAccountName: "shop-deployer"}
+// The umbrella names an account for its own Kustomization; a child gets
+// one only where it names its own.
+infra := &stack.Bundle{Name: "shop-infra", ServiceAccountName: "infra-deployer"}
+services := &stack.Bundle{Name: "shop-services"}
+shop := &stack.Bundle{Name: "shop", ServiceAccountName: "shop-deployer", Children: []*stack.Bundle{infra, services}}
+cluster := &stack.Cluster{Name: "prod", Node: &stack.Node{Name: "apps", Bundle: shop}}
+
+objects, err := fluxcd.Engine().GenerateFromCluster(cluster, layout.DefaultLayoutRules())
+if err != nil {
+    panic(err)
+}
+for _, obj := range objects {
+    kust := obj.(*kustv1.Kustomization)
+    fmt.Printf("%s %q\n", kust.Name, kust.Spec.ServiceAccountName)
+}
 ```
+<!-- doc-example:end -->
+
+It prints `shop "shop-deployer"`, `shop-infra "infra-deployer"` and `shop-services ""`: each
+bundle's Kustomization carries the account the bundle names, and the umbrella's is not passed to
+`shop-services`.
 
 - **Create the account and its RBAC yourself.** Flux looks it up in the Kustomization's own
   namespace, the generator's `DefaultNamespace` (`flux-system` by default), and kure writes the
@@ -733,7 +753,8 @@ shop := &stack.Bundle{Name: "shop", ServiceAccountName: "shop-deployer"}
   application layouts, so the bundle's account needs RBAC to manage Kustomizations in that
   namespace.
 - **Set it on every bundle that needs one.** An umbrella's account is not passed to its children:
-  a child without its own is applied with the controller's identity.
+  a child without its own is applied with the controller's own identity, or with the default
+  service account the controller is started with (`--default-service-account`), if any.
 - **Bundles that share a directory share one account.** Bundles a `GroupFlat` merge puts in one
   directory must set the same value, or the integration is refused, naming both.
 - **The name is checked.** It must be a DNS-1123 subdomain; `Bundle.Validate` and the generator

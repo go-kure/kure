@@ -173,7 +173,8 @@ Flux's (see the Flux engine's "Durations").
 applies the bundle: the Flux workflow writes it to `spec.serviceAccountName` of the bundle's
 Kustomization and, under `FluxPlacement: FluxIntegratedPerLayout`, of the Kustomization of each
 of the bundle's applications that has a directory of its own and of each layout below it. Empty
-writes nothing, and the controller applies with its own identity, as before. Flux looks the
+writes nothing, as before, and the controller applies with its own identity, or with the default
+service account it is started with (`--default-service-account`), if any. Flux looks the
 account up in the Kustomization's own namespace, the generator's `DefaultNamespace`; creating the
 account and its RBAC is the caller's. An umbrella's value is not passed to its `Children`: each
 bundle carries its own. The value must be a DNS-1123 subdomain (see "Service account name"
