@@ -165,9 +165,9 @@ func decodeDocument(raw []byte, opts ParseOptions, nesting int) ([]runtime.Objec
 		return nil, parseErrorsOfKeys(refused)
 	}
 
-	if list, ok := registeredList(fields); ok {
+	if list, items, ok := registeredList(fields); ok {
 		listGVK := list.GetObjectKind().GroupVersionKind()
-		want, generic, err := listItemKind(list, listGVK.GroupVersion())
+		want, generic, err := listItemKind(items, listGVK.GroupVersion())
 		if err != nil {
 			return nil, []error{errors.NewParseError("Kubernetes object",
 				fmt.Sprintf("failed to read the items of %s", listGVK.Kind), 0, 0, err)}
@@ -304,35 +304,76 @@ func withListIdentity(item []byte, apiVersion, kind string) []byte {
 
 // registeredList reports whether fields, the top level of a document, is that
 // of a list document of a kind the scheme registers. When it is, it returns an
-// empty list of that kind, carrying its GroupVersionKind. The document is
-// recognised by the kind it states and is not decoded as a whole: one item
-// that does not decode must not take the items beside it down with it.
+// empty list of that kind, carrying its GroupVersionKind, and the type of its
+// items. The document is recognised by the kind it states and is not decoded
+// as a whole: one item that does not decode must not take the items beside it
+// down with it.
 //
 // apiVersion and kind are read under exactly those keys. A document that
 // states either under another case never gets here; see decodeDocument.
-func registeredList(fields map[string]json.RawMessage) (list runtime.Object, ok bool) {
+func registeredList(fields map[string]json.RawMessage) (list runtime.Object, items reflect.Type, ok bool) {
 	apiVersion, err := stringField(fields, "apiVersion")
 	if err != nil {
-		return nil, false
+		return nil, nil, false
 	}
 	kind, err := stringField(fields, "kind")
 	if err != nil || kind == "" {
-		return nil, false
+		return nil, nil, false
 	}
 	gv, err := schema.ParseGroupVersion(apiVersion)
 	if err != nil {
-		return nil, false
+		return nil, nil, false
 	}
 	gvk := gv.WithKind(kind)
 	list, err = kubernetes.Scheme.New(gvk)
 	if err != nil {
-		return nil, false
+		return nil, nil, false
 	}
-	if _, isObject := list.(client.Object); isObject || !meta.IsListType(list) {
-		return nil, false
+	if _, isObject := list.(client.Object); isObject {
+		return nil, nil, false
+	}
+	if items, ok = typedListItems(list); !ok {
+		return nil, nil, false
 	}
 	list.GetObjectKind().SetGroupVersionKind(gvk)
-	return list, true
+	return list, items, true
+}
+
+// typedListItems returns the type of the items of list where apimachinery
+// reads it as a typed List (meta.IsListType, then meta.GetItemsPtr), and
+// whether it does. Its reflection panics on shapes of the zero value
+// Scheme.New returns, by k8s.io/apimachinery v0.37.1 pkg/api/meta/help.go: a
+// nil embedded pointer on the way to Items (getItemsPtr, :95,
+// reflect.Value.FieldByName), and an Items field of interface type that is
+// nil (:101). It keeps its answer per type (IsListType, :44-67), so a type
+// once taken for a List can panic where its items are read. A type it panics
+// on, or whose items it reads as no pointer to a slice, is no List it can
+// read: the document is decoded as one object of that type, an error and
+// never an object, since a registered type that is no client.Object is
+// refused where it decodes. Only those two calls are recovered from.
+func typedListItems(list runtime.Object) (reflect.Type, bool) {
+	var itemsPtr any
+	read := func() (ok bool) {
+		defer func() {
+			if recover() != nil {
+				ok = false
+			}
+		}()
+		if !meta.IsListType(list) {
+			return false
+		}
+		var err error
+		itemsPtr, err = meta.GetItemsPtr(list)
+		return err == nil
+	}
+	if !read() {
+		return nil, false
+	}
+	t := reflect.TypeOf(itemsPtr)
+	if t == nil || t.Kind() != reflect.Pointer || t.Elem().Kind() != reflect.Slice {
+		return nil, false
+	}
+	return t.Elem().Elem(), true
 }
 
 // stringField returns the string a document states under key, exactly as
@@ -508,15 +549,11 @@ func occurrences(object []byte, key string) ([]json.RawMessage, error) {
 	return values, nil
 }
 
-// listItemKind returns what a registered list holds: generic is true for the
-// v1 List, whose items are documents of any kind, and want is the one kind a
-// typed list holds, in the list's group version.
-func listItemKind(list runtime.Object, listGV schema.GroupVersion) (want schema.GroupVersionKind, generic bool, err error) {
-	itemsPtr, err := meta.GetItemsPtr(list)
-	if err != nil {
-		return schema.GroupVersionKind{}, false, err
-	}
-	elem := reflect.TypeOf(itemsPtr).Elem().Elem()
+// listItemKind returns what a registered list whose items are of type elem
+// holds: generic is true for the v1 List, whose items are documents of any
+// kind, and want is the one kind a typed list holds, in the list's group
+// version.
+func listItemKind(elem reflect.Type, listGV schema.GroupVersion) (want schema.GroupVersionKind, generic bool, err error) {
 	if elem == reflect.TypeOf(runtime.RawExtension{}) {
 		return schema.GroupVersionKind{}, true, nil
 	}
