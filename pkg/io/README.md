@@ -101,10 +101,10 @@ multi-document stream, and an empty list yields nothing.
   typed items in both modes. An item may leave `apiVersion` and `kind` out, as the
   API server's own list responses do; an item that states them must state the kind
   the list holds. A registered type is such a list when apimachinery reads its
-  `Items` as a slice. One whose `Items` it cannot read, a nil field of interface
-  type or one behind a nil embedded pointer, is decoded as one object of that type
-  and refused, where it does not decode or as no `client.Object`: an error, never a
-  panic.
+  `Items` as a slice. One whose `Items` it cannot read (a nil field of interface
+  type, or one behind a nil embedded pointer) is not flattened: it is decoded as one
+  object of that type and refused with an error, never a panic, since it either
+  fails to decode or is no `client.Object`.
 - A generic `v1` `List` is read item by item, each as a document of its own: a
   registered kind comes back typed, an unregistered one follows `AllowUnstructured`,
   and a list inside the list is flattened where it stands.
