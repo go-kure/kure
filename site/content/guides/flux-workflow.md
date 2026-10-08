@@ -695,6 +695,22 @@ whole, and the bundle's patches are placed by object. What to do:
 The full rules, the refusals and the limit are in the
 [Flux Engine reference](/api-reference/flux-engine/#per-layout-settings).
 
+### A layout's Kustomization settings are refused where it gets no Kustomization (breaking change)
+
+A layout's own Kustomization fields (`DependsOn`, `KustomizationName`, `Wait`, `Timeout`,
+`RetryInterval`, `Labels`, `Annotations`, `Interval`, `Prune`, `Force`, `Suspend`) used to be
+dropped without an error on a layout that gets no Flux Kustomization of its own. They are now
+refused (go-kure/kure#1032). That is every layout under `FluxIntegratedPerBundle` and
+`FluxSeparate` (and `GenerateFromLayout`), and, under `FluxIntegratedPerLayout`, the top of the
+tree, a layout that renders a bundle, an umbrella child and an `AppFileSingle` layout. The error
+names the first such layout, every field it sets and why it has no Kustomization. What to do:
+
+- **An augmenter that sets `DependsOn` (or any of the eleven fields) on a child layout under
+  `FluxSeparate` or `FluxIntegratedPerBundle` is now refused.** Use `FluxIntegratedPerLayout`,
+  which gives such a child layout its own Kustomization, or leave the fields unset.
+- **A node's own fields are refused on the node,** once: a value the walk copies from a node to
+  its layout is not refused a second time on the layout.
+
 ## Umbrella Bundles — Readiness Aggregation
 
 A bundle with non-empty `Children` becomes an **umbrella**: Flux will only mark
@@ -818,7 +834,7 @@ A child layout receives a CR when:
 
 ### Ordered reconciliation with DependsOn
 
-Set `ManifestLayout.DependsOn` to the names of the sibling layouts to express reconciliation order between hook groups. A hook-group layout's CR is named `<unit name>-<layout name>` (or by its `KustomizationName`), and the integrator writes that name into `spec.dependsOn` for an entry that names a layout of the same unit: a sibling first, else the one layout of that name below the unit's directory. Any other entry is a Kustomization name and is written as given. This happens only under `FluxIntegratedPerLayout`:
+Set `ManifestLayout.DependsOn` to the names of the sibling layouts to express reconciliation order between hook groups. A hook-group layout's CR is named `<unit name>-<layout name>` (or by its `KustomizationName`), and the integrator writes that name into `spec.dependsOn` for an entry that names a layout of the same unit: a sibling first, else the one layout of that name below the unit's directory. Any other entry is a Kustomization name and is written as given. This happens only under `FluxIntegratedPerLayout`; under the other placements the child gets no Kustomization and the field is refused (see the breaking-change section above):
 
 <!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowDependsOn -->
 ```go
