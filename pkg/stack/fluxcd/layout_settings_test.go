@@ -389,6 +389,11 @@ func TestLayoutSettings_OtherPlacementsRefused(t *testing.T) {
 			if err != nil && strings.Contains(err.Error(), "not a duration") {
 				t.Errorf("a value was checked as a Kustomization's, though none carries it:\n%v", err)
 			}
+			// Each wrapper on the way out adds its context once and the
+			// refusal appears once, however deep it was raised.
+			if n := strings.Count(fmt.Sprint(err), "has no Flux Kustomization of its own"); err != nil && n != 1 {
+				t.Errorf("the refusal appears %d times in the error, want once:\n%v", n, err)
+			}
 
 			without := integrated(t, oneBundleCluster(shopSettings(unordered(nil))), rules)
 			if names := slices.Sorted(maps.Keys(kustomizationsByName(without))); !slices.Equal(names, []string{"shop"}) {

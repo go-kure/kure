@@ -250,13 +250,13 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {
 		return nil, errors.ResourceValidationError("Cluster", c.Name, "layout",
-			fmt.Sprintf("failed to create base layout: %v", err), err)
+			"failed to create base layout", err)
 	}
 
 	// Integrate Flux resources into the layout
 	if err := li.IntegrateWithLayout(ml, c, rules); err != nil {
 		return nil, errors.ResourceValidationError("Cluster", c.Name, "flux-integration",
-			fmt.Sprintf("failed to integrate Flux resources: %v", err), err)
+			"failed to integrate Flux resources", err)
 	}
 
 	return ml, nil
@@ -1072,7 +1072,7 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 		objs, err := p.gen.generateForUnit(l, p.ix)
 		if err != nil {
 			return errors.ResourceValidationError("Bundle", bundles[0].Name, "flux-resources",
-				fmt.Sprintf("failed to generate Flux resources: %v", err), err)
+				"failed to generate Flux resources", err)
 		}
 		// The CR is hosted by the parent of the layout that renders the
 		// bundles. Every unit has one: IntegrateWithLayout refuses a top
@@ -2102,7 +2102,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	fluxResources, ix, err := li.Generator.generateFromLayout(ml, c)
 	if err != nil {
 		return errors.ResourceValidationError("Cluster", c.Name, "flux-resources",
-			fmt.Sprintf("failed to generate Flux resources: %v", err), err)
+			"failed to generate Flux resources", err)
 	}
 
 	if len(fluxResources) == 0 {
