@@ -71,7 +71,10 @@ type. That changes what a parse returns when kure starts registering a kind: a
 `*schedulingv1.PriorityClass`. A list document follows its items: a
 `PriorityClassList`, a `DeploymentList` or a generic `List` is flattened into its
 items, typed where the kind is registered, in the list's order and in the list's
-place in the stream. A list whose own metadata carries labels or annotations is
+place in the stream. A registered type is such a list only where apimachinery
+reads its `Items` as a slice: one whose `Items` is a nil field of interface
+type, or sits behind a nil embedded pointer, is not flattened, and the parse
+refuses it with an error instead of panicking. A list whose own metadata carries labels or annotations is
 refused, since its items cannot keep them, and so is a document that states
 `apiVersion`, `kind` or a list's `items` under a key in another case (`Kind`,
 `Items`).
