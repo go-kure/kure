@@ -504,8 +504,9 @@ name of its bundle's.
   derived; the layout and `ManifestLayout.KustomizationName` for a layout's, set or default. The
   default is longer than the layout's name by the unit name, so a directory name within the
   limit can give a default over it; since go-kure/kure#1030 kure shortens that default, and only
-  that one, to `<unit prefix>-<hash>-<layout name>` (`unitLayoutCRName`), refusing it only where
-  the layout name has more than 54 characters.
+  that one, to `<unit prefix>-<hash>-<layout name>` (`unitLayoutCRName`). Since
+  go-kure/kure#1036 a layout name over 54 characters, which leaves no room for the hash beside it,
+  gives `<first 54 bytes of the layout name>-<hash>` instead of a refusal.
 
 **Breaking.** With the node fields unset, a node's Kustomization and every bundle's are unchanged.
 Under `FluxIntegratedPerLayout` the Kustomization of every application and augmenter layout is

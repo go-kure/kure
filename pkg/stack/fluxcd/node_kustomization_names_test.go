@@ -1,6 +1,8 @@
 package fluxcd_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"slices"
 	"strings"
 	"testing"
@@ -14,7 +16,14 @@ import (
 // the name in effect is checked where the Kustomization is created, and the
 // refusal names what the caller sets to change it, a node's field or a
 // layout's. kure shortens only the "<unit name>-<layout name>" default of an
-// application or augmenter layout (go-kure/kure#1030).
+// application or augmenter layout (go-kure/kure#1030, go-kure/kure#1036).
+
+// nameHash is the hash part of a shortened default, computed apart from the
+// code under test.
+func nameHash(composed string) string {
+	sum := sha256.Sum256([]byte(composed))
+	return hex.EncodeToString(sum[:])[:8]
+}
 
 // TestNodeKustomization_DerivedNameOverTheLimit: a node whose derived
 // "<path>-node" name is over the limit is refused, naming the node and the
@@ -72,17 +81,15 @@ func longNameCluster() (c *stack.Cluster, app string, rules layout.LayoutRules) 
 
 // TestLayoutKustomization_DefaultOverTheLimit: the default name of an
 // application layout's Kustomization is longer than the layout's name by the
-// unit name, and one over the limit whose layout name is too long to shorten
-// it (over 54 characters) is refused, naming the layout and the field to set.
-// Setting the field on the walked layout renders the same tree.
+// unit name; one over the limit whose layout name has more than 54 characters
+// is shortened to the layout name's first 54 and a hash (go-kure/kure#1036).
+// Setting the field on the walked layout uses the name set instead.
 func TestLayoutKustomization_DefaultOverTheLimit(t *testing.T) {
 	c, app, rules := longNameCluster()
-	_, err := integrateCluster(c, rules)
-	mustContainAll(t, err,
-		"ManifestLayout 'prod/web/"+app+"'", "field 'kustomizationName'",
-		`"web-`+app+`"`, "at most 63 characters",
-		"a default over 63 characters is shortened only where the layout name has at most 54",
-		"set ManifestLayout.KustomizationName")
+	short := strings.Repeat("a", 54) + "-" + nameHash("web-"+app)
+	if got := kustPaths(integrated(t, c, rules))[short]; got != "prod/web/"+app {
+		t.Errorf("Kustomization %s applies %q, want the application's directory prod/web/%s", short, got, app)
+	}
 
 	c, app, rules = longNameCluster()
 	root := mustWalk(t, c, rules)
@@ -147,8 +154,8 @@ func TestLayoutKustomization_ShortenedNameCollision(t *testing.T) {
 }
 
 // TestLayoutKustomization_ShortenBoundary: a default over the limit is
-// shortened where the layout name has 54 characters, to "<hash>-<name>", and
-// refused where it has 55, naming the rule.
+// shortened where the layout name has 54 characters to "<hash>-<name>", and
+// where it has 55 to "<first 54 of the name>-<hash>" (go-kure/kure#1036).
 func TestLayoutKustomization_ShortenBoundary(t *testing.T) {
 	t.Run("54", func(t *testing.T) {
 		app := strings.Repeat("n", 54)
@@ -171,13 +178,26 @@ func TestLayoutKustomization_ShortenBoundary(t *testing.T) {
 	t.Run("55", func(t *testing.T) {
 		app := strings.Repeat("n", 55)
 		c, rules := shortenedCluster(app)
-		_, err := integrateCluster(c, rules)
-		mustContainAll(t, err,
-			"ManifestLayout 'prod/platform-services-payments/"+app+"'", "field 'kustomizationName'",
-			`"platform-services-payments-`+app+`"`, "at most 63 characters",
-			`shortened only where the layout name has at most 54, and "`+app+`" has 55`,
-			"set ManifestLayout.KustomizationName")
+		short := strings.Repeat("n", 54) + "-" + nameHash("platform-services-payments-"+app)
+		if got := kustPaths(integrated(t, c, rules))[short]; got != "prod/platform-services-payments/"+app {
+			t.Errorf("Kustomization %s applies %q, want the application's directory", short, got)
+		}
 	})
+}
+
+// TestLayoutKustomization_LongNameCollision: two layout names over 54
+// characters below one unit that share their first 54 and whose 8-character
+// hashes collide (the names below, both 35a47603 below the unit "shop") give
+// the same name, and the duplicate-name check refuses the tree, naming both
+// layouts (go-kure/kure#1036).
+func TestLayoutKustomization_LongNameCollision(t *testing.T) {
+	const base = "checkout-service-payments-reconciler-worker-hook-group"
+	const short = base + "-35a47603"
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "prod",
+		Bundle: srBundle("shop", cmApp(base+"-46715"), cmApp(base+"-61807"))}}
+	rules := placed(layout.LayoutRules{BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupByName}, layout.FluxIntegratedPerLayout)
+	_, err := integrateCluster(c, rules)
+	mustContainAll(t, err, `"`+short+`"`, `layout "prod/shop/`+base+`-46715"`, `layout "prod/shop/`+base+`-61807"`)
 }
 
 // TestLayoutKustomization_NameValueRefused: a KustomizationName set on a
