@@ -506,7 +506,8 @@ name of its bundle's.
   limit can give a default over it; since go-kure/kure#1030 kure shortens that default, and only
   that one, to `<unit prefix>-<hash>-<layout name>` (`unitLayoutCRName`). Since
   go-kure/kure#1036 a layout name over 54 characters, which leaves no room for the hash beside it,
-  gives `<first 54 bytes of the layout name>-<hash>` instead of a refusal.
+  gives `<first 54 bytes of the layout name>-<hash>` instead of a refusal, without the hyphens
+  and dots that end those bytes (the hash alone where nothing is left of them).
 
 **Breaking.** With the node fields unset, a node's Kustomization and every bundle's are unchanged.
 Under `FluxIntegratedPerLayout` the Kustomization of every application and augmenter layout is

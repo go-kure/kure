@@ -616,8 +616,9 @@ bundle gave two Kustomizations one name and was refused. What to do:
   unit name, and Flux cannot reconcile a Kustomization whose name is over 63 characters, so the
   integration shortens it to `<unit prefix>-<hash>-<layout name>`, keeping the layout's name. A
   layout name over 54 characters leaves no room for the hash beside it, and the name is its first
-  54 bytes and the hash, `<layout name prefix>-<hash>` (go-kure/kure#1036; it was refused
-  before). Set `ManifestLayout.KustomizationName` on the layout for a name of your own.
+  54 bytes, without the hyphens and dots that end them, and the hash: `<layout name
+  prefix>-<hash>`, or the hash alone where nothing is left of those bytes (go-kure/kure#1036; it
+  was refused before). Set `ManifestLayout.KustomizationName` on the layout for a name of your own.
 - **A new name another Kustomization already has is refused.** The application `web` of the
   bundle `platform` is now applied by `platform-web`. If a bundle, a node or another layout
   already has a Kustomization of that name, the integration refuses the tree and names both,
