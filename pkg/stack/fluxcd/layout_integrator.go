@@ -1753,7 +1753,8 @@ const layoutNameShortenMax = stack.KustomizationNameMaxLength - layoutNameHashLe
 //     "<hash>-<name>";
 //   - where name is longer, it leaves no room for the hash beside it, and the
 //     result is "<name prefix>-<hash>": the first 54 bytes of name, without
-//     the hyphens and dots that end them, and the hash. The unit name and the
+//     the hyphens and dots that end them, and the hash; where nothing is left
+//     of them, the result is the hash alone. The unit name and the
 //     rest of name show only in the hash, and are not checked as part of the
 //     result.
 //
