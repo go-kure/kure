@@ -185,6 +185,103 @@ func TestLayoutKustomization_ShortenBoundary(t *testing.T) {
 	})
 }
 
+// TestDefaultLayoutKustomizationName_MatchesIntegrator: the integrator names
+// an application layout's Kustomization exactly as the exported
+// DefaultLayoutKustomizationName predicts from the bundle's UnitName and the
+// layout's name (go-kure/kure#1040), for a default that fits and for each
+// shortened shape, also where the bundle sets its own KustomizationName. The
+// shape check keeps a row from passing on a default that did not take the
+// form it is there for.
+func TestDefaultLayoutKustomizationName_MatchesIntegrator(t *testing.T) {
+	const name76 = "checkout-service-payments-reconciler-worker-pre-install-hooks-schema-migrate"
+	for _, tc := range []struct {
+		desc, bundle, kustName, app string
+		shape                       func(got, unit, app string) bool
+	}{
+		{
+			desc: "fits", bundle: "platform-services-payments", app: "api",
+			shape: func(got, unit, app string) bool { return got == unit+"-"+app },
+		},
+		{
+			desc: "<unit prefix>-<hash>-<name>", bundle: "platform-services-payments", app: "checkout-service-payments-reconciler-worker",
+			shape: func(got, unit, app string) bool {
+				return strings.HasPrefix(got, "platform-s-") && strings.HasSuffix(got, "-"+app) && got != unit+"-"+app
+			},
+		},
+		{
+			desc: "<hash>-<name>", bundle: "platform-services-payments", app: strings.Repeat("n", 54),
+			shape: func(got, unit, app string) bool {
+				return len(got) == stack.KustomizationNameMaxLength && strings.HasSuffix(got, "-"+app) && !strings.HasPrefix(got, "platform")
+			},
+		},
+		{
+			desc: "<name prefix>-<hash>", bundle: "platform-services-payments", app: name76,
+			shape: func(got, unit, app string) bool {
+				return strings.HasPrefix(got, app[:54]+"-") && len(got) == stack.KustomizationNameMaxLength
+			},
+		},
+		{
+			desc: "bundle with its own KustomizationName", bundle: "web", kustName: "platform-services-payments", app: "checkout-service-payments-reconciler-worker",
+			shape: func(got, unit, app string) bool {
+				return strings.HasPrefix(got, "platform-s-") && strings.HasSuffix(got, "-"+app)
+			},
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			b := srBundle(tc.bundle, cmApp(tc.app))
+			b.KustomizationName = tc.kustName
+			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "prod", Bundle: b}}
+			rules := placed(layout.LayoutRules{BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupByName}, layout.FluxIntegratedPerLayout)
+			ml := integrated(t, c, rules)
+
+			want := fluxstack.DefaultLayoutKustomizationName(b.UnitName(), tc.app)
+			if !tc.shape(want, b.UnitName(), tc.app) {
+				t.Fatalf("DefaultLayoutKustomizationName(%q, %q) = %q, not of the shape %s", b.UnitName(), tc.app, want, tc.desc)
+			}
+			var emitted []string
+			for name, path := range kustPaths(ml) {
+				if path == "prod/"+tc.bundle+"/"+tc.app {
+					emitted = append(emitted, name)
+				}
+			}
+			if len(emitted) != 1 || emitted[0] != want {
+				t.Fatalf("Kustomizations applying prod/%s/%s: %v, want exactly [%s]; have %v", tc.bundle, tc.app, emitted, want, kustPaths(ml))
+			}
+			writeAll(t, ml)
+		})
+	}
+}
+
+// TestDefaultLayoutKustomizationName_MergedBundles: where NodeGrouping
+// GroupFlat merges a child node's bundle into the root's directory, the unit
+// of the child bundle's application is the first bundle's UnitName, so that
+// is what DefaultLayoutKustomizationName takes to predict the name; the
+// application's own bundle's UnitName gives another name, which is not
+// written.
+func TestDefaultLayoutKustomizationName_MergedBundles(t *testing.T) {
+	const app = "checkout-service-payments-reconciler-worker"
+	first := srBundle("platform-services-payments", cmApp("api"))
+	second := srBundle("apps", cmApp(app))
+	child := &stack.Node{Name: "apps", Bundle: second}
+	root := &stack.Node{Name: "prod", Bundle: first, Children: []*stack.Node{child}}
+	child.SetParent(root)
+	rules := placed(layout.LayoutRules{NodeGrouping: layout.GroupFlat, BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupByName}, layout.FluxIntegratedPerLayout)
+	ml := integrated(t, &stack.Cluster{Name: "demo", Node: root}, rules)
+
+	want := fluxstack.DefaultLayoutKustomizationName(first.UnitName(), app)
+	if want != "platform-s-7365aca5-"+app {
+		t.Fatalf("DefaultLayoutKustomizationName(%q, %q) = %q, want the shortened platform-s-7365aca5-%s", first.UnitName(), app, want, app)
+	}
+	if got := kustNamed(t, ml, want).Spec.Path; !strings.HasSuffix(got, "/"+app) {
+		t.Errorf("Kustomization %s applies %q, want the application's directory", want, got)
+	}
+	own := fluxstack.DefaultLayoutKustomizationName(second.UnitName(), app)
+	if _, ok := kustPaths(ml)[own]; ok {
+		t.Errorf("a Kustomization is named %q, from the application's own bundle, not the unit's", own)
+	}
+	writeAll(t, ml)
+}
+
 // TestLayoutKustomization_LongNameCollision: two layout names over 54
 // characters below one unit that share their first 54 and whose 8-character
 // hashes collide (the names below, both 35a47603 below the unit "shop") give

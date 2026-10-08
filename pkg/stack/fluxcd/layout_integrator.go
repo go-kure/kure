@@ -1795,6 +1795,25 @@ func unitLayoutCRName(unit, name string) string {
 	return hash + "-" + name
 }
 
+// DefaultLayoutKustomizationName returns the name the layout integrator gives
+// the per-layout Kustomization of an application or augmenter layout under
+// FluxIntegratedPerLayout when the layout sets no KustomizationName: the
+// default "<unit>-<layoutName>", shortened where it is longer than a Flux
+// Kustomization name may be (see the package README, "Per-layout name rule").
+// unit is the unit name: the name in effect (stack.Bundle.UnitName) of the
+// Kustomization that applies the bundles the layout belongs to, which is the
+// first bundle's where a grouping axis merged several into one directory, not
+// necessarily that of the bundle holding the application. layoutName is the
+// layout's Name.
+//
+// The result is the same on every run for the same inputs, so a caller that
+// checks names before writing them (for collisions or length) gets the name
+// kure writes. It is the name only: whether the integrator accepts it (its
+// characters, a duplicate) is checked where the Kustomization is created.
+func DefaultLayoutKustomizationName(unit, layoutName string) string {
+	return unitLayoutCRName(unit, layoutName)
+}
+
 // checkLayoutCRName refuses a name for l's per-layout CR that Flux cannot
 // reconcile (stack.ValidateKustomizationName), where the CR is created or
 // kept. The error names what the caller sets to change the name, which
