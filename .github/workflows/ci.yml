@@ -813,20 +813,7 @@ jobs:
         #   confirmed empirically: still reachable at the v2.9.0 pin. Same finding,
         #   same reasoning as launcher's identical allowlist entry — see
         #   launcher/docs/github-workflows.md.
-        #
-        # GO-2026-6596: cross-namespace HTTPRoute redirect in the cilium *Gateway API
-        #   operator* (GHSA-w7c2-w76w-5hmj). kure imports only the cilium API types,
-        #   for its builders, deepcopy and scheme registration, never the operator.
-        #   The advisory's own ranges are < 1.17.17, 1.18.0 to 1.18.11 and 1.19.0 to
-        #   1.19.5; kure pins v1.20.2 (go.mod), outside all three. govulncheck still
-        #   reports it because the Go vuln DB entry carries a second `affected` block
-        #   whose standard `ranges` is `{"introduced": "0"}` with no `fixed` event
-        #   and no symbol list -- the 1.18 fix lives only in a `custom_ranges`
-        #   annotation (vuln.go.dev/ID/GO-2026-6596.json, published 2026-10-01) --
-        #   so every version and every symbol of the module match. The same DB
-        #   defect as GO-2026-5377 above; drop the entry once the ranges upstream
-        #   are corrected.
-        allowlist: 'GO-2026-5377 GO-2026-6596'
+        allowlist: 'GO-2026-5377'
 
     - name: Save Go build cache
       # Default-branch only: a PR's own gocache entry is dead the moment it merges (GitHub
