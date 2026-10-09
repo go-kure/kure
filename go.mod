@@ -34,7 +34,7 @@ require (
 	github.com/cilium/cilium v1.20.2
 	github.com/cloudnative-pg/barman-cloud v0.6.0
 	github.com/cloudnative-pg/cloudnative-pg v1.30.1
-	github.com/cloudnative-pg/machinery v0.6.0
+	github.com/cloudnative-pg/machinery v0.6.1
 	github.com/cloudnative-pg/plugin-barman-cloud v0.15.1
 	github.com/controlplaneio-fluxcd/flux-operator v0.58.1
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0
