@@ -797,12 +797,16 @@ jobs:
         #
         # GO-2026-5377: privilege escalation in the external-secrets *controller*
         #   reconciler. kure only imports the apis module for CRD deepcopy/scheme
-        #   registration; every reachable trace runs through generated
-        #   DeepCopyObject/DeepCopyInto boilerplate (pkg/io/runtime.go:54) or package
-        #   init (pkg/kubernetes/externalsecrets/create.go:4), never a reconciler.
+        #   registration; every reachable trace ends in generated
+        #   DeepCopyObject/DeepCopyInto boilerplate or package init, never a
+        #   reconciler. The traces start in pkg/stack/fluxcd, at
+        #   (*ResourceGenerator).GenerateFromLayout through sameObject and
+        #   comparableContent, and at (*LayoutIntegrator).IntegrateWithLayout
+        #   through applyDeliveryIntents; and in the package init of
+        #   pkg/kubernetes/externalsecrets.
         #   The fix landed upstream at v2.4.1 (github.com/external-secrets/
-        #   external-secrets/releases/tag/v2.4.1) and kure now pins v2.9.0
-        #   (versions.yaml upstream_release), well past it -- but the waiver stays
+        #   external-secrets/releases/tag/v2.4.1) and kure pins a later release
+        #   (versions.yaml external-secrets upstream_release) -- but the waiver stays
         #   structurally necessary, not just untagged: the Go vuln DB entry's
         #   standard `ranges` block is `{"introduced": "0"}` with no `fixed` event;
         #   the v2.4.1 fix exists only inside a `custom_ranges` annotation the DB
@@ -810,7 +814,7 @@ jobs:
         #   module versions" (vuln.go.dev/ID/GO-2026-5377.json). Standard
         #   govulncheck matching consumes `ranges`, not `custom_ranges`, so it
         #   flags every version as affected regardless of the real fix commit --
-        #   confirmed empirically: still reachable at the v2.9.0 pin. Same finding,
+        #   confirmed empirically: still reachable at the current pin. Same finding,
         #   same reasoning as launcher's identical allowlist entry — see
         #   launcher/docs/github-workflows.md.
         allowlist: 'GO-2026-5377'
