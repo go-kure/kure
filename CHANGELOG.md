@@ -16,6 +16,291 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-beta.16] - 2026-10-11
+
+### Breaking
+
+- Apply FileNaming to flux-system and augmenter layouts
+- Add constructors for ten more base kinds of k8s.io/api
+- Check Flux-delivered trees before writing
+- Flatten a list document of a registered kind into its items
+- Add constructors for ImageRepository and ImagePolicy
+- Add a constructor for APIService
+- Point the gotk bootstrap at the directory the sync path names
+- Validate the layout rules in the walk, for every entry point
+- Remove the unapplied ApplicationFileMode from LayoutRules
+- Walk with the caller's layout rules in GenerateFromCluster
+- Render the root node's bundle in a directory of its own
+- Refuse a directory child whose Namespace is its own path
+- Refuse names that cannot be a Kustomization or a directory
+- Take no generated Source for a Kustomization that applies it
+- Refuse a per-layout tree in GenerateFromLayout
+- Name and order a node's own Flux Kustomization
+- Point the bootstrap at the top directory of the written tree
+- Build the MetalLB BGPPeer at metallb.io/v1beta2
+- Give a list document one reading and keep what it says
+- Give a per-layout Kustomization readiness settings and labels
+- Refuse a duration the Flux API does not take
+- Give a per-layout Kustomization six more settings
+- Refuse an object written without a kind or an apiVersion
+- Write no child health checks on an umbrella that waits
+- Refuse a layout's Kustomization settings where it gets none
+
+### Added
+
+- Name a bundle's Kustomization separately from the bundle
+- Delivery intent on Application
+- Check names at the entry points that skip cluster validation
+- Name a bundle's directory separately from the bundle
+- Export the default per-layout Kustomization name
+
+### Build
+
+- Update module sigs.k8s.io/gateway-api to v1.6.3
+- Update dependency external-secrets/external-secrets to v2.12.0
+- Widen external-secrets supported_range to 2.12
+- Update Go to 1.26.9 and golang.org/x/net to v0.60.0
+- Update module github.com/cloudnative-pg/machinery to v0.6.1
+- Update module golang.org/x/tools to v0.52.0
+- Update module golang.org/x/vuln to v1.9.0
+
+### CI
+
+- Save the tool caches from main only
+- Raise the test job timeout from 20 to 30 minutes
+- Drop the stale GO-2026-6596 allowlist entry
+- Correct the stale pin and source references in the GO-2026-5377 waiver comment
+
+### Changed
+
+- Let the sync root-name check accept a nil config
+- Keep the root-name check clear of the bootstrap path code
+- Remove the root-directory refusal no bundle name can reach
+- Check every application layout's name, drop origin.appDir
+
+### Documentation
+
+- Add layout and Flux naming design (current behaviour and target)
+- Link the layout and Flux naming changes to their issues
+- List the layout and Flux naming page for the doc-examples check
+- Correct current-behaviour claims in the layout and Flux naming page
+- Scope the augmenter opt-out and the FileNaming target to where they apply
+- Scope the leading ./ statement to the Kustomization spec.path
+- Align the target sections with the updated issues
+- Close the remaining gaps between the page and the issues
+- Address the review of the roles and three target sections
+- Qualify two collision rows and the issue references
+- State when a payload Kustomization is kept, not refused
+- Name the layout that hosts its own Kustomization
+- State the flux-operator distribution requirement in the domain model
+- Mark the empty-distribution refusal as shipped on the layout page
+- Qualify three FileNaming statements
+- Widen the FileNaming acceptance exception
+- Mark the FileNaming section as shipped
+- Say which files FileNaming names
+- Restore the FileNaming text of the design page after the rebase
+- State the kept-Kustomization rule in the Flux workflow guide
+- Say where the bootstrap directory and a walked root differ
+- State the two walks whose root is not the bootstrap directory exactly
+- Say what removing the rules field leaves unchanged
+- Correct the SourceRef, hook-group and DependsOn statements
+- Cite code by symbol on the design page and mark what shipped
+- State that merged bundles share a Kustomization and that DependsOn holds Kustomization names
+- Qualify which bundle-less child layouts get a Kustomization
+- Mark the kept-Kustomization checks of the behaviour-bug ticket as shipped
+- List the patch-scope case of the behaviour-bug ticket as a target
+- State that the walked root hosts its own Kustomization and what the patch-scope check counts
+- Say that a Kustomization already in place is kept, not refused
+- Qualify the kept Kustomization by the generated namespace
+- Name the layout rules of the workflow entry points in the domain-model guide
+- Say that GenerateFromCluster also returns generated Sources
+- Bring the behaviour-bug section of the naming design up to main
+- Say which rules made the old GenerateFromCluster paths disagree
+- Name references follow the Kustomization name, not the bundle name
+- Mark the Kustomization name section of the naming page shipped
+- State the GenerateForBundle refusals on the names in effect
+- State the patch-scope gap for a collapsed per-layout directory
+- State the shipped delivery intent in the layout and Flux naming page
+- Say which writer call SameDirectory does not describe
+- Say which stored tree was rewritten for the path move
+- Say where the root bundle's Kustomization sits per placement
+- Scope the unset-field guarantee to its own change
+- Drop the comparison with child nodes' bundles in the guide
+- Say which layouts the root bundle's name is compared with
+- State the directory-child refusal in the Flux workflow guide
+- State the name validation rules as delivered in the naming page
+- Say what a NamedDependsOn entry refers to
+- Split the naming page's row on dotted and over-long names
+- Say in the naming page that a nil DependsOn entry is refused at validation
+- Name the test file of the per-layout Kustomization names in the naming page
+- Describe Bundle.DirName as shipped in the naming page
+- Describe node Kustomizations as shipped in the naming page
+- State how the YAML encoders write a float that holds an integer
+- Bound the float rule at -2^63 and 2^64, both excluded
+- Limit the float rule to a float64 that holds an integer
+- State the WriteManifest change as a rule
+- Name the rules argument of GenerateBootstrap on the stack pages
+- Say the walk and TopDirectory name the same directory
+- Say which parse failures leave the rest of a stream
+- Describe a document that fails to decode, not every document
+- Say in the Flux guide where a node's layout takes its source
+- Name the root bundle's source where the ones below differ
+- Say which streams end a parse at malformed JSON
+- State the JSON-only stream by what the decoder checks
+- Name the MetalLB BGPPeer among the kinds a parse returns typed
+- Point the layout integration refusal at what its error names
+- State per-layout inheritance in the domain model
+- Say that a zero duration is not refused
+- Say in the Flux workflow guide what a per-layout Kustomization now takes
+- Say that only a plain patch is placed by object
+- List a layout's interval among the durations refused
+- Say a patch that is not plain can remove its object
+- State what follows a removal only for a removed object
+- Cite where kyaml removes an annotation set to null
+- Say the local-config annotation drops its object where the merge gives it
+- Cite gateway-api v1.6.3 and date the ledger's citations
+- Say widen --note appends to the notes key
+- Count one separator in the layout name shortening bound
+- State the unreadable-list fallback in the library guide
+- Drop two older copies of the corrected layout claims
+- Qualify why a parent does not list an umbrella child
+- State what an invalid-duration refusal names
+- State the refusal of a layout's settings in the Flux workflow
+- State the trimmed prefix and the hash-only long-name form
+- Qualify the long-name form in the field and test comments
+- Generate the service account example and qualify the unset identity
+- Name the first bundle's unit for merged bundles
+- Name the default layout Kustomization helper
+- Add an example for DefaultLayoutKustomizationName
+
+### Fixed
+
+- Refuse an empty Registry or FluxVersion in flux-operator mode
+- Read raw and empty items of a typed List
+- Read typed List items that carry no object metadata
+- Read a raw typed List item from its raw JSON
+- Read raw List items by element type, through ExtractList
+- Check a kept Kustomization in whatever form it has
+- Name the placement in use in the SourceRef refusal
+- State what FluxPlacement still decides, pass one set of rules in the integration tests
+- Refuse the per-layout placement in the Flux GenerateFromCluster
+- Refuse the per-layout placement before the empty-cluster guard
+- Refuse invalid layout rules in GenerateFromCluster for an empty cluster too
+- Refuse a GenerateForBundle reference to the bundle's own Kustomization name
+- Refuse a GenerateForBundle bundle that depends on itself
+- Refuse a GenerateForBundle health check on the bundle's own Kustomization
+- Keep three name checks true with KustomizationName set
+- Refuse a DependsOn copy that names another Kustomization
+- Compare a DependsOn copy with its bundle on the name in effect
+- Refuse a bundle that is its own umbrella child in GenerateForBundle
+- Delivery intent reaches nested Lists and hand-built ArgoCD layouts
+- Decide what a List is the way kustomize does
+- Read a typed List's items from its written form
+- Refuse a written form that lacks the delivery annotation
+- Match a generated ConfigMap's annotations in the patch-scope check
+- Patch-scope check covers ConfigMaps generated in child layouts
+- Delivery intent reads raw List items as written and reaches a derived Source
+- Refuse a delivery intent in the Flux GenerateFromCluster
+- Keep the root bundle's directory to one owner and one layout
+- Compare the root bundle's directory as the writers do
+- Resolve a rooted path as the writers do in SameDirectory
+- Refuse a root bundle name that resolves to the root node's directory
+- Refuse a root bundle name that resolves to a directory further down
+- Refuse the nested directory child in another case, ask each parent once
+- Check the root name only where a path is built, refuse a NUL byte
+- Check Flux's 63-character name limit in the Flux workflow only
+- Check the bundle names a Kustomization refers to
+- Check an application's name on the tree the walk returns
+- Check a Kustomization's name on the name it gets
+- Refuse a nil DependsOn entry
+- Check the bootstrap source name and per-layout Kustomization names
+- Name an umbrella descendant by its path when a DependsOn entry is nil
+- Pass over only a Source the integration can generate
+- Say the Source rule without the wait it need not cause
+- Write an integer above 2^53 as the integer it is
+- Write an integer above the int64 range as the integer it is
+- Return the top directory without a leading slash
+- Refuse a root node name that is no directory name in TopDirectory
+- Report a panic in a registered type's decoder as a parse error
+- Give a node's layout Kustomization its node's bundle source
+- Let the node's bundle decide where the SourceRefs below differ
+- End a parse at a stream the decoder cannot move past
+- Keep what is version-specific per version
+- Say whose Kustomization a generated one meets and what names it apart
+- Name the field in effect in the Kustomization clash refusal
+- Name an application only for the object the tree still holds
+- Do not panic on an object Go cannot compare
+- Read a list's metadata from every place the list states it
+- Join an item and its list's identity without a size sum
+- Read a List by one rule in the layout checks and the Flux integration
+- Read a typed List's items only where they are what it writes
+- Read an item that is a nil pointer to raw content as empty
+- Word the duration refusal and the List cycle rule as they are
+- Place a bundle's patches by object only while the list is plain
+- Return from the root-build check on a patch kustomize cannot read
+- Say the remedy for a patch of several documents
+- Count a patch's objects, not its documents, in the remedy
+- Keep a per-layout Kustomization's postBuild and patches from its parent's substitution
+- Read only the patches again when checking the parent's substitution
+- Judge a per-layout Kustomization's patches by its own substitution
+- Count any change the parent makes to a per-layout Kustomization's patches
+- Judge the opt-out over every Kustomization that builds a per-layout one
+- Word the two-parent opt-out refusal without attributing fields
+- Check a per-layout Kustomization's annotations with the opt-out in them
+- Count a patch that deletes its object as not plain
+- Count a patch that marks its object local-config as not plain
+- Take a typed object for a List by the kind it is written with
+- Read an Items field apimachinery cannot read as no List
+- Read an object apimachinery's list reading panics on from what it writes
+- Take a local-config object without an apiVersion as before
+- Name a refused List item by the resource it is held in
+- Shorten a layout's composed Kustomization name over 63
+- Read a registered List's items without an apimachinery panic
+- State accurately why a refused layout has no Kustomization
+- State a wrapped error's cause once
+- State an invalid duration's parse error once
+- Shorten a long layout name's default Kustomization name
+- Let a bundle name the service account its Kustomization applies with
+
+### Maintenance
+
+- Update github-actions-trusted
+- Update go-kure/.github digest to 8494b10
+
+### Testing
+
+- Build List test objects in the subtest that uses them
+- Make the refused-integration rollback assertion bite
+- Hold the output without KustomizationName to the stored bytes
+- Compare the health checks GenerateForBundle keeps, not their count
+- Require the Application the dependency copy test reads
+- Pass layout rules to GenerateFromCluster in the name tests
+- Move the ArgoCD cluster-entry intent cases out of delivery_intent_test.go
+- Name the entry points the ArgoCD refusal test covers
+- Name the rule sets the ArgoCD refusal test runs
+- Fail when an expected object is missing from the layout
+- Fail when a check in the delivery tests meets nothing
+- Keep the root bundle's directory named by its Name
+- Read application records where the root bundle is rendered
+- Say which record shapes the collapse used to absorb
+- Pass the layout rules to GenerateFromCluster in the long-name test
+- Fail the over-limit subtest on its own testing.T
+- Expect the name refusal where a name no longer reaches a directory check
+- Pin the patch scope of a generated ConfigMap under per-layout
+- Pin the root-build check by the build and the kept forms on the written tree
+- Build the gotk bootstrap once per input in the path matrix
+- Pin that a recovered decoder panic returns the error alone
+- Register the schemes in the direct decoder test
+- Pin the node's bundle source with every node in one directory
+- Pin malformed JSON that ends the stream after one document
+- Pin two malformed documents in a row behind separator lines
+- Hold each scope source against its own type
+- Say what joining a list's identity keeps of an item's bytes
+- Check the postBuild and patches of a tree the parent leaves as written
+- Compare the whole patch of a tree the parent leaves as written
+- Match the duration parse error by its message
+- State the hash-only case in the long-name test comment
+
 ## [0.2.0-beta.15] - 2026-10-02
 
 ### Added
