@@ -106,7 +106,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `action-pins` | `action-pins` | 2 min | — | Fails if any third-party `uses:` ref is not pinned to a 40-char commit SHA (`go-kure/.github` canonical checker) |
 | `forbidden-terms` | `forbidden-terms` | 2 min | — | Runs the canonical full-tree downstream-reference guard on every workflow event and verifies the vendored release guard and release guide against `go-kure/.github` at a ref derived from the guard action's own pin (go-kure/kure#813) |
 | `test` | `test` | 30 min | changes | Unit tests with race detection and coverage; `-race` compilation takes ~5 min on the in-cluster runner and whole runs now reach ~19-20 min; `go test -timeout 15m` bounds each test binary, and the 30 min job limit leaves headroom for the whole run |
-| `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.8.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational; the accepted-risk entry (`GO-2026-5377`) carries its justification inline in `ci.yml` |
+| `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.9.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational; the accepted-risk entry (`GO-2026-5377`) carries its justification inline in `ci.yml` |
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment |
 | `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, line counts against the PR's own base branch (for example `main` or a `release/vX.Y` branch), breaking change warnings (PR only) |
@@ -118,7 +118,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 
 - Go Version: read from `go.mod` (`go-version-file: go.mod`)
 - Golangci-lint Version: `v2.14.0`
-- govulncheck Version: `v1.8.0` (pinned, cached binary, `-scan symbol` mode)
+- govulncheck Version: `v1.9.0` (pinned, cached binary, `-scan symbol` mode)
 - Coverage Threshold (total): `90%` — the overall figure from `go tool cover -func`
 - Coverage Threshold (per-package): `90%` — checked separately for every package, and a single
   package below it fails the job even when the total passes. Packages whose import path contains
@@ -738,7 +738,7 @@ Tool binaries are also cached to avoid reinstalling on every run:
   (the key used to be the `go.sum` hash, which missed on every dependency bump)
 - `yq`, `lychee` — keyed by the version a "Read `<tool>` version from mise.toml" step reads at run
   time (see [yq and lychee Versions](#yq-and-lychee-versions) below), never a hardcoded literal
-- `govulncheck` — keyed by pinned version (`v1.8.0`)
+- `govulncheck` — keyed by pinned version (`v1.9.0`)
 
 Cache and artifact traffic is routed through an in-cluster falcondev cache server backed by
 Garage S3. Two layers work together:
