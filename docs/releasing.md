@@ -38,7 +38,7 @@ To release the version in `VERSION` on `main`:
    `VERSION` that would follow.
 2. If that is what you want, run it again with **Dry run** unticked.
 3. Wait for the run to go green: about a minute for the checks, up to 30 minutes for CI on the
-   commit, then the time Release / Publish takes (up to 45 minutes).
+   commit, then the time Release / Publish takes (up to 75 minutes).
 
 That is the whole procedure for an ordinary prerelease. The rest of this guide is for moving
 between stages, patch releases on a release branch, and failures.
@@ -176,7 +176,7 @@ Release: release-as-stable (later)
    - checks the tree for downstream references, then pushes the branch and the tag (or `main` and
      the new release branch) in one atomic push.
 4. **Wait for Release / Publish** — only when a tag was pushed. Up to 2 minutes for Publish to
-   start and 45 minutes for it to finish; Release fails if Publish does.
+   start and 75 minutes for it to finish; Release fails if Publish does.
 
 Only one Release run per repository runs at a time. A second run waits for the first; if a third
 is started meanwhile, GitHub cancels the waiting one.
