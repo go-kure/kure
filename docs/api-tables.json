@@ -459,7 +459,7 @@
       "goType": "CiliumBGPAdvertisement",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -470,7 +470,7 @@
       "goType": "CiliumBGPClusterConfig",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -481,7 +481,7 @@
       "goType": "CiliumBGPNodeConfig",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -492,7 +492,7 @@
       "goType": "CiliumBGPNodeConfigOverride",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -503,7 +503,7 @@
       "goType": "CiliumBGPPeerConfig",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -514,7 +514,7 @@
       "goType": "CiliumCIDRGroup",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -525,7 +525,7 @@
       "goType": "CiliumClusterwideEnvoyConfig",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -536,7 +536,7 @@
       "goType": "CiliumClusterwideNetworkPolicy",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -547,7 +547,7 @@
       "goType": "CiliumEgressGatewayPolicy",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -558,7 +558,7 @@
       "goType": "CiliumEndpoint",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -569,7 +569,7 @@
       "goType": "CiliumEnvoyConfig",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -580,7 +580,7 @@
       "goType": "CiliumIdentity",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -591,7 +591,7 @@
       "goType": "CiliumLoadBalancerIPPool",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -602,7 +602,7 @@
       "goType": "CiliumLocalRedirectPolicy",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -613,7 +613,7 @@
       "goType": "CiliumNetworkPolicy",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -624,7 +624,7 @@
       "goType": "CiliumNode",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -635,7 +635,7 @@
       "goType": "CiliumNodeConfig",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.2",
+      "moduleVersion": "v1.20.3",
       "namespaced": true,
       "scopeSource": "marker"
     },
