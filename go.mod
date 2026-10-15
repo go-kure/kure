@@ -31,7 +31,7 @@ replace (
 require (
 	github.com/backube/volsync v0.16.0
 	github.com/cert-manager/cert-manager v1.21.2
-	github.com/cilium/cilium v1.20.2
+	github.com/cilium/cilium v1.20.3
 	github.com/cloudnative-pg/barman-cloud v0.6.0
 	github.com/cloudnative-pg/cloudnative-pg v1.30.1
 	github.com/cloudnative-pg/machinery v0.6.1
@@ -58,7 +58,7 @@ require (
 	golang.org/x/tools v0.52.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
-	helm.sh/helm/v4 v4.3.0
+	helm.sh/helm/v4 v4.3.1
 	k8s.io/api v0.37.1
 	k8s.io/apiextensions-apiserver v0.37.1
 	k8s.io/apimachinery v0.37.1
