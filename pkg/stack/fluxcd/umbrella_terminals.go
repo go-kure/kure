@@ -2,7 +2,6 @@ package fluxcd
 
 import (
 	"encoding/json"
-	"fmt"
 	"path"
 	"slices"
 	"strings"
@@ -415,11 +414,11 @@ func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, er
 			err = t.otherErr
 		}
 		if err != nil {
-			return nil, fmt.Errorf("%w: tree %d (%q): %s", ErrUmbrellaTerminals, i, root.FullRepoPath(), err.Error())
+			return nil, errors.Wrapf(ErrUmbrellaTerminals, "tree %d (%q): %s", i, root.FullRepoPath(), err.Error())
 		}
 		for key := range t.hostOf {
 			if prev, ok := placedIn[key]; ok && prev != i {
-				return nil, fmt.Errorf("%w: Flux Kustomization %q is in tree %d and tree %d: a name must identify one Kustomization across the trees", ErrUmbrellaTerminals, key, prev, i)
+				return nil, errors.Wrapf(ErrUmbrellaTerminals, "Flux Kustomization %q is in tree %d and tree %d: a name must identify one Kustomization across the trees", key, prev, i)
 			}
 			placedIn[key] = i
 		}
@@ -430,7 +429,7 @@ func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, er
 			}
 			terms, err := t.terminals(key)
 			if err != nil {
-				return nil, fmt.Errorf("%w: tree %d (%q): %s", ErrUmbrellaTerminals, i, root.FullRepoPath(), err.Error())
+				return nil, errors.Wrapf(ErrUmbrellaTerminals, "tree %d (%q): %s", i, root.FullRepoPath(), err.Error())
 			}
 			out[key] = terms
 		}
