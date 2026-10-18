@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 
@@ -92,6 +93,9 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 		return nil
 	}
 	t, err := indexKustomizationTree(root, generatedMembers(p.generated))
+	if err == nil {
+		err = t.otherErr
+	}
 	if err != nil {
 		return err
 	}
@@ -132,6 +136,32 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 			return err
 		}
 	}
+	// A health check is not rewritten: one naming an umbrella would be
+	// satisfied once the umbrella applied, before its leaves are Ready. Nor is
+	// a Flux Kustomization this pass did not place (an application's, or the
+	// caller's), its dependsOn included.
+	for _, k := range t.kusts {
+		key := crKey(k.Namespace, k.Name)
+		if t.isUmbrella(key) {
+			continue // R1: written without health checks, or refused above
+		}
+		for _, c := range kustomizationChecks(k) {
+			if terms, umbrella := terminals[c]; umbrella {
+				return errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q (spec.path %q) health-checks %q, which applies Flux Kustomizations: under UmbrellasDoNotWait %q does not wait, so it becomes Ready before what it applies, and a health check is not rewritten; health-check its terminal leaves %q instead", k.Name, k.Spec.Path, c, c, terms)
+			}
+		}
+	}
+	for _, key := range t.otherKeys {
+		spec, err := typedKustomization(t.otherObjs[key])
+		if err != nil {
+			return err
+		}
+		for _, d := range append(slices.Clone(t.otherDeps[key]), kustomizationChecks(spec)...) {
+			if terms, umbrella := terminals[d]; umbrella {
+				return errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q (spec.path %q), which this integration did not place, depends on or health-checks %q, which applies Flux Kustomizations: under UmbrellasDoNotWait %q does not wait, so it becomes Ready before what it applies, and the integration does not rewrite a Kustomization it did not place; name its terminal leaves %q instead", key, spec.Spec.Path, d, d, terms)
+			}
+		}
+	}
 
 	// rewritten lists every dependsOn edge R3 writes onto a terminal leaf, so
 	// that the graph after the rewrite can be checked for a cycle it closes.
@@ -163,12 +193,14 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 				return errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q (spec.path %q) depends on %q, which applies it: written as a dependsOn on %q's terminal leaves, it would depend on itself", k.Name, k.Spec.Path, d.Name, d.Name)
 			}
 			for _, term := range terms {
+				// Checked also when an earlier entry already names the
+				// leaf: that entry was the caller's, judged by no check.
+				rewritten = append(rewritten, edge{from: key, umbrella: target, to: term})
 				if seen[term] {
 					continue
 				}
 				seen[term] = true
 				deps = append(deps, dependencyOn(k.Namespace, term))
-				rewritten = append(rewritten, edge{from: key, umbrella: target, to: term})
 			}
 		}
 		if created == nil {
@@ -181,42 +213,124 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 		}
 	}
 
-	// A terminal leaf can itself depend, directly or through Kustomizations
-	// an application emits, on the dependent: the edge onto the umbrella was
-	// no cycle, since the umbrella holds no wait, but the edge onto the leaf
-	// is one. The reconcile-order check that follows reads members only, so
-	// the cycle is refused here, over every Kustomization of the tree.
+	// A terminal leaf can become Ready only after the dependent applies: it
+	// depends on the dependent, or it is created through it, directly or
+	// through Kustomizations an application emits. The edge onto the umbrella
+	// closed no cycle the reconcile-order check sees, but the edge onto the
+	// leaf closes one. That check reads members only, so the cycle is refused
+	// here, over every Kustomization of the tree.
 	for _, e := range rewritten {
-		if chain := t.dependencyPath(e.to, e.from); chain != nil {
-			return errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q depends on %q, written as a dependsOn on its terminal leaf %q, which depends on %q in turn (%s): the rewrite would close a dependsOn cycle, and no Kustomization of it would become Ready; remove one of these dependencies",
+		chain, err := t.orderPath("ready "+e.to, "apply "+e.from)
+		if err != nil {
+			return err
+		}
+		if chain != nil {
+			return errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q depends on %q, written as a dependsOn on its terminal leaf %q, which cannot become Ready before %q applies (%s): the rewrite would close a cycle, and none of these Kustomizations would become Ready; remove the dependency",
 				e.from, e.umbrella, e.to, e.from, strings.Join(chain, " -> "))
 		}
 	}
 	return nil
 }
 
-// dependencyPath returns a chain of spec.dependsOn edges from the
-// Kustomization with key from to the one with key to, both included, over
-// every Kustomization of the tree (deps), or nil when there is none.
-func (t *kustomizationTree) dependencyPath(from, to string) []string {
-	seen := map[string]bool{}
-	var walk func(k string) []string
-	walk = func(k string) []string {
-		if k == to {
-			return []string{k}
+// orderPath returns a chain from node from to node to, both included, in the
+// graph checkReconcileOrder judges ("ready K" and "apply K" for each
+// Kustomization K), here over every Kustomization of the tree, or nil when
+// there is none. "ready K" needs "apply K", and what K's wait or its
+// Kustomization health checks wait for; "apply K" needs every Kustomization K
+// depends on Ready, and the member whose apply writes K applied (writer). A
+// Kustomization that is no member is read from its own spec, as its author
+// wrote it: its health checks without wait. Its wait is not followed, since
+// its spec.path is resolved in this tree whatever its spec.sourceRef names
+// (go-kure/kure#1062).
+func (t *kustomizationTree) orderPath(from, to string) ([]string, error) {
+	writers := map[string]string{}
+	next := func(n string) ([]string, error) {
+		kind, key, _ := strings.Cut(n, " ")
+		var out []string
+		if kind == "apply" {
+			for _, d := range t.deps(key) {
+				out = append(out, "ready "+d)
+			}
+			w, ok := writers[key]
+			if !ok {
+				w = t.writer(key)
+				writers[key] = w
+			}
+			if w != "" {
+				out = append(out, "apply "+w)
+			}
+			return out, nil
 		}
-		if seen[k] {
-			return nil
-		}
-		seen[k] = true
-		for _, d := range t.deps(k) {
-			if rest := walk(d); rest != nil {
-				return append([]string{k}, rest...)
+		out = append(out, "apply "+key)
+		k := t.byKey[key]
+		var awaited []string
+		switch {
+		case k != nil && k.Spec.Wait:
+			awaited = t.applied(key)
+		case k != nil:
+			awaited = kustomizationChecks(k)
+		case t.otherObjs[key] != nil:
+			spec, err := typedKustomization(t.otherObjs[key])
+			if err != nil {
+				return nil, err
+			}
+			if !spec.Spec.Wait {
+				awaited = kustomizationChecks(spec)
 			}
 		}
-		return nil
+		for _, x := range awaited {
+			out = append(out, "ready "+x)
+		}
+		return out, nil
+	}
+	seen := map[string]bool{}
+	var walk func(n string) ([]string, error)
+	walk = func(n string) ([]string, error) {
+		if n == to {
+			return []string{n}, nil
+		}
+		if seen[n] {
+			return nil, nil
+		}
+		seen[n] = true
+		succ, err := next(n)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range succ {
+			rest, err := walk(m)
+			if err != nil {
+				return nil, err
+			}
+			if rest != nil {
+				return append([]string{n}, rest...), nil
+			}
+		}
+		return nil, nil
 	}
 	return walk(from)
+}
+
+// writer names the member whose apply writes the Flux Kustomization with key,
+// as creator does, but over what a build holds (buildScope), so that one an
+// AppFileSingle application's file holds counts: "" when the Flux bootstrap
+// applies it or no member does. The innermost wins.
+func (t *kustomizationTree) writer(key string) string {
+	host := t.hostOf[key]
+	if host == nil || slices.Contains(buildScope(t.root), host) {
+		return ""
+	}
+	best, bestLen := "", -1
+	for _, k := range t.kusts {
+		other := crKey(k.Namespace, k.Name)
+		if other == key {
+			continue
+		}
+		if l := t.layoutAt[path.Clean(k.Spec.Path)]; l != nil && len(k.Spec.Path) > bestLen && slices.Contains(buildScope(l), host) {
+			best, bestLen = other, len(k.Spec.Path)
+		}
+	}
+	return best
 }
 
 // keptNodeDependencies is a node's Kustomization kept from the tree whose
@@ -232,7 +346,9 @@ type keptNodeDependencies struct {
 }
 
 // check refuses the kept Kustomization unless each missing dependency is an
-// umbrella whose every terminal leaf the kept spec.dependsOn names.
+// umbrella whose every terminal leaf the kept spec.dependsOn names. A missing
+// dependency that is no umbrella is refused as without the setting; one on an
+// umbrella wraps ErrUmbrellaDependency (R3).
 func (c keptNodeDependencies) check(terminals map[string][]string) error {
 	have := map[string]bool{}
 	for _, h := range c.have {
@@ -240,8 +356,11 @@ func (c keptNodeDependencies) check(terminals map[string][]string) error {
 	}
 	for _, m := range c.missing {
 		terms, umbrella := terminals[dependencyKey(c.namespace, m)]
-		if !umbrella || slices.ContainsFunc(terms, func(term string) bool { return !have[term] }) {
+		if !umbrella {
 			return c.refusal
+		}
+		if slices.ContainsFunc(terms, func(term string) bool { return !have[term] }) {
+			return errors.Wrapf(ErrUmbrellaDependency, "%s; %q applies Flux Kustomizations, so under UmbrellasDoNotWait a dependsOn on its terminal leaves %q also satisfies it", c.refusal.Error(), m, terms)
 		}
 	}
 	return nil

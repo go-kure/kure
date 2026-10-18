@@ -865,8 +865,11 @@ integrator := fluxcd.NewLayoutIntegrator(gen)
 - every other Kustomization with `Wait` unset waits;
 - a `dependsOn` on an umbrella names its terminal leaves instead: the
   Kustomizations it applies that none of its other ones depends on, expanded
-  through nested umbrellas. A rewrite that would close a `dependsOn` cycle is
-  refused.
+  through nested umbrellas. A rewrite onto a leaf that cannot become Ready
+  before the dependent applies (one that depends on or health-checks it, or
+  that it creates) is refused, and so is a health check
+  on an umbrella, and a `dependsOn` on one in a Flux Kustomization an
+  application emits: the integration rewrites neither.
 
 The integrated placements apply all three rules. `GenerateForBundle` applies
 the first two to the one Kustomization it returns, and `GenerateFromLayout`,
