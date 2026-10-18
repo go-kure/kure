@@ -275,6 +275,8 @@ jobs:
     # requires, so the binary and its cache key change only when that requirement
     # does. The key used to be the go.sum hash, which missed on every dependency
     # bump while the install took @latest whatever go.sum said (go-kure/kure#969).
+    # The key also carries the Go version: a binary built by the previous
+    # toolchain must not be restored after a Go bump.
     - name: Read goimports version from go.mod
       id: goimports-version
       run: |
@@ -290,7 +292,7 @@ jobs:
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/go/bin/goimports
-        key: goimports-${{ steps.goimports-version.outputs.version }}
+        key: goimports-${{ steps.goimports-version.outputs.version }}-go${{ steps.go-version.outputs.version }}
 
     - name: Install goimports
       if: steps.goimports-cache.outputs.cache-hit != 'true'
@@ -712,19 +714,22 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gomod-
 
-    - name: Restore govulncheck binary from cache
-      id: govulncheck-cache
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-      with:
-        path: ~/go/bin/govulncheck
-        key: govulncheck-${{ env.GOVULNCHECK_VERSION }}
-
     - name: Read Go version from go.mod
       id: go-version
       run: |
         GO_VER=$(grep '^go ' go.mod | awk '{print $2}')
         echo "version=$GO_VER" >> $GITHUB_OUTPUT
         echo "Using Go version: $GO_VER"
+
+    # Keyed by the Go version too: govulncheck loads packages with the go/types
+    # it was built with, so a binary from the previous toolchain cannot load a
+    # module whose go directive is newer and the scan fails.
+    - name: Restore govulncheck binary from cache
+      id: govulncheck-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/go/bin/govulncheck
+        key: govulncheck-${{ env.GOVULNCHECK_VERSION }}-go${{ steps.go-version.outputs.version }}
 
     # Source-aware Go build cache. govulncheck's scan compiles the module, so a warm cache
     # helps here too (this job had no build cache before). Distinct prefix.
