@@ -38,6 +38,38 @@ type ResourceGenerator struct {
 	// use that bundle's own Prune and ignore this field. nil emits
 	// prune: false — see pruneValue.
 	Prune *bool
+	// UmbrellasDoNotWait, when true, makes readiness flow through dependsOn
+	// only. kustomize-controller runs a Kustomization's health wait inside
+	// one of its --concurrent workers, so umbrellas that wait for child
+	// Kustomizations can hold every worker while no child has one to
+	// reconcile with; a dependsOn that is not met yet holds none. With it:
+	//
+	//   - R1: an umbrella, a Kustomization whose build applies a Flux
+	//     Kustomization, is written without wait and without health checks,
+	//     and is Ready once applied. An explicit Wait true or HealthChecks
+	//     that reach one are refused (ErrUmbrellaWait).
+	//   - R2: an unset wait on any other Kustomization (a leaf) resolves to
+	//     true; an explicit false is kept.
+	//   - R3: a dependsOn on an umbrella is written as one on its terminal
+	//     leaves (UmbrellaTerminals), so the dependent still starts after
+	//     every last stage of the umbrella is Ready (ErrUmbrellaDependency).
+	//
+	// R1 and R3 need the integrator's placement: only
+	// LayoutIntegrator with FluxIntegratedPerLayout or FluxIntegratedPerBundle
+	// applies all three, GenerateForBundle applies R1 and R2 to the one
+	// bundle, and the other entry points refuse the setting. The zero value
+	// leaves every output as it is without it.
+	UmbrellasDoNotWait bool
+}
+
+// waitFor resolves a bundle's or a layout's tri-state wait input: waitValue,
+// except that an unset one is true under UmbrellasDoNotWait (R2). An umbrella
+// generated with it is reset by R1.
+func (g *ResourceGenerator) waitFor(wait *bool) bool {
+	if wait == nil && g.UmbrellasDoNotWait {
+		return true
+	}
+	return waitValue(wait)
 }
 
 // NewResourceGenerator creates a FluxCD resource generator seeded with the
@@ -141,6 +173,11 @@ func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *s
 // tree's origins it generated from as well: nil when there was nothing to
 // index (a nil root, cluster or root node).
 func (g *ResourceGenerator) generateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, *layout.OriginIndex, error) {
+	if g.UmbrellasDoNotWait {
+		// The list says nothing about which Kustomization's build applies
+		// which: there is no umbrella to read for R1 or R3.
+		return nil, nil, errors.Wrapf(ErrUmbrellaWait, "GenerateFromLayout, GenerateFromCluster and FluxPlacement %q do not support UmbrellasDoNotWait: they place no Kustomization, so which one applies which is not known; use LayoutIntegrator.CreateLayoutWithResources with FluxIntegratedPerLayout or FluxIntegratedPerBundle", string(layout.FluxSeparate))
+	}
 	if l := perLayoutCarrier(root); l != nil {
 		return nil, nil, errors.Errorf("GenerateFromLayout does not support FluxPlacement %q, which layout %q carries: the Kustomizations that apply a per-layout tree's child directories are placed only by the integrator; use LayoutIntegrator.CreateLayoutWithResources or IntegrateWithLayout", l.FluxPlacement, l.FullRepoPath())
 	}
@@ -340,6 +377,12 @@ func (g *ResourceGenerator) mergeIntoUnit(unit, other *kustv1.Kustomization, fir
 		{"serviceAccountName", unit.Spec.ServiceAccountName, other.Spec.ServiceAccountName},
 	}
 	for _, s := range same {
+		// Under UmbrellasDoNotWait an unset wait resolves by what the unit
+		// turns out to be, which the placement knows once every Kustomization
+		// sits where it stays: unitWaitConflict compares the waits then.
+		if s.field == "wait" && g.UmbrellasDoNotWait {
+			continue
+		}
 		if !reflect.DeepEqual(s.a, s.b) {
 			return unitConflict(first, b, path, s.field, "one Kustomization holds one value")
 		}
@@ -434,6 +477,24 @@ func unionStrings(a, b map[string]string) (map[string]string, error) {
 		out[k] = v
 	}
 	return out, nil
+}
+
+// unitWaitConflict is mergeIntoUnit's wait check under UmbrellasDoNotWait, for
+// a unit that applies no Flux Kustomization (a leaf): the bundles rendering
+// directory path must resolve to one wait (waitFor), so an unset Wait, true
+// there, conflicts with an explicit false. An umbrella unit is not checked:
+// R1 writes it without a wait whatever its bundles leave unset or false.
+func (g *ResourceGenerator) unitWaitConflict(bundles []*stack.Bundle, path string) error {
+	if len(bundles) < 2 {
+		return nil
+	}
+	first := bundles[0]
+	for _, b := range bundles[1:] {
+		if b != nil && g.waitFor(b.Wait) != g.waitFor(first.Wait) {
+			return unitConflict(first, b, path, "wait", "one Kustomization holds one value; under UmbrellasDoNotWait an unset Wait is true on a Kustomization that applies no Flux Kustomization")
+		}
+	}
+	return nil
 }
 
 // unitConflict is the refusal for bundles merged into one directory whose
@@ -572,6 +633,17 @@ func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]c
 	if err != nil {
 		return nil, err
 	}
+	// Under UmbrellasDoNotWait a bundle with children is an umbrella: its
+	// build is the caller's, but the children are the ones it names (R1).
+	// There are no other Kustomizations here whose dependsOn R3 would rewrite.
+	if g.UmbrellasDoNotWait && isUmbrellaBundle(b) {
+		if err := refuseUmbrellaWaitInputs(fmt.Sprintf("Flux Kustomization %q of bundle %q", b.UnitName(), b.GetPath()), bundleWaitInputs(b)); err != nil {
+			return nil, err
+		}
+		k := kustomization.(*kustv1.Kustomization)
+		k.Spec.Wait = false
+		k.Spec.HealthChecks = nil
+	}
 	resources := []client.Object{kustomization}
 
 	if b.SourceRef != nil {
@@ -653,7 +725,7 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string,
 			Interval: metav1.Duration{Duration: interval},
 			Path:     path,
 			Prune:    pruneValue(b.Prune),
-			Wait:     waitValue(b.Wait),
+			Wait:     g.waitFor(b.Wait),
 		},
 	}
 
@@ -717,7 +789,8 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string,
 	// umbrella's own build applies the children's Kustomizations, its wait
 	// covers them; where it does not, Wait unset or false is what makes the
 	// entries take effect. Each child's name is checked either way: the
-	// child's own Kustomization is written with it.
+	// child's own Kustomization is written with it. Under UmbrellasDoNotWait
+	// none is written either: an umbrella does not wait (R1).
 	if len(b.Children) > 0 {
 		b.InitializeUmbrella()
 		for _, child := range b.Children {
@@ -729,7 +802,7 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string,
 					return nil, err
 				}
 			}
-			if kust.Spec.Wait {
+			if kust.Spec.Wait || g.UmbrellasDoNotWait {
 				continue
 			}
 			kust.Spec.HealthChecks = append(kust.Spec.HealthChecks, metaapi.NamespacedObjectKindReference{

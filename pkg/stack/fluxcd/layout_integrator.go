@@ -310,6 +310,16 @@ type integratedPlacement struct {
 	// patches on them once every Kustomization is placed.
 	patchBuilds map[*stack.Bundle]*bundlePatchBuilds
 	patchOrder  []*stack.Bundle
+	// created maps the namespace/name of every Kustomization this pass added
+	// to a layout (not one it kept) to that object, and waitInputs to what
+	// its inputs ask of its readiness: umbrellasDoNotWait rewrites the one
+	// and refuses by the other.
+	created    map[string]*kustv1.Kustomization
+	waitInputs map[string]waitInputs
+	// keptNodeDeps holds, under UmbrellasDoNotWait, the kept node
+	// Kustomizations checkKeptNodeCR found lacking a dependency, for
+	// umbrellasDoNotWait to judge against the terminal sets.
+	keptNodeDeps []keptNodeDependencies
 }
 
 // hostedObject is an object and the layout whose Resources hold it (directly
@@ -399,6 +409,8 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		derivable:   derivableSources(ml, li.Generator.DefaultNamespace),
 		delivery:    delivery,
 		patchBuilds: map[*stack.Bundle]*bundlePatchBuilds{},
+		created:     map[string]*kustv1.Kustomization{},
+		waitInputs:  map[string]waitInputs{},
 	}
 	existing, err := indexExistingKustomizations(ml, nil)
 	if err != nil {
@@ -439,6 +451,11 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		return err
 	}
 	if err := p.checkRootBuildKeepsHostedSources(ml); err != nil {
+		return err
+	}
+	// Under UmbrellasDoNotWait an umbrella stops waiting and a dependsOn on
+	// it names its terminal leaves; the reconcile-order check judges that.
+	if err := p.umbrellasDoNotWait(ml); err != nil {
 		return err
 	}
 	if err := checkPlacedReconcileOrder(ml, p.generated); err != nil {
@@ -504,86 +521,11 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) erro
 // separate placement every CR sits in flux-system, which the root lists, so
 // GenerateFromLayout's own check is the whole story.
 func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string]bool) error {
-	var kusts []*kustv1.Kustomization
-	hostOf := map[string]*layout.ManifestLayout{}
-	layoutAt := map[string]*layout.ManifestLayout{}
-	var index func(l *layout.ManifestLayout) error
-	index = func(l *layout.ManifestLayout) error {
-		layoutAt[path.Clean(l.FullRepoPath())] = l
-		own, err := generatedKustomizations(l, generated)
-		if err != nil {
-			return err
-		}
-		for _, k := range own {
-			kusts = append(kusts, k)
-			hostOf[crKey(k.Namespace, k.Name)] = l
-		}
-		for _, child := range l.Children {
-			if child != nil {
-				if err := index(child); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}
-	if err := index(root); err != nil {
+	t, err := indexKustomizationTree(root, generatedMembers(generated))
+	if err != nil {
 		return err
 	}
-
-	reach := func(l *layout.ManifestLayout, into map[*layout.ManifestLayout]bool) {
-		for _, b := range buildDirectories(l) {
-			into[b] = true
-		}
-	}
-	fromRoot := map[*layout.ManifestLayout]bool{}
-	reach(root, fromRoot)
-	reached := map[string]map[*layout.ManifestLayout]bool{}
-	creator := func(key string) string {
-		host := hostOf[key]
-		if fromRoot[host] {
-			return ""
-		}
-		best, bestLen := "", -1
-		for _, k := range kusts {
-			other := crKey(k.Namespace, k.Name)
-			l := layoutAt[path.Clean(k.Spec.Path)]
-			if other == key || l == nil {
-				continue
-			}
-			if reached[other] == nil {
-				reached[other] = map[*layout.ManifestLayout]bool{}
-				reach(l, reached[other])
-			}
-			if reached[other][host] && len(k.Spec.Path) > bestLen {
-				best, bestLen = other, len(k.Spec.Path)
-			}
-		}
-		return best
-	}
-	// applied lists the generated CRs a Kustomization's apply writes: those
-	// its directory's references reach. With wait it waits for all of them,
-	// whoever else (the bootstrap) also creates them.
-	applied := func(key string) []string {
-		k := set(kusts)[key]
-		l := layoutAt[path.Clean(k.Spec.Path)]
-		if l == nil {
-			return nil
-		}
-		if reached[key] == nil {
-			reached[key] = map[*layout.ManifestLayout]bool{}
-			reach(l, reached[key])
-		}
-		var out []string
-		for _, other := range kusts {
-			ok := crKey(other.Namespace, other.Name)
-			if ok != key && reached[key][hostOf[ok]] {
-				out = append(out, ok)
-			}
-		}
-		return out
-	}
-	return checkReconcileOrder(kusts, creator, applied)
+	return checkReconcileOrder(t.kusts, t.creator, t.applied)
 }
 
 // buildDirectories returns, in pre-order, the layouts whose directories a
@@ -1093,6 +1035,15 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 			}
 			p.recordUnitBuild(host, l, bundles, unit)
 		}
+		if len(objs) > 0 {
+			if unit, ok := objs[0].(*kustv1.Kustomization); ok {
+				in := bundleWaitInputs(bundles...)
+				if p.gen.UmbrellasDoNotWait {
+					in.leafConflict = p.gen.unitWaitConflict(bundles, l.FullRepoPath())
+				}
+				p.waitInputs[crKey(unit.Namespace, unit.Name)] = in
+			}
+		}
 	}
 
 	if p.perLayout {
@@ -1141,6 +1092,7 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 			if err := p.add(l, []client.Object{cr}, owner, p.layoutNamed(child)); err != nil {
 				return err
 			}
+			p.waitInputs[crKey(cr.Namespace, cr.Name)] = p.layoutWaitInputs(child)
 			p.recordLayoutBuild(l, child, name, cr)
 		}
 	}
@@ -1450,6 +1402,7 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 				return errors.Errorf("layout %q already has Flux Kustomization %q with spec.path %q%s; this integration generates one of that name for %s, with spec.path %q in layout %q: %s",
 					e.host.FullRepoPath(), k.Name, e.path, heldBy(p.ix, key, e.host), by.owner, k.Spec.Path, host.FullRepoPath(), nameApart(by.field, by.owner))
 			}
+			p.created[key] = k
 		} else if key, ok := sourceKey(obj); ok {
 			// One identity, one object: an identical Source (a repeated
 			// integration, or two bundles sharing a SourceRef) is hosted
@@ -1587,25 +1540,37 @@ func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 		if r == nil {
 			continue
 		}
-		objs, err := built.Objects(r)
+		objs, err := objectItems(r)
 		if err != nil {
 			return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
 		}
-		for _, obj := range objs {
-			if o, ok := obj.Object.(client.Object); ok {
-				out = append(out, o)
-				continue
-			}
-			raw, err := json.Marshal(obj.Object)
-			if err != nil {
-				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-			}
-			u := &unstructured.Unstructured{}
-			if err := json.Unmarshal(raw, &u.Object); err != nil {
-				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-			}
-			out = append(out, u)
+		out = append(out, objs...)
+	}
+	return out, nil
+}
+
+// objectItems returns the objects a kustomize build holds for one object r, as
+// resourceItems reads them: a List's items, any other object itself.
+func objectItems(r client.Object) ([]client.Object, error) {
+	objs, err := built.Objects(r)
+	if err != nil {
+		return nil, err
+	}
+	var out []client.Object
+	for _, obj := range objs {
+		if o, ok := obj.Object.(client.Object); ok {
+			out = append(out, o)
+			continue
 		}
+		raw, err := json.Marshal(obj.Object)
+		if err != nil {
+			return nil, err
+		}
+		u := &unstructured.Unstructured{}
+		if err := json.Unmarshal(raw, &u.Object); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
 	}
 	return out, nil
 }
@@ -2017,8 +1982,18 @@ func (p *integratedPlacement) checkKeptNodeCR(host, child *layout.ManifestLayout
 	if len(missing) == 0 {
 		return nil
 	}
-	return errors.Errorf("layout %q already has Flux Kustomization %q for node %q with spec.dependsOn %q, which lacks %q that the node's DependsOn and NamedDependsOn ask for: the kept Kustomization would not wait for them; remove it, or add them to it",
+	refusal := errors.Errorf("layout %q already has Flux Kustomization %q for node %q with spec.dependsOn %q, which lacks %q that the node's DependsOn and NamedDependsOn ask for: the kept Kustomization would not wait for them; remove it, or add them to it",
 		host.FullRepoPath(), name, p.nodes.path(nodes[0]), kept.dependsOn, missing)
+	if p.gen.UmbrellasDoNotWait {
+		// An earlier integration with the setting wrote a dependsOn on an
+		// umbrella as one on its terminal leaves (R3): umbrellasDoNotWait
+		// accepts that form once the terminal sets are known.
+		p.keptNodeDeps = append(p.keptNodeDeps, keptNodeDependencies{
+			namespace: p.gen.DefaultNamespace, have: kept.dependsOn, missing: missing, refusal: refusal,
+		})
+		return nil
+	}
+	return refusal
 }
 
 // layoutsNamed returns the application and augmenter layouts among layouts

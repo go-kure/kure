@@ -111,7 +111,7 @@ func (p *integratedPlacement) layoutSettings(l *layout.ManifestLayout) (layoutSe
 		prune:              pruneValue(firstSet(l.Prune, inherit.Prune, p.gen.Prune)),
 		force:              isTrue(firstSet(l.Force, inherit.Force)),
 		suspend:            isTrue(firstSet(l.Suspend, inherit.Suspend)),
-		wait:               waitValue(firstSet(l.Wait, inherit.Wait)),
+		wait:               p.gen.waitFor(firstSet(l.Wait, inherit.Wait)),
 		postBuild:          fluxPostBuild(inherit.PostBuild),
 		serviceAccountName: inherit.ServiceAccountName,
 	}

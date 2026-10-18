@@ -433,7 +433,8 @@ fmt.Println(kust.Name, kust.Spec.Path, kust.Spec.DependsOn[0].Name)
 It prints `apps-shop clusters/prod/shop apps-db`: the Kustomization and its `dependsOn` entry carry
 the names set on the bundles, and `spec.path` is the directory, which did not move. Everything
 that refers to a bundle's Kustomization follows the name in effect (`Bundle.UnitName()`):
-`dependsOn` entries, an umbrella's health checks, and the name a merged directory takes from its
+`dependsOn` entries, an umbrella's health checks (it has none under
+[`UmbrellasDoNotWait`](#umbrellas-that-do-not-wait)), and the name a merged directory takes from its
 first bundle. A `NamedDependsOn` entry names a Kustomization, so it reaches a bundle that sets the
 field by that value, not by the bundle's name.
 
@@ -841,6 +842,38 @@ objects the umbrella applies; `FluxSeparate` does not, so leave `Wait` unset
 there for the umbrella to wait for them. With `GenerateForBundle` alone it
 depends on whether the caller's build at the given path applies the children's
 Kustomization objects.
+
+### Umbrellas that do not wait
+
+A Kustomization that waits, on `wait` or on health checks, holds one of
+kustomize-controller's workers (4 by default) until what it waits for is
+Ready, while an unmet `dependsOn` only requeues. A tree with as many waiting
+umbrellas as workers can stall with every worker waiting on a child that
+never gets one. Setting `ResourceGenerator.UmbrellasDoNotWait` moves readiness
+onto `dependsOn` instead:
+
+<!-- doc-example:excerpt setting the field on a generator; the rules are pinned by pkg/stack/fluxcd/umbrellas_do_not_wait_test.go -->
+```go
+gen := fluxcd.NewResourceGenerator()
+gen.UmbrellasDoNotWait = true
+integrator := fluxcd.NewLayoutIntegrator(gen)
+```
+
+- every Kustomization that applies a Flux Kustomization (an umbrella) gets no
+  `wait` and no health checks, and an explicit `Wait: true` or `HealthChecks`
+  on one is refused;
+- every other Kustomization with `Wait` unset waits;
+- a `dependsOn` on an umbrella names its terminal leaves instead: the
+  Kustomizations it applies that none of its other ones depends on, expanded
+  through nested umbrellas. A rewrite that would close a `dependsOn` cycle is
+  refused.
+
+The integrated placements apply all three rules. `GenerateForBundle` applies
+the first two to the one Kustomization it returns, and `GenerateFromLayout`,
+`GenerateFromCluster` and `FluxSeparate` refuse the setting.
+`fluxcd.UmbrellaTerminals` returns each umbrella's terminal leaves, for a
+dependency written from outside the tree. The full rules and refusals are in
+the [Flux Engine reference](/api-reference/flux-engine/#with-umbrellasdonotwait).
 
 Umbrella children must be **standalone** — a bundle cannot simultaneously be
 the `Bundle` of a `stack.Node` and appear in another bundle's `Children`.
