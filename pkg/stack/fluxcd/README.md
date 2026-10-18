@@ -310,7 +310,7 @@ The bundles merged into one directory combine as follows:
 | Bundle setting | In the shared Kustomization |
 |---|---|
 | `SourceRef`, `Interval`, `Timeout`, `RetryInterval`, `Prune`, `Wait`, `Force`, `Suspend`, `PostBuild`, `ServiceAccountName` | must be the same for every merged bundle (unset compares as the default; an omitted `SourceRef` namespace is the generator's `DefaultNamespace`; without a `URL` only its kind, name and namespace are compared, the fields a Kustomization carries), else an error naming the setting and the bundles |
-| `HealthChecks`, umbrella health checks | combined, each listed once; a check on a Flux Kustomization names the unit that applies that bundle, and one on the unit itself is dropped |
+| `HealthChecks`, umbrella health checks | combined, each listed once; a check on a Flux Kustomization names the unit that applies that bundle, and one on the unit itself is dropped; under `UmbrellasDoNotWait` a unit that applies a Flux Kustomization has none (see [With `UmbrellasDoNotWait`](#with-umbrellasdonotwait)) |
 | `Labels`, `Annotations` | combined; one key with two values is an error |
 | `Patches` | combined, but only when every patch has a `Target` that selects none of the other merged bundles' objects (see [Patches in a shared directory](#patches-in-a-shared-directory)) |
 | `DependsOn` | mapped to the Kustomization that applies each dependency; dependencies between the merged bundles are dropped |
@@ -333,7 +333,9 @@ directory still hosts the CRs of its umbrella children and, under `FluxIntegrate
 the layouts inside it, as every bundle's directory does. A per-layout Kustomization with `wait`
 (its layout's, or the one it inherits: see [Per-layout settings](#per-layout-settings)) waits for
 the CRs its directory hosts like any other, so a layout that depends on the application layout
-above it closes a cycle once that one has `wait`. ArgoCD
+above it closes a cycle once that one has `wait`. Under `UmbrellasDoNotWait` no Kustomization
+that applies another one waits, and a `dependsOn` on it names its terminal leaves, so these
+cycles through a wait are gone; the check runs on the rewritten specs. ArgoCD
 Applications get the unit rule but not this check: only a `DependsOn` cycle between units is
 refused there. Give bundles directories of their own (`NodeGrouping` or
 `BundleGrouping` `GroupByName`) when they need different settings.
@@ -520,6 +522,10 @@ The two fields resolve differently because their upstream tags differ:
   who never asked for it.
 - `KustomizationSpec.Wait` is `+optional` with `omitempty`, so unset and `false` produce the same
   YAML: the key is absent and Flux's own default, `false`, applies.
+
+The one exception is `ResourceGenerator.UmbrellasDoNotWait`: under it an unset `Wait` on a
+Kustomization that applies no Flux Kustomization resolves to `true`, and an umbrella gets no
+`wait` (see [With `UmbrellasDoNotWait`](#with-umbrellasdonotwait)).
 
 Sources (`GitRepository`, `OCIRepository`) and the `FluxInstance` are built the way the
 builder contract prescribes: the `pkg/kubernetes/fluxcd` `Create<Kind>` constructor returns a
@@ -1128,6 +1134,61 @@ resources) instead of the child subdirectory. The child subdirectory still exist
 `kustomization.yaml` plus workload YAML files — but **no** Flux CR files, so
 Flux does not double-apply the child's resources.
 
+### With `UmbrellasDoNotWait`
+
+`ResourceGenerator.UmbrellasDoNotWait`, off by default, keeps every umbrella from holding a
+kustomize-controller worker. A Kustomization that waits (with `wait`, or on health checks) holds
+one of the controller's workers (`--concurrent`, 4 by default) until what it waits for is Ready.
+A `dependsOn` that is not met requeues instead and holds none. A tree with as many waiting
+umbrellas as workers, each waiting for a child that needs a worker to reconcile, stalls: every
+worker waits and no child is applied. With the setting, readiness flows through `dependsOn`
+instead of nested waits:
+
+- **R1: an umbrella does not wait.** An umbrella here is any Kustomization the call generates
+  whose build applies a Flux Kustomization: a bundle with `Children`, a directory that hosts the
+  CRs of child nodes or, under `FluxIntegratedPerLayout`, of the layouts inside it, and one whose
+  objects include a Flux Kustomization, an `AppFileSingle` application's file written into its
+  directory among them. It gets no `wait` and no `healthChecks`, the automatic
+  entries for its children included. An explicit `Wait` true that reaches it (the bundle's, the
+  layout's, or the one a layout inherits from the bundle that holds its application) and
+  `HealthChecks` on it are refused with `ErrUmbrellaWait`, naming the Kustomization and where the
+  input comes from: the setting exists to remove that wait, so it is not dropped without a word.
+- **R2: a leaf waits.** An unset `Wait` on any other Kustomization resolves to `true`, so it is
+  Ready only once its objects are. An explicit `false` is kept. Bundles merged into one directory
+  are compared on the resolved value once the pass knows what their shared Kustomization is: an
+  unset `Wait` and an explicit `false` conflict on a leaf, and not on an umbrella, which R1 writes
+  without a wait either way.
+- **R3: a dependency on an umbrella is one on its terminal leaves.** A `dependsOn` entry that
+  names an umbrella is replaced by entries naming its terminal leaves: the Kustomizations it
+  applies that no other one it applies depends on, an umbrella among them replaced by its own
+  terminal leaves in turn, each listed once. A Flux Kustomization an application emits is a leaf
+  by its own name, also when it is an item of a `List`. A Kustomization inside the umbrella's
+  subtree that depends on it is refused with `ErrUmbrellaDependency`, since it would depend on
+  itself, and so is an umbrella without a terminal leaf. So is a rewrite that closes a
+  `dependsOn` cycle: a terminal leaf that depends, directly or through Kustomizations
+  applications emit, on the dependent. The edge onto the umbrella was no cycle, since the
+  umbrella does not wait; the edge onto the leaf is one, and the error names the chain.
+
+The rules apply to the Kustomizations the call generates. One kept from an earlier integration
+is not rewritten; it is refused when it breaks R1 (with `ErrUmbrellaWait`, for `wait` or any
+`healthChecks`) or R3 (with `ErrUmbrellaDependency`), since it was placed without the setting.
+A tree the setting wrote integrates again unchanged: a node's kept Kustomization whose
+`dependsOn` names the terminal leaves of an umbrella the node depends on satisfies that
+dependency. The reconcile-order check (see "One Kustomization per directory") runs on the
+rewritten specs.
+
+| Entry point | With the setting |
+|---|---|
+| `IntegrateWithLayout`, `CreateLayoutWithResources` under `FluxIntegratedPerBundle` or `FluxIntegratedPerLayout` | R1, R2 and R3 |
+| `GenerateForBundle` | R1 and R2 on the Kustomization it returns, a bundle with `Children` being the umbrella. It sees no other Kustomization, so R3 is the caller's |
+| `GenerateFromLayout`, `GenerateFromCluster`, and `FluxSeparate` placement | refused with `ErrUmbrellaWait` |
+
+`UmbrellaTerminals(roots ...)` returns the terminal leaves of each umbrella in one or more
+integrated trees, keyed `namespace/name`, so that a caller can point a dependency from outside a
+tree (a `NamedDependsOn` entry) at the leaves instead of the umbrella. Kustomizations an
+application emits, directly or as `List` items, are leaves there. A Kustomization that two trees both hold is refused with
+`ErrUmbrellaTerminals`.
+
 ## Non-Bundle Child Layout CRs
 
 In `FluxIntegratedPerLayout` mode every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle gets a `Kustomization` CR in its parent's `Resources`, with `spec.path` set to `child.FullRepoPath()`. (A child that renders a bundle already has that bundle's CR there.) The CR's name is checked with `stack.ValidateKustomizationName` where the CR is created: one that is not a DNS-1123 subdomain of at most 63 characters is refused, and the error names what to set to change it (see [Per-layout name rule](#per-layout-name-rule)). This covers:
@@ -1264,7 +1325,9 @@ Each `Target` here is for a patch of one object; a patch of several is first wri
 - **A change of content only.** When a new revision of the source changes the files in a layout's directory and leaves the layout's Kustomization object as it was, the Kustomization above finds that object unchanged, with its generation observed and `Ready` true from the revision before. The health check does not look at the revision an object last applied, so the Kustomization above can be Ready for the new revision before the one below has applied it.
 - **Nested timeouts.** A health check runs under its own Kustomization's timeout (`spec.timeout`, or the interval less 30 seconds without one) and has to outlast everything below it. One timeout inherited on every level gives the innermost Kustomization as long as the outermost, which then fails at the moment the innermost would. Set a shorter `Timeout` on the layouts below: the layout fields are how the layouts get a shorter timeout than their bundle. Flux raises any timeout under 30 seconds to 30 seconds, so a shorter value gives no margin below that: the timeout above has to exceed the timeout in effect below, which is never less than 30 seconds.
 
-**Wait and a dependency on the layout above.** A layout that lists the application layout above it in `DependsOn` (a hook group that applies after the application's own objects) cannot be combined with `wait` on that application layout's Kustomization: it would wait for the hook group's Kustomization, which waits for it. With `Bundle.Wait` set both now have `wait`, and the reconcile-order check refuses the tree, naming the chain, where it rendered before. Set `Wait` to a pointer to `false` on the application's layout; the layouts below keep the bundle's.
+Under `ResourceGenerator.UmbrellasDoNotWait` the chain is not nested waits: no Kustomization that applies another one waits, each leaf does, and a `dependsOn` on an umbrella waits on its terminal leaves instead (see [With `UmbrellasDoNotWait`](#with-umbrellasdonotwait)).
+
+**Wait and a dependency on the layout above.** A layout that lists the application layout above it in `DependsOn` (a hook group that applies after the application's own objects) cannot be combined with `wait` on that application layout's Kustomization: it would wait for the hook group's Kustomization, which waits for it. With `Bundle.Wait` set both now have `wait`, and the reconcile-order check refuses the tree, naming the chain, where it rendered before. Set `Wait` to a pointer to `false` on the application's layout; the layouts below keep the bundle's. Under `UmbrellasDoNotWait` the application layout's Kustomization is an umbrella and the hook group is inside its subtree, so that dependency is refused with `ErrUmbrellaDependency`.
 
 ### Node Kustomizations
 
