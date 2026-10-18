@@ -735,10 +735,13 @@ which uses the branch or tag selected for it.
 Tool binaries are also cached to avoid reinstalling on every run:
 - `goimports` — keyed by the version of `golang.org/x/tools` that `go.mod` requires, which a
   "Read goimports version from go.mod" step reads at run time; that version is the one installed
-  (the key used to be the `go.sum` hash, which missed on every dependency bump)
+  (the key used to be the `go.sum` hash, which missed on every dependency bump), plus the Go
+  version from `go.mod`
 - `yq`, `lychee` — keyed by the version a "Read `<tool>` version from mise.toml" step reads at run
   time (see [yq and lychee Versions](#yq-and-lychee-versions) below), never a hardcoded literal
-- `govulncheck` — keyed by pinned version (`v1.9.0`)
+- `govulncheck` — keyed by pinned version (`v1.9.0`) plus the Go version from `go.mod`. A
+  govulncheck built by Go 1.26 cannot load a module whose `go` directive says 1.27, so a key
+  without the Go version restored a stale binary after the Go bump and failed the scan
 
 Cache and artifact traffic is routed through an in-cluster falcondev cache server backed by
 Garage S3. Two layers work together:
