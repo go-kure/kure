@@ -1,6 +1,6 @@
 module github.com/go-kure/kure
 
-go 1.26.9
+go 1.27.2
 
 // Replace directives: pin all k8s.io packages to the same patch release.
 //
@@ -38,7 +38,7 @@ require (
 	github.com/cloudnative-pg/plugin-barman-cloud v0.15.1
 	github.com/controlplaneio-fluxcd/flux-operator v0.58.1
 	github.com/envoyproxy/go-control-plane/envoy v1.40.0
-	github.com/external-secrets/external-secrets/apis v0.0.0-20261006075617-9d17906e8e4c
+	github.com/external-secrets/external-secrets/apis v0.0.0-20261016092056-a82d14894fbc
 	github.com/fluxcd/flux2/v2 v2.9.5
 	github.com/fluxcd/helm-controller/api v1.6.4
 	github.com/fluxcd/image-automation-controller/api v1.2.5
