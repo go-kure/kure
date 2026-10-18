@@ -16,6 +16,26 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-beta.17] - 2026-10-18
+
+### Added
+
+- Let umbrellas hold no controller worker
+
+### Build
+
+- Update dependency hugo to v0.168.0
+- Update go-patch
+
+### Fixed
+
+- Refuse umbrella rewrites onto leaves the dependent creates
+- Build UmbrellaTerminals errors with the errors package
+
+### Maintenance
+
+- Update go-kure/.github digest to 7aa603a
+
 ## [0.2.0-beta.16] - 2026-10-11
 
 ### Breaking
