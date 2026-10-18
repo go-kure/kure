@@ -3,7 +3,7 @@
 package versions
 
 // GoVersion is the go.current field of versions.yaml.
-const GoVersion string = "1.26.9" // doc-gate:trivial
+const GoVersion string = "1.27.2" // doc-gate:trivial
 
 var infrastructure = []Dependency{
 	{
@@ -81,9 +81,9 @@ var infrastructure = []Dependency{
 	{
 		Name:           "external-secrets",
 		GoModule:       "github.com/external-secrets/external-secrets/apis",
-		SupportedRange: "2.9 - 2.12",
+		SupportedRange: "2.9 - 2.13",
 		Min:            "2.9",
-		Max:            "2.12",
+		Max:            "2.13",
 		VersionBasis:   "semver",
 		FloorModule:    "",
 	},
