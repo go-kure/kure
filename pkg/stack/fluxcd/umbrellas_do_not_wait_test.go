@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	kustv1beta2 "github.com/fluxcd/kustomize-controller/api/v1beta2"
 	metaapi "github.com/fluxcd/pkg/apis/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -362,12 +363,95 @@ func TestUmbrellasDoNotWait_Refusals(t *testing.T) {
 		}
 		// web depends on platform, whose terminal leaf hand-written depends on
 		// web: no cycle before the rewrite, web -> hand-written -> web after.
-		cases["a rewrite closing a cycle through an application's Kustomization/"+string(p)] = refusal{
+		// The Kustomizations an application emits are read the same in every
+		// form it can hand one over in.
+		for _, form := range kustomizationForms {
+			cases["a rewrite closing a cycle through an application's Kustomization/"+form+"/"+string(p)] = refusal{
+				run: func() error {
+					app := formApp("platform-app", handWritten("hand-written", "web"), form)
+					_, err := integrateNoWait(noWaitCluster(srBundle("platform", app), true), nodeOnly, p)
+					return err
+				},
+				is: fluxstack.ErrUmbrellaDependency, want: `apply flux-system/hand-written -> ready flux-system/web`,
+			}
+		}
+		// a depends on b, which a creates: refused without the setting. b is an
+		// umbrella over the hand-written its application emits, so with the
+		// setting the dependsOn becomes one on hand-written, which exists only
+		// once b, and so a, has applied.
+		cases["a rewrite onto a leaf the dependent creates/"+string(p)] = refusal{
 			run: func() error {
-				_, err := integrateNoWait(noWaitCluster(srBundle("platform", fluxKustomizationApp("platform-app", "hand-written", "web")), true), nodeOnly, p)
+				rules := propertyGroupings["nodeOnly"]
+				if _, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(createdLeafCluster(), withPlacement(rules, p)); err == nil || !strings.Contains(err.Error(), "never") {
+					return fmt.Errorf("without the setting: got %w, want a reconcile-order refusal", err)
+				}
+				_, err := integrateNoWait(createdLeafCluster(), rules, p)
 				return err
 			},
-			is: fluxstack.ErrUmbrellaDependency, want: `flux-system/hand-written -> flux-system/web`,
+			is: fluxstack.ErrUmbrellaDependency, want: `apply flux-system/hand-written -> apply flux-system/b -> apply flux-system/a`,
+		}
+		for _, form := range kustomizationForms {
+			// web depends on platform, whose terminal leaf hand-written
+			// health-checks web, without wait: it becomes Ready only once web is.
+			cases["a rewrite onto an application's Kustomization health-checking the dependent/"+form+"/"+string(p)] = refusal{
+				run: func() error {
+					_, err := integrateNoWait(noWaitCluster(srBundle("platform", checkingApp("web", form)), true), nodeOnly, p)
+					return err
+				},
+				is: fluxstack.ErrUmbrellaDependency, want: `ready flux-system/hand-written -> ready flux-system/web`,
+			}
+			// hand-written's dependsOn on umbrella mid is its author's, not
+			// rewritten: it would be satisfied before x is Ready.
+			cases["an application's Kustomization depending on an umbrella/"+form+"/"+string(p)] = refusal{
+				run: func() error {
+					_, err := integrateNoWait(noWaitCluster(appCoveredUmbrella(form), true), nodeOnly, p)
+					return err
+				},
+				is: fluxstack.ErrUmbrellaDependency, want: `depends on or health-checks "flux-system/mid"`,
+			}
+		}
+		// web depends on platform, whose terminal leaf a, without wait,
+		// health-checks web: a becomes Ready only once web is.
+		cases["a rewrite onto a generated leaf health-checking the dependent/"+string(p)] = refusal{
+			run: func() error {
+				a := srBundle("a", cmApp("a-app"))
+				a.Wait = boolPtr(false)
+				a.HealthChecks = []stack.HealthCheck{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "web"}}
+				_, err := integrateNoWait(noWaitCluster(umbrellaOf("platform", a), true), nodeOnly, p)
+				return err
+			},
+			is: fluxstack.ErrUmbrellaDependency, want: `ready flux-system/a -> ready flux-system/web`,
+		}
+		// A health check is not rewritten: one on umbrella platform would pass
+		// once platform applied, before a is Ready.
+		cases["a generated leaf health-checking an umbrella/"+string(p)] = refusal{
+			run: func() error {
+				c := noWaitCluster(umbrellaOf("platform", srBundle("a", cmApp("a-app"))), false)
+				web := c.Node.Children[1].Bundle
+				web.Wait = boolPtr(false)
+				web.HealthChecks = []stack.HealthCheck{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "platform"}}
+				_, err := integrateNoWait(c, nodeOnly, p)
+				return err
+			},
+			is: fluxstack.ErrUmbrellaDependency, want: `health-checks "flux-system/platform"`,
+		}
+		cases["a kept leaf health-checking an umbrella/"+string(p)] = refusal{
+			run: func() error {
+				return integrateAgain(noWaitCluster(umbrellaOf("platform", srBundle("a", cmApp("a-app"))), false), p, noWaitGenerator(), func(ml *layout.ManifestLayout) {
+					findKept(ml, "web").Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "platform"}}
+				})
+			},
+			is: fluxstack.ErrUmbrellaDependency, want: `health-checks "flux-system/platform"`,
+		}
+		for _, form := range kustomizationForms {
+			cases["an application's Kustomization health-checking an umbrella/"+form+"/"+string(p)] = refusal{
+				run: func() error {
+					u := umbrellaOf("platform", srBundle("a", cmApp("a-app")), srBundle("b", checkingApp("platform", form)))
+					_, err := integrateNoWait(noWaitCluster(u, false), nodeOnly, p)
+					return err
+				},
+				is: fluxstack.ErrUmbrellaDependency, want: `depends on or health-checks "flux-system/platform"`,
+			}
 		}
 		cases["a kept umbrella with a health check on another kind/"+string(p)] = refusal{
 			run: func() error {
@@ -445,6 +529,170 @@ func TestUmbrellasDoNotWait_Refusals(t *testing.T) {
 			}
 		})
 	}
+}
+
+// checkingApp is an application emitting the Flux Kustomization hand-written,
+// in form, without wait and with a Kustomization health check on checked.
+func checkingApp(checked, form string) *stack.Application {
+	k := handWritten("hand-written")
+	k.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: checked}}
+	return formApp("platform-app", k, form)
+}
+
+// appCoveredUmbrella is platform -> {c -> mid -> x, and the hand-written its
+// application emits in form, depending on mid}.
+func appCoveredUmbrella(form string) *stack.Bundle {
+	u := umbrellaOf("platform", umbrellaOf("c", umbrellaOf("mid", srBundle("x", cmApp("x-app")))))
+	u.Applications = []*stack.Application{formApp("platform-app", handWritten("hand-written", "mid"), form)}
+	return u
+}
+
+// kustomizationForms are the forms in which an application can hand over a
+// Flux Kustomization: the typed v1 object, its own type embedding one, the
+// typed v1beta2 object and an unstructured one. Each is read as the same
+// Kustomization.
+var kustomizationForms = []string{"v1", "embedding", "v1beta2", "unstructured"}
+
+// embeddedKustomization is an application's own type embedding a Flux
+// Kustomization: it serializes as the one it embeds.
+type embeddedKustomization struct {
+	kustv1.Kustomization
+}
+
+// formApp is an application whose one object is k in form, one of
+// kustomizationForms.
+func formApp(app string, k *kustv1.Kustomization, form string) *stack.Application {
+	var o client.Object
+	switch form {
+	case "v1":
+		o = k
+	case "embedding":
+		o = &embeddedKustomization{Kustomization: *k}
+	case "v1beta2", "unstructured":
+		raw, err := json.Marshal(k)
+		if err != nil {
+			panic(err)
+		}
+		if form == "v1beta2" {
+			b := &kustv1beta2.Kustomization{}
+			if err := json.Unmarshal(raw, b); err != nil {
+				panic(err)
+			}
+			b.APIVersion = kustv1beta2.GroupVersion.String()
+			o = b
+		} else {
+			u := &unstructured.Unstructured{}
+			if err := json.Unmarshal(raw, &u.Object); err != nil {
+				panic(err)
+			}
+			o = u
+		}
+	default:
+		panic("unknown form " + form)
+	}
+	return stack.NewApplication(app, "default", &fakeAppConfig{objs: []*client.Object{&o}})
+}
+
+// An application's Kustomization with wait, on another repository, whose
+// spec.path names the directory that holds web's Kustomization here: its
+// build is that repository's, so the rewrite onto it closes no cycle and is
+// accepted (go-kure/kure#1062).
+func TestUmbrellasDoNotWait_ForeignWaitIsNoCycle(t *testing.T) {
+	for _, placement := range integratedPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			off, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(srBundle("platform", cmApp("platform-app")), true), withPlacement(nodeOnly, placement))
+			if err != nil {
+				t.Fatalf("without the setting: %v", err)
+			}
+			k := handWritten("hand-written")
+			k.Spec.Wait, k.Spec.Path = true, path.Dir(path.Clean(findKept(off, "web").Spec.Path))
+			k.Spec.SourceRef.Name = "unrelated-repository"
+			var o client.Object = k
+			app := stack.NewApplication("platform-app", "default", &fakeAppConfig{objs: []*client.Object{&o}})
+			ml, err := integrateNoWait(noWaitCluster(srBundle("platform", app), true), nodeOnly, placement)
+			if err != nil {
+				t.Fatalf("CreateLayoutWithResources: %v", err)
+			}
+			assertDependsOn(t, ml, "web", "hand-written")
+		})
+	}
+}
+
+// A dependsOn of an application's Kustomization is not rewritten, so one on
+// an umbrella awaits none of its leaves: hand-written, depending on mid, does
+// not stand for c, and platform's terminal leaves are x and hand-written. One
+// on a sibling leaf is read: with platform -> {a, hand-written depending on
+// a}, a is no terminal leaf. Both hold in every form an application can hand
+// a Kustomization over in.
+func TestUmbrellaTerminals_ApplicationDependenciesAwaitNoLeaf(t *testing.T) {
+	siblingDependent := func(form string) *stack.Bundle {
+		u := umbrellaOf("platform", srBundle("a", cmApp("a-app")))
+		u.Applications = []*stack.Application{formApp("platform-app", handWritten("hand-written", "a"), form)}
+		return u
+	}
+	for _, form := range kustomizationForms {
+		for _, placement := range integratedPlacements {
+			t.Run(form+"/"+string(placement), func(t *testing.T) {
+				for _, tc := range []struct {
+					bundle *stack.Bundle
+					want   []string
+				}{
+					{appCoveredUmbrella(form), []string{"flux-system/x", "flux-system/hand-written"}},
+					{siblingDependent(form), []string{"flux-system/hand-written"}},
+				} {
+					ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(tc.bundle, true), withPlacement(nodeOnly, placement))
+					if err != nil {
+						t.Fatalf("CreateLayoutWithResources: %v", err)
+					}
+					terms, err := fluxstack.UmbrellaTerminals(ml)
+					if err != nil {
+						t.Fatalf("UmbrellaTerminals: %v", err)
+					}
+					if got := terms["flux-system/platform"]; !slices.Equal(got, tc.want) {
+						t.Errorf("terminals of platform = %v, want %v", got, tc.want)
+					}
+				}
+			})
+		}
+	}
+}
+
+// An application's Flux Kustomization that cannot be read in typed form (a
+// spec.dependsOn that is no list) integrates as before without the setting,
+// and is refused with it, whose checks read its spec.
+func TestUmbrellasDoNotWait_UnreadableApplicationKustomization(t *testing.T) {
+	unreadable := func() *stack.Bundle {
+		u := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": kustv1.GroupVersion.String(),
+			"kind":       "Kustomization",
+			"metadata":   map[string]any{"name": "hand-written", "namespace": "flux-system"},
+			"spec":       map[string]any{"path": "./elsewhere", "dependsOn": "web"},
+		}}
+		var o client.Object = u
+		return srBundle("platform", stack.NewApplication("platform-app", "default", &fakeAppConfig{objs: []*client.Object{&o}}))
+	}
+	for _, placement := range integratedPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			if _, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(unreadable(), true), withPlacement(nodeOnly, placement)); err != nil {
+				t.Fatalf("without the setting: %v", err)
+			}
+			if _, err := integrateNoWait(noWaitCluster(unreadable(), true), nodeOnly, placement); err == nil || !strings.Contains(err.Error(), `read Flux Kustomization "flux-system/hand-written" in typed form`) {
+				t.Fatalf("with the setting: got %v, want the typed-form read error", err)
+			}
+		})
+	}
+}
+
+// createdLeafCluster is r -> a -> b: a depends on b, whose application emits
+// the Flux Kustomization hand-written, and a's apply creates b's CR.
+func createdLeafCluster() *stack.Cluster {
+	b := &stack.Node{Name: "b", Bundle: srBundle("b", fluxKustomizationApp("b-app", "hand-written"))}
+	a := &stack.Node{Name: "a", Bundle: srBundle("a", cmApp("a-app")), Children: []*stack.Node{b}}
+	a.Bundle.DependsOn = []*stack.Bundle{b.Bundle}
+	r := &stack.Node{Name: "r", Children: []*stack.Node{a}}
+	b.SetParent(a)
+	a.SetParent(r)
+	return &stack.Cluster{Name: "demo", Node: r}
 }
 
 func withPlacement(rules layout.LayoutRules, placement layout.FluxPlacement) layout.LayoutRules {
@@ -877,6 +1125,87 @@ func TestUmbrellasDoNotWait_MergedBundleWaits(t *testing.T) {
 	}
 }
 
+// A rewrite onto a leaf that exists only once the dependent has applied is
+// refused however the leaf is reached: an application written as one file,
+// or a leaf the dependent also names itself. Each tree is refused without the
+// setting too, as a dependency on what the dependent creates.
+func TestUmbrellasDoNotWait_CreationDeadlocks(t *testing.T) {
+	cases := map[string]func(t *testing.T, placement layout.FluxPlacement) (*stack.Cluster, *layout.ManifestLayout, layout.LayoutRules){
+		"an application written as one file": func(t *testing.T, placement layout.FluxPlacement) (*stack.Cluster, *layout.ManifestLayout, layout.LayoutRules) {
+			c := createdLeafCluster()
+			rules := withPlacement(propertyGroupings["nodeOnly"], placement)
+			rules.ApplicationGrouping = layout.GroupByName
+			return c, singleFile(t, c, rules, "b-app"), rules
+		},
+		"a leaf the dependent also names": func(t *testing.T, placement layout.FluxPlacement) (*stack.Cluster, *layout.ManifestLayout, layout.LayoutRules) {
+			c := createdLeafCluster()
+			a := c.Node.Children[0].Bundle
+			a.DependsOn, a.NamedDependsOn = nil, []string{"hand-written", "b"}
+			rules := withPlacement(propertyGroupings["nodeOnly"], placement)
+			ml, err := layout.WalkCluster(c, rules)
+			if err != nil {
+				t.Fatalf("WalkCluster: %v", err)
+			}
+			return c, ml, rules
+		},
+	}
+	for name, build := range cases {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				c, ml, rules := build(t, placement)
+				if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules); err == nil || !strings.Contains(err.Error(), "never") {
+					t.Fatalf("without the setting: got %v, want a reconcile-order refusal", err)
+				}
+				c, ml, rules = build(t, placement)
+				err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules)
+				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "-> apply flux-system/a") {
+					t.Fatalf("got %v, want ErrUmbrellaDependency naming the chain to a's apply", err)
+				}
+			})
+		}
+	}
+}
+
+// A dependsOn that names an umbrella and a leaf of another one awaits what R3
+// writes it as: s, depending on x and umbrella b, awaits x and y, every
+// terminal leaf of its sibling c. So platform's terminal leaf is s, before the
+// rewrite and on the tree it wrote.
+func TestUmbrellasDoNotWait_MixedNestedDependencies(t *testing.T) {
+	cluster := func() *stack.Cluster {
+		x := srBundle("x", cmApp("x-app"))
+		b := umbrellaOf("b", srBundle("y", cmApp("y-app")))
+		s := srBundle("s", cmApp("s-app"))
+		s.DependsOn = []*stack.Bundle{x, b}
+		return noWaitCluster(umbrellaOf("platform", umbrellaOf("c", x, b), s), true)
+	}
+	for _, placement := range integratedPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			c := cluster()
+			rules := withPlacement(nodeOnly, placement)
+			ml, err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).CreateLayoutWithResources(c, rules)
+			if err != nil {
+				t.Fatalf("CreateLayoutWithResources: %v", err)
+			}
+			assertDependsOn(t, ml, "web", "s")
+			assertDependsOn(t, ml, "s", "x", "y")
+			terms, err := fluxstack.UmbrellaTerminals(ml)
+			if err != nil {
+				t.Fatalf("UmbrellaTerminals: %v", err)
+			}
+			if got := terms["flux-system/platform"]; !slices.Equal(got, []string{"flux-system/s"}) {
+				t.Errorf("terminals of platform on the written tree = %v, want [flux-system/s]", got)
+			}
+			before := describeKustomizations(ml)
+			if err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules); err != nil {
+				t.Fatalf("second IntegrateWithLayout: %v", err)
+			}
+			if after := describeKustomizations(ml); after != before {
+				t.Errorf("after a second integration %s, want %s", after, before)
+			}
+		})
+	}
+}
+
 // A second integration of a tree the setting wrote keeps every Kustomization
 // as it is: a node's dependsOn the first wrote onto an umbrella's terminal
 // leaves still satisfies what the node asks for. One it lacks is refused.
@@ -910,8 +1239,46 @@ func TestUmbrellasDoNotWait_IntegrationIsRepeatable(t *testing.T) {
 		}
 		findKept(ml, "apps").Spec.DependsOn = nil
 		err = fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules)
-		if err == nil || !strings.Contains(err.Error(), "which lacks") {
-			t.Fatalf("got %v, want the kept node Kustomization refused for the dependency it lacks", err)
+		if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "which lacks") {
+			t.Fatalf("got %v, want the kept node Kustomization refused for the dependency it lacks, wrapping ErrUmbrellaDependency", err)
+		}
+	})
+	// platform applies umbrellas mid (over x) and z (over z-leaf), and z
+	// depends on mid: platform's terminal leaf is z-leaf. The first
+	// integration writes apps -> z-leaf and z -> x, and on that tree
+	// platform's terminal leaf is still z-leaf.
+	t.Run("node dependsOn on an umbrella whose children depended on an umbrella", func(t *testing.T) {
+		c := func() *stack.Cluster {
+			mid := &stack.Node{Name: "mid", KustomizationName: "mid", Children: []*stack.Node{{Name: "x", Bundle: srBundle("x", cmApp("x-app"))}}}
+			z := &stack.Node{Name: "z", KustomizationName: "z", DependsOn: []*stack.Node{mid}, Children: []*stack.Node{
+				{Name: "z-leaf", Bundle: srBundle("z-leaf", cmApp("z-app"))},
+			}}
+			platform := &stack.Node{Name: "platform", KustomizationName: "platform", Children: []*stack.Node{mid, z}}
+			apps := &stack.Node{Name: "apps", KustomizationName: "apps", DependsOn: []*stack.Node{platform}, Children: []*stack.Node{
+				{Name: "shop", Bundle: srBundle("shop", cmApp("shop-app"))},
+			}}
+			return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "prod", Children: []*stack.Node{platform, apps}}}
+		}()
+		rules := perLayoutNodeOnly()
+		ml, err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).CreateLayoutWithResources(c, rules)
+		if err != nil {
+			t.Fatalf("CreateLayoutWithResources: %v", err)
+		}
+		assertDependsOn(t, ml, "apps", "z-leaf")
+		assertDependsOn(t, ml, "z", "x")
+		terms, err := fluxstack.UmbrellaTerminals(ml)
+		if err != nil {
+			t.Fatalf("UmbrellaTerminals: %v", err)
+		}
+		if got := terms["flux-system/platform"]; !slices.Equal(got, []string{"flux-system/z-leaf"}) {
+			t.Errorf("terminals of platform on the written tree = %v, want [flux-system/z-leaf]", got)
+		}
+		before := describeKustomizations(ml)
+		if err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules); err != nil {
+			t.Fatalf("second IntegrateWithLayout: %v", err)
+		}
+		if after := describeKustomizations(ml); after != before {
+			t.Errorf("after a second integration %s, want %s", after, before)
 		}
 	})
 	for _, placement := range integratedPlacements {

@@ -58,7 +58,13 @@ type ResourceGenerator struct {
 	// LayoutIntegrator with FluxIntegratedPerLayout or FluxIntegratedPerBundle
 	// applies all three, GenerateForBundle applies R1 and R2 to the one
 	// bundle, and the other entry points refuse the setting. The zero value
-	// leaves every output as it is without it.
+	// leaves every output as it is without it. Not refused: a Flux
+	// Kustomization an application emits on the tree's own source whose wait
+	// awaits the Kustomization a rewrite makes depend on it, a deadlock
+	// (go-kure/kure#1062). Health checks are read as local Ready edges,
+	// without spec.kubeConfig or spec.healthCheckExprs, so a Kustomization
+	// health-checking another cluster or with its own health predicate may
+	// be refused (go-kure/kure#1062).
 	UmbrellasDoNotWait bool
 }
 

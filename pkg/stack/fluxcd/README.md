@@ -1161,20 +1161,41 @@ instead of nested waits:
 - **R3: a dependency on an umbrella is one on its terminal leaves.** A `dependsOn` entry that
   names an umbrella is replaced by entries naming its terminal leaves: the Kustomizations it
   applies that no other one it applies depends on, an umbrella among them replaced by its own
-  terminal leaves in turn, each listed once. A Flux Kustomization an application emits is a leaf
-  by its own name, also when it is an item of a `List`. A Kustomization inside the umbrella's
+  terminal leaves in turn, each listed once. Dependencies are compared as R3 writes them: a
+  generated Kustomization's `dependsOn` entry naming an umbrella of the subtree stands for its
+  terminal leaves, and a Kustomization whose entries together await every terminal leaf of an
+  umbrella depends on it, so a tree the setting wrote has the same terminal leaves. A Flux
+  Kustomization an application emits is a leaf by its own name, also when it is an item of a
+  `List`; its `dependsOn` is not rewritten, so an entry there naming an umbrella awaits none of
+  its leaves. Its spec is read in the same way whatever form the application hands it over in
+  (the typed object, its own type embedding one, another API version, or unstructured); one
+  that cannot be read in typed form is refused with the read error under the setting. A
+  Kustomization inside the umbrella's
   subtree that depends on it is refused with `ErrUmbrellaDependency`, since it would depend on
-  itself, and so is an umbrella without a terminal leaf. So is a rewrite that closes a
-  `dependsOn` cycle: a terminal leaf that depends, directly or through Kustomizations
-  applications emit, on the dependent. The edge onto the umbrella was no cycle, since the
-  umbrella does not wait; the edge onto the leaf is one, and the error names the chain.
+  itself, and so is an umbrella without a terminal leaf. So is a rewrite onto a terminal leaf
+  that cannot become Ready before the dependent applies: one that depends on the dependent, or
+  that health-checks it without wait (an application's Kustomization read as its author wrote
+  it), or that the dependent's apply creates, directly or through Kustomizations applications
+  emit (an `AppFileSingle` application's file included), also when the dependent already names
+  the leaf itself. The edge onto the umbrella closed no cycle the reconcile-order check sees;
+  the edge onto the leaf closes one, and the error names the chain. A health check is not
+  rewritten, nor is a Flux Kustomization the integration did not place (an application's, or the
+  caller's): a Kustomization health check naming an umbrella, on any Kustomization but an
+  umbrella, and such a Kustomization's `dependsOn` naming one are refused with
+  `ErrUmbrellaDependency` too, since the umbrella does not wait and so is Ready before what it
+  applies. The error names the terminal leaves to name instead. Not refused: a Kustomization an
+  application emits on the tree's own source whose `wait` awaits the dependent, since the check
+  does not follow such a wait ([go-kure/kure#1062](https://github.com/go-kure/kure/issues/1062)).
+  Health checks are read as local Ready edges, without `spec.kubeConfig` or
+  `spec.healthCheckExprs`, so a Kustomization that health-checks another cluster or carries its
+  own health predicate may be refused (same issue).
 
 The rules apply to the Kustomizations the call generates. One kept from an earlier integration
 is not rewritten; it is refused when it breaks R1 (with `ErrUmbrellaWait`, for `wait` or any
 `healthChecks`) or R3 (with `ErrUmbrellaDependency`), since it was placed without the setting.
 A tree the setting wrote integrates again unchanged: a node's kept Kustomization whose
 `dependsOn` names the terminal leaves of an umbrella the node depends on satisfies that
-dependency. The reconcile-order check (see "One Kustomization per directory") runs on the
+dependency, and one that names neither is refused with `ErrUmbrellaDependency`. The reconcile-order check (see "One Kustomization per directory") runs on the
 rewritten specs.
 
 | Entry point | With the setting |

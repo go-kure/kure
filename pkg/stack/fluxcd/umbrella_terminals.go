@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -50,9 +51,19 @@ type kustomizationTree struct {
 	hostOf   map[string]*layout.ManifestLayout
 	layoutAt map[string]*layout.ManifestLayout
 	// others lists, per layout, the keys of the Flux Kustomizations it hosts
-	// that are not members, and otherDeps their spec.dependsOn as keys.
+	// that are not members, and otherDeps their spec.dependsOn as keys, read
+	// in typed form (typedKustomization) as their health checks are, so that
+	// a type embedding one, or another API version, counts the same.
+	// otherKeys lists them in depth-first layout order, and otherObjs holds
+	// each object. otherErr is the error of the first that cannot be read in
+	// typed form: UmbrellasDoNotWait and UmbrellaTerminals, which read
+	// otherDeps, refuse the tree with it; the reconcile-order check reads
+	// none and ignores it.
 	others    map[*layout.ManifestLayout][]string
 	otherDeps map[string][]string
+	otherKeys []string
+	otherObjs map[string]client.Object
+	otherErr  error
 	reached   map[string]map[*layout.ManifestLayout]bool
 	fromRoot  map[*layout.ManifestLayout]bool
 }
@@ -80,6 +91,7 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 		layoutAt:  map[string]*layout.ManifestLayout{},
 		others:    map[*layout.ManifestLayout][]string{},
 		otherDeps: map[string][]string{},
+		otherObjs: map[string]client.Object{},
 		reached:   map[string]map[*layout.ManifestLayout]bool{},
 		fromRoot:  map[*layout.ManifestLayout]bool{},
 	}
@@ -109,9 +121,22 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 				continue
 			}
 			t.others[l] = append(t.others[l], key)
+			t.otherKeys = append(t.otherKeys, key)
+			t.otherObjs[key] = obj
 			t.hostOf[key] = l
-			for _, dep := range fluxKustomizationDependsOn(obj) {
-				t.otherDeps[key] = append(t.otherDeps[key], dependencyKey(obj.GetNamespace(), dep))
+			spec, err := typedKustomization(obj)
+			if err != nil {
+				if t.otherErr == nil {
+					t.otherErr = err
+				}
+				continue
+			}
+			for _, d := range spec.Spec.DependsOn {
+				ns := d.Namespace
+				if ns == "" {
+					ns = obj.GetNamespace()
+				}
+				t.otherDeps[key] = append(t.otherDeps[key], crKey(ns, d.Name))
 			}
 		}
 		for _, child := range l.Children {
@@ -246,8 +271,14 @@ func (t *kustomizationTree) deps(key string) []string {
 
 // terminals returns the terminal leaves of umbrella u: for each Kustomization
 // C that u applies and that no other Kustomization u applies depends on,
-// terminals(C) when C is an umbrella, else C itself. A Flux Kustomization that
-// is no member is a leaf: its own subtree is its author's. Entries are
+// terminals(C) when C is an umbrella, else C itself. Dependencies are compared
+// in the form R3 writes them: C, and each Kustomization of u's subtree a
+// member's dependsOn names, stand for their terminal leaves when they are
+// umbrellas, and C is depended on when another one's dependsOn awaits all of
+// C's. So a tree the setting already rewrote has the same sets. A dependsOn
+// of a Kustomization that is no member is not rewritten, so its entries on
+// umbrellas await nothing. A Flux Kustomization
+// that is no member is a leaf: its own subtree is its author's. Entries are
 // deduplicated, in the order of u's children. An empty set is an error that
 // wraps ErrUmbrellaDependency.
 func (t *kustomizationTree) terminals(u string) ([]string, error) {
@@ -261,25 +292,49 @@ func (t *kustomizationTree) terminalsFrom(u string, visiting map[string]bool) ([
 	visiting[u] = true
 	defer delete(visiting, u)
 	children := t.children(u)
-	dependedOn := map[string]bool{}
-	for _, c := range children {
-		for _, d := range t.deps(c) {
-			if d != c && slices.Contains(children, d) {
-				dependedOn[d] = true
+	// leaves is what R3 writes a dependsOn on k as: the terminal leaves of an
+	// umbrella of u's subtree, else k.
+	memo := map[string][]string{}
+	leaves := func(k string) ([]string, error) {
+		if k == u || !t.isUmbrella(k) || !t.within(u, k) {
+			return []string{k}, nil
+		}
+		if l, ok := memo[k]; ok {
+			return l, nil
+		}
+		l, err := t.terminalsFrom(k, visiting)
+		if err != nil {
+			return nil, err
+		}
+		memo[k] = l
+		return l, nil
+	}
+	awaited := map[string][]string{}
+	for _, s := range children {
+		for _, d := range t.deps(s) {
+			if d == s {
+				continue
 			}
+			if t.byKey[s] == nil && t.isUmbrella(d) {
+				// Not rewritten: its author's dependsOn on an umbrella,
+				// which may not wait, proves no leaf of it Ready.
+				continue
+			}
+			l, err := leaves(d)
+			if err != nil {
+				return nil, err
+			}
+			awaited[s] = append(awaited[s], l...)
 		}
 	}
 	var out []string
 	for _, c := range children {
-		if dependedOn[c] {
-			continue
+		expanded, err := leaves(c)
+		if err != nil {
+			return nil, err
 		}
-		expanded := []string{c}
-		if t.isUmbrella(c) {
-			var err error
-			if expanded, err = t.terminalsFrom(c, visiting); err != nil {
-				return nil, err
-			}
+		if slices.ContainsFunc(children, func(s string) bool { return s != c && dependsOnAll(awaited[s], expanded) }) {
+			continue
 		}
 		for _, e := range expanded {
 			if !slices.Contains(out, e) {
@@ -291,6 +346,11 @@ func (t *kustomizationTree) terminalsFrom(u string, visiting map[string]bool) ([
 		return nil, errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q has no terminal leaf: every Kustomization it applies is depended on by another one it applies", u)
 	}
 	return out, nil
+}
+
+// dependsOnAll reports whether deps holds every key of keys.
+func dependsOnAll(deps, keys []string) bool {
+	return !slices.ContainsFunc(keys, func(k string) bool { return !slices.Contains(deps, k) })
 }
 
 // within reports whether the Kustomization with key d is umbrella u itself or
@@ -351,6 +411,9 @@ func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, er
 			continue
 		}
 		t, err := indexKustomizationTree(root, nonApplicationMembers(root))
+		if err == nil {
+			err = t.otherErr
+		}
 		if err != nil {
 			return nil, fmt.Errorf("%w: tree %d (%q): %s", ErrUmbrellaTerminals, i, root.FullRepoPath(), err.Error())
 		}
@@ -423,19 +486,44 @@ func nonApplicationMembers(root *layout.ManifestLayout) memberFilter {
 			if _, ok := fluxKustomizationPath(obj); !ok || emitted[crKey(obj.GetNamespace(), obj.GetName())] {
 				continue
 			}
-			k, ok := obj.(*kustv1.Kustomization)
-			if !ok {
-				raw, err := json.Marshal(obj)
-				if err == nil {
-					k = &kustv1.Kustomization{}
-					err = json.Unmarshal(raw, k)
-				}
-				if err != nil {
-					return nil, errors.Wrapf(err, "layout %q: read Flux Kustomization %q in typed form", l.FullRepoPath(), crKey(obj.GetNamespace(), obj.GetName()))
-				}
+			k, err := typedKustomization(obj)
+			if err != nil {
+				return nil, errors.Wrapf(err, "layout %q", l.FullRepoPath())
 			}
 			out = append(out, k)
 		}
 		return out, nil
 	}
+}
+
+// typedKustomization returns the Flux Kustomization obj in typed form.
+func typedKustomization(obj client.Object) (*kustv1.Kustomization, error) {
+	if k, ok := obj.(*kustv1.Kustomization); ok {
+		return k, nil
+	}
+	raw, err := json.Marshal(obj)
+	if err == nil {
+		k := &kustv1.Kustomization{}
+		if err = json.Unmarshal(raw, k); err == nil {
+			return k, nil
+		}
+	}
+	return nil, errors.Wrapf(err, "read Flux Kustomization %q in typed form", crKey(obj.GetNamespace(), obj.GetName()))
+}
+
+// kustomizationChecks returns the keys of the Flux Kustomizations k's
+// spec.healthChecks name; an entry without namespace is in k's.
+func kustomizationChecks(k *kustv1.Kustomization) []string {
+	var out []string
+	for _, hc := range k.Spec.HealthChecks {
+		if hc.Kind != "Kustomization" || !strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") {
+			continue
+		}
+		ns := hc.Namespace
+		if ns == "" {
+			ns = k.Namespace
+		}
+		out = append(out, crKey(ns, hc.Name))
+	}
+	return out
 }
