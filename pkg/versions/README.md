@@ -80,6 +80,12 @@ kure's builders let callers assign upstream fields directly, so an object the ol
 accepted can be rejected by the newer one. When that happens the widening's note in
 `docs/compatibility.md` says so; check it before upgrading across a range boundary.
 
+A widening can also move `GoVersion`. The release kure widens to may raise the `go`
+directive of the dependency's own Go module, and kure's `go.mod` must then declare at least
+that version, so the Go toolchain needed to build kure, and any module that requires it, rises
+with the range (external-secrets v2.13.0, `go-kure/kure#1057`). The widening's note in
+`docs/compatibility.md` records such a raise.
+
 An MVS-floor entry (`FloorModule != ""`) moves on a different trigger: its pin tracks
 whichever version `floor_module` itself currently requires, tag or pseudo-version, whether
 or not that's kure's own dependency bump (see `docs/dependency-updates.md`'s "MVS-floor
