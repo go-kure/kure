@@ -1088,7 +1088,8 @@ Which names are checked follows from what the entry point returns:
 - `GenerateForBundle` takes a bundle no validation has seen and returns one
   Kustomization. It checks the bundle's own name and the names that
   Kustomization refers to: each umbrella child, named in a health check
-  (checked with `Wait` true too, where no health check is written), and
+  (checked with `Wait` true or `OmitUmbrellaChildHealthChecks` too, where
+  no health check is written), and
   each `DependsOn` bundle, named in `spec.dependsOn`. It builds no
   Kustomization for them, so it refuses an umbrella whose child's name Flux
   cannot reconcile instead of returning a reference to it.
