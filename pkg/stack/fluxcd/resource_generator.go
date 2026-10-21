@@ -73,9 +73,9 @@ type ResourceGenerator struct {
 	// integrated placement a Kustomization kept from an earlier integration
 	// stays as written, child entries included; under FluxSeparate an
 	// earlier flux-system child written with them no longer matches and is
-	// refused, so integrate a freshly walked layout. The zero value leaves every output as it is without it: with
-	// Wait unset or false and UmbrellasDoNotWait unset, an umbrella gets one
-	// health check per child.
+	// refused, so integrate a freshly walked layout. The zero value leaves
+	// every output as it is without it: with Wait unset or false and
+	// UmbrellasDoNotWait unset, an umbrella gets one health check per child.
 	//
 	// It is for an umbrella whose children are applied by their own
 	// Kustomizations, as under FluxSeparate, where they are not in the
@@ -89,8 +89,9 @@ type ResourceGenerator struct {
 	// umbrella's HealthChecks, or depend on the children directly. With Wait
 	// true the field changes nothing in any placement, since no entry was
 	// written before either; under an integrated placement the umbrella's
-	// wait still covers its children, under FluxSeparate it never did. Unlike UmbrellasDoNotWait it
-	// changes no other field, and no entry point refuses it.
+	// wait still covers its children, under FluxSeparate it never did.
+	// Unlike UmbrellasDoNotWait it changes no other field, and no entry
+	// point refuses it.
 	OmitUmbrellaChildHealthChecks bool
 }
 
