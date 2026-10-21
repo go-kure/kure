@@ -777,7 +777,8 @@ The table of which Kustomization carries which account is in the
 A bundle with non-empty `Children` becomes an **umbrella**: Flux will only mark
 its Kustomization `Ready` once every child Kustomization is `Ready`. The Flux
 engine enforces this by prepending an auto `spec.healthChecks` entry for each
-direct child.
+direct child, unless the generator sets `OmitUmbrellaChildHealthChecks`
+([below](#umbrellas-without-child-health-checks)).
 
 `spec.wait` is not forced. It is `Bundle.Wait` like any other input, and leaving
 it unset is what makes the `healthChecks` entries take effect — upstream ignores
@@ -835,7 +836,8 @@ spec:
 User-supplied `HealthChecks` on the umbrella bundle are appended AFTER the
 auto entries. `Wait` on an umbrella is the caller's choice like on any other
 bundle: unset and `Wait: false` emit the same `spec`, and the umbrella still
-becomes `Ready` only when every child is, through those health checks. With
+becomes `Ready` only when every child is, through those health checks (unless
+the generator sets `OmitUmbrellaChildHealthChecks`). With
 `Wait: true` no entry is written for the children, since Flux ignores
 `healthChecks` under `wait`; the user-supplied entries are handled as before. The
 integrated placements then still wait for the children, whose Kustomization
@@ -843,6 +845,10 @@ objects the umbrella applies; `FluxSeparate` does not, so leave `Wait` unset
 there for the umbrella to wait for them. With `GenerateForBundle` alone it
 depends on whether the caller's build at the given path applies the children's
 Kustomization objects.
+
+Umbrella children must be **standalone** — a bundle cannot simultaneously be
+the `Bundle` of a `stack.Node` and appear in another bundle's `Children`.
+`stack.ValidateCluster` rejects any such overlap before resource generation.
 
 ### Umbrellas that do not wait
 
@@ -906,10 +912,6 @@ placement, since no entry was written before either; under an integrated
 placement the umbrella's wait still covers its children, under `FluxSeparate`
 it never did. Off, every tree renders as before. Details are in the
 [Flux Engine reference](/api-reference/flux-engine/#with-omitumbrellachildhealthchecks).
-
-Umbrella children must be **standalone** — a bundle cannot simultaneously be
-the `Bundle` of a `stack.Node` and appear in another bundle's `Children`.
-`stack.ValidateCluster` rejects any such overlap before resource generation.
 
 ### Disk layout
 

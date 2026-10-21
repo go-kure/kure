@@ -124,7 +124,8 @@ status: {}
 	}
 }
 
-// GenerateFromCluster, which FluxSeparate's list comes from, follows it as well.
+// GenerateFromCluster, which generates through GenerateFromLayout as
+// FluxSeparate does, follows it as well.
 func TestOmitUmbrellaChildHealthChecks_GenerateFromCluster(t *testing.T) {
 	objs, err := omittingGenerator().GenerateFromCluster(waitingUmbrellaCluster(nil), layout.LayoutRules{
 		BundleGrouping:      layout.GroupFlat,
@@ -150,9 +151,10 @@ func TestOmitUmbrellaChildHealthChecks_GenerateFromCluster(t *testing.T) {
 }
 
 // In every placement and for every Wait the field removes the child entries
-// and changes nothing else: the tree rendered with it is the tree rendered
-// without it, once the umbrella's entries on its children are taken off. With
-// Wait true there are none to take off, so the trees are equal as rendered.
+// and changes nothing else: every resource of the tree rendered with it is
+// that of the tree rendered without it, once the umbrella's entries on its
+// children are taken off. With Wait true there are none to take off, so the
+// resources are equal as rendered.
 func TestOmitUmbrellaChildHealthChecks_ChangesNothingElse(t *testing.T) {
 	placements := []layout.FluxPlacement{
 		layout.FluxSeparate, layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout,
@@ -214,4 +216,60 @@ func TestOmitUmbrellaChildHealthChecks_StillChecksChildNames(t *testing.T) {
 	if !strings.Contains(err.Error(), strings.Repeat("a", 64)) {
 		t.Errorf("error does not name the child: %v", err)
 	}
+}
+
+// A layout integrated without the field and integrated again with it: under
+// an integrated placement the kept umbrella stays as written, child entries
+// included; under FluxSeparate the earlier flux-system child no longer
+// matches and the integration is refused.
+func TestOmitUmbrellaChildHealthChecks_ReIntegration(t *testing.T) {
+	rules := func(p layout.FluxPlacement) layout.LayoutRules {
+		return layout.LayoutRules{
+			BundleGrouping:      layout.GroupFlat,
+			ApplicationGrouping: layout.GroupFlat,
+			FluxPlacement:       p,
+		}
+	}
+	integrated := func(t *testing.T, c *stack.Cluster, r layout.LayoutRules) *layout.ManifestLayout {
+		t.Helper()
+		ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, r)
+		if err != nil {
+			t.Fatalf("CreateLayoutWithResources without the field: %v", err)
+		}
+		return ml
+	}
+
+	t.Run("integrated placement keeps the entries", func(t *testing.T) {
+		c := waitingUmbrellaCluster(nil)
+		r := rules(layout.FluxIntegratedPerBundle)
+		ml := integrated(t, c, r)
+		if err := fluxstack.NewLayoutIntegrator(omittingGenerator()).IntegrateWithLayout(ml, c, r); err != nil {
+			t.Fatalf("IntegrateWithLayout with the field: %v", err)
+		}
+		platform := findKustomization(ml, "platform")
+		if platform == nil {
+			t.Fatal("no platform Kustomization in the layout")
+		}
+		var names []string
+		for _, hc := range platform.Spec.HealthChecks {
+			names = append(names, hc.Name)
+		}
+		// The child entries come first, then the umbrella's own check.
+		if got, want := strings.Join(names, ","), "y-infra,y-services,manual-check"; got != want {
+			t.Errorf("healthChecks = %s, want %s", got, want)
+		}
+	})
+
+	t.Run("FluxSeparate refuses the earlier flux-system child", func(t *testing.T) {
+		c := waitingUmbrellaCluster(nil)
+		r := rules(layout.FluxSeparate)
+		ml := integrated(t, c, r)
+		err := fluxstack.NewLayoutIntegrator(omittingGenerator()).IntegrateWithLayout(ml, c, r)
+		if err == nil {
+			t.Fatal("IntegrateWithLayout with the field accepted a flux-system child written without it")
+		}
+		if !strings.Contains(err.Error(), "child with other Flux resources; integrate a freshly walked layout") {
+			t.Errorf("error = %v, want the refusal of a flux-system child with other Flux resources", err)
+		}
+	})
 }

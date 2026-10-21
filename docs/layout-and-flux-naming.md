@@ -1732,5 +1732,7 @@ placement `FluxSeparate` included.
 
 **Tests.** `pkg/stack/fluxcd/umbrella_child_checks_test.go`: the umbrella under `FluxSeparate`
 with `Wait` unset and false keeps only the caller's check; the whole Kustomization from
-`GenerateForBundle`; `GenerateFromCluster`; in each of the three placements the tree with the
-field is the tree without it less the child entries; and the child-name check with the field set.
+`GenerateForBundle`; `GenerateFromCluster`; in each of the three placements every resource of
+the tree with the field is that of the tree without it less the child entries; the child-name
+check with the field set; and a re-integration with the field set, which keeps the umbrella as
+written under `FluxIntegratedPerBundle` and is refused under `FluxSeparate`.
