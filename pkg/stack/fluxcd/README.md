@@ -1015,7 +1015,8 @@ umbrella contains.
 or false:
 - prepends one `HealthChecks` entry per direct child (referencing the child's
   own Kustomization by name/namespace; the name is the child's `KustomizationName` when it sets
-  one)
+  one), unless the generator sets `OmitUmbrellaChildHealthChecks` (see
+  [With `OmitUmbrellaChildHealthChecks`](#with-omitumbrellachildhealthchecks))
 - leaves user-supplied `HealthChecks` appended after the auto entries
 
 With `Wait` true it writes no entry for the children: upstream documents that when `wait` is
@@ -1038,7 +1039,10 @@ covers the children depends on where their Kustomization objects are written:
   (they are in `flux-system`, which the root applies), so `wait: true` does not wait for the
   children. A caller who needs the umbrella to wait for them there leaves `Wait` unset or false,
   so the generated entries take effect. This gap was there before the entries were dropped
-  under `wait`, when Flux ignored them, and dropping them does not change it.
+  under `wait`, when Flux ignored them, and dropping them does not change it. Those entries hold
+  a kustomize-controller worker while the umbrella waits; a caller who would rather not hold one
+  sets `OmitUmbrellaChildHealthChecks` and gives up the umbrella's wait on its children (see
+  [With `OmitUmbrellaChildHealthChecks`](#with-omitumbrellachildhealthchecks)).
 - **`GenerateForBundle` alone** neither generates nor places the children's Kustomization
   objects, and takes `path` as given, so whether `wait: true` covers them depends on whether the
   caller's build at that path applies them. Where it does not, leave `Wait` unset or false.
@@ -1209,6 +1213,36 @@ integrated trees, keyed `namespace/name`, so that a caller can point a dependenc
 tree (a `NamedDependsOn` entry) at the leaves instead of the umbrella. Kustomizations an
 application emits, directly or as `List` items, are leaves there. A Kustomization that two trees both hold is refused with
 `ErrUmbrellaTerminals`.
+
+### With `OmitUmbrellaChildHealthChecks`
+
+`ResourceGenerator.OmitUmbrellaChildHealthChecks`, off by default, writes no automatic health
+check on an umbrella's children. It is for an umbrella whose children are applied by their own
+Kustomizations, as under `FluxSeparate`, where the children's Kustomization objects are not in the
+umbrella's build. There the automatic entries make the umbrella's reconcile wait until every
+child is Ready, holding one of kustomize-controller's workers the whole time, while each child
+needs a worker of its own to become Ready. `UmbrellasDoNotWait` is refused under `FluxSeparate`,
+and `Wait` true makes Flux ignore the caller's own `HealthChecks` too, so this setting is the
+one that drops the automatic entries alone.
+
+- **What it changes:** an umbrella's Kustomization gets no entry per child, whatever `Wait`
+  says, in every placement and from every entry point (`GenerateForBundle`,
+  `GenerateFromLayout`, `GenerateFromCluster`, the layout integrator). Nothing else changes:
+  the caller's own `HealthChecks` are written and mapped as without it, and each child's
+  Kustomization name is still checked.
+- **The trade-off:** the umbrella is no longer a readiness anchor for its children. It is Ready
+  once its own build is, so a bundle that depends on it no longer waits for its children. To keep
+  that, list the children's Kustomizations in the umbrella's `HealthChecks` (which brings the
+  worker wait back for that umbrella), or depend on the children directly; `UmbrellaTerminals`
+  names the last ones to become Ready in an integrated tree.
+- **Off:** every tree renders as without the field.
+
+<!-- doc-example:excerpt setting the field on a generator; the behaviour is pinned by pkg/stack/fluxcd/umbrella_child_checks_test.go -->
+```go
+gen := fluxcd.NewResourceGenerator()
+gen.OmitUmbrellaChildHealthChecks = true
+integrator := fluxcd.NewLayoutIntegrator(gen)
+```
 
 ## Non-Bundle Child Layout CRs
 

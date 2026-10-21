@@ -153,7 +153,7 @@ From `kustomizationForBundle` (`resource_generator.go`):
 | `Wait` | `spec.wait` | omitted (`waitValue` in `defaults.go`) |
 | `Timeout`, `RetryInterval`, `Force`, `Suspend` | same | omitted |
 | `SourceRef` | `spec.sourceRef` | namespace omitted when empty |
-| `Children` (umbrella) | one `healthChecks` entry per child, in the generator's namespace, none when `Wait` is true since go-kure/kure#1022 (below); `wait` is not set | the umbrella branch of `kustomizationForBundle` |
+| `Children` (umbrella) | one `healthChecks` entry per child, in the generator's namespace, none when `Wait` is true since go-kure/kure#1022 (below), nor under `OmitUmbrellaChildHealthChecks` since go-kure/kure#1064 (below); `wait` is not set | the umbrella branch of `kustomizationForBundle` |
 | `HealthChecks`, `Patches`, `PostBuild` | same | omitted |
 | `DependsOn`, `NamedDependsOn` | `spec.dependsOn[].name` | omitted |
 
@@ -1694,3 +1694,35 @@ as before.
 umbrella with two children and a check of its own, the entries with `Wait` unset and false, the
 child-name check under `Wait`, and the umbrella's checks in each of the three placements with and
 without `Wait`.
+
+### Opting out of child health checks ([go-kure/kure#1064](https://github.com/go-kure/kure/issues/1064))
+
+**Shipped.** `ResourceGenerator.OmitUmbrellaChildHealthChecks`, off by default, writes no
+per-child `healthChecks` entry on an umbrella's Kustomization, in every placement and from every
+entry point.
+
+**Why.** Under `FluxSeparate` the children's Kustomizations are not in the umbrella's build: each
+child is applied by its own Kustomization. An umbrella whose children are applied that way holds
+a kustomize-controller worker on its health wait until each child is Ready, and each child needs
+its own worker to get there. A caller who sets health checks of its own must leave `wait` false
+for them to count, and so got the child entries too. `Wait` true drops them, but Flux then
+ignores the caller's checks as well, and `UmbrellasDoNotWait` is refused under `FluxSeparate`.
+
+**What it does.**
+
+- **The entries:** none per child with the field set, whatever `Wait` says (the umbrella branch
+  of `kustomizationForBundle` in `resource_generator.go`). The placement is still not consulted:
+  the caller sets the field.
+- **The caller's own `HealthChecks`**, each child's name check and every other field are as
+  without it.
+- **The trade-off:** the umbrella is Ready once its own build is, so a dependent of the umbrella
+  no longer waits for its children. A caller who needs that lists the children's Kustomizations
+  in the umbrella's `HealthChecks`, or depends on the children directly.
+
+**Not breaking.** With the field unset every tree renders byte for byte as before, the default
+placement `FluxSeparate` included.
+
+**Tests.** `pkg/stack/fluxcd/umbrella_child_checks_test.go`: the umbrella under `FluxSeparate`
+with `Wait` unset and false keeps only the caller's check; the whole Kustomization from
+`GenerateForBundle`; `GenerateFromCluster`; in each of the three placements the tree with the
+field is the tree without it less the child entries; and the child-name check with the field set.

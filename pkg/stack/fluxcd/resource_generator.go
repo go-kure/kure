@@ -66,6 +66,23 @@ type ResourceGenerator struct {
 	// health-checking another cluster or with its own health predicate may
 	// be refused (go-kure/kure#1062).
 	UmbrellasDoNotWait bool
+	// OmitUmbrellaChildHealthChecks, when true, writes no health check on an
+	// umbrella's child Kustomizations (Bundle.Children), in every placement
+	// and from every entry point; the bundle's own HealthChecks are written
+	// as without it. The zero value leaves every output as it is without it:
+	// with Wait unset or false, an umbrella gets one health check per child.
+	//
+	// It is for an umbrella whose children are applied by their own
+	// Kustomizations, as under FluxSeparate, where they are not in the
+	// umbrella's build: kustomize-controller runs the umbrella's health wait
+	// inside one of its --concurrent workers until every child is Ready, and
+	// each child needs a worker of its own to become Ready. The trade-off is
+	// readiness: the umbrella is Ready once its own build is, so a bundle
+	// that depends on it no longer waits for its children. To keep that, set
+	// the children's checks in the umbrella's HealthChecks, or depend on the
+	// children directly. Unlike UmbrellasDoNotWait it changes nothing else,
+	// and no entry point refuses it.
+	OmitUmbrellaChildHealthChecks bool
 }
 
 // waitFor resolves a bundle's or a layout's tri-state wait input: waitValue,
@@ -796,7 +813,8 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string,
 	// covers them; where it does not, Wait unset or false is what makes the
 	// entries take effect. Each child's name is checked either way: the
 	// child's own Kustomization is written with it. Under UmbrellasDoNotWait
-	// none is written either: an umbrella does not wait (R1).
+	// none is written either: an umbrella does not wait (R1). Nor under
+	// OmitUmbrellaChildHealthChecks, the caller's choice.
 	if len(b.Children) > 0 {
 		b.InitializeUmbrella()
 		for _, child := range b.Children {
@@ -808,7 +826,7 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string,
 					return nil, err
 				}
 			}
-			if kust.Spec.Wait || g.UmbrellasDoNotWait {
+			if kust.Spec.Wait || g.UmbrellasDoNotWait || g.OmitUmbrellaChildHealthChecks {
 				continue
 			}
 			kust.Spec.HealthChecks = append(kust.Spec.HealthChecks, metaapi.NamespacedObjectKindReference{
