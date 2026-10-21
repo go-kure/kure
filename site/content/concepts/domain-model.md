@@ -66,7 +66,10 @@ integrated Flux placements render them into the parent's directory,
 This gives downstream consumers a single stable anchor — for example, a
 `platform` umbrella with tier children `infra`, `services`, `apps` lets an
 external bundle `DependsOn: [platform]` without having to know or care about
-the internal tiers.
+the internal tiers. A Flux generator with `OmitUmbrellaChildHealthChecks` set
+writes no child entry, and the umbrella is then no such anchor: it is Ready
+once its own build is (see the Flux engine's "With
+`OmitUmbrellaChildHealthChecks`").
 
 A bundle referenced by `Children` must be **standalone**: it cannot
 simultaneously be the `Bundle` of any `Node`. The `stack.ValidateCluster`

@@ -878,6 +878,30 @@ the first two to the one Kustomization it returns, and `GenerateFromLayout`,
 dependency written from outside the tree. The full rules and refusals are in
 the [Flux Engine reference](/api-reference/flux-engine/#with-umbrellasdonotwait).
 
+### Umbrellas without child health checks
+
+Under `FluxSeparate` the children's Kustomization objects are not in the
+umbrella's build: each child is applied by its own Kustomization. The automatic
+health checks then hold a kustomize-controller worker for the umbrella until
+every child is Ready, each child needing a worker of its own, and
+`UmbrellasDoNotWait` is refused there. Setting
+`ResourceGenerator.OmitUmbrellaChildHealthChecks` writes no automatic entry for
+the children, in every placement; the umbrella's own `HealthChecks` are written
+as before:
+
+<!-- doc-example:excerpt setting the field on a generator; the behaviour is pinned by pkg/stack/fluxcd/umbrella_child_checks_test.go -->
+```go
+gen := fluxcd.NewResourceGenerator()
+gen.OmitUmbrellaChildHealthChecks = true
+integrator := fluxcd.NewLayoutIntegrator(gen)
+```
+
+The umbrella is then Ready once its own build is, so a bundle that depends on
+it no longer waits for its children. To keep that, list the children's
+Kustomizations in the umbrella's `HealthChecks`, or depend on the children
+directly. Off, every tree renders as before. Details are in the
+[Flux Engine reference](/api-reference/flux-engine/#with-omitumbrellachildhealthchecks).
+
 Umbrella children must be **standalone** — a bundle cannot simultaneously be
 the `Bundle` of a `stack.Node` and appear in another bundle's `Children`.
 `stack.ValidateCluster` rejects any such overlap before resource generation.
