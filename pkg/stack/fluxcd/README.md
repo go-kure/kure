@@ -1233,15 +1233,18 @@ one that drops the automatic entries alone.
   the caller's own `HealthChecks` are written and mapped as without it, and each child's
   Kustomization name is still checked. The reconcile-order check reads health checks as edges,
   so it no longer sees one from the umbrella to each child.
-- **The trade-off:** with `Wait` unset or false the umbrella is Ready once applied, so a bundle
-  that depends on it no longer waits for its children. To keep that, list the children's
-  Kustomizations in the umbrella's `HealthChecks` (which brings the worker wait back for that
-  umbrella), or depend on the children directly; `UmbrellaTerminals` names the last ones to
-  become Ready in an integrated tree. With `Wait` true under an integrated placement the
-  umbrella's wait still covers its children (no entry was written there before either), and the
-  field changes nothing there.
-- **A kept Kustomization** from an earlier integration stays as written, child entries
-  included, as every kept CR does; integrate a tree `layout.WalkCluster` returns.
+- **The trade-off:** with `Wait` unset or false the umbrella no longer waits for its children:
+  it is Ready once applied and its own `HealthChecks`, if any, pass, so a bundle that depends on
+  it no longer waits for its children. To keep that, list the children's Kustomizations in the
+  umbrella's `HealthChecks` (which brings the worker wait back for that umbrella), or depend on
+  the children directly; `UmbrellaTerminals` names the last ones to become Ready in an
+  integrated tree. With `Wait` true the field changes nothing in any placement, since no entry
+  was written before either; under an integrated placement the umbrella's wait still covers its
+  children, under `FluxSeparate` it never did.
+- **A kept Kustomization** from an earlier integration under an integrated placement stays as
+  written, child entries included, as every kept CR does. Under `FluxSeparate` an earlier
+  `flux-system` child written with the entries no longer matches, and the integration is
+  refused; integrate a freshly walked layout.
 - **Off:** every tree renders as without the field.
 
 <!-- doc-example:excerpt setting the field on a generator; the behaviour is pinned by pkg/stack/fluxcd/umbrella_child_checks_test.go -->

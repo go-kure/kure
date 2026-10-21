@@ -897,12 +897,14 @@ gen.OmitUmbrellaChildHealthChecks = true
 integrator := fluxcd.NewLayoutIntegrator(gen)
 ```
 
-With `Wait` unset or false the umbrella is then Ready once applied, so a bundle
+With `Wait` unset or false the umbrella then no longer waits for its children:
+it is Ready once applied and its own `HealthChecks`, if any, pass, so a bundle
 that depends on it no longer waits for its children. To keep that, list the
 children's Kustomizations in the umbrella's `HealthChecks`, or depend on the
-children directly. With `Wait` true under an integrated placement the
-umbrella's wait still covers its children, and the field changes nothing
-there. Off, every tree renders as before. Details are in the
+children directly. With `Wait` true the field changes nothing in any
+placement, since no entry was written before either; under an integrated
+placement the umbrella's wait still covers its children, under `FluxSeparate`
+it never did. Off, every tree renders as before. Details are in the
 [Flux Engine reference](/api-reference/flux-engine/#with-omitumbrellachildhealthchecks).
 
 Umbrella children must be **standalone** — a bundle cannot simultaneously be
