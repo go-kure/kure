@@ -310,7 +310,7 @@ The bundles merged into one directory combine as follows:
 | Bundle setting | In the shared Kustomization |
 |---|---|
 | `SourceRef`, `Interval`, `Timeout`, `RetryInterval`, `Prune`, `Wait`, `Force`, `Suspend`, `PostBuild`, `ServiceAccountName` | must be the same for every merged bundle (unset compares as the default; an omitted `SourceRef` namespace is the generator's `DefaultNamespace`; without a `URL` only its kind, name and namespace are compared, the fields a Kustomization carries), else an error naming the setting and the bundles |
-| `HealthChecks`, umbrella health checks | combined, each listed once; a check on a Flux Kustomization names the unit that applies that bundle, and one on the unit itself is dropped; under `UmbrellasDoNotWait` a unit that applies a Flux Kustomization has none (see [With `UmbrellasDoNotWait`](#with-umbrellasdonotwait)) |
+| `HealthChecks`, umbrella health checks | combined, each listed once; a check on a Flux Kustomization names the unit that applies that bundle, and one on the unit itself is dropped; under `UmbrellasDoNotWait` a unit that applies a Flux Kustomization has none (see [With `UmbrellasDoNotWait`](#with-umbrellasdonotwait)); under `OmitUmbrellaChildHealthChecks` a unit has no automatic entries for umbrella children, only the checks its bundles list (see [With `OmitUmbrellaChildHealthChecks`](#with-omitumbrellachildhealthchecks)) |
 | `Labels`, `Annotations` | combined; one key with two values is an error |
 | `Patches` | combined, but only when every patch has a `Target` that selects none of the other merged bundles' objects (see [Patches in a shared directory](#patches-in-a-shared-directory)) |
 | `DependsOn` | mapped to the Kustomization that applies each dependency; dependencies between the merged bundles are dropped |
@@ -1007,7 +1007,9 @@ Flux Kustomization that aggregates the readiness of its children, via
 auto-generated `spec.healthChecks` or, where its build applies them, via
 `spec.wait`. This gives downstream
 consumers a single stable anchor regardless of how many internal tiers the
-umbrella contains.
+umbrella contains. A generator that sets `OmitUmbrellaChildHealthChecks` gives
+up the first of the two (see
+[With `OmitUmbrellaChildHealthChecks`](#with-omitumbrellachildhealthchecks)).
 
 ### Resource generation
 
@@ -1227,14 +1229,19 @@ one that drops the automatic entries alone.
 
 - **What it changes:** an umbrella's Kustomization gets no entry per child, whatever `Wait`
   says, in every placement and from every entry point (`GenerateForBundle`,
-  `GenerateFromLayout`, `GenerateFromCluster`, the layout integrator). Nothing else changes:
+  `GenerateFromLayout`, `GenerateFromCluster`, the layout integrator). No other field changes:
   the caller's own `HealthChecks` are written and mapped as without it, and each child's
-  Kustomization name is still checked.
-- **The trade-off:** the umbrella is no longer a readiness anchor for its children. It is Ready
-  once its own build is, so a bundle that depends on it no longer waits for its children. To keep
-  that, list the children's Kustomizations in the umbrella's `HealthChecks` (which brings the
-  worker wait back for that umbrella), or depend on the children directly; `UmbrellaTerminals`
-  names the last ones to become Ready in an integrated tree.
+  Kustomization name is still checked. The reconcile-order check reads health checks as edges,
+  so it no longer sees one from the umbrella to each child.
+- **The trade-off:** with `Wait` unset or false the umbrella is Ready once applied, so a bundle
+  that depends on it no longer waits for its children. To keep that, list the children's
+  Kustomizations in the umbrella's `HealthChecks` (which brings the worker wait back for that
+  umbrella), or depend on the children directly; `UmbrellaTerminals` names the last ones to
+  become Ready in an integrated tree. With `Wait` true under an integrated placement the
+  umbrella's wait still covers its children (no entry was written there before either), and the
+  field changes nothing there.
+- **A kept Kustomization** from an earlier integration stays as written, child entries
+  included, as every kept CR does; integrate a tree `layout.WalkCluster` returns.
 - **Off:** every tree renders as without the field.
 
 <!-- doc-example:excerpt setting the field on a generator; the behaviour is pinned by pkg/stack/fluxcd/umbrella_child_checks_test.go -->

@@ -185,9 +185,9 @@ bundle has non-empty `Children`, its generated Flux Kustomization automatically
 gets an entry in `spec.healthChecks` for each child while `Bundle.Wait` is unset
 or false,
 giving external consumers a single readiness anchor for a group of bundles. A
-Flux generator with `OmitUmbrellaChildHealthChecks` set writes none, and the
-umbrella is then Ready once its own build is (see the Flux engine's "With
-`OmitUmbrellaChildHealthChecks`").
+Flux generator with `OmitUmbrellaChildHealthChecks` set writes none: with
+`Wait` unset or false the umbrella is then Ready once applied (see the Flux
+engine's "With `OmitUmbrellaChildHealthChecks`").
 `spec.wait` is left to `Bundle.Wait`: the generator no longer forces it, because
 upstream ignores `healthChecks` when `wait` is enabled, and with `Wait` true it
 writes no entry for the children. Whether `wait` then covers the children
