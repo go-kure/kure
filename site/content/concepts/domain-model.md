@@ -67,8 +67,8 @@ This gives downstream consumers a single stable anchor — for example, a
 `platform` umbrella with tier children `infra`, `services`, `apps` lets an
 external bundle `DependsOn: [platform]` without having to know or care about
 the internal tiers. A Flux generator with `OmitUmbrellaChildHealthChecks` set
-writes no child entry, and the umbrella is then no such anchor: it is Ready
-once its own build is (see the Flux engine's "With
+writes no child entry: with `Wait` unset or false the umbrella is then Ready
+once applied and no such anchor (see the Flux engine's "With
 `OmitUmbrellaChildHealthChecks`").
 
 A bundle referenced by `Children` must be **standalone**: it cannot

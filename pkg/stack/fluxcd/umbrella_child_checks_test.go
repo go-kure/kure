@@ -149,10 +149,10 @@ func TestOmitUmbrellaChildHealthChecks_GenerateFromCluster(t *testing.T) {
 	}
 }
 
-// In every placement the field removes the child entries and changes nothing
-// else: the tree rendered with it is the tree rendered without it, once the
-// child entries are taken off the umbrella. The rendering without it is the
-// one TestCreateLayoutWithResources_UmbrellaWaitPerPlacement pins.
+// In every placement and for every Wait the field removes the child entries
+// and changes nothing else: the tree rendered with it is the tree rendered
+// without it, once the umbrella's entries on its children are taken off. With
+// Wait true there are none to take off, so the trees are equal as rendered.
 func TestOmitUmbrellaChildHealthChecks_ChangesNothingElse(t *testing.T) {
 	placements := []layout.FluxPlacement{
 		layout.FluxSeparate, layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout,
@@ -164,30 +164,41 @@ func TestOmitUmbrellaChildHealthChecks_ChangesNothingElse(t *testing.T) {
 			FluxPlacement:       p,
 		}
 	}
+	children := map[string]bool{"y-infra": true, "y-services": true}
 	for _, placement := range placements {
-		t.Run(string(placement), func(t *testing.T) {
-			without, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).
-				CreateLayoutWithResources(waitingUmbrellaCluster(nil), rules(placement))
-			if err != nil {
-				t.Fatalf("CreateLayoutWithResources without the field: %v", err)
-			}
-			with, err := fluxstack.NewLayoutIntegrator(omittingGenerator()).
-				CreateLayoutWithResources(waitingUmbrellaCluster(nil), rules(placement))
-			if err != nil {
-				t.Fatalf("CreateLayoutWithResources with the field: %v", err)
-			}
-			platform := findKustomization(without, "platform")
-			if platform == nil {
-				t.Fatal("no platform Kustomization in the layout")
-			}
-			if n := len(platform.Spec.HealthChecks); n != 3 {
-				t.Fatalf("without the field: %d health checks, want 2 child entries and the caller's", n)
-			}
-			platform.Spec.HealthChecks = platform.Spec.HealthChecks[2:]
-			if got, want := renderTree(t, with), renderTree(t, without); got != want {
-				t.Errorf("tree with the field:\n%s\nwant:\n%s", got, want)
-			}
-		})
+		for name, wait := range map[string]*bool{"unset": nil, "false": boolPtr(false), "true": boolPtr(true)} {
+			t.Run(string(placement)+"/wait-"+name, func(t *testing.T) {
+				without, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).
+					CreateLayoutWithResources(waitingUmbrellaCluster(wait), rules(placement))
+				if err != nil {
+					t.Fatalf("CreateLayoutWithResources without the field: %v", err)
+				}
+				with, err := fluxstack.NewLayoutIntegrator(omittingGenerator()).
+					CreateLayoutWithResources(waitingUmbrellaCluster(wait), rules(placement))
+				if err != nil {
+					t.Fatalf("CreateLayoutWithResources with the field: %v", err)
+				}
+				platform := findKustomization(without, "platform")
+				if platform == nil {
+					t.Fatal("no platform Kustomization in the layout")
+				}
+				kept := platform.Spec.HealthChecks[:0:0]
+				for _, hc := range platform.Spec.HealthChecks {
+					if hc.Kind == "Kustomization" && children[hc.Name] {
+						continue
+					}
+					kept = append(kept, hc)
+				}
+				dropped := len(platform.Spec.HealthChecks) - len(kept)
+				if want := map[bool]int{true: 0, false: 2}[wait != nil && *wait]; dropped != want {
+					t.Fatalf("without the field: %d child entries, want %d", dropped, want)
+				}
+				platform.Spec.HealthChecks = kept
+				if got, want := renderTree(t, with), renderTree(t, without); got != want {
+					t.Errorf("tree with the field:\n%s\nwant:\n%s", got, want)
+				}
+			})
+		}
 	}
 }
 

@@ -27,7 +27,8 @@ import (
 )
 ```
 
-Every other Go block on this page is the body of an `Example` function in
+Every other Go block on this page, except the two that only set a field on a generator
+(`UmbrellasDoNotWait`, `OmitUmbrellaChildHealthChecks`), is the body of an `Example` function in
 `pkg/stack/fluxcd`, which `go test` runs: the Kustomization-name, bootstrap and sync-name blocks
 are shared with the [Flux Engine reference](/api-reference/flux-engine) and live in its
 `example_test.go`, the others in `flux_workflow_example_test.go`. Besides the imports above they use `os`, `kustv1`
@@ -896,10 +897,12 @@ gen.OmitUmbrellaChildHealthChecks = true
 integrator := fluxcd.NewLayoutIntegrator(gen)
 ```
 
-The umbrella is then Ready once its own build is, so a bundle that depends on
-it no longer waits for its children. To keep that, list the children's
-Kustomizations in the umbrella's `HealthChecks`, or depend on the children
-directly. Off, every tree renders as before. Details are in the
+With `Wait` unset or false the umbrella is then Ready once applied, so a bundle
+that depends on it no longer waits for its children. To keep that, list the
+children's Kustomizations in the umbrella's `HealthChecks`, or depend on the
+children directly. With `Wait` true under an integrated placement the
+umbrella's wait still covers its children, and the field changes nothing
+there. Off, every tree renders as before. Details are in the
 [Flux Engine reference](/api-reference/flux-engine/#with-omitumbrellachildhealthchecks).
 
 Umbrella children must be **standalone** — a bundle cannot simultaneously be

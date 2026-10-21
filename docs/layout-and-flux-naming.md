@@ -1715,9 +1715,12 @@ ignores the caller's checks as well, and `UmbrellasDoNotWait` is refused under `
   the caller sets the field.
 - **The caller's own `HealthChecks`**, each child's name check and every other field are as
   without it.
-- **The trade-off:** the umbrella is Ready once its own build is, so a dependent of the umbrella
-  no longer waits for its children. A caller who needs that lists the children's Kustomizations
-  in the umbrella's `HealthChecks`, or depends on the children directly.
+- **The trade-off:** with `Wait` unset or false the umbrella is Ready once applied, so a
+  dependent of the umbrella no longer waits for its children. A caller who needs that lists the
+  children's Kustomizations in the umbrella's `HealthChecks`, or depends on the children
+  directly. With `Wait` true under an integrated placement the umbrella's wait still covers its
+  children, and the field changes nothing there.
+- **A kept Kustomization** from an earlier integration stays as written, child entries included.
 
 **Not breaking.** With the field unset every tree renders byte for byte as before, the default
 placement `FluxSeparate` included.
