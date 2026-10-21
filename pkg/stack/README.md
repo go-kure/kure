@@ -186,7 +186,8 @@ gets an entry in `spec.healthChecks` for each child while `Bundle.Wait` is unset
 or false,
 giving external consumers a single readiness anchor for a group of bundles. A
 Flux generator with `OmitUmbrellaChildHealthChecks` set writes none: with
-`Wait` unset or false the umbrella is then Ready once applied (see the Flux
+`Wait` unset or false the umbrella then no longer waits for its children: it
+is Ready once applied and its own `HealthChecks`, if any, pass (see the Flux
 engine's "With `OmitUmbrellaChildHealthChecks`").
 `spec.wait` is left to `Bundle.Wait`: the generator no longer forces it, because
 upstream ignores `healthChecks` when `wait` is enabled, and with `Wait` true it
