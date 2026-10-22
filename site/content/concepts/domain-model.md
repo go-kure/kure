@@ -57,9 +57,9 @@ A deployment unit corresponding to a single GitOps reconciliation resource (e.g.
 whose Flux Kustomization aggregates each child's Ready condition via
 `spec.healthChecks`. With `Bundle.Wait` unset or false, the parent is Ready iff
 all children are Ready, unless the generator sets
-`OmitUmbrellaChildHealthChecks` (below). `spec.wait` is left to `Bundle.Wait` — upstream ignores
-`healthChecks` when `wait` is enabled, so forcing it would defeat the
-aggregation. With `Wait` true no child entry is written, and the wait covers
+`OmitUmbrellaChildHealthChecks` (below). `spec.wait` is left to `Bundle.Wait`
+— upstream ignores `healthChecks` when `wait` is enabled, so forcing it would
+defeat the aggregation. With `Wait` true no child entry is written, and the wait covers
 the children only where the parent's build applies their Kustomization CRs: the
 integrated Flux placements render them into the parent's directory,
 `FluxSeparate` does not (see the Flux engine's "Umbrella Bundles").

@@ -261,8 +261,14 @@ func TestOmitUmbrellaChildHealthChecks_ReIntegration(t *testing.T) {
 	})
 
 	t.Run("FluxSeparate refuses the earlier flux-system child", func(t *testing.T) {
-		c := waitingUmbrellaCluster(nil)
 		r := rules(layout.FluxSeparate)
+		// Control: the same fixture re-integrates without the field, so the
+		// refusal below is the field's.
+		c := waitingUmbrellaCluster(nil)
+		if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(integrated(t, c, r), c, r); err != nil {
+			t.Fatalf("IntegrateWithLayout without the field: %v", err)
+		}
+		c = waitingUmbrellaCluster(nil)
 		ml := integrated(t, c, r)
 		err := fluxstack.NewLayoutIntegrator(omittingGenerator()).IntegrateWithLayout(ml, c, r)
 		if err == nil {
