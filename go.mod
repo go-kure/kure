@@ -31,7 +31,7 @@ replace (
 require (
 	github.com/backube/volsync v0.16.0
 	github.com/cert-manager/cert-manager v1.21.2
-	github.com/cilium/cilium v1.20.3
+	github.com/cilium/cilium v1.20.4
 	github.com/cloudnative-pg/barman-cloud v0.6.0
 	github.com/cloudnative-pg/cloudnative-pg v1.30.1
 	github.com/cloudnative-pg/machinery v0.6.1
@@ -53,7 +53,7 @@ require (
 	github.com/fluxcd/pkg/tar v1.2.0
 	github.com/fluxcd/source-controller/api v1.9.5
 	github.com/fluxcd/source-watcher/api/v2 v2.2.4
-	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.94.1
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.94.2
 	go.universe.tf/metallb v0.16.1
 	golang.org/x/tools v0.52.0
 	google.golang.org/protobuf v1.36.12
