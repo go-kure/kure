@@ -55,23 +55,23 @@ for the kinds whose scope the API server defines.
 | `cert-manager.io/v1` | `CertificateRequest` | Namespaced | `marker` | `CertificateRequest` | `github.com/cert-manager/cert-manager@v1.21.2` |
 | `cert-manager.io/v1` | `ClusterIssuer` | Cluster | `marker` | `ClusterIssuer` | `github.com/cert-manager/cert-manager@v1.21.2` |
 | `cert-manager.io/v1` | `Issuer` | Namespaced | `marker` | `Issuer` | `github.com/cert-manager/cert-manager@v1.21.2` |
-| `cilium.io/v2` | `CiliumBGPAdvertisement` | Cluster | `marker` | `CiliumBGPAdvertisement` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumBGPClusterConfig` | Cluster | `marker` | `CiliumBGPClusterConfig` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumBGPNodeConfig` | Cluster | `marker` | `CiliumBGPNodeConfig` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumBGPNodeConfigOverride` | Cluster | `marker` | `CiliumBGPNodeConfigOverride` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumBGPPeerConfig` | Cluster | `marker` | `CiliumBGPPeerConfig` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumCIDRGroup` | Cluster | `marker` | `CiliumCIDRGroup` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumClusterwideEnvoyConfig` | Cluster | `marker` | `CiliumClusterwideEnvoyConfig` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumClusterwideNetworkPolicy` | Cluster | `marker` | `CiliumClusterwideNetworkPolicy` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumEgressGatewayPolicy` | Cluster | `marker` | `CiliumEgressGatewayPolicy` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumEndpoint` | Namespaced | `marker` | `CiliumEndpoint` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumEnvoyConfig` | Namespaced | `marker` | `CiliumEnvoyConfig` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumIdentity` | Cluster | `marker` | `CiliumIdentity` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumLoadBalancerIPPool` | Cluster | `marker` | `CiliumLoadBalancerIPPool` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumLocalRedirectPolicy` | Namespaced | `marker` | `CiliumLocalRedirectPolicy` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumNetworkPolicy` | Namespaced | `marker` | `CiliumNetworkPolicy` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumNode` | Cluster | `marker` | `CiliumNode` | `github.com/cilium/cilium@v1.20.3` |
-| `cilium.io/v2` | `CiliumNodeConfig` | Namespaced | `marker` | `CiliumNodeConfig` | `github.com/cilium/cilium@v1.20.3` |
+| `cilium.io/v2` | `CiliumBGPAdvertisement` | Cluster | `marker` | `CiliumBGPAdvertisement` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumBGPClusterConfig` | Cluster | `marker` | `CiliumBGPClusterConfig` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumBGPNodeConfig` | Cluster | `marker` | `CiliumBGPNodeConfig` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumBGPNodeConfigOverride` | Cluster | `marker` | `CiliumBGPNodeConfigOverride` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumBGPPeerConfig` | Cluster | `marker` | `CiliumBGPPeerConfig` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumCIDRGroup` | Cluster | `marker` | `CiliumCIDRGroup` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumClusterwideEnvoyConfig` | Cluster | `marker` | `CiliumClusterwideEnvoyConfig` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumClusterwideNetworkPolicy` | Cluster | `marker` | `CiliumClusterwideNetworkPolicy` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumEgressGatewayPolicy` | Cluster | `marker` | `CiliumEgressGatewayPolicy` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumEndpoint` | Namespaced | `marker` | `CiliumEndpoint` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumEnvoyConfig` | Namespaced | `marker` | `CiliumEnvoyConfig` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumIdentity` | Cluster | `marker` | `CiliumIdentity` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumLoadBalancerIPPool` | Cluster | `marker` | `CiliumLoadBalancerIPPool` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumLocalRedirectPolicy` | Namespaced | `marker` | `CiliumLocalRedirectPolicy` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumNetworkPolicy` | Namespaced | `marker` | `CiliumNetworkPolicy` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumNode` | Cluster | `marker` | `CiliumNode` | `github.com/cilium/cilium@v1.20.4` |
+| `cilium.io/v2` | `CiliumNodeConfig` | Namespaced | `marker` | `CiliumNodeConfig` | `github.com/cilium/cilium@v1.20.4` |
 | `coordination.k8s.io/v1` | `Lease` | Namespaced | `builtin` | `Lease` | `k8s.io/api@v0.37.1` |
 | `discovery.k8s.io/v1` | `EndpointSlice` | Namespaced | `builtin` | `EndpointSlice` | `k8s.io/api@v0.37.1` |
 | `external-secrets.io/v1` | `ClusterExternalSecret` | Cluster | `marker` | `ClusterExternalSecret` | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
@@ -107,13 +107,13 @@ for the kinds whose scope the API server defines.
 | `metallb.io/v1beta1` | `L2Advertisement` | Namespaced | `crd` | `L2Advertisement` | `go.universe.tf/metallb@v0.16.1` |
 | `metallb.io/v1beta1` | `ServiceBGPStatus` | Namespaced | `crd` | `ServiceBGPStatus` | `go.universe.tf/metallb@v0.16.1` |
 | `metallb.io/v1beta1` | `ServiceL2Status` | Namespaced | `crd` | `ServiceL2Status` | `go.universe.tf/metallb@v0.16.1` |
-| `monitoring.coreos.com/v1` | `Alertmanager` | Namespaced | `marker` | `Alertmanager` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring.coreos.com/v1` | `PodMonitor` | Namespaced | `marker` | `PodMonitor` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring.coreos.com/v1` | `Probe` | Namespaced | `marker` | `Probe` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring.coreos.com/v1` | `Prometheus` | Namespaced | `marker` | `Prometheus` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring.coreos.com/v1` | `PrometheusRule` | Namespaced | `marker` | `PrometheusRule` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring.coreos.com/v1` | `ServiceMonitor` | Namespaced | `marker` | `ServiceMonitor` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring.coreos.com/v1` | `ThanosRuler` | Namespaced | `marker` | `ThanosRuler` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
+| `monitoring.coreos.com/v1` | `Alertmanager` | Namespaced | `marker` | `Alertmanager` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring.coreos.com/v1` | `PodMonitor` | Namespaced | `marker` | `PodMonitor` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring.coreos.com/v1` | `Probe` | Namespaced | `marker` | `Probe` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring.coreos.com/v1` | `Prometheus` | Namespaced | `marker` | `Prometheus` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring.coreos.com/v1` | `PrometheusRule` | Namespaced | `marker` | `PrometheusRule` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring.coreos.com/v1` | `ServiceMonitor` | Namespaced | `marker` | `ServiceMonitor` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring.coreos.com/v1` | `ThanosRuler` | Namespaced | `marker` | `ThanosRuler` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
 | `networking.k8s.io/v1` | `IPAddress` | Cluster | `builtin` | `IPAddress` | `k8s.io/api@v0.37.1` |
 | `networking.k8s.io/v1` | `Ingress` | Namespaced | `builtin` | `Ingress` | `k8s.io/api@v0.37.1` |
 | `networking.k8s.io/v1` | `IngressClass` | Cluster | `builtin` | `IngressClass` | `k8s.io/api@v0.37.1` |
@@ -188,25 +188,25 @@ by a caller.
 | `api/v2.Rollback` | `recreate` | deprecated | — | `github.com/fluxcd/helm-controller/api@v1.6.4` |
 | `api/v1beta3.AlertSpec` | `summary` | deprecated | — | `github.com/fluxcd/notification-controller/api@v1.9.4` |
 | `api/v1beta3.ProviderSpec` | `proxy` | deprecated | — | `github.com/fluxcd/notification-controller/api@v1.9.4` |
-| `monitoring/v1.APIServerConfig` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.AlertmanagerEndpoints` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.AlertmanagerSpec` | `baseImage` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.AlertmanagerSpec` | `persistentVolumeClaimRetentionPolicy` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.AlertmanagerSpec` | `sha` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.AlertmanagerSpec` | `tag` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.CommonPrometheusFields` | `persistentVolumeClaimRetentionPolicy` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.Endpoint` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.HTTPConfigWithoutTLS` | `bearerTokenSecret` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.PodMetricsEndpoint` | `targetPort` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.PrometheusSpec` | `allowOverlappingBlocks` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.PrometheusSpec` | `prometheusRulesExcludedFromEnforce` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.PrometheusSpec` | `shardRetentionPolicy` | beta | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.RemoteReadSpec` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.RemoteWriteSpec` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.RollingUpdateStatefulSetStrategy` | `maxUnavailable` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.ShardingStrategy` | `mode` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.StorageSpec` | `ephemeral` | beta | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `monitoring/v1.ThanosRulerSpec` | `prometheusRulesExcludedFromEnforce` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
+| `monitoring/v1.APIServerConfig` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.AlertmanagerEndpoints` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.AlertmanagerSpec` | `baseImage` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.AlertmanagerSpec` | `persistentVolumeClaimRetentionPolicy` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.AlertmanagerSpec` | `sha` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.AlertmanagerSpec` | `tag` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.CommonPrometheusFields` | `persistentVolumeClaimRetentionPolicy` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.Endpoint` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.HTTPConfigWithoutTLS` | `bearerTokenSecret` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.PodMetricsEndpoint` | `targetPort` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.PrometheusSpec` | `allowOverlappingBlocks` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.PrometheusSpec` | `prometheusRulesExcludedFromEnforce` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.PrometheusSpec` | `shardRetentionPolicy` | beta | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.RemoteReadSpec` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.RemoteWriteSpec` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.RollingUpdateStatefulSetStrategy` | `maxUnavailable` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.ShardingStrategy` | `mode` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.StorageSpec` | `ephemeral` | beta | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
+| `monitoring/v1.ThanosRulerSpec` | `prometheusRulesExcludedFromEnforce` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
 | `api/v1beta2.BGPPeerSpec` | `disableMP` | deprecated | — | `go.universe.tf/metallb@v0.16.1` |
 | `apps/v1.RollingUpdateStatefulSetStrategy` | `maxUnavailable` | beta | `MaxUnavailableStatefulSet` | `k8s.io/api@v0.37.1` |
 | `autoscaling/v2.HPAScalingRules` | `tolerance` | stable | `HPAConfigurableTolerance` | `k8s.io/api@v0.37.1` |

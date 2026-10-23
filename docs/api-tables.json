@@ -459,7 +459,7 @@
       "goType": "CiliumBGPAdvertisement",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -470,7 +470,7 @@
       "goType": "CiliumBGPClusterConfig",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -481,7 +481,7 @@
       "goType": "CiliumBGPNodeConfig",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -492,7 +492,7 @@
       "goType": "CiliumBGPNodeConfigOverride",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -503,7 +503,7 @@
       "goType": "CiliumBGPPeerConfig",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -514,7 +514,7 @@
       "goType": "CiliumCIDRGroup",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -525,7 +525,7 @@
       "goType": "CiliumClusterwideEnvoyConfig",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -536,7 +536,7 @@
       "goType": "CiliumClusterwideNetworkPolicy",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -547,7 +547,7 @@
       "goType": "CiliumEgressGatewayPolicy",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -558,7 +558,7 @@
       "goType": "CiliumEndpoint",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -569,7 +569,7 @@
       "goType": "CiliumEnvoyConfig",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -580,7 +580,7 @@
       "goType": "CiliumIdentity",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -591,7 +591,7 @@
       "goType": "CiliumLoadBalancerIPPool",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -602,7 +602,7 @@
       "goType": "CiliumLocalRedirectPolicy",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -613,7 +613,7 @@
       "goType": "CiliumNetworkPolicy",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -624,7 +624,7 @@
       "goType": "CiliumNode",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -635,7 +635,7 @@
       "goType": "CiliumNodeConfig",
       "importPath": "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2",
       "module": "github.com/cilium/cilium",
-      "moduleVersion": "v1.20.3",
+      "moduleVersion": "v1.20.4",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1031,7 +1031,7 @@
       "goType": "Alertmanager",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1",
+      "moduleVersion": "v0.94.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1042,7 +1042,7 @@
       "goType": "PodMonitor",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1",
+      "moduleVersion": "v0.94.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1053,7 +1053,7 @@
       "goType": "Probe",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1",
+      "moduleVersion": "v0.94.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1064,7 +1064,7 @@
       "goType": "Prometheus",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1",
+      "moduleVersion": "v0.94.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1075,7 +1075,7 @@
       "goType": "PrometheusRule",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1",
+      "moduleVersion": "v0.94.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1086,7 +1086,7 @@
       "goType": "ServiceMonitor",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1",
+      "moduleVersion": "v0.94.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1097,7 +1097,7 @@
       "goType": "ThanosRuler",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1",
+      "moduleVersion": "v0.94.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1743,7 +1743,7 @@
       "goField": "BearerTokenFile",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1752,7 +1752,7 @@
       "goField": "BearerTokenFile",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1761,7 +1761,7 @@
       "goField": "BaseImage",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1770,7 +1770,7 @@
       "goField": "PersistentVolumeClaimRetentionPolicy",
       "stability": "alpha",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1779,7 +1779,7 @@
       "goField": "SHA",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1788,7 +1788,7 @@
       "goField": "Tag",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1797,7 +1797,7 @@
       "goField": "PersistentVolumeClaimRetentionPolicy",
       "stability": "alpha",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1806,7 +1806,7 @@
       "goField": "BearerTokenFile",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1815,7 +1815,7 @@
       "goField": "BearerTokenSecret",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1824,7 +1824,7 @@
       "goField": "TargetPort",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1833,7 +1833,7 @@
       "goField": "AllowOverlappingBlocks",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1842,7 +1842,7 @@
       "goField": "PrometheusRulesExcludedFromEnforce",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1851,7 +1851,7 @@
       "goField": "ShardRetentionPolicy",
       "stability": "beta",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1860,7 +1860,7 @@
       "goField": "BearerTokenFile",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1869,7 +1869,7 @@
       "goField": "BearerTokenFile",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1878,7 +1878,7 @@
       "goField": "MaxUnavailable",
       "stability": "alpha",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1887,7 +1887,7 @@
       "goField": "Mode",
       "stability": "alpha",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1896,7 +1896,7 @@
       "goField": "Ephemeral",
       "stability": "beta",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1905,7 +1905,7 @@
       "goField": "PrometheusRulesExcludedFromEnforce",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.94.1"
+      "moduleVersion": "v0.94.2"
     },
     {
       "importPath": "go.universe.tf/metallb/api/v1beta2",
