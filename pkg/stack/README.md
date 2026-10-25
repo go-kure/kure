@@ -402,6 +402,36 @@ validation failed for application "web" in namespace "prod": port must be positi
 
 Configs that do not implement `Validator` continue to work without changes.
 
+### Generation contract
+
+What `Generate` returns belongs to the caller from the moment it returns: the slice, every
+object it points to, and every map, slice and pointer those objects hold. kure writes into them.
+`Bundle.Generate` adds the bundle's labels and annotations that an object lacks, and the Flux
+integrator adds an application's delivery annotations (see [Flux Engine](/api-reference/flux-engine/)).
+A caller that holds the layout may edit them as well. So:
+
+- **Return nothing you keep or have returned before.** Build each result fresh, or return a
+  `DeepCopy()` of a cached one. Do not share a map between objects, or between fields of one
+  object: a Deployment whose labels map is also its selector's gets the bundle's labels in the
+  selector too.
+- **Every call is independent**, failed ones included. A walk (`layout.WalkCluster`,
+  `layout.WalkClusterByPackage`) calls `Generate` once for each application it renders. Every
+  workflow entry point that renders applications walks once, and nothing memoizes across
+  calls: validating with one entry point and laying out with another generates twice. A walk in
+  which one call fails returns no layout.
+- **To reuse a result you already validated**, memoize in the config. Validate and render once,
+  then return a deep copy on each call. The copy is linear in the objects' size, so it pays for
+  itself only where rendering costs more than copying, as with templates, charts and decoded YAML.
+- **No concurrency.** kure never calls `Generate` concurrently. Memoizing does not make a config
+  safe for concurrent use, and a config safe for concurrent use need not memoize.
+- **Wrappers forward the optional interfaces.** kure finds `Validator`, `layout.LayoutAugmenter`
+  and `layout.LayoutIntentAugmenter` by type assertion on the config itself. A wrapper that
+  embeds the `ApplicationConfig` interface hides all three, silently. Embed the concrete type,
+  or forward each method.
+
+`Application.Generate` runs `Validate` and `Generate` on every call and never augments a layout;
+only a walk does. The tests in `pkg/stack/layout/generation_contract_test.go` show each rule.
+
 ## Fluent Builder API
 
 For ergonomic cluster construction, use the fluent builder. Builder methods
