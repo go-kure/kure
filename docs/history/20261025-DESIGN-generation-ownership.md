@@ -150,21 +150,24 @@ config that chooses to memoize. Mandating it for every config, or doing it insid
 
 ## Follow-ups
 
-Registered on go-kure/kure#1067 before it closes, each with its completion criteria:
+Registered before go-kure/kure#1067 closes, each with its completion criteria in the issue:
 
-1. **Generated objects stop sharing the caller's maps.** The Flux Kustomization, the Argo CD
-   Application and the bundle builder clone `Labels` and `Annotations`. Done when a test edits
-   every generated object's maps in place and the input `Bundle` is unchanged.
-2. **`Bundle.Generate` writes into copies and skips nil entries**, as the walker does. Done when
-   a test with a labels map shared with a selector, and one with a nil entry, both pass.
-3. **The getting-started example builds every map and pointer fresh.** Done when the example
-   output is unchanged and `examples/getting-started/main_test.go` passes.
-4. **A conformance helper.** An exported test-support function that calls `Generate` twice and
-   reports any object, map, slice or pointer the two results share. It also reports whether
-   the config's optional interfaces survive a given wrapper. Done when it is documented, kure's
-   own example configs pass it, and a sharing config fails it.
-5. **Release and adoption.** Done when a tagged kure release ships 1-4 with changelog entries,
-   and one external consumer runs the helper in its CI, linked from the issue.
+1. **Generated objects stop sharing the caller's maps** (go-kure/kure#1082). The Flux
+   Kustomization, the Argo CD Application and the bundle builder clone `Labels` and
+   `Annotations`. Done when a test edits every generated object's maps in place and the input
+   `Bundle` is unchanged.
+2. **`Bundle.Generate` writes into copies and skips nil entries** (go-kure/kure#1083), as the
+   walker does. Done when a test with a labels map shared with a selector, and one with a nil
+   entry, both pass.
+3. **The getting-started example builds every map and pointer fresh** (go-kure/kure#1084).
+   Done when the example output is unchanged and `examples/getting-started/main_test.go` passes.
+4. **A conformance helper** (go-kure/kure#1085). An exported test-support function that calls
+   `Generate` twice and reports any object, map, slice or pointer the two results share. It
+   also reports whether the config's optional interfaces survive a given wrapper. Done when it
+   is documented, kure's own example configs pass it, and a sharing config fails it.
+5. **Release and adoption** (go-kure/kure#1086). Done when a tagged kure release ships 1-4 with
+   changelog entries, and one external consumer runs the helper in its CI, linked from the
+   issue.
 
 ## What this does not solve
 
