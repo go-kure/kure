@@ -907,8 +907,9 @@ the first two to the one Kustomization it returns, and `GenerateFromLayout`,
 `GenerateFromCluster` and `FluxSeparate` refuse the setting.
 These checks read a Kustomization's `spec.path` as a directory of the tree
 only when it reads the Source of the Kustomization that applies it, on this
-cluster; a health check on another cluster (`spec.kubeConfig`), or one a
-`spec.healthCheckExprs` predicate decides, waits for no readiness here.
+cluster; a health check on another cluster (`spec.kubeConfig`) waits for no
+readiness here, and a `spec.healthCheckExprs` predicate on Flux Kustomizations
+is read as a readiness wait, whatever it says.
 `fluxcd.UmbrellaTerminals` returns each umbrella's terminal leaves, for a
 dependency written from outside the tree. The full rules and refusals are in
 the [Flux Engine reference](/api-reference/flux-engine/#with-umbrellasdonotwait).

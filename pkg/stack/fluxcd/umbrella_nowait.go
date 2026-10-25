@@ -143,14 +143,13 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	// a Flux Kustomization this pass did not place (an application's, or the
 	// caller's), its dependsOn included. Only a check that waits for the
 	// umbrella's readiness counts (checkedKustomizations): one on another
-	// cluster, or one a healthCheckExprs predicate decides, does not.
+	// cluster does not; one a healthCheckExprs predicate decides does.
 	for _, k := range t.kusts {
 		key := crKey(k.Namespace, k.Name)
 		if t.isUmbrella(key) {
 			continue // R1: written without health checks, or refused above
 		}
-		checks, _ := checkedKustomizations(k)
-		for _, c := range checks {
+		for _, c := range checkedKustomizations(k) {
 			if terms, umbrella := terminals[c]; umbrella {
 				return errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q (spec.path %q) health-checks %q, which applies Flux Kustomizations: under UmbrellasDoNotWait %q does not wait, so it becomes Ready before what it applies, and a health check is not rewritten; health-check its terminal leaves %q instead", k.Name, k.Spec.Path, c, c, terms)
 			}
@@ -161,8 +160,7 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 		if err != nil {
 			return err
 		}
-		checks, _ := checkedKustomizations(spec)
-		for _, d := range append(slices.Clone(t.otherDeps[key]), checks...) {
+		for _, d := range append(slices.Clone(t.otherDeps[key]), checkedKustomizations(spec)...) {
 			if terms, umbrella := terminals[d]; umbrella {
 				return errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q (spec.path %q), which this integration did not place, depends on or health-checks %q, which applies Flux Kustomizations: under UmbrellasDoNotWait %q does not wait, so it becomes Ready before what it applies, and the integration does not rewrite a Kustomization it did not place; name its terminal leaves %q instead", key, spec.Spec.Path, d, d, terms)
 			}
@@ -242,9 +240,7 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 // graph checkReconcileOrder judges ("ready K" and "apply K" for each
 // Kustomization K), here over every Kustomization of the tree, or nil when
 // there is none. "ready K" needs "apply K", and what K's wait or its
-// Kustomization health checks wait for (awaitedKustomizations), and, for one
-// a healthCheckExprs predicate decides, that it exists: the apply of the
-// member that writes it; "apply K" needs every Kustomization K depends on
+// Kustomization health checks wait for (awaitedKustomizations); "apply K" needs every Kustomization K depends on
 // Ready, and the member whose apply writes K applied (soleWriter: none when
 // another Kustomization's build writes K as well). A Kustomization
 // that is no member is read from its own spec, as its author wrote it; its
@@ -284,14 +280,8 @@ func (t *kustomizationTree) orderPath(from, to string) ([]string, error) {
 		if k == nil {
 			return out, nil
 		}
-		ready, exist := awaitedKustomizations(k, func() []string { return t.written(key) })
-		for _, x := range ready {
+		for _, x := range awaitedKustomizations(k, func() []string { return t.written(key) }) {
 			out = append(out, "ready "+x)
-		}
-		for _, x := range exist {
-			if w := writer(x); w != "" {
-				out = append(out, "apply "+w)
-			}
 		}
 		return out, nil
 	}

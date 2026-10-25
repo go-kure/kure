@@ -992,9 +992,9 @@ func set(kusts []*kustv1.Kustomization) map[string]*kustv1.Kustomization {
 // waits for every dependsOn to be Ready; Ready waits for being applied and for
 // every Kustomization it health-checks — unless wait is set, when Flux ignores
 // health checks and waits for everything the Kustomization applied (applied,
-// if set, lists the generated CRs among it); one a healthCheckExprs predicate
-// decides needs only to exist, and none on another cluster (spec.kubeConfig)
-// counts (awaitedKustomizations). creator, if set, names the
+// if set, lists the generated CRs among it); none on another cluster
+// (spec.kubeConfig) counts, and a healthCheckExprs predicate is read as
+// readiness (awaitedKustomizations). creator, if set, names the
 // Kustomization whose apply creates a CR. Identities are namespace/name;
 // references to objects outside the set (other namespaces, Kustomizations an
 // application emits) are not modelled. A cycle is a deadlock on a fresh install: a merge can close one
@@ -1020,19 +1020,13 @@ func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string)
 		if applied != nil {
 			appliedBy = func() []string { return applied(key) }
 		}
-		awaited, exist := awaitedKustomizations(k, appliedBy)
-		for _, x := range awaited {
+		for _, x := range awaitedKustomizations(k, appliedBy) {
 			if set[x] != nil {
 				edges[ready] = append(edges[ready], "ready "+x)
 			}
 		}
 		if creator == nil {
 			continue
-		}
-		for _, x := range exist {
-			if c := creator(x); set[x] != nil && c != "" {
-				edges[ready] = append(edges[ready], "apply "+c)
-			}
 		}
 		if c := creator(key); c != "" {
 			edges[apply] = append(edges[apply], "apply "+c)
