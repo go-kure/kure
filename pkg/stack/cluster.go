@@ -71,7 +71,13 @@ type BootstrapConfig struct {
 	// gotk mode empty means the upstream registry. In flux-operator mode it is
 	// the FluxInstance distribution registry, and required: an empty value is an
 	// error, and no default is filled in.
-	Registry        string `yaml:"registry,omitempty"`
+	Registry string `yaml:"registry,omitempty"`
+	// ImagePullSecret names the Kubernetes Secret used to pull the Flux
+	// controller images, in both modes: in gotk mode it is the install
+	// option that adds the secret to every controller Deployment, in
+	// flux-operator mode the FluxInstance distribution's imagePullSecret.
+	// Empty sets none. It is for the controller images only, not a
+	// credential for the sync source.
 	ImagePullSecret string `yaml:"imagePullSecret,omitempty"`
 
 	// Source configuration

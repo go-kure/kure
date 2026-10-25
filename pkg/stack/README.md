@@ -59,7 +59,10 @@ is an error) and components, and the sync
 source — `SourceKind`, `SourceURL`,
 `SourceRef` and, in `flux-operator` mode, `SyncName`, the name the operator gives the sync source
 and Kustomization it creates (empty leaves it to the operator, which uses the `FluxInstance`
-namespace). See [Flux Engine](/api-reference/flux-engine/) for how each field is emitted.
+namespace). `ImagePullSecret` names the Secret the Flux controller images are pulled with, in
+both modes: the gotk install option, or the `FluxInstance` distribution's `imagePullSecret`. It
+is not a credential for the sync source. See [Flux Engine](/api-reference/flux-engine/) for how
+each field is emitted.
 
 ### Node
 
