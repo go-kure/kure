@@ -421,7 +421,7 @@ Configs that do not implement `Validator` continue to work without changes.
 ### Generation contract
 
 What `Generate` returns belongs to the caller from the moment it returns: the slice, every
-object it points to, and every map, slice and pointer those objects hold. kure writes into them.
+object it points to, and every map, slice and pointer those objects hold. kure writes to the objects.
 `Bundle.Generate` adds the bundle's labels and annotations that an object lacks, and the Flux
 integrator adds an application's delivery annotations (see [Flux Engine](/api-reference/flux-engine/)).
 A caller that holds the layout may edit them as well. So:
