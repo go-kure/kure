@@ -495,40 +495,71 @@ func TestReconcileContext_PlacedOrderReadsExpressions(t *testing.T) {
 	}
 }
 
-// As above, sub decided by a predicate, but platform's application also emits
-// hand-written, building web's directory on the tree's Source: it creates sub
-// too, once platform has applied, so sub exists without web's apply. Accepted.
+// As above, sub decided by a predicate, but an application also emits
+// hand-written, building web's directory on the tree's Source, so that it
+// creates sub too. Emitted by platform, which the bootstrap creates, it
+// applies without waiting for anything: sub exists without web's apply, and
+// the tree is accepted. Emitted by sub, it exists only once sub has applied,
+// and depending on web, only once web is Ready: either way sub still waits
+// for web's apply, and the cycle is refused.
 func TestReconcileContext_PlacedOrderAnotherWriter(t *testing.T) {
-	build := func(app *stack.Application) *stack.Cluster {
-		c := noWaitCluster(srBundle("platform", app), true)
+	cases := map[string]struct {
+		emitter   string
+		dependsOn bool
+		refused   bool
+	}{
+		"emitted by platform":              {emitter: "platform"},
+		"emitted by sub":                   {emitter: "sub", refused: true},
+		"emitted by platform, waiting web": {emitter: "platform", dependsOn: true, refused: true},
+	}
+	build := func(emitter string, app *stack.Application) *stack.Cluster {
+		platformApp, subApp := cmApp("platform-app"), cmApp("sub-app")
+		if emitter == "platform" {
+			platformApp = app
+		} else if emitter == "sub" {
+			subApp = app
+		}
+		c := noWaitCluster(srBundle("platform", platformApp), true)
 		web := c.Node.Children[1]
-		sub := &stack.Node{Name: "sub", Bundle: srBundle("sub", cmApp("sub-app"))}
+		sub := &stack.Node{Name: "sub", Bundle: srBundle("sub", subApp)}
 		web.Children = []*stack.Node{sub}
 		sub.SetParent(web)
 		return c
 	}
-	for _, placement := range integratedPlacements {
-		t.Run(string(placement), func(t *testing.T) {
-			rules := withPlacement(nodeOnly, placement)
-			off, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(build(cmApp("platform-app")), rules)
-			if err != nil {
-				t.Fatalf("without hand-written: %v", err)
-			}
-			k := handWritten("hand-written")
-			k.Spec.Path = path.Clean(findKept(off, "web").Spec.Path)
-			var o client.Object = k
-			cl := build(stack.NewApplication("platform-app", "default", &fakeAppConfig{objs: []*client.Object{&o}}))
-			ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(cl, rules)
-			if err != nil {
-				t.Fatalf("first integration: %v", err)
-			}
-			p := findKept(ml, "platform")
-			p.Spec.Wait = false
-			p.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: findKept(ml, "sub").Name}}
-			p.Spec.HealthCheckExprs = []kustomize.CustomHealthCheck{currentExpr(kustv1.GroupVersion.String(), "Kustomization")}
-			if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, cl, rules); err != nil {
-				t.Fatalf("IntegrateWithLayout: %v (%s)", err, describeKustomizations(ml))
-			}
-		})
+	for name, c := range cases {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				rules := withPlacement(nodeOnly, placement)
+				off, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(build("", nil), rules)
+				if err != nil {
+					t.Fatalf("without hand-written: %v", err)
+				}
+				k := handWritten("hand-written")
+				k.Spec.Path = path.Clean(findKept(off, "web").Spec.Path)
+				if c.dependsOn {
+					k.Spec.DependsOn = []kustv1.DependencyReference{{Name: findKept(off, "web").Name}}
+				}
+				var o client.Object = k
+				cl := build(c.emitter, stack.NewApplication(c.emitter+"-app", "default", &fakeAppConfig{objs: []*client.Object{&o}}))
+				ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(cl, rules)
+				if err != nil {
+					t.Fatalf("first integration: %v", err)
+				}
+				p := findKept(ml, "platform")
+				p.Spec.Wait = false
+				p.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: findKept(ml, "sub").Name}}
+				p.Spec.HealthCheckExprs = []kustomize.CustomHealthCheck{currentExpr(kustv1.GroupVersion.String(), "Kustomization")}
+				err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, cl, rules)
+				if c.refused {
+					if err == nil || !strings.Contains(err.Error(), "can never all become Ready") {
+						t.Fatalf("got %v, want a reconcile-order refusal (%s)", err, describeKustomizations(ml))
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("IntegrateWithLayout: %v (%s)", err, describeKustomizations(ml))
+				}
+			})
+		}
 	}
 }
