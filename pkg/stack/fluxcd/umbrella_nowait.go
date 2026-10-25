@@ -139,13 +139,16 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	// A health check is not rewritten: one naming an umbrella would be
 	// satisfied once the umbrella applied, before its leaves are Ready. Nor is
 	// a Flux Kustomization this pass did not place (an application's, or the
-	// caller's), its dependsOn included.
+	// caller's), its dependsOn included. Only a check that waits for the
+	// umbrella's readiness counts (checkedKustomizations): one on another
+	// cluster, or one a healthCheckExprs predicate decides, does not.
 	for _, k := range t.kusts {
 		key := crKey(k.Namespace, k.Name)
 		if t.isUmbrella(key) {
 			continue // R1: written without health checks, or refused above
 		}
-		for _, c := range kustomizationChecks(k) {
+		checks, _ := checkedKustomizations(k)
+		for _, c := range checks {
 			if terms, umbrella := terminals[c]; umbrella {
 				return errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q (spec.path %q) health-checks %q, which applies Flux Kustomizations: under UmbrellasDoNotWait %q does not wait, so it becomes Ready before what it applies, and a health check is not rewritten; health-check its terminal leaves %q instead", k.Name, k.Spec.Path, c, c, terms)
 			}
@@ -156,7 +159,8 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 		if err != nil {
 			return err
 		}
-		for _, d := range append(slices.Clone(t.otherDeps[key]), kustomizationChecks(spec)...) {
+		checks, _ := checkedKustomizations(spec)
+		for _, d := range append(slices.Clone(t.otherDeps[key]), checks...) {
 			if terms, umbrella := terminals[d]; umbrella {
 				return errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q (spec.path %q), which this integration did not place, depends on or health-checks %q, which applies Flux Kustomizations: under UmbrellasDoNotWait %q does not wait, so it becomes Ready before what it applies, and the integration does not rewrite a Kustomization it did not place; name its terminal leaves %q instead", key, spec.Spec.Path, d, d, terms)
 			}
@@ -236,14 +240,23 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 // graph checkReconcileOrder judges ("ready K" and "apply K" for each
 // Kustomization K), here over every Kustomization of the tree, or nil when
 // there is none. "ready K" needs "apply K", and what K's wait or its
-// Kustomization health checks wait for; "apply K" needs every Kustomization K
-// depends on Ready, and the member whose apply writes K applied (writer). A
-// Kustomization that is no member is read from its own spec, as its author
-// wrote it: its health checks without wait. Its wait is not followed, since
-// its spec.path is resolved in this tree whatever its spec.sourceRef names
-// (go-kure/kure#1062).
+// Kustomization health checks wait for (awaitedKustomizations), and, for one
+// a healthCheckExprs predicate decides, that it exists: the apply of the
+// member that writes it; "apply K" needs every Kustomization K depends on
+// Ready, and the member whose apply writes K applied (writer). A Kustomization
+// that is no member is read from its own spec, as its author wrote it; its
+// wait waits for what its build writes only when that build is the tree's
+// (readsLocalBuild), and for nothing the tree holds otherwise.
 func (t *kustomizationTree) orderPath(from, to string) ([]string, error) {
 	writers := map[string]string{}
+	writer := func(key string) string {
+		w, ok := writers[key]
+		if !ok {
+			w = t.writer(key)
+			writers[key] = w
+		}
+		return w
+	}
 	next := func(n string) ([]string, error) {
 		kind, key, _ := strings.Cut(n, " ")
 		var out []string
@@ -251,35 +264,31 @@ func (t *kustomizationTree) orderPath(from, to string) ([]string, error) {
 			for _, d := range t.deps(key) {
 				out = append(out, "ready "+d)
 			}
-			w, ok := writers[key]
-			if !ok {
-				w = t.writer(key)
-				writers[key] = w
-			}
-			if w != "" {
+			if w := writer(key); w != "" {
 				out = append(out, "apply "+w)
 			}
 			return out, nil
 		}
 		out = append(out, "apply "+key)
 		k := t.byKey[key]
-		var awaited []string
-		switch {
-		case k != nil && k.Spec.Wait:
-			awaited = t.applied(key)
-		case k != nil:
-			awaited = kustomizationChecks(k)
-		case t.otherObjs[key] != nil:
+		if k == nil && t.otherObjs[key] != nil {
 			spec, err := typedKustomization(t.otherObjs[key])
 			if err != nil {
 				return nil, err
 			}
-			if !spec.Spec.Wait {
-				awaited = kustomizationChecks(spec)
-			}
+			k = spec
 		}
-		for _, x := range awaited {
+		if k == nil {
+			return out, nil
+		}
+		ready, exist := awaitedKustomizations(k, func() []string { return t.written(key) })
+		for _, x := range ready {
 			out = append(out, "ready "+x)
+		}
+		for _, x := range exist {
+			if w := writer(x); w != "" {
+				out = append(out, "apply "+w)
+			}
 		}
 		return out, nil
 	}
