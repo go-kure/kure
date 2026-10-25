@@ -230,6 +230,11 @@ func checkUnappliedLayouts(root *ManifestLayout, plan writerPlan) error {
 // apply would replace what the other wrote. A Kustomization is matched by its
 // group and kind, at any version, and an omitted namespace is "default". One
 // inside a List counts, a List opened as kustomize opens it (see builtObjects).
+// One written with kustomize's local-config annotation at any string value but
+// "false" does not: a build drops it, so it never reaches the cluster
+// (built.LocalConfig, go-kure/kure#1059). Within one build it still counts,
+// in checkResourceIdentities and checkBuildIdentities, because kustomize
+// refuses one identity twice before it drops anything.
 func checkKustomizationNames(root *ManifestLayout) error {
 	holders := map[string]*ManifestLayout{}
 	var walk func(l *ManifestLayout) error
@@ -241,6 +246,13 @@ func checkKustomizationNames(root *ManifestLayout) error {
 		for _, obj := range objs {
 			gvk := obj.GetObjectKind().GroupVersionKind()
 			if gvk.Group != fluxKustomizationGroup || gvk.Kind != fluxKustomizationKind {
+				continue
+			}
+			local, err := built.LocalConfig(obj)
+			if err != nil {
+				return errors.Wrapf(err, "layout %q: read an object as written", l.FullRepoPath())
+			}
+			if local {
 				continue
 			}
 			acc, err := meta.Accessor(obj)

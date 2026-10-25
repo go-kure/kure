@@ -160,7 +160,11 @@ in `List` and that has an `items` field, opened again when an item is itself suc
 not end in `List` is one object, whatever fields it has, and so is a List kind without `items`; a
 List whose `items` is null holds nothing. An item a typed List holds as raw JSON
 (`runtime.RawExtension`) is read as the object it encodes, also when the item carries an object
-beside the raw JSON: the raw JSON is what is written.
+beside the raw JSON: the raw JSON is what is written. A Kustomization written with kustomize's
+`config.kubernetes.io/local-config` annotation at any string value but `"false"` is left out of
+this check: a build drops it, so it never reaches the cluster (go-kure/kure#1059). The checks of
+one layout and of one build still count it, because kustomize refuses one identity twice in a
+build before it drops anything.
 
 Every check above that compares objects reads a resource that way (go-kure/kure#1006): the check
 of one layout, the check of one build and the check of Kustomization names take a resource for the
