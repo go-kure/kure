@@ -966,7 +966,9 @@ func fluxKustomizationSource(obj client.Object) (source string, remote bool) {
 	case *kustv1.Kustomization:
 		ref, remote = o.Spec.SourceRef, o.Spec.KubeConfig != nil
 	case *unstructured.Unstructured:
-		_, remote, _ = unstructured.NestedFieldNoCopy(o.Object, "spec", "kubeConfig")
+		// A null kubeConfig is none, as in the typed object.
+		kc, _, _ := unstructured.NestedFieldNoCopy(o.Object, "spec", "kubeConfig")
+		remote = kc != nil
 		m, _, _ := unstructured.NestedMap(o.Object, "spec", "sourceRef")
 		ref.Kind, _ = m["kind"].(string)
 		ref.Name, _ = m["name"].(string)
