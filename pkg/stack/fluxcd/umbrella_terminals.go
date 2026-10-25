@@ -76,6 +76,9 @@ type kustomizationTree struct {
 	otherErr   error
 	reached    map[string]map[*layout.ManifestLayout]bool
 	fromRoot   map[*layout.ManifestLayout]bool
+	// local and scope cache localOthers and rootScope.
+	local []string
+	scope []*layout.ManifestLayout
 }
 
 // memberFilter returns the Flux Kustomizations of l that are members of the
