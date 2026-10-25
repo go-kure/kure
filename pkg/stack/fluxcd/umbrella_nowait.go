@@ -344,23 +344,22 @@ func (t *kustomizationTree) writer(key string) string {
 }
 
 // soleWriter is writer, but "" when a Kustomization that is no member, whose
-// build is the tree's (readsLocalBuild), also writes the one with key: it
-// then exists once either applies. The check does not model that
-// alternative, so it waits for neither, and refuses no tree for it.
+// build is the tree's (readsLocalBuild), also writes the one with key and
+// applies without waiting for anything (writtenByOther): the one with key
+// then exists once that one applies, and no check on it waits for either.
 func (t *kustomizationTree) soleWriter(key string) string {
 	w := t.writer(key)
-	if w == "" || t.writtenByOther(key, t.writer) {
+	if w == "" || t.writtenByOther(key) {
 		return ""
 	}
 	return w
 }
 
-// soleCreator is creator, but "" where another Kustomization writes the one
-// with key as soleWriter reads it, along creator: for the placed check, which
-// reads creator.
+// soleCreator is creator, but "" where soleWriter is: for the placed check,
+// which reads creator.
 func (t *kustomizationTree) soleCreator(key string) string {
 	c := t.creator(key)
-	if c == "" || t.writtenByOther(key, t.creator) {
+	if c == "" || t.writtenByOther(key) {
 		return ""
 	}
 	return c
@@ -368,8 +367,8 @@ func (t *kustomizationTree) soleCreator(key string) string {
 
 // writtenByOther reports whether a Kustomization that is no member, whose
 // build is the tree's (localOthers), writes the one with key and applies
-// without waiting for anything (appliesFreely, along by).
-func (t *kustomizationTree) writtenByOther(key string, by func(string) string) bool {
+// without waiting for anything (appliesFreely).
+func (t *kustomizationTree) writtenByOther(key string) bool {
 	host := t.hostOf[key]
 	if host == nil {
 		return false
@@ -378,7 +377,7 @@ func (t *kustomizationTree) writtenByOther(key string, by func(string) string) b
 		if o == key {
 			continue
 		}
-		if l := t.layoutAt[path.Clean(t.otherSpecs[o].Spec.Path)]; l != nil && slices.Contains(buildScope(l), host) && t.appliesFreely(o, by) {
+		if l := t.layoutAt[path.Clean(t.otherSpecs[o].Spec.Path)]; l != nil && slices.Contains(buildScope(l), host) && t.appliesFreely(o) {
 			return true
 		}
 	}
@@ -386,18 +385,25 @@ func (t *kustomizationTree) writtenByOther(key string, by func(string) string) b
 }
 
 // appliesFreely reports whether the Kustomization with key o applies without
-// waiting for anything: o, and each Kustomization whose apply creates the one
-// before it (by, the rule of the caller's graph), depends on nothing, and the
-// first that by names no creator of is one the Flux bootstrap applies.
-// Otherwise o may wait, directly or not, for what it would create (o is
-// created by that Kustomization's own apply, or depends on one that waits for
-// it): the check then keeps the member's creation edge, and may refuse a tree
-// that would converge.
-func (t *kustomizationTree) appliesFreely(o string, by func(string) string) bool {
+// waiting for anything: o, and each Kustomization whose apply writes the one
+// before it (writer), is read in typed form, is not suspended and depends on
+// nothing, and the first that writer names no writer of is one the Flux
+// bootstrap applies. Otherwise o may never apply, or wait, directly or not,
+// for what it would create (o is written by that Kustomization's own apply,
+// or depends on one that waits for it): the check then keeps the member's
+// creation edge, and may refuse a tree that would converge.
+func (t *kustomizationTree) appliesFreely(o string) bool {
 	seen := map[string]bool{}
-	for x := o; !seen[x] && len(t.deps(x)) == 0; x = by(x) {
+	for x := o; !seen[x]; x = t.writer(x) {
 		seen[x] = true
-		if by(x) == "" {
+		k := t.byKey[x]
+		if k == nil {
+			k = t.otherSpecs[x]
+		}
+		if k == nil || k.Spec.Suspend || len(t.deps(x)) > 0 {
+			return false
+		}
+		if t.writer(x) == "" {
 			host := t.hostOf[x]
 			return host != nil && slices.Contains(t.rootScope(), host)
 		}

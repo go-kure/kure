@@ -499,18 +499,23 @@ func TestReconcileContext_PlacedOrderReadsExpressions(t *testing.T) {
 // hand-written, building web's directory on the tree's Source, so that it
 // creates sub too. Emitted by platform, which the bootstrap creates, it
 // applies without waiting for anything: sub exists without web's apply, and
-// the tree is accepted. Emitted by sub, it exists only once sub has applied,
-// and depending on web, only once web is Ready: either way sub still waits
-// for web's apply, and the cycle is refused.
+// the tree is accepted, also when platform's application is written as one
+// file into platform's directory. Emitted by sub, it exists only once sub
+// has applied; depending on web, only once web is Ready; suspended, never:
+// each way sub still waits for web's apply, and the cycle is refused.
 func TestReconcileContext_PlacedOrderAnotherWriter(t *testing.T) {
 	cases := map[string]struct {
 		emitter   string
+		single    bool
 		dependsOn bool
+		suspend   bool
 		refused   bool
 	}{
 		"emitted by platform":              {emitter: "platform"},
+		"emitted by platform, one file":    {emitter: "platform", single: true},
 		"emitted by sub":                   {emitter: "sub", refused: true},
 		"emitted by platform, waiting web": {emitter: "platform", dependsOn: true, refused: true},
+		"emitted by platform, suspended":   {emitter: "platform", suspend: true, refused: true},
 	}
 	build := func(emitter string, app *stack.Application) *stack.Cluster {
 		platformApp, subApp := cmApp("platform-app"), cmApp("sub-app")
@@ -530,18 +535,29 @@ func TestReconcileContext_PlacedOrderAnotherWriter(t *testing.T) {
 		for _, placement := range integratedPlacements {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
 				rules := withPlacement(nodeOnly, placement)
-				off, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(build("", nil), rules)
+				if c.single {
+					rules.ApplicationGrouping = layout.GroupByName
+				}
+				integrate := func(cl *stack.Cluster) (*layout.ManifestLayout, error) {
+					if !c.single {
+						return fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(cl, rules)
+					}
+					ml := singleFile(t, cl, rules, "platform-app")
+					return ml, fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, cl, rules)
+				}
+				off, err := integrate(build("", nil))
 				if err != nil {
 					t.Fatalf("without hand-written: %v", err)
 				}
 				k := handWritten("hand-written")
 				k.Spec.Path = path.Clean(findKept(off, "web").Spec.Path)
+				k.Spec.Suspend = c.suspend
 				if c.dependsOn {
 					k.Spec.DependsOn = []kustv1.DependencyReference{{Name: findKept(off, "web").Name}}
 				}
 				var o client.Object = k
 				cl := build(c.emitter, stack.NewApplication(c.emitter+"-app", "default", &fakeAppConfig{objs: []*client.Object{&o}}))
-				ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(cl, rules)
+				ml, err := integrate(cl)
 				if err != nil {
 					t.Fatalf("first integration: %v", err)
 				}
