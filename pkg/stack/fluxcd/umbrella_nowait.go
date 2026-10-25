@@ -3,10 +3,12 @@ package fluxcd
 import (
 	"fmt"
 	"path"
+	"reflect"
 	"slices"
 	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
@@ -386,9 +388,10 @@ func (t *kustomizationTree) writtenByOther(key string) bool {
 
 // appliesFreely reports whether the Kustomization with key o applies without
 // waiting for anything: o, and each Kustomization whose apply writes the one
-// before it (writer), is read in typed form, is not suspended and depends on
-// nothing, and the first that writer names no writer of is one the Flux
-// bootstrap applies. Otherwise o may never apply, or wait, directly or not,
+// before it (writer), is read in typed form, sets no field that may change
+// what it applies (plainSpec) and depends on nothing, and the first that
+// writer names no writer of is one the Flux bootstrap applies. Otherwise o may
+// never apply, or write, the one after it, or wait, directly or not,
 // for what it would create (o is written by that Kustomization's own apply,
 // or depends on one that waits for it): the check then keeps the member's
 // creation edge, and may refuse a tree that would converge.
@@ -400,7 +403,7 @@ func (t *kustomizationTree) appliesFreely(o string) bool {
 		if k == nil {
 			k = t.otherSpecs[x]
 		}
-		if k == nil || k.Spec.Suspend || len(t.deps(x)) > 0 {
+		if k == nil || !plainSpec(k) || len(t.deps(x)) > 0 {
 			return false
 		}
 		if t.writer(x) == "" {
@@ -409,6 +412,22 @@ func (t *kustomizationTree) appliesFreely(o string) bool {
 		}
 	}
 	return false
+}
+
+// plainSpec reports whether k sets no field but those that change neither
+// whether it applies nor which objects of its directory it applies:
+// interval, retryInterval, timeout, path, sourceRef, prune, deletionPolicy,
+// force, wait, healthChecks, healthCheckExprs and dependsOn (which
+// appliesFreely reads itself). Any other field (suspend, commonMetadata,
+// spec.ignore, postBuild, decryption, serviceAccountName, images, a transform
+// of its build, ...) may keep it from writing what its directory holds, so
+// the check does not count it as another writer.
+func plainSpec(k *kustv1.Kustomization) bool {
+	s := k.Spec
+	s.Interval, s.RetryInterval, s.Timeout = metav1.Duration{}, nil, nil
+	s.Path, s.SourceRef, s.Prune, s.DeletionPolicy, s.Force, s.Wait = "", kustv1.CrossNamespaceSourceReference{}, false, "", false, false
+	s.HealthChecks, s.HealthCheckExprs, s.DependsOn = nil, nil, nil
+	return reflect.DeepEqual(s, kustv1.KustomizationSpec{})
 }
 
 // localOthers lists, once per tree, the Kustomizations that are no members

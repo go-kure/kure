@@ -501,21 +501,30 @@ func TestReconcileContext_PlacedOrderReadsExpressions(t *testing.T) {
 // applies without waiting for anything: sub exists without web's apply, and
 // the tree is accepted, also when platform's application is written as one
 // file into platform's directory. Emitted by sub, it exists only once sub
-// has applied; depending on web, only once web is Ready; suspended, never:
-// each way sub still waits for web's apply, and the cycle is refused.
+// has applied; depending on web, only once web is Ready; suspended, or with
+// any spec field that may change what it applies (common metadata of any
+// kind among them), it may never write sub: each way sub still waits for
+// web's apply, and the cycle is refused.
 func TestReconcileContext_PlacedOrderAnotherWriter(t *testing.T) {
 	cases := map[string]struct {
-		emitter   string
-		single    bool
-		dependsOn bool
-		suspend   bool
-		refused   bool
+		emitter     string
+		single      bool
+		dependsOn   bool
+		suspend     bool
+		annotations map[string]string
+		refused     bool
 	}{
 		"emitted by platform":              {emitter: "platform"},
 		"emitted by platform, one file":    {emitter: "platform", single: true},
 		"emitted by sub":                   {emitter: "sub", refused: true},
 		"emitted by platform, waiting web": {emitter: "platform", dependsOn: true, refused: true},
 		"emitted by platform, suspended":   {emitter: "platform", suspend: true, refused: true},
+		"emitted by platform, ssa ignore": {emitter: "platform", refused: true,
+			annotations: map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "Ignore"}},
+		"emitted by platform, reconcile disabled": {emitter: "platform", refused: true,
+			annotations: map[string]string{"kustomize.toolkit.fluxcd.io/reconcile": "disabled"}},
+		"emitted by platform, another annotation": {emitter: "platform", refused: true,
+			annotations: map[string]string{"example.com/team": "web"}},
 	}
 	build := func(emitter string, app *stack.Application) *stack.Cluster {
 		platformApp, subApp := cmApp("platform-app"), cmApp("sub-app")
@@ -552,6 +561,9 @@ func TestReconcileContext_PlacedOrderAnotherWriter(t *testing.T) {
 				k := handWritten("hand-written")
 				k.Spec.Path = path.Clean(findKept(off, "web").Spec.Path)
 				k.Spec.Suspend = c.suspend
+				if c.annotations != nil {
+					k.Spec.CommonMetadata = &kustv1.CommonMetadata{Annotations: c.annotations}
+				}
 				if c.dependsOn {
 					k.Spec.DependsOn = []kustv1.DependencyReference{{Name: findKept(off, "web").Name}}
 				}
