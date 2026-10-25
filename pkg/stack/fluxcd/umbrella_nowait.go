@@ -348,20 +348,37 @@ func (t *kustomizationTree) writer(key string) string {
 // then exists once either applies. The check does not model that
 // alternative, so it waits for neither, and refuses no tree for it.
 func (t *kustomizationTree) soleWriter(key string) string {
-	w := t.writer(key)
-	if w == "" {
+	if t.writtenByOther(key) {
 		return ""
 	}
+	return t.writer(key)
+}
+
+// soleCreator is creator, but "" where soleWriter is: for the placed check,
+// which reads creator.
+func (t *kustomizationTree) soleCreator(key string) string {
+	if t.writtenByOther(key) {
+		return ""
+	}
+	return t.creator(key)
+}
+
+// writtenByOther reports whether a Kustomization that is no member, whose
+// build is the tree's (readsLocalBuild), writes the one with key.
+func (t *kustomizationTree) writtenByOther(key string) bool {
 	host := t.hostOf[key]
+	if host == nil {
+		return false
+	}
 	for _, o := range t.otherKeys {
 		if o == key || !t.readsLocalBuild(o) {
 			continue
 		}
 		if l := t.layoutAt[path.Clean(t.otherSpecs[o].Spec.Path)]; l != nil && slices.Contains(buildScope(l), host) {
-			return ""
+			return true
 		}
 	}
-	return w
+	return false
 }
 
 // keptNodeDependencies is a node's Kustomization kept from the tree whose
