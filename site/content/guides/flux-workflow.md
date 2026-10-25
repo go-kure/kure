@@ -144,11 +144,12 @@ for _, child := range ml.(*layout.ManifestLayout).Children {
 
 `CreateLayoutWithResources` walks the cluster and calls each application's `Generate` once. What
 `Generate` returns belongs to the caller, and kure writes into it: here, an application's
-delivery annotations (`Bundle.Generate` adds the bundle's labels and annotations too). A config
+delivery annotations. (`Bundle.Generate`, which the walk does not call, adds the bundle's labels
+and annotations.) A config
 therefore returns fresh objects on every call, or deep copies of a cached result. Each entry
 point that renders applications (`GenerateFromCluster`, `CreateLayoutWithResources`) walks
 again, so validating with one and laying out with another generates twice; to generate once,
-walk once and pass the layout to `IntegrateWithLayout`. A wrapper config forwards `Validator`
+walk once with `layout.WalkCluster` and pass the layout to `IntegrateWithLayout`. A wrapper config forwards `Validator`
 and the layout augmenter interfaces, or loses them. See [Stack](/api-reference/stack/) §
 Generation contract.
 
