@@ -65,9 +65,9 @@ type ResourceGenerator struct {
 	// also when it transforms its build (patches, components, name prefix or
 	// suffix, target namespace: not modelled, so the wait is kept);
 	// a health check on another cluster names none of the tree's
-	// Kustomizations, and one a spec.healthCheckExprs entry for Flux
-	// Kustomizations decides waits for the checked one to exist, not to be
-	// Ready.
+	// Kustomizations, and a spec.healthCheckExprs entry for Flux
+	// Kustomizations is read as a wait for the checked one to be Ready,
+	// whatever its expression says.
 	UmbrellasDoNotWait bool
 	// OmitUmbrellaChildHealthChecks, when true, writes none of the automatic
 	// health checks an umbrella's Kustomization gets for its children

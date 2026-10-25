@@ -37,6 +37,12 @@ func currentExpr(apiVersion, kind string) kustomize.CustomHealthCheck {
 	return kustomize.CustomHealthCheck{APIVersion: apiVersion, Kind: kind, HealthCheckExpressions: kustomize.HealthCheckExpressions{Current: "true"}}
 }
 
+// readyExpr is a healthCheckExprs entry for Flux Kustomizations that is a
+// readiness wait written as an expression.
+func readyExpr() kustomize.CustomHealthCheck {
+	return kustomize.CustomHealthCheck{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", HealthCheckExpressions: kustomize.HealthCheckExpressions{Current: "status.conditions.filter(e, e.type == 'Ready').all(e, e.status == 'True')"}}
+}
+
 // webDirectory is the directory that holds web's Kustomization once
 // noWaitCluster is integrated in placement.
 func webDirectory(t *testing.T, placement layout.FluxPlacement) string {
@@ -111,11 +117,11 @@ func TestReconcileContext_ForeignWaitIsNoCycle(t *testing.T) {
 }
 
 // A health check of hand-written on web closes the same cycle as a wait,
-// unless it does not wait for web's readiness: on another cluster it names
-// another Kustomization, and where a healthCheckExprs entry matches Flux
-// Kustomizations (by group and kind, any version; or the whole group) Flux
-// evaluates that instead. An entry for another kind leaves the check as it
-// was. With wait, the predicate decides what the wait polls the same way.
+// unless it names another Kustomization: one on another cluster. A
+// healthCheckExprs entry matching Flux Kustomizations is arbitrary CEL, which
+// may itself wait for readiness, so it is read as readiness whatever it says,
+// with or without wait: each is refused, the always-current one a false
+// refusal kept on purpose (go-kure/kure#1094).
 func TestReconcileContext_HealthCheckContext(t *testing.T) {
 	checksWeb := func(k *kustv1.Kustomization) {
 		k.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "web"}}
@@ -136,15 +142,16 @@ func TestReconcileContext_HealthCheckContext(t *testing.T) {
 			checksWeb(k)
 			k.Spec.KubeConfig = remoteCluster()
 		}},
-		"an expression for Kustomization":          {edit: withExpr(currentExpr(kustv1.GroupVersion.String(), "Kustomization"))},
-		"an expression at another version":         {edit: withExpr(currentExpr(kustv1beta2.GroupVersion.String(), "Kustomization"))},
-		"an expression for the whole group":        {edit: withExpr(currentExpr(kustv1.GroupVersion.String(), ""))},
+		"an expression for Kustomization":          {edit: withExpr(currentExpr(kustv1.GroupVersion.String(), "Kustomization")), refused: true},
+		"an expression waiting for readiness":      {edit: withExpr(readyExpr()), refused: true},
+		"an expression at another version":         {edit: withExpr(currentExpr(kustv1beta2.GroupVersion.String(), "Kustomization")), refused: true},
+		"an expression for the whole group":        {edit: withExpr(currentExpr(kustv1.GroupVersion.String(), "")), refused: true},
 		"an expression for another kind":           {edit: withExpr(currentExpr("apps/v1", "Deployment")), refused: true},
 		"an expression for the group's other kind": {edit: withExpr(currentExpr(kustv1.GroupVersion.String(), "Other")), refused: true},
 		"wait with an expression for Kustomization": {edit: func(t *testing.T, placement layout.FluxPlacement, k *kustv1.Kustomization) {
 			k.Spec.Wait, k.Spec.Path = true, webDirectory(t, placement)
 			k.Spec.HealthCheckExprs = []kustomize.CustomHealthCheck{currentExpr(kustv1.GroupVersion.String(), "Kustomization")}
-		}},
+		}, refused: true},
 	}
 	for name, c := range cases {
 		for _, placement := range integratedPlacements {
@@ -165,11 +172,11 @@ func TestReconcileContext_HealthCheckContext(t *testing.T) {
 	}
 }
 
-// A Kustomization a healthCheckExprs predicate decides must still exist for
-// Flux to evaluate it: hand-written, checking inner that web's apply writes,
-// becomes Ready only once web applied, and web, depending on it once
-// rewritten, applies only once it is Ready. Refused, as the Ready edge would
-// be; on another cluster, inner is not this one, and it is accepted.
+// A Kustomization a healthCheckExprs predicate decides is waited Ready for,
+// as without the predicate: hand-written, checking inner that web's apply
+// writes, becomes Ready only once inner is, so once web applied, and web,
+// depending on it once rewritten, applies only once it is Ready. Refused; on
+// another cluster, inner is not this one, and it is accepted.
 func TestReconcileContext_ExistenceIsAwaited(t *testing.T) {
 	for _, remote := range []bool{false, true} {
 		for _, placement := range integratedPlacements {
@@ -193,8 +200,8 @@ func TestReconcileContext_ExistenceIsAwaited(t *testing.T) {
 					assertDependsOn(t, ml, "web", "hand-written")
 					return
 				}
-				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "ready flux-system/hand-written -> apply flux-system/web") {
-					t.Fatalf("got %v, want ErrUmbrellaDependency naming hand-written's wait for web's apply", err)
+				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "ready flux-system/hand-written -> ready flux-system/inner -> apply flux-system/inner -> apply flux-system/web") {
+					t.Fatalf("got %v, want ErrUmbrellaDependency naming hand-written's wait for inner's readiness", err)
 				}
 			})
 		}
@@ -445,10 +452,10 @@ func replaceUnstructured(t *testing.T, ml *layout.ManifestLayout, obj client.Obj
 // The reconcile-order check of every integration reads a kept
 // Kustomization's health checks the same way. platform, kept without wait,
 // health-checks a Kustomization while web depends on platform: on web itself,
-// platform's readiness waits for web's, which waits for platform's, unless a
-// healthCheckExprs predicate decides web, which then needs only to exist
-// (the bootstrap creates it). On sub, which web's apply creates, even the
-// predicate waits for web to apply, and so for platform.
+// platform's readiness waits for web's, which waits for platform's. A
+// healthCheckExprs predicate deciding it is read as readiness too (it may be
+// one), so each is refused, and on sub, which web's apply creates, the same
+// way.
 func TestReconcileContext_PlacedOrderReadsExpressions(t *testing.T) {
 	build := func() *stack.Cluster {
 		c := noWaitCluster(srBundle("platform", cmApp("platform-app")), true)
@@ -464,7 +471,7 @@ func TestReconcileContext_PlacedOrderReadsExpressions(t *testing.T) {
 		refused bool
 	}{
 		"web":                 {checked: "web", refused: true},
-		"web, by a predicate": {checked: "web", expr: true},
+		"web, by a predicate": {checked: "web", expr: true, refused: true},
 		"sub":                 {checked: "sub", refused: true},
 		"sub, by a predicate": {checked: "sub", expr: true, refused: true},
 	}
@@ -481,7 +488,7 @@ func TestReconcileContext_PlacedOrderReadsExpressions(t *testing.T) {
 				k.Spec.Wait = false
 				k.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: findKept(ml, c.checked).Name}}
 				if c.expr {
-					k.Spec.HealthCheckExprs = []kustomize.CustomHealthCheck{currentExpr(kustv1.GroupVersion.String(), "Kustomization")}
+					k.Spec.HealthCheckExprs = []kustomize.CustomHealthCheck{readyExpr()}
 				}
 				err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, cl, rules)
 				if c.refused {
@@ -498,10 +505,11 @@ func TestReconcileContext_PlacedOrderReadsExpressions(t *testing.T) {
 	}
 }
 
-// As above, sub decided by a predicate, but an application also emits
-// hand-written, building web's directory on the tree's Source, so that it
-// creates sub too. Emitted by platform, which the bootstrap creates, it
-// applies without waiting for anything: sub exists without web's apply, and
+// As above, sub decided by a predicate (read as readiness), but an
+// application also emits hand-written, building web's directory on the
+// tree's Source, so that it creates sub too. Emitted by platform, which the
+// bootstrap creates, it applies without waiting for anything: sub is
+// applied, and can become Ready, without web's apply, and
 // the tree is accepted, also when platform's application is written as one
 // file into platform's directory. Emitted by sub, it exists only once sub
 // has applied; depending on web, only once web is Ready; suspended, or with

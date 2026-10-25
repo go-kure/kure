@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
-	"github.com/fluxcd/pkg/apis/kustomize"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/errors"
@@ -572,31 +570,33 @@ func typedKustomization(obj client.Object) (*kustv1.Kustomization, error) {
 	return nil, errors.Wrapf(err, "read Flux Kustomization %q in typed form", crKey(obj.GetNamespace(), obj.GetName()))
 }
 
-// awaitedKustomizations returns the Flux Kustomizations whose state k's
+// awaitedKustomizations returns the Flux Kustomizations whose readiness k's
 // readiness waits for, as kustomize-controller polls them: with wait, those
 // its apply wrote (applied; nil when unknown), and otherwise those its
-// spec.healthChecks name (checkedKustomizations). Flux reads both sets with
-// the same status readers, so both are split alike. applied says what the
+// spec.healthChecks name (checkedKustomizations). applied says what the
 // apply wrote here: nothing, for one on another cluster (readsLocalBuild).
-func awaitedKustomizations(k *kustv1.Kustomization, applied func() []string) (ready, exist []string) {
+// A spec.healthCheckExprs entry matching Flux Kustomizations changes
+// nothing: its expression is arbitrary CEL, which may wait for readiness, so
+// it is read as readiness (go-kure/kure#1094).
+func awaitedKustomizations(k *kustv1.Kustomization, applied func() []string) []string {
 	if !k.Spec.Wait {
 		return checkedKustomizations(k)
 	}
 	if applied == nil {
-		return nil, nil
+		return nil
 	}
-	return splitByExprs(k, applied())
+	return applied()
 }
 
 // checkedKustomizations returns the Flux Kustomizations k's spec.healthChecks
 // name, an entry without namespace in k's, whether or not k sets wait (under
-// which Flux ignores them). ready are those it waits Ready for; exist those an
-// entry of spec.healthCheckExprs decides instead (splitByExprs). With
-// spec.kubeConfig set Flux polls another cluster: a name there is not this
-// tree's Kustomization, and none is returned.
-func checkedKustomizations(k *kustv1.Kustomization) (ready, exist []string) {
+// which Flux ignores them), each waited Ready for (a healthCheckExprs entry
+// for them read as readiness, awaitedKustomizations). With spec.kubeConfig
+// set Flux polls another cluster: a name there is not this tree's
+// Kustomization, and none is returned.
+func checkedKustomizations(k *kustv1.Kustomization) []string {
 	if k.Spec.KubeConfig != nil {
-		return nil, nil
+		return nil
 	}
 	var targets []string
 	for _, hc := range k.Spec.HealthChecks {
@@ -609,21 +609,5 @@ func checkedKustomizations(k *kustv1.Kustomization) (ready, exist []string) {
 		}
 		targets = append(targets, crKey(ns, hc.Name))
 	}
-	return splitByExprs(k, targets)
-}
-
-// splitByExprs splits targets, Flux Kustomizations k polls, into those it
-// waits Ready for and those it needs only to exist. When an entry of
-// k's spec.healthCheckExprs matches Flux Kustomizations, Flux evaluates that
-// expression instead of their readiness, and needs each to exist to read it.
-// An entry matches by group and kind, its version ignored, and one without a
-// kind matches its whole group, as Flux matches them.
-func splitByExprs(k *kustv1.Kustomization, targets []string) (ready, exist []string) {
-	if slices.ContainsFunc(k.Spec.HealthCheckExprs, func(e kustomize.CustomHealthCheck) bool {
-		gk := schema.FromAPIVersionAndKind(e.APIVersion, e.Kind).GroupKind()
-		return gk.Group == kustv1.GroupVersion.Group && (e.Kind == "" || gk.Kind == "Kustomization")
-	}) {
-		return nil, targets
-	}
-	return targets, nil
+	return targets
 }

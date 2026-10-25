@@ -322,8 +322,8 @@ every Kustomization it health-checks, unless `wait` is set (Flux then ignores he
 waits for everything it applied, the CRs it created included); and, under integrated placement, a
 CR exists only once the Kustomization whose directory references reach its file has applied — a CR
 the root directory reaches is created by the Flux bootstrap. Identities are namespace and name. A
-health check on another cluster (`spec.kubeConfig`) is no wait, and one a `spec.healthCheckExprs`
-entry for Flux Kustomizations decides waits only for the checked CR to exist. A
+health check on another cluster (`spec.kubeConfig`) is no wait. A `spec.healthCheckExprs` entry
+for Flux Kustomizations is read as a wait for readiness, whatever its expression says. A
 cycle among these waits is refused, naming the chain. Kustomizations an application emits itself,
 and objects in other namespaces, are outside this check. A merge can close one (a health
 check or dependency on a bundle merged into a unit that waits for it), and so can a parent node's
@@ -1216,17 +1216,17 @@ bootstrap applies, depends on nothing and sets no spec field but `interval`, `re
 for the apply of either. Otherwise the other may wait for, or never write, what it would create
 (`suspend`, `commonMetadata` annotations, `kustomize.toolkit.fluxcd.io/ssa: Ignore` on the
 object itself, `spec.ignore`, …), and the checks wait for the generated one's apply. A health check on another cluster
-(`spec.kubeConfig`) names none of the tree's Kustomizations. Where a `spec.healthCheckExprs` entry matches Flux
-Kustomizations (by group and kind, whatever version, or the whole group for an entry without a
-kind), Flux evaluates that predicate instead of their readiness: the check waits for the checked
-Kustomization to exist, so for the apply that writes it, not for it to be Ready. The same holds
-for what a `wait` polls.
+(`spec.kubeConfig`) names none of the tree's Kustomizations. Health-check expressions on Flux
+Kustomizations (`spec.healthCheckExprs`) are read conservatively, as readiness: an expression is
+arbitrary CEL and may itself wait for the `Ready` condition, so the check, and what a `wait`
+polls, waits for the checked Kustomization to be Ready, whatever the expression says.
 
 Where these checks cannot tell what a build writes or waits for, they keep the wait, so they may
 refuse a tree that would converge. They do not model a generated Kustomization's patches
 rewriting a child Kustomization's spec, objects that `kustomize.toolkit.fluxcd.io/ssa: Ignore` or
 `kustomize.toolkit.fluxcd.io/reconcile: disabled` excludes from an apply, `spec.ignore`,
-`spec.postBuild` substitution, `spec.suspend`, or a build's own transforms (`spec.patches`,
+`spec.postBuild` substitution, `spec.suspend`, a `spec.healthCheckExprs` expression that does
+not wait for readiness, or a build's own transforms (`spec.patches`,
 which may delete what the directory holds, `spec.components`, `spec.namePrefix`,
 `spec.nameSuffix`, `spec.targetNamespace`) (go-kure/kure#1094). A tree refused for one of them integrates
 once the dependency or health check that closes the reported chain is dropped, or names another
