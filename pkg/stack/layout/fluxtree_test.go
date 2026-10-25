@@ -3,6 +3,7 @@ package layout_test
 import (
 	"archive/tar"
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -471,6 +472,46 @@ func TestWriters_RefuseDuplicateFluxKustomizationInOneLayout(t *testing.T) {
 		want := `layout "p" holds the same object kustomize.toolkit.fluxcd.io/Kustomization flux-system/shop twice`
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err = %v, want it to contain %q", writer, err, want)
+		}
+	}
+}
+
+// TestWriters_LocalConfigKustomizationName (go-kure/kure#1059): a copy written
+// with kustomize's local-config annotation at any string value but "false"
+// never reaches the cluster, so in a layout applied on its own it is no second
+// Kustomization of that name and the tree is written; at "false" it is one. In
+// the layout that holds the other copy it is still refused, as kustomize
+// refuses it: a build registers both before it drops one.
+func TestWriters_LocalConfigKustomizationName(t *testing.T) {
+	annotated := func(value string, obj *unstructured.Unstructured) *unstructured.Unstructured {
+		obj.SetAnnotations(map[string]string{"config.kubernetes.io/local-config": value})
+		return obj
+	}
+	for _, value := range []string{"true", "", "false"} {
+		dropped := value != "false"
+		for _, marked := range []bool{false, true} {
+			for _, writer := range allWriters {
+				name := fmt.Sprintf("%q/%s/%s", value, map[bool]string{false: "unmarked", true: "marked"}[marked], writer)
+				t.Run("separate builds/"+name, func(t *testing.T) {
+					tree := separately(marked, shopKs(), annotated(value, shopKs()))
+					if dropped {
+						writtenFiles(t, writer, layout.DefaultLayoutConfig(), tree)
+						return
+					}
+					err := writeRefused(t, writer, layout.DefaultLayoutConfig(), tree)
+					if want := `both hold the Flux Kustomization `; err == nil || !strings.Contains(err.Error(), want) {
+						t.Fatalf("err = %v, want it to contain %q", err, want)
+					}
+				})
+				t.Run("one layout/"+name, func(t *testing.T) {
+					p := fluxParent()
+					p.Resources = append(p.Resources, shopKs(), annotated(value, shopKs()))
+					err := writeRefused(t, writer, layout.DefaultLayoutConfig(), p)
+					if want := `holds the same object kustomize.toolkit.fluxcd.io/Kustomization flux-system/shop twice`; err == nil || !strings.Contains(err.Error(), want) {
+						t.Fatalf("err = %v, want it to contain %q", err, want)
+					}
+				})
+			}
 		}
 	}
 }
