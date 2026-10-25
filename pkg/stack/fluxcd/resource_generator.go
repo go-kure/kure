@@ -62,7 +62,9 @@ type ResourceGenerator struct {
 	// leaves every output as it is without it. A Flux Kustomization is read
 	// in its context: its spec.path is a directory of the tree only when it
 	// reads the Source of the Kustomization whose apply writes it, without
-	// spec.kubeConfig, and so its wait waits for what that directory holds;
+	// spec.kubeConfig, and transforms no object of its build (patches,
+	// components, name prefix or suffix, target namespace), and so its wait
+	// waits for what that directory holds;
 	// a health check on another cluster names none of the tree's
 	// Kustomizations, and one a spec.healthCheckExprs entry for Flux
 	// Kustomizations decides waits for the checked one to exist, not to be

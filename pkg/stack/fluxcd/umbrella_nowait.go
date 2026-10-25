@@ -243,7 +243,8 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 // Kustomization health checks wait for (awaitedKustomizations), and, for one
 // a healthCheckExprs predicate decides, that it exists: the apply of the
 // member that writes it; "apply K" needs every Kustomization K depends on
-// Ready, and the member whose apply writes K applied (writer). A Kustomization
+// Ready, and the member whose apply writes K applied (soleWriter: none when
+// another Kustomization's build writes K as well). A Kustomization
 // that is no member is read from its own spec, as its author wrote it; its
 // wait waits for what its build writes only when that build is the tree's
 // (readsLocalBuild), and for nothing the tree holds otherwise.
@@ -252,7 +253,7 @@ func (t *kustomizationTree) orderPath(from, to string) ([]string, error) {
 	writer := func(key string) string {
 		w, ok := writers[key]
 		if !ok {
-			w = t.writer(key)
+			w = t.soleWriter(key)
 			writers[key] = w
 		}
 		return w
@@ -340,6 +341,27 @@ func (t *kustomizationTree) writer(key string) string {
 		}
 	}
 	return best
+}
+
+// soleWriter is writer, but "" when a Kustomization that is no member, whose
+// build is the tree's (readsLocalBuild), also writes the one with key: it
+// then exists once either applies. The check does not model that
+// alternative, so it waits for neither, and refuses no tree for it.
+func (t *kustomizationTree) soleWriter(key string) string {
+	w := t.writer(key)
+	if w == "" {
+		return ""
+	}
+	host := t.hostOf[key]
+	for _, o := range t.otherKeys {
+		if o == key || !t.readsLocalBuild(o) {
+			continue
+		}
+		if l := t.layoutAt[path.Clean(t.otherSpecs[o].Spec.Path)]; l != nil && slices.Contains(buildScope(l), host) {
+			return ""
+		}
+	}
+	return w
 }
 
 // keptNodeDependencies is a node's Kustomization kept from the tree whose
