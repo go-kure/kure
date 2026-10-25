@@ -974,6 +974,38 @@ func TestDeliveryIntent_IntegratingAgainChangesNothing(t *testing.T) {
 	}
 }
 
+// TestDeliveryIntent_UnstructuredItemNonStringAnnotation: an unstructured
+// item of a typed List may carry an annotation whose value is no string, as
+// one decoded from YAML does. The intent is set beside it, the value stays,
+// and the check of what is written reads it as written.
+func TestDeliveryIntent_UnstructuredItemNonStringAnnotation(t *testing.T) {
+	for _, placement := range placements {
+		t.Run(string(placement), func(t *testing.T) {
+			u := &unstructured.Unstructured{Object: map[string]any{
+				"apiVersion": "v1", "kind": "ConfigMap",
+				"metadata": map[string]any{"name": "listed-cm", "namespace": "default", "annotations": map[string]any{"example.com/count": int64(1)}},
+			}}
+			var obj client.Object = rawListOf(runtime.RawExtension{Object: u})
+			app := stack.NewApplication("listed", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+			app.Delivery = stack.DeliveryIntent{PruneProtection: true}
+			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app)}}
+			ml := integrated(t, c, recursiveRules("nodeOnly", placement))
+			for writer, w := range writeAll(t, ml) {
+				applied := appliedObjects(t, w, ml)
+				checkApplied(t, writer, applied, []string{"listed-cm"}, map[string]string{pruneKey: "disabled"})
+				for _, o := range applied {
+					if o.GetName() != "listed-cm" {
+						continue
+					}
+					if v, _, _ := unstructured.NestedFieldNoCopy(o.Object, "metadata", "annotations", "example.com/count"); v == nil {
+						t.Errorf("%s: listed-cm is applied without example.com/count: %v", writer, o.Object["metadata"])
+					}
+				}
+			}
+		})
+	}
+}
+
 // TestDeliveryIntent_RawItemReadAsWritten: an item a typed List holds as a
 // runtime.RawExtension is written from its raw JSON when it has any, so that
 // is the object the intent is checked on. An object held beside the raw JSON
