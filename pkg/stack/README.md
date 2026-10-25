@@ -428,8 +428,8 @@ A caller that holds the layout may edit them as well. So:
 
 - **Return nothing you keep or have returned before.** Build each result fresh, or return a
   `DeepCopy()` of a cached one. Do not share a map between objects, or between fields of one
-  object: a Deployment whose labels map is also its selector's gets the bundle's labels in the
-  selector too.
+  object: kure gives an object a new map where it adds labels or annotations, but a caller's edit
+  of a Deployment's labels map in the layout also reaches a selector that shares it.
 - **Every call is independent**, failed ones included. A walk (`layout.WalkCluster`,
   `layout.WalkClusterByPackage`) calls `Generate` once for each application it renders. Every
   workflow entry point that renders applications walks once, and nothing memoizes across
