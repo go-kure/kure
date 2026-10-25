@@ -1203,8 +1203,12 @@ reads the Source of the Kustomization whose apply writes it (its `spec.sourceRef
 namespace its own; the Source's identity, so another Source of the same repository, at another
 ref, is another Source) and sets no `spec.kubeConfig`. One the Flux bootstrap writes, one on
 another Source, and one applying to another cluster build no directory of this tree: they add no
-wait, and are never refused for one. A health check on another cluster (`spec.kubeConfig`) names
-none of the tree's Kustomizations. Where a `spec.healthCheckExprs` entry matches Flux
+wait, and are never refused for one. Nor does one that transforms its build (`spec.patches`,
+`spec.components`, `spec.namePrefix`, `spec.nameSuffix` or `spec.targetNamespace`), since what
+it writes is then not what the directory holds. A Kustomization that a generated one's build
+writes, and the build of a Kustomization the tree holds writes too, exists once either applies:
+no check on it waits for the apply of either. A health check on another cluster
+(`spec.kubeConfig`) names none of the tree's Kustomizations. Where a `spec.healthCheckExprs` entry matches Flux
 Kustomizations (by group and kind, whatever version, or the whole group for an entry without a
 kind), Flux evaluates that predicate instead of their readiness: the check waits for the checked
 Kustomization to exist, so for the apply that writes it, not for it to be Ready. The same holds

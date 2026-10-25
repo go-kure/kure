@@ -201,6 +201,116 @@ func TestReconcileContext_ExistenceIsAwaited(t *testing.T) {
 	}
 }
 
+// hand-written building web's own directory writes inner as web does, so
+// inner exists, and can become Ready, once either applies: hand-written's
+// check on inner waits for nothing web's apply does, whether a
+// healthCheckExprs predicate decides it or it waits for readiness, through
+// an explicit health check or wait. Accepted: web depending on hand-written
+// closes no cycle.
+func TestReconcileContext_TargetItsOwnBuildWrites(t *testing.T) {
+	checksInner := func(k *kustv1.Kustomization) {
+		k.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "inner"}}
+	}
+	exprs := func(k *kustv1.Kustomization) {
+		k.Spec.HealthCheckExprs = []kustomize.CustomHealthCheck{currentExpr(kustv1.GroupVersion.String(), "Kustomization")}
+	}
+	cases := map[string]func(k *kustv1.Kustomization){
+		"existence":       func(k *kustv1.Kustomization) { checksInner(k); exprs(k) },
+		"health check":    checksInner,
+		"wait":            func(k *kustv1.Kustomization) { k.Spec.Wait = true },
+		"wait, existence": func(k *kustv1.Kustomization) { k.Spec.Wait = true; exprs(k) },
+	}
+	for name, edit := range cases {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				k := handWritten("hand-written")
+				k.Spec.Path = webBuildDirectory(t, placement)
+				edit(k)
+				var o client.Object = k
+				platform := srBundle("platform", stack.NewApplication("platform-app", "default", &fakeAppConfig{objs: []*client.Object{&o}}))
+				c := noWaitCluster(platform, true)
+				web := c.Node.Children[1].Bundle
+				web.Applications = append(web.Applications, fluxKustomizationApp("inner-app", "inner"))
+				ml, err := integrateNoWait(c, nodeOnly, placement)
+				if err != nil {
+					t.Fatalf("CreateLayoutWithResources: %v", err)
+				}
+				assertDependsOn(t, ml, "web", "hand-written")
+			})
+		}
+	}
+}
+
+// The same path on another Source is another directory: hand-written then
+// writes no inner, and its health check on inner waits for web's apply.
+// Refused: web depending on hand-written closes the cycle.
+func TestReconcileContext_TargetAForeignBuildDoesNotWrite(t *testing.T) {
+	for _, placement := range integratedPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			k := handWritten("hand-written")
+			k.Spec.Path = webBuildDirectory(t, placement)
+			k.Spec.SourceRef.Name = "flux-system-next"
+			k.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "inner"}}
+			var o client.Object = k
+			platform := srBundle("platform", stack.NewApplication("platform-app", "default", &fakeAppConfig{objs: []*client.Object{&o}}))
+			c := noWaitCluster(platform, true)
+			web := c.Node.Children[1].Bundle
+			web.Applications = append(web.Applications, fluxKustomizationApp("inner-app", "inner"))
+			_, err := integrateNoWait(c, nodeOnly, placement)
+			if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "ready flux-system/hand-written -> ready flux-system/inner -> apply flux-system/inner -> apply flux-system/web") {
+				t.Fatalf("got %v, want ErrUmbrellaDependency naming hand-written's check on inner, which web's apply writes", err)
+			}
+		})
+	}
+}
+
+// webBuildDirectory is the directory web's Kustomization builds once
+// noWaitCluster, inner added to web, is integrated in placement.
+func webBuildDirectory(t *testing.T, placement layout.FluxPlacement) string {
+	t.Helper()
+	c := noWaitCluster(srBundle("platform", cmApp("platform-app")), true)
+	web := c.Node.Children[1].Bundle
+	web.Applications = append(web.Applications, fluxKustomizationApp("inner-app", "inner"))
+	off, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, withPlacement(nodeOnly, placement))
+	if err != nil {
+		t.Fatalf("without the setting: %v", err)
+	}
+	return path.Clean(findKept(off, "web").Spec.Path)
+}
+
+// hand-written waiting on web's directory, as in
+// TestReconcileContext_SameSourceWaitIsACycle, but transforming what its
+// build writes: a patch can delete web from it, a component add to it, a
+// name prefix or suffix, or a target namespace, change which Kustomizations
+// it writes. The check does not model them, so the build is no longer read
+// as the tree's directory, and the rewrite is accepted.
+func TestReconcileContext_TransformedBuildIsUnknown(t *testing.T) {
+	cases := map[string]func(k *kustv1.Kustomization){
+		"patch deleting web": func(k *kustv1.Kustomization) {
+			k.Spec.Patches = []kustomize.Patch{{Patch: "$patch: delete\napiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: web\n  namespace: flux-system\n"}}
+		},
+		"component":        func(k *kustv1.Kustomization) { k.Spec.Components = []string{"../extra"} },
+		"name prefix":      func(k *kustv1.Kustomization) { k.Spec.NamePrefix = "x-" },
+		"name suffix":      func(k *kustv1.Kustomization) { k.Spec.NameSuffix = "-x" },
+		"target namespace": func(k *kustv1.Kustomization) { k.Spec.TargetNamespace = "elsewhere" },
+	}
+	for name, edit := range cases {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				dir := webDirectory(t, placement)
+				ml, err := integrateWithHandWritten(placement, func(k *kustv1.Kustomization) {
+					k.Spec.Wait, k.Spec.Path = true, dir
+					edit(k)
+				})
+				if err != nil {
+					t.Fatalf("CreateLayoutWithResources: %v", err)
+				}
+				assertDependsOn(t, ml, "web", "hand-written")
+			})
+		}
+	}
+}
+
 // A Kustomization kept from the tree in place of a generated one must read
 // what the generated one would, on this cluster: its spec.path is a directory
 // of this tree only then. One on another Source, or with spec.kubeConfig, is
