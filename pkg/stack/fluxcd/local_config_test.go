@@ -18,7 +18,8 @@ import (
 )
 
 // localConfigAnnotation is kustomize's local-config annotation: a build drops
-// an object that carries it at any string value but "false".
+// an object that carries it at any value but false, the string "false" or the
+// boolean false.
 const localConfigAnnotation = "config.kubernetes.io/local-config"
 
 // annotateLocalConfig sets the local-config annotation on obj to value, or
@@ -44,6 +45,77 @@ var localConfigCases = []struct {
 }
 
 func ptr(s string) *string { return &s }
+
+// localConfigValueCases is the annotation at values that are no Go string,
+// as an unstructured object decoded from YAML holds them. kustomize reads the
+// written text, so it keeps the object only at the boolean false.
+var localConfigValueCases = []struct {
+	name    string
+	value   any
+	dropped bool
+}{
+	{name: "boolean true", value: true, dropped: true},
+	{name: "boolean false", value: false, dropped: false},
+	{name: "number", value: int64(1), dropped: true},
+	{name: "null", value: nil, dropped: true},
+	{name: "string False", value: "False", dropped: true},
+}
+
+// annotateLocalConfigValue sets the local-config annotation of an
+// unstructured obj to value, whatever its type.
+func annotateLocalConfigValue(t *testing.T, obj client.Object, value any) client.Object {
+	t.Helper()
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+		if err != nil {
+			t.Fatal(err)
+		}
+		u = &unstructured.Unstructured{Object: content}
+	}
+	if err := unstructured.SetNestedField(u.Object, value, "metadata", "annotations", localConfigAnnotation); err != nil {
+		t.Fatal(err)
+	}
+	return u
+}
+
+// TestLocalConfig_ValueAsWritten: an unstructured namesake whose annotation
+// value is no Go string is judged as kustomize judges its written text. At
+// the boolean false it is built and refused; at any other value it is
+// dropped and the integration admits the tree.
+func TestLocalConfig_ValueAsWritten(t *testing.T) {
+	webRef := &stack.SourceRef{Kind: "GitRepository", Name: "web-git", Namespace: "flux-system", URL: "https://example.com/web.git", Branch: "main"}
+	for _, placement := range allPlacements {
+		for _, tc := range localConfigValueCases {
+			t.Run("Kustomization/"+string(placement)+"/"+tc.name, func(t *testing.T) {
+				o := annotateLocalConfigValue(t, fluxKustomization("web-bundle", "elsewhere"), tc.value)
+				platformApp := stack.NewApplication("platform-ks", "default", &fakeAppConfig{objs: []*client.Object{&o}})
+				web := &stack.Node{Name: "web", Bundle: srBundle("web-bundle", cmApp("web-app"))}
+				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
+				rules := propertyGroupings["nodeOnly"]
+				rules.FluxPlacement = placement
+				ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+				checkLocalConfigVerdict(t, err, tc.dropped, `"web-bundle"`)
+				if err == nil {
+					checkWritable(t, ml)
+				}
+			})
+			t.Run("Source/"+string(placement)+"/"+tc.name, func(t *testing.T) {
+				o := annotateLocalConfigValue(t, gitRepository("web-git", "https://example.com/other.git"), tc.value)
+				platformApp := stack.NewApplication("sources", "default", &fakeAppConfig{objs: []*client.Object{&o}})
+				web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", SourceRef: webRef, Applications: []*stack.Application{cmApp("web-app")}}}
+				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
+				rules := propertyGroupings["nodeOnly"]
+				rules.FluxPlacement = placement
+				ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+				checkLocalConfigVerdict(t, err, tc.dropped, `"web-git"`)
+				if err == nil {
+					checkWritable(t, ml)
+				}
+			})
+		}
+	}
+}
 
 // TestLocalConfig_IssueReproducer is go-kure/kure#1059 as reported: an
 // application emits a local-config Kustomization under the name the

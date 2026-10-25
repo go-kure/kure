@@ -359,16 +359,23 @@ func WrittenType(obj runtime.Object) (kind, apiVersion string, err error) {
 }
 
 // LocalConfig reports whether obj is written with kustomize's local-config
-// annotation (konfig.IgnoredByKustomizeAnnotation) at any string value but
-// "false". A kustomize build drops such an object once it has run its
+// annotation (konfig.IgnoredByKustomizeAnnotation) at any value but false:
+// the string "false" or the boolean false. kustomize reads the value as the
+// text of the YAML node it is written as (kyaml v0.21.2 RNode.GetMeta and
+// GetValue, yaml/rnode.go:322-326 and :54-58), keeps the object where that
+// text is exactly "false" (Factory.DropLocalNodes, resource/factory.go:149-150)
+// and drops it at any other: "true", "False", "", a number, null (read as
+// ""), a map or a list (no text, read as ""). The writers marshal an object
+// to JSON first, so the value is judged by its JSON, whatever its Go type: an
+// unstructured object decoded from YAML holds a boolean or a number as one.
+// A kustomize build drops such an object once it has run its
 // transformers, and does not require an apiVersion: by kustomize api v0.21.2 it
 // reads the kind of every object it takes in, and the name of every one whose
 // kind does not end in "List", and refuses one without
 // (Factory.dropBadNodes, resource/factory.go:253-268), and then drops
 // the object (KustTarget.IgnoreLocal, internal/target/kusttarget.go:255-265;
 // Factory.DropLocalNodes, resource/factory.go:134-155). Like WrittenType it
-// reads what is written, not the Go value; an annotation value that is no
-// string is not taken for one.
+// reads what is written, not the Go value.
 func LocalConfig(obj runtime.Object) (bool, error) {
 	written, err := writtenObject(obj)
 	if err != nil {
@@ -376,8 +383,19 @@ func LocalConfig(obj runtime.Object) (bool, error) {
 	}
 	metadata, _ := written["metadata"].(map[string]any)
 	annotations, _ := metadata["annotations"].(map[string]any)
-	value, ok := annotations[konfig.IgnoredByKustomizeAnnotation].(string)
-	return ok && value != "false", nil
+	value, ok := annotations[konfig.IgnoredByKustomizeAnnotation]
+	if !ok {
+		return false, nil
+	}
+	text, err := json.Marshal(value)
+	if err != nil {
+		return false, errors.Wrapf(err, "marshal the %s annotation", konfig.IgnoredByKustomizeAnnotation)
+	}
+	switch string(text) {
+	case `false`, `"false"`:
+		return false, nil
+	}
+	return true, nil
 }
 
 // writtenObject returns obj as it is written: an unstructured object from its

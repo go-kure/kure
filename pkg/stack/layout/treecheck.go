@@ -230,9 +230,9 @@ func checkUnappliedLayouts(root *ManifestLayout, plan writerPlan) error {
 // apply would replace what the other wrote. A Kustomization is matched by its
 // group and kind, at any version, and an omitted namespace is "default". One
 // inside a List counts, a List opened as kustomize opens it (see builtObjects).
-// One written with kustomize's local-config annotation at any string value but
-// "false" does not: a build drops it, so it never reaches the cluster
-// (built.LocalConfig, go-kure/kure#1059). Within one build it still counts,
+// One written with kustomize's local-config annotation at any value but false,
+// the string "false" or the boolean false, does not: a build drops it, so it
+// never reaches the cluster (built.LocalConfig, go-kure/kure#1059). Within one build it still counts,
 // in checkResourceIdentities and checkBuildIdentities, because kustomize
 // refuses one identity twice before it drops anything.
 func checkKustomizationNames(root *ManifestLayout) error {
@@ -570,9 +570,10 @@ func layoutPath(l *ManifestLayout, plan writerPlan) string {
 // object for one by its written kind), and a build drops the envelope without
 // reading its apiVersion, so a List without one builds and applies as its
 // items do. An object written with kustomize's local-config annotation at any
-// string value but "false" is not judged on its apiVersion either: a build drops it
-// without requiring one (built.LocalConfig). It is still judged on its kind,
-// which a build reads before it drops anything.
+// value but false, the string "false" or the boolean false, is not judged on
+// its apiVersion either: a build drops it without requiring one
+// (built.LocalConfig). It is still judged on its kind, which a build reads
+// before it drops anything.
 //
 // Only an empty field is refused. Whether a kind exists in any API, and
 // whether an apiVersion is well formed, is not looked at. The type is not

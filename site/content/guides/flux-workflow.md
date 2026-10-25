@@ -314,8 +314,8 @@ What changed, and what to do:
   one without an apiVersion builds into an object nothing applies. Set the `TypeMeta`, as the
   `Create*` constructors do, or the two fields of an unstructured object. A `List`'s own
   apiVersion is not required, nor the apiVersion of an object with the
-  `config.kubernetes.io/local-config` annotation at any string value but `"false"`, which kustomize
-  drops from the build.
+  `config.kubernetes.io/local-config` annotation at any value but `false` (the string `"false"` or
+  the boolean `false`), which kustomize drops from the build.
 - **No `..` in a layout's name or namespace.** Every writer refuses a layout whose `Name` or
   `Namespace` has a `..` path segment, with or without extra files.
 - **The walk validates its rules.** `WalkCluster` and `WalkClusterByPackage` run
@@ -653,7 +653,8 @@ bundle gave two Kustomizations one name and was refused. What to do:
   bundle `platform` is now applied by `platform-web`. If a bundle, a node or another layout
   already has a Kustomization of that name, the integration refuses the tree and names both,
   where the old name `web` was free. One written with the `config.kubernetes.io/local-config`
-  annotation at any value but `"false"` does not count: kustomize drops it from the build
+  annotation at any value but `false` (the string `"false"` or the boolean `false`) does not
+  count: kustomize drops it from the build
   (go-kure/kure#1059). Set `ManifestLayout.KustomizationName` on the layout, or
   `KustomizationName` on the other owner.
 - **Keep an old name** by setting `ManifestLayout.KustomizationName` on the layout.
