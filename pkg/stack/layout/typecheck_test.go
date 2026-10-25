@@ -127,6 +127,17 @@ func TestWriters_RefuseObjectWithoutKindOrAPIVersion(t *testing.T) {
 			func(t *testing.T) client.Object { return localConfig(withoutField("cm", "apiVersion"), "false") },
 			[]string{`ConfigMap "default/cm"`, "written without an apiVersion:"},
 		},
+		// So does the boolean false.
+		"an object without an apiVersion whose local-config annotation is the boolean false": {
+			func(t *testing.T) client.Object {
+				obj := withoutField("cm", "apiVersion")
+				if err := unstructured.SetNestedField(obj.Object, false, "metadata", "annotations", "config.kubernetes.io/local-config"); err != nil {
+					t.Fatal(err)
+				}
+				return obj
+			},
+			[]string{`ConfigMap "default/cm"`, "written without an apiVersion:"},
+		},
 	}
 	for name, tc := range cases {
 		for _, writer := range allWriters {
@@ -160,6 +171,13 @@ func TestWriters_LocalConfigWithoutAPIVersion(t *testing.T) {
 		},
 		"an item of an unstructured List, at a value that is not true": func(t *testing.T) client.Object {
 			return listOf("List", localConfig(withoutField("held", "apiVersion"), "x"))
+		},
+		"an unstructured object at the boolean true": func(t *testing.T) client.Object {
+			obj := withoutField("held", "apiVersion")
+			if err := unstructured.SetNestedField(obj.Object, true, "metadata", "annotations", "config.kubernetes.io/local-config"); err != nil {
+				t.Fatal(err)
+			}
+			return obj
 		},
 		"a typed object with a kind and no apiVersion": func(t *testing.T) client.Object {
 			cm := untypedConfigMap("held")

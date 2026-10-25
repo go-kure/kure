@@ -1,6 +1,7 @@
 package built
 
 import (
+	"encoding/json"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -704,6 +705,9 @@ func TestLocalConfig(t *testing.T) {
 		{"a typed object at false", typedFalse, false},
 		{"raw JSON at the boolean true", &runtime.Unknown{Raw: []byte(`{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"c","annotations":{"config.kubernetes.io/local-config":true}}}`)}, true},
 		{"raw JSON at the boolean false", &runtime.Unknown{Raw: []byte(`{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"c","annotations":{"config.kubernetes.io/local-config":false}}}`)}, false},
+		// A json.Marshaler may emit an escaped string. The writers decode
+		// the JSON before they write YAML, so it is written as false.
+		{"a value marshalled as an escaped string false", annotatedConfigMap(json.RawMessage(`"\u0066alse"`)), false},
 	}
 	for _, v := range localConfigValues {
 		cases = append(cases, struct {

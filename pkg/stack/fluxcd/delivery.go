@@ -168,19 +168,20 @@ func refuseDeliveryIntent(ml *layout.ManifestLayout) error {
 
 // annotateObject adds want to obj's annotations and returns how to take that
 // back, or nil when obj already carries all of want. It changes nothing when
-// one of them is present with another value.
+// one of them is present with another value. Every other annotation stays as
+// written, also one whose value is no string (built.Annotations).
 func annotateObject(app *stack.Application, obj client.Object, want map[string]string) (func(), error) {
-	orig := obj.GetAnnotations()
-	if key, have, conflict := conflicting(orig, want); conflict {
-		return nil, errors.Errorf("application %q: %s already carries annotation %s: %q, but the application's delivery intent needs %q",
-			app.Name, describeObject(obj), key, have, want[key])
+	have := built.Annotations(obj)
+	for _, k := range slices.Sorted(maps.Keys(want)) {
+		v, ok := have[k]
+		if !ok || v == want[k] {
+			continue
+		}
+		written, _ := json.Marshal(v)
+		return nil, errors.Errorf("application %q: %s already carries annotation %s: %s, but the application's delivery intent needs %q",
+			app.Name, describeObject(obj), k, written, want[k])
 	}
-	merged, changed := merge(orig, want)
-	if !changed {
-		return nil, nil
-	}
-	obj.SetAnnotations(merged)
-	return func() { obj.SetAnnotations(orig) }, nil
+	return built.AddAnnotations(obj, want), nil
 }
 
 // annotateGenerators adds want to every configMapGenerator of l and of the

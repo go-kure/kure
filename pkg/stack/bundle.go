@@ -7,6 +7,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/internal/built"
 	"github.com/go-kure/kure/pkg/errors"
 )
 
@@ -500,19 +501,11 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 	}
 
 	// Propagate bundle annotations to all generated resources.
-	// Application-specific annotations take precedence.
+	// Application-specific annotations take precedence, and stay as written:
+	// on an unstructured object a value need not be a string.
 	if len(a.Annotations) > 0 {
 		for _, r := range resources {
-			annotations := (*r).GetAnnotations()
-			if annotations == nil {
-				annotations = make(map[string]string, len(a.Annotations))
-			}
-			for k, v := range a.Annotations {
-				if _, exists := annotations[k]; !exists {
-					annotations[k] = v
-				}
-			}
-			(*r).SetAnnotations(annotations)
+			built.AddAnnotations(*r, a.Annotations)
 		}
 	}
 
