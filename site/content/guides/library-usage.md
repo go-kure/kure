@@ -166,6 +166,12 @@ decodes `.nan` and `.inf` into a float NaN or infinity without error, while `sig
 returns that error at decode time. Decode with the latter, or marshal the values yourself and pass
 them to `fluxcd.SetHelmReleaseValues`.
 
+`fluxcd.SetFluxInstanceSyncPullSecret` and `fluxcd.SetFluxInstanceSyncProvider` write one field of a
+`FluxInstance`'s `spec.sync`, creating `spec.sync` when it is nil. One they create holds only that
+field: its `kind`, `url`, `ref` and `path`, which the CRD requires, are yours to set. An `OCIRepository`'s
+provider and plain-HTTP setting have no helper, since each is a single non-pointer field: assign
+`repo.Spec.Provider` and `repo.Spec.Insecure` directly.
+
 See the [FluxCD Builders reference](/api-reference/fluxcd-builders) for all available resource types.
 
 Beyond FluxCD, the [Kubernetes Builders](/api-reference/kubernetes-builders) package provides typed constructors for core resources (Deployment, Service, Ingress, CronJob, NetworkPolicy, HTTPRoute), PSA security context helpers, ResourceRequirements builders, and more. The constructors write identity only, so fields the API server requires in context are yours to set: a Job from `kubernetes.CreateJob` needs `Spec.Template.Spec.RestartPolicy` set to `Never` or `OnFailure`, or the server defaults it to `Always` and rejects the Job. The [Prometheus Builders](/api-reference/prometheus-builders) sub-package covers ServiceMonitor, PodMonitor, and PrometheusRule CRDs.
