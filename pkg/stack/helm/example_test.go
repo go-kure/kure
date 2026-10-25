@@ -59,6 +59,20 @@ func ExampleWithReleaseName() {
 	fmt.Print(string(manifests))
 }
 
+func ExampleWithDigest() {
+	manifests, err := helm.RenderChart(
+		"oci://registry.example.com/charts/cilium",
+		"1.16.5",
+		nil,
+		// the manifest digest 1.16.5 is pinned to; any other is an error
+		helm.WithDigest("sha256:3f1c5a9e0b7d2468ace13579bdf02468ace13579bdf02468ace13579bdf02468"),
+	)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Print(string(manifests))
+}
+
 func ExampleSplitByHookWeight() {
 	// Multi-doc YAML as RenderChart returns it
 	rendered := []byte(`apiVersion: batch/v1
