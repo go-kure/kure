@@ -477,8 +477,8 @@ func TestWriters_RefuseDuplicateFluxKustomizationInOneLayout(t *testing.T) {
 }
 
 // TestWriters_LocalConfigKustomizationName (go-kure/kure#1059): a copy written
-// with kustomize's local-config annotation at any string value but "false"
-// never reaches the cluster, so in a layout applied on its own it is no second
+// with kustomize's local-config annotation at a string value other than
+// "false" never reaches the cluster, so in a layout applied on its own it is no second
 // Kustomization of that name and the tree is written; at "false" it is one. In
 // the layout that holds the other copy it is still refused, as kustomize
 // refuses it: a build registers both before it drops one.
@@ -508,6 +508,50 @@ func TestWriters_LocalConfigKustomizationName(t *testing.T) {
 					p.Resources = append(p.Resources, shopKs(), annotated(value, shopKs()))
 					err := writeRefused(t, writer, layout.DefaultLayoutConfig(), p)
 					if want := `holds the same object kustomize.toolkit.fluxcd.io/Kustomization flux-system/shop twice`; err == nil || !strings.Contains(err.Error(), want) {
+						t.Fatalf("err = %v, want it to contain %q", err, want)
+					}
+				})
+			}
+		}
+	}
+}
+
+// TestWriters_LocalConfigValueAsWritten (go-kure/kure#1059): a copy whose
+// local-config annotation is no Go string, as an unstructured object decoded
+// from YAML holds it, is judged as kustomize judges the written text: at the
+// boolean false it is a second Kustomization of that name, at any other value
+// a build drops it and the tree is written.
+func TestWriters_LocalConfigValueAsWritten(t *testing.T) {
+	annotated := func(value any) *unstructured.Unstructured {
+		obj := shopKs()
+		if err := unstructured.SetNestedField(obj.Object, value, "metadata", "annotations", "config.kubernetes.io/local-config"); err != nil {
+			t.Fatal(err)
+		}
+		return obj
+	}
+	for _, tc := range []struct {
+		name    string
+		value   any
+		dropped bool
+	}{
+		{"boolean true", true, true},
+		{"boolean false", false, false},
+		{"number", int64(1), true},
+		{"null", nil, true},
+		{"map", map[string]any{}, true},
+		{"string False", "False", true},
+	} {
+		for _, marked := range []bool{false, true} {
+			for _, writer := range allWriters {
+				name := fmt.Sprintf("%s/%s/%s", tc.name, map[bool]string{false: "unmarked", true: "marked"}[marked], writer)
+				t.Run("separate builds/"+name, func(t *testing.T) {
+					tree := separately(marked, shopKs(), annotated(tc.value))
+					if tc.dropped {
+						writtenFiles(t, writer, layout.DefaultLayoutConfig(), tree)
+						return
+					}
+					err := writeRefused(t, writer, layout.DefaultLayoutConfig(), tree)
+					if want := `both hold the Flux Kustomization `; err == nil || !strings.Contains(err.Error(), want) {
 						t.Fatalf("err = %v, want it to contain %q", err, want)
 					}
 				})

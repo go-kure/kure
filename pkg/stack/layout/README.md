@@ -161,9 +161,9 @@ not end in `List` is one object, whatever fields it has, and so is a List kind w
 List whose `items` is null holds nothing. An item a typed List holds as raw JSON
 (`runtime.RawExtension`) is read as the object it encodes, also when the item carries an object
 beside the raw JSON: the raw JSON is what is written. A Kustomization written with kustomize's
-`config.kubernetes.io/local-config` annotation at any string value but `"false"` is left out of
-this check: a build drops it, so it never reaches the cluster (go-kure/kure#1059). The checks of
-one layout and of one build still count it, because kustomize refuses one identity twice in a
+`config.kubernetes.io/local-config` annotation at any value but `false` (the string `"false"` or
+the boolean `false`, as kustomize reads the written value) is left out of this check: a build
+drops it, so it never reaches the cluster (go-kure/kure#1059). The checks of one layout and of one build still count it, because kustomize refuses one identity twice in a
 build before it drops anything.
 
 Every check above that compares objects reads a resource that way (go-kure/kure#1006): the check
@@ -197,7 +197,8 @@ looked at. A kustomize build fails on a document without a kind, and one without
 builds into an object of no version that nothing applies. A List's own `apiVersion` is exempt:
 kustomize drops the envelope without reading it, so a List without one whose items are complete
 builds and applies as its items do, and is written as before. So is the `apiVersion` of an object
-with kustomize's `config.kubernetes.io/local-config` annotation at any string value but `"false"`:
+with kustomize's `config.kubernetes.io/local-config` annotation at any value but `false` (the
+string `"false"` or the boolean `false`):
 kustomize drops such an object from the build without requiring one, so it is written as before. Its
 `kind` is still required, since kustomize reads the kind before it drops anything.
 
