@@ -3,12 +3,10 @@ package fluxcd
 import (
 	"fmt"
 	"path"
-	"reflect"
 	"slices"
 	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
@@ -240,9 +238,10 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 // graph checkReconcileOrder judges ("ready K" and "apply K" for each
 // Kustomization K), here over every Kustomization of the tree, or nil when
 // there is none. "ready K" needs "apply K", and what K's wait or its
-// Kustomization health checks wait for (awaitedKustomizations); "apply K" needs every Kustomization K depends on
-// Ready, and the member whose apply writes K applied (soleWriter: none when
-// another Kustomization's build writes K as well). A Kustomization
+// Kustomization health checks wait for (awaitedKustomizations); "apply K"
+// needs every Kustomization K depends on Ready, and the member whose apply
+// writes K applied (writer), also when another Kustomization's build writes K
+// as well: that one is no alternate creator. A Kustomization
 // that is no member is read from its own spec, as its author wrote it; its
 // wait waits for what its build writes only when that build is the tree's
 // (readsLocalBuild), and for nothing the tree holds otherwise.
@@ -251,7 +250,7 @@ func (t *kustomizationTree) orderPath(from, to string) ([]string, error) {
 	writer := func(key string) string {
 		w, ok := writers[key]
 		if !ok {
-			w = t.soleWriter(key)
+			w = t.writer(key)
 			writers[key] = w
 		}
 		return w
@@ -333,138 +332,6 @@ func (t *kustomizationTree) writer(key string) string {
 		}
 	}
 	return best
-}
-
-// soleWriter is writer, but "" when a Kustomization that is no member, whose
-// build is the tree's (readsLocalBuild), also writes the one with key and
-// applies without waiting for anything (writtenByOther): the one with key
-// then exists once that one applies, and no check on it waits for either.
-func (t *kustomizationTree) soleWriter(key string) string {
-	w := t.writer(key)
-	if w == "" || t.writtenByOther(key) {
-		return ""
-	}
-	return w
-}
-
-// soleCreator is creator, but "" where soleWriter is: for the placed check,
-// which reads creator.
-func (t *kustomizationTree) soleCreator(key string) string {
-	c := t.creator(key)
-	if c == "" || t.writtenByOther(key) {
-		return ""
-	}
-	return c
-}
-
-// writtenByOther reports whether a Kustomization that is no member, whose
-// build is the tree's (localOthers), writes the one with key and applies
-// without waiting for anything (appliesFreely). The one with key must carry
-// no annotation by which an apply may skip it (plainMeta).
-func (t *kustomizationTree) writtenByOther(key string) bool {
-	host := t.hostOf[key]
-	if host == nil || !plainMeta(t.kustomization(key)) {
-		return false
-	}
-	for _, o := range t.localOthers() {
-		if o == key {
-			continue
-		}
-		if l := t.layoutAt[path.Clean(t.otherSpecs[o].Spec.Path)]; l != nil && slices.Contains(buildScope(l), host) && t.appliesFreely(o) {
-			return true
-		}
-	}
-	return false
-}
-
-// appliesFreely reports whether the Kustomization with key o applies without
-// waiting for anything: o, and each Kustomization whose apply writes the one
-// before it (writer), is read in typed form, sets no field that may change
-// what it applies (plainSpec) and depends on nothing, and the first that
-// writer names no writer of is one the Flux bootstrap applies; each carries
-// no annotation by which the apply writing it may skip it (plainMeta). Otherwise o may
-// never apply, or write, the one after it, or wait, directly or not,
-// for what it would create (o is written by that Kustomization's own apply,
-// or depends on one that waits for it): the check then keeps the member's
-// creation edge, and may refuse a tree that would converge.
-func (t *kustomizationTree) appliesFreely(o string) bool {
-	seen := map[string]bool{}
-	for x := o; !seen[x]; x = t.writer(x) {
-		seen[x] = true
-		k := t.kustomization(x)
-		if k == nil || !plainSpec(k) || !plainMeta(k) || len(t.deps(x)) > 0 {
-			return false
-		}
-		if t.writer(x) == "" {
-			host := t.hostOf[x]
-			return host != nil && slices.Contains(t.rootScope(), host)
-		}
-	}
-	return false
-}
-
-// kustomization is the typed Kustomization with key x, a member or not, or
-// nil.
-func (t *kustomizationTree) kustomization(x string) *kustv1.Kustomization {
-	if k := t.byKey[x]; k != nil {
-		return k
-	}
-	return t.otherSpecs[x]
-}
-
-// plainMeta reports whether k is non-nil and carries no
-// kustomize.toolkit.fluxcd.io/ annotation but substitute, which changes only
-// the substitution of its own fields. Any other (ssa: Ignore, reconcile:
-// disabled, ...) may keep the apply that writes k from creating it.
-func plainMeta(k *kustv1.Kustomization) bool {
-	if k == nil {
-		return false
-	}
-	for a := range k.GetAnnotations() {
-		if strings.HasPrefix(a, "kustomize.toolkit.fluxcd.io/") && a != "kustomize.toolkit.fluxcd.io/substitute" {
-			return false
-		}
-	}
-	return true
-}
-
-// plainSpec reports whether k sets no field but those that change neither
-// whether it applies nor which objects of its directory it applies:
-// interval, retryInterval, timeout, path, sourceRef, prune, deletionPolicy,
-// force, wait, healthChecks, healthCheckExprs and dependsOn (which
-// appliesFreely reads itself). Any other field (suspend, commonMetadata,
-// spec.ignore, postBuild, decryption, serviceAccountName, images, a transform
-// of its build, ...) may keep it from writing what its directory holds, so
-// the check does not count it as another writer.
-func plainSpec(k *kustv1.Kustomization) bool {
-	s := k.Spec
-	s.Interval, s.RetryInterval, s.Timeout = metav1.Duration{}, nil, nil
-	s.Path, s.SourceRef, s.Prune, s.DeletionPolicy, s.Force, s.Wait = "", kustv1.CrossNamespaceSourceReference{}, false, "", false, false
-	s.HealthChecks, s.HealthCheckExprs, s.DependsOn = nil, nil, nil
-	return reflect.DeepEqual(s, kustv1.KustomizationSpec{})
-}
-
-// localOthers lists, once per tree, the Kustomizations that are no members
-// and whose build is the tree's (readsLocalBuild).
-func (t *kustomizationTree) localOthers() []string {
-	if t.local == nil {
-		t.local = []string{}
-		for _, o := range t.otherKeys {
-			if t.readsLocalBuild(o) {
-				t.local = append(t.local, o)
-			}
-		}
-	}
-	return t.local
-}
-
-// rootScope is buildScope of the root, once per tree: what the Flux bootstrap
-// applies.
-func (t *kustomizationTree) rootScope() []*layout.ManifestLayout {
-	if t.scope == nil {
-		t.scope = buildScope(t.root)
-	}
-	return t.scope
 }
 
 // keptNodeDependencies is a node's Kustomization kept from the tree whose

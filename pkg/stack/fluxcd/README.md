@@ -1317,16 +1317,7 @@ another Source, and one applying to another cluster build no directory of this t
 wait, and are never refused for one. One that transforms its build (`spec.patches`,
 `spec.components`, `spec.namePrefix`, `spec.nameSuffix` or `spec.targetNamespace`) keeps the
 wait on all the directory holds: the transform is not modelled, and a renamed or moved
-Kustomization still depends on what it did before. A Kustomization that a generated one's build
-writes, and the build of a Kustomization the tree holds writes too, exists once either applies.
-When that other Kustomization, and each Kustomization whose apply creates it up to one the Flux
-bootstrap applies, depends on nothing and sets no spec field but `interval`, `retryInterval`,
-`timeout`, `path`, `sourceRef`, `prune`, `deletionPolicy`, `force`, `wait`, `healthChecks` and
-`healthCheckExprs`, and when neither the written one nor any of those carries a
-`kustomize.toolkit.fluxcd.io/` annotation but `substitute`, no check on the written one waits
-for the apply of either. Otherwise the other may wait for, or never write, what it would create
-(`suspend`, `commonMetadata` annotations, `kustomize.toolkit.fluxcd.io/ssa: Ignore` on the
-object itself, `spec.ignore`, …), and the checks wait for the generated one's apply. A health check on another cluster
+Kustomization still depends on what it did before. A health check on another cluster
 (`spec.kubeConfig`) names none of the tree's Kustomizations. Health-check expressions on Flux
 Kustomizations (`spec.healthCheckExprs`) are read conservatively, as readiness: an expression is
 arbitrary CEL and may itself wait for the `Ready` condition, so the check, and what a `wait`
@@ -1339,7 +1330,10 @@ rewriting a child Kustomization's spec, objects that `kustomize.toolkit.fluxcd.i
 `spec.postBuild` substitution, `spec.suspend`, a `spec.healthCheckExprs` expression that does
 not wait for readiness, or a build's own transforms (`spec.patches`,
 which may delete what the directory holds, `spec.components`, `spec.namePrefix`,
-`spec.nameSuffix`, `spec.targetNamespace`) (go-kure/kure#1094). A tree refused for one of them integrates
+`spec.nameSuffix`, `spec.targetNamespace`), or a Kustomization the tree's own build also writes,
+as an alternate creator: a check on what a generated Kustomization's build writes waits for that
+apply, even where another Kustomization of the tree writes it as well and would apply first
+(go-kure/kure#1094). A tree refused for one of them integrates
 once the dependency or health check that closes the reported chain is dropped, or names another
 Kustomization.
 
