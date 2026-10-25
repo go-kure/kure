@@ -607,3 +607,50 @@ func TestLocalConfig_UmbrellasDoNotWaitMembersAreGenerated(t *testing.T) {
 		})
 	}
 }
+
+// TestLocalConfig_UmbrellaTerminalsAppNamesake: an application that emits a
+// namesake of a generated umbrella, in whatever form, hides that member from
+// UmbrellaTerminals only when kustomize builds the namesake. A dropped one is
+// not emitted, so the generated umbrella stays a member and its terminals
+// are unchanged.
+func TestLocalConfig_UmbrellaTerminalsAppNamesake(t *testing.T) {
+	for _, placement := range integratedPlacements {
+		for _, form := range kustomizationForms {
+			for _, tc := range localConfigCases {
+				t.Run(string(placement)+"/"+form+"/"+tc.name, func(t *testing.T) {
+					build := func(decoy bool) (*layout.ManifestLayout, error) {
+						u := umbrellaOf("platform", srBundle("a", cmApp("a-app")))
+						c := noWaitCluster(u, false)
+						if decoy {
+							k := handWritten("platform")
+							annotateLocalConfig(k, tc.value)
+							web := c.Node.Children[1].Bundle
+							web.Applications = append(web.Applications, formApp("decoy", k, form))
+						}
+						return integrateNoWait(c, nodeOnly, placement)
+					}
+					plain, err := build(false)
+					if err != nil {
+						t.Fatal(err)
+					}
+					want, err := fluxstack.UmbrellaTerminals(plain)
+					if err != nil {
+						t.Fatal(err)
+					}
+					ml, err := build(true)
+					checkLocalConfigVerdict(t, err, tc.dropped, `"platform"`)
+					if !tc.dropped {
+						return
+					}
+					got, err := fluxstack.UmbrellaTerminals(ml)
+					if err != nil {
+						t.Fatalf("UmbrellaTerminals with a dropped application namesake: %v", err)
+					}
+					if !reflect.DeepEqual(got, want) {
+						t.Errorf("UmbrellaTerminals with a dropped application namesake = %v, want %v", got, want)
+					}
+				})
+			}
+		}
+	}
+}
