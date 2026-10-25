@@ -230,27 +230,65 @@ func (w forwardingWrapper) AugmentLayout(ml *layout.ManifestLayout) error {
 }
 func (w forwardingWrapper) WantsOwnLayout() bool { return w.inner.WantsOwnLayout() }
 
+// augmentOnlyWrapper forwards AugmentLayout but not WantsOwnLayout, so kure
+// sees a LayoutAugmenter without the intent: presence-only placement,
+// whatever the wrapped config wants.
+type augmentOnlyWrapper struct{ inner *recordingConfig }
+
+func (w augmentOnlyWrapper) Generate(app *stack.Application) ([]*client.Object, error) {
+	return w.inner.Generate(app)
+}
+func (w augmentOnlyWrapper) AugmentLayout(ml *layout.ManifestLayout) error {
+	return w.inner.AugmentLayout(ml)
+}
+
 // TestGenerationContract_WrappersForwardOptionalInterfaces: kure finds
 // Validator and the augmenter interfaces by type assertion on the config
 // itself. A wrapper that embeds the ApplicationConfig interface hides them,
-// silently; one that embeds the concrete type, or forwards them, keeps them.
+// silently: no validation, no augmentation and, under flat application
+// grouping, no layout of its own even where the wrapped config wants one.
+// One that embeds the concrete type, or forwards them, keeps them. Only flat
+// grouping with WantsOwnLayout() false shows a lost WantsOwnLayout: the
+// wrapper then gets its own layout and AugmentLayout anyway.
 func TestGenerationContract_WrappersForwardOptionalInterfaces(t *testing.T) {
-	for _, tc := range []struct {
+	groupings := []struct {
 		name  string
-		wrap  func(*recordingConfig) stack.ApplicationConfig
-		calls int
+		rules layout.LayoutRules
+		own   bool // the wrapped config's WantsOwnLayout
 	}{
-		{"embeds the interface", func(c *recordingConfig) stack.ApplicationConfig { return embeddingWrapper{c} }, 0},
-		{"embeds the concrete type", func(c *recordingConfig) stack.ApplicationConfig { return concreteWrapper{c} }, 1},
-		{"forwards", func(c *recordingConfig) stack.ApplicationConfig { return forwardingWrapper{c} }, 1},
+		{"groupByName", groupByName, true},
+		{"flat, wants its own layout", nodeOnly, true},
+		{"flat, does not want its own layout", nodeOnly, false},
+	}
+	for _, tc := range []struct {
+		name        string
+		wrap        func(*recordingConfig) stack.ApplicationConfig
+		validations int
+		// per grouping, in the order above
+		ownLayout [3]bool
+		augmented [3]int
+	}{
+		{"embeds the interface", func(c *recordingConfig) stack.ApplicationConfig { return embeddingWrapper{c} }, 0,
+			[3]bool{true, false, false}, [3]int{0, 0, 0}},
+		{"embeds the concrete type", func(c *recordingConfig) stack.ApplicationConfig { return concreteWrapper{c} }, 1,
+			[3]bool{true, true, false}, [3]int{1, 1, 0}},
+		{"forwards", func(c *recordingConfig) stack.ApplicationConfig { return forwardingWrapper{c} }, 1,
+			[3]bool{true, true, false}, [3]int{1, 1, 0}},
+		{"forwards AugmentLayout only", func(c *recordingConfig) stack.ApplicationConfig { return augmentOnlyWrapper{c} }, 0,
+			[3]bool{true, true, true}, [3]int{1, 1, 1}},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			inner := &recordingConfig{name: "chart", own: true}
-			walk(t, contractCluster(stack.NewApplication("chart", "default", tc.wrap(inner))), groupByName)
-			if len(inner.generated) != 1 || inner.validations != tc.calls || len(inner.augmented) != tc.calls {
-				t.Errorf("%d Generate, %d Validate and %d AugmentLayout calls, want 1, %d and %d",
-					len(inner.generated), inner.validations, len(inner.augmented), tc.calls, tc.calls)
-			}
-		})
+		for i, g := range groupings {
+			t.Run(tc.name+"/"+g.name, func(t *testing.T) {
+				inner := &recordingConfig{name: "chart", own: g.own}
+				ml := walk(t, contractCluster(stack.NewApplication("chart", "default", tc.wrap(inner))), g.rules)
+				if len(inner.generated) != 1 || inner.validations != tc.validations || len(inner.augmented) != tc.augmented[i] {
+					t.Errorf("%d Generate, %d Validate and %d AugmentLayout calls, want 1, %d and %d",
+						len(inner.generated), inner.validations, len(inner.augmented), tc.validations, tc.augmented[i])
+				}
+				if own := applicationObjects(t, ml)["chart"].Layout != nil; own != tc.ownLayout[i] {
+					t.Errorf("the application has a layout of its own: %t, want %t", own, tc.ownLayout[i])
+				}
+			})
+		}
 	}
 }
