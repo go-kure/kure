@@ -65,8 +65,9 @@ modes. `ImagePullSecret` names the Secret the Flux controller images are pulled 
 modes: the gotk install option, or the `FluxInstance` distribution's `imagePullSecret`. It is not
 a credential for the sync source. In `flux-operator` mode neither `Registry` nor
 `ImagePullSecret` reaches the flux-operator `Deployment` in the vendored install bundle, whose
-image is pulled as upstream ships it. See [Flux Engine](/api-reference/flux-engine/) for how each
-field is emitted.
+image is pulled as upstream ships it. `Prune` reaches the `gotk` bootstrap Kustomization only:
+flux-operator prunes its sync Kustomization whatever it says (go-kure/kure#1088). See
+[Flux Engine](/api-reference/flux-engine/) for how each field is emitted.
 
 ### Node
 
