@@ -1130,7 +1130,10 @@ distribution version and registry, and Kure has no default for either. If one is
 To pull the Flux controller images from a private registry, set `ImagePullSecret` to the name of
 the pull Secret. Both modes use it: `"gotk"` mode adds it to every controller `Deployment`, and
 `"flux-operator"` mode sets it as the `FluxInstance`'s distribution `imagePullSecret`. It is for
-the controller images only, not a credential for the sync source.
+the controller images only, not a credential for the sync source. In `"flux-operator"` mode
+neither `Registry` nor `ImagePullSecret` reaches the flux-operator `Deployment` in the vendored
+install bundle: its image is pulled as upstream ships it, from its upstream registry with no pull
+secret.
 
 The `"flux-operator"` bundle is vendored from one specific upstream flux-operator release
 (`FluxOperatorVersion`), so upgrading Kure can also change the CRDs it installs. A CRD that

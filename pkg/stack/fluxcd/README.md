@@ -773,6 +773,10 @@ carry it: `"gotk"` mode passes it to the install options, which add it to every 
 `spec.distribution.imagePullSecret`. Empty sets none. It covers the controller images only; it
 is not a credential for the sync source.
 
+Neither `Registry` nor `ImagePullSecret` reaches the flux-operator `Deployment` in the vendored
+install bundle: the bundle is emitted as upstream ships it, so the operator image is pulled from
+its upstream registry with no pull secret.
+
 The `"flux-operator"` bundle is vendored from the upstream flux-operator release and pinned
 in lockstep with the `github.com/controlplaneio-fluxcd/flux-operator` Go module
 (`FluxOperatorVersion`, currently **v0.58.1**). Renovate re-vendors the bundle and updates
