@@ -132,8 +132,8 @@ A Kustomization holds copies of the bundle's label and annotation maps, never th
 themselves, whichever entry point builds it (`GenerateFromCluster`, `GenerateFromLayout`,
 `GenerateForBundle`, `CreateLayoutWithResources`, `IntegrateWithLayout`): editing a Kustomization
 kure returns leaves the bundle, and so what later generations from it produce, as it was. An
-application's own objects are passed through without copying (a delivery intent gives an object a
-new annotations map, see [Delivery intent](#delivery-intent)): an edit of one reaches whatever the
+application's own objects are passed through without copying (a delivery intent that adds
+annotations gives the object a new annotations map, see [Delivery intent](#delivery-intent)): an edit of one reaches whatever the
 config shares it with, so a config that builds every object, map and pointer per call keeps its
 next call unchanged.
 
