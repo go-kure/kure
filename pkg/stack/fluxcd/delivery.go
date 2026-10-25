@@ -341,7 +341,10 @@ func verifyWritten(r client.Object, want map[string]string) ([]map[string]any, e
 	}
 	objs := writtenObjects(written)
 	for _, b := range objs {
-		have, _, _ := unstructured.NestedStringMap(b, "metadata", "annotations")
+		// Read as written: a value need not be a string, and
+		// NestedStringMap would return none at all.
+		raw, _, _ := unstructured.NestedFieldNoCopy(b, "metadata", "annotations")
+		have, _ := raw.(map[string]any)
 		for _, key := range slices.Sorted(maps.Keys(want)) {
 			if have[key] != want[key] {
 				return nil, errors.Errorf("%s is written with %s lacking annotation %s: %q; the integrator cannot reach that object to set it",
