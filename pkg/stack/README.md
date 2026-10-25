@@ -436,11 +436,17 @@ A caller that holds the layout may edit them as well. So:
   safe for concurrent use, and a config safe for concurrent use need not memoize.
 - **Wrappers forward the optional interfaces.** kure finds `Validator`, `layout.LayoutAugmenter`
   and `layout.LayoutIntentAugmenter` by type assertion on the config itself. A wrapper that
-  embeds the `ApplicationConfig` interface hides all three, silently. Embed the concrete type,
-  or forward each method.
+  embeds the `ApplicationConfig` interface hides all three, silently: no validation, no
+  augmentation, and under flat application grouping no layout of its own. Embed the concrete
+  type, or forward each method.
 
 `Application.Generate` runs `Validate` and `Generate` on every call and never augments a layout;
-only a walk does. The tests in `pkg/stack/layout/generation_contract_test.go` show each rule.
+only a walk does. The tests in `pkg/stack/layout/generation_contract_test.go` (walks) and
+`pkg/stack/generation_contract_test.go` (workflow entry points) show the call counts per walk
+and per entry point, what the augmenter sees and where it is skipped, that a failed walk leaves
+nothing behind, that one walk's edits stay out of the next for fresh and deep-copying configs
+but not for a shared cache, and what each wrapper shape keeps. No test shows the concurrency
+rule: it is a property of kure's code.
 
 ## Fluent Builder API
 
