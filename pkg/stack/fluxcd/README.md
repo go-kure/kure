@@ -518,9 +518,11 @@ full reference.
 ### `prune` and `wait` are inputs, not policy
 
 `Bundle.Prune` and `Bundle.Wait` are `*bool` and are passed through untouched.
-`BootstrapConfig.Prune` does the same for the bootstrap Kustomization, and
-`ResourceGenerator.Prune` for a Kustomization generated from a `layout.ManifestLayout` where
-neither the layout nor the bundle that holds its application sets one. A layout carries both
+`BootstrapConfig.Prune` does the same for the gotk bootstrap Kustomization. In flux-operator
+mode it reaches nothing: flux-operator renders its sync Kustomization with `prune: true`, whatever
+the config says (go-kure/kure#1088). `ResourceGenerator.Prune` is passed through untouched for a
+Kustomization generated from a `layout.ManifestLayout` where neither the layout nor the bundle that
+holds its application sets one. A layout carries both
 settings, `ManifestLayout.Prune` and `ManifestLayout.Wait`, unset meaning that bundle's (see
 [Per-layout settings](#per-layout-settings)).
 

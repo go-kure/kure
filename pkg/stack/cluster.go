@@ -109,7 +109,9 @@ type BootstrapConfig struct {
 	// Prune controls garbage collection on the bootstrap Kustomization.
 	// Unset emits prune: false: the upstream field is required with no
 	// omitempty, so it cannot be left out of the YAML, and an unset input is
-	// not a request for destructive garbage collection.
+	// not a request for destructive garbage collection. gotk mode only:
+	// flux-operator renders its sync Kustomization with prune: true whatever
+	// this says (go-kure/kure#1088).
 	Prune *bool `yaml:"prune,omitempty"`
 
 	// ArgoCD-specific (mock for now)
