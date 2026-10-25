@@ -62,8 +62,11 @@ func TestLocalConfig_IssueReproducer(t *testing.T) {
 				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("platform-app")), Children: []*stack.Node{apps}}}
 				rules := propertyGroupings["nodeOnly"]
 				rules.FluxPlacement = placement
-				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+				ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
 				checkLocalConfigVerdict(t, err, tc.dropped, `"applications-storefront"`)
+				if err == nil {
+					checkWritable(t, ml)
+				}
 			})
 		}
 	}
@@ -102,6 +105,7 @@ func TestLocalConfig_KustomizationNamesake(t *testing.T) {
 				if built != 1 {
 					t.Errorf("got %d built web-bundle Kustomizations, want the generated one", built)
 				}
+				checkWritable(t, ml)
 			})
 		}
 	}
@@ -148,18 +152,38 @@ func TestLocalConfig_SourceNamesake(t *testing.T) {
 				if len(urls) != 1 || urls[0] != webRef.URL {
 					t.Errorf("built web-git URLs = %v, want only the generated %q", urls, webRef.URL)
 				}
+				checkWritable(t, ml)
 			})
 		}
 	}
 }
 
 // TestLocalConfig_DuplicateNameOneDropped: one Kustomization name present
-// twice is refused when kustomize builds both copies, and admitted when it
-// drops one.
+// twice. In directories applied separately, the integration refuses it when
+// kustomize builds both copies and admits it when it drops one, and the tree
+// is written. In one directory the writers refuse it either way: kustomize
+// registers both copies before it drops one, and refuses the second.
 func TestLocalConfig_DuplicateNameOneDropped(t *testing.T) {
 	for _, placement := range allPlacements {
 		for _, tc := range localConfigCases {
-			t.Run(string(placement)+"/"+tc.name, func(t *testing.T) {
+			t.Run(string(placement)+"/separate builds/"+tc.name, func(t *testing.T) {
+				extra := func(name, path string, value *string) *stack.Application {
+					return stack.NewApplication(name, "default", &fakeAppConfig{objs: func() []*client.Object {
+						o := annotateLocalConfig(fluxKustomization("extra", path), value)
+						return []*client.Object{&o}
+					}()})
+				}
+				web := &stack.Node{Name: "web", Bundle: srBundle("web-bundle", cmApp("web-app"), extra("web-extra", "two", tc.value))}
+				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", extra("extra", "one", nil)), Children: []*stack.Node{web}}}
+				rules := propertyGroupings["nodeOnly"]
+				rules.FluxPlacement = placement
+				ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+				checkLocalConfigVerdict(t, err, tc.dropped, `"extra"`)
+				if err == nil {
+					checkWritable(t, ml)
+				}
+			})
+			t.Run(string(placement)+"/one directory/"+tc.name, func(t *testing.T) {
 				extra := stack.NewApplication("extra", "default", &fakeAppConfig{objs: func() []*client.Object {
 					a := fluxKustomization("extra", "one")
 					b := annotateLocalConfig(fluxKustomization("extra", "two"), tc.value)
@@ -169,8 +193,11 @@ func TestLocalConfig_DuplicateNameOneDropped(t *testing.T) {
 				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", extra), Children: []*stack.Node{web}}}
 				rules := propertyGroupings["nodeOnly"]
 				rules.FluxPlacement = placement
-				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+				ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
 				checkLocalConfigVerdict(t, err, tc.dropped, `"extra"`)
+				if err == nil {
+					checkRefusedByWriters(t, ml, "holds the same object kustomize.toolkit.fluxcd.io/Kustomization flux-system/extra twice")
+				}
 			})
 		}
 	}
@@ -269,6 +296,25 @@ func checkLocalConfigVerdict(t *testing.T, err error, dropped bool, name string)
 	}
 }
 
+// checkWritable writes ml: a tree the integration admits must be one the
+// writers write.
+func checkWritable(t *testing.T, ml *layout.ManifestLayout) {
+	t.Helper()
+	if err := ml.WriteToDisk(t.TempDir()); err != nil {
+		t.Errorf("the integrated tree is not written: %v", err)
+	}
+}
+
+// checkRefusedByWriters writes ml and wants the writers to refuse it with an
+// error holding want.
+func checkRefusedByWriters(t *testing.T, ml *layout.ManifestLayout, want string) {
+	t.Helper()
+	err := ml.WriteToDisk(t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("writing the integrated tree: got %v, want a refusal holding %q", err, want)
+	}
+}
+
 func walkLayouts(l *layout.ManifestLayout, fn func(*layout.ManifestLayout)) {
 	if l == nil {
 		return
@@ -305,7 +351,8 @@ func isKustomization(obj client.Object, name string) bool {
 // TestLocalConfig_IdenticalSourceCopy: the caller placed a dropped copy of a
 // generated Source in the root layout, the build that hosts the generated
 // one. It does not stand in for the generated one, which stays the one built
-// copy.
+// copy. The writers then refuse the tree: kustomize registers both copies
+// before it drops one, and refuses the second.
 func TestLocalConfig_IdenticalSourceCopy(t *testing.T) {
 	webRef := &stack.SourceRef{Kind: "GitRepository", Name: "web-git", Namespace: "flux-system", URL: "https://example.com/web.git", Branch: "main"}
 	for _, placement := range integratedPlacements {
@@ -341,6 +388,7 @@ func TestLocalConfig_IdenticalSourceCopy(t *testing.T) {
 				if built != 1 {
 					t.Errorf("got %d built copies of GitRepository web-git, want 1", built)
 				}
+				checkRefusedByWriters(t, ml, "holds the same object source.toolkit.fluxcd.io/GitRepository flux-system/web-git twice")
 			})
 		}
 	}
