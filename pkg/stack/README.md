@@ -61,8 +61,10 @@ source — `SourceKind`, `SourceURL`,
 and Kustomization it creates (empty leaves it to the operator, which uses the `FluxInstance`
 namespace). `ImagePullSecret` names the Secret the Flux controller images are pulled with, in
 both modes: the gotk install option, or the `FluxInstance` distribution's `imagePullSecret`. It
-is not a credential for the sync source. See [Flux Engine](/api-reference/flux-engine/) for how
-each field is emitted.
+is not a credential for the sync source. In `flux-operator` mode neither `Registry` nor
+`ImagePullSecret` reaches the flux-operator `Deployment` in the vendored install bundle, whose
+image is pulled as upstream ships it. See [Flux Engine](/api-reference/flux-engine/) for how each
+field is emitted.
 
 ### Node
 

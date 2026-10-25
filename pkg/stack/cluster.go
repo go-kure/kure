@@ -70,7 +70,8 @@ type BootstrapConfig struct {
 	// Registry is the container registry the Flux images are pulled from. In
 	// gotk mode empty means the upstream registry. In flux-operator mode it is
 	// the FluxInstance distribution registry, and required: an empty value is an
-	// error, and no default is filled in.
+	// error, and no default is filled in. It does not move the flux-operator
+	// Deployment's own image; see ImagePullSecret.
 	Registry string `yaml:"registry,omitempty"`
 	// ImagePullSecret names the Kubernetes Secret used to pull the Flux
 	// controller images, in both modes: in gotk mode it is the install
@@ -78,6 +79,11 @@ type BootstrapConfig struct {
 	// flux-operator mode the FluxInstance distribution's imagePullSecret.
 	// Empty sets none. It is for the controller images only, not a
 	// credential for the sync source.
+	//
+	// In flux-operator mode neither Registry nor ImagePullSecret reaches the
+	// flux-operator Deployment in the vendored install bundle: its image is
+	// pulled as upstream ships it, from its own registry and with no pull
+	// secret.
 	ImagePullSecret string `yaml:"imagePullSecret,omitempty"`
 
 	// Source configuration
