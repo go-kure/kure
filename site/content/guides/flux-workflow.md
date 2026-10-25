@@ -1278,6 +1278,22 @@ the sync of a running cluster means recreating the `FluxInstance`. It is distinc
 flux-operator CRD rejects any other name at admission. The generator's
 `BootstrapName` names the bootstrap Kustomization only and never reaches the `FluxInstance`.
 
+### Source access
+
+A sync source in a private or plain-HTTP OCI registry needs three more `BootstrapConfig`
+options. `SourceSecretRef` names a `kubernetes.io/dockerconfigjson` Secret with the registry
+credentials. `SourceProvider` picks the OIDC provider: `generic`, `aws`, `azure` or `gcp`.
+`SourceInsecure` allows plain HTTP. They work in both modes:
+
+- In `"gotk"` mode they land on the generated `OCIRepository`.
+- In `"flux-operator"` mode the secret and provider land on `spec.sync`. Plain HTTP becomes a
+  `spec.kustomize` patch on the `OCIRepository` the operator creates for the sync, since the sync
+  has no field for it.
+
+They apply to an `OCIRepository` source with `SourceURL` set. Anything else is refused: a
+`GitRepository` source, no `SourceURL`, or a provider an `OCIRepository` does not take.
+`ImagePullSecret` is a different secret: it is for pulling the Flux controller images.
+
 ## Further Reading
 
 - [Stack](/api-reference/stack) - Domain model reference

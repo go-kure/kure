@@ -79,6 +79,25 @@ type BootstrapConfig struct {
 	SourceURL  string `yaml:"sourceURL,omitempty"`  // OCI/Git repository URL
 	SourceRef  string `yaml:"sourceRef,omitempty"`  // Tag/branch/ref
 
+	// Source access. The three options apply to an OCIRepository source only,
+	// and only with SourceURL set; any of them with a GitRepository source or
+	// without SourceURL is an error. Unset, the source is generated as before.
+	//
+	// SourceSecretRef names the Secret, of type kubernetes.io/dockerconfigjson,
+	// holding the registry credentials for the source: spec.secretRef on the
+	// gotk OCIRepository, spec.sync.pullSecret on the FluxInstance. It is not
+	// ImagePullSecret, which is for the Flux controller images.
+	SourceSecretRef string `yaml:"sourceSecretRef,omitempty"`
+	// SourceProvider is the OIDC provider the source authenticates with: one
+	// of generic, aws, azure and gcp. spec.provider on the gotk OCIRepository,
+	// spec.sync.provider on the FluxInstance.
+	SourceProvider string `yaml:"sourceProvider,omitempty"`
+	// SourceInsecure lets the source pull from a plain-HTTP registry:
+	// spec.insecure on the gotk OCIRepository. A FluxInstance sync has no such
+	// field, so in flux-operator mode it is a spec.kustomize patch setting
+	// spec.insecure on the OCIRepository the operator generates for the sync.
+	SourceInsecure bool `yaml:"sourceInsecure,omitempty"`
+
 	// SyncName names the source and Kustomization that the FluxInstance sync
 	// creates (spec.sync.name). flux-operator mode only: gotk mode ignores it.
 	// It has no effect without SourceURL, because no sync block is emitted

@@ -59,7 +59,10 @@ is an error) and components, and the sync
 source — `SourceKind`, `SourceURL`,
 `SourceRef` and, in `flux-operator` mode, `SyncName`, the name the operator gives the sync source
 and Kustomization it creates (empty leaves it to the operator, which uses the `FluxInstance`
-namespace). See [Flux Engine](/api-reference/flux-engine/) for how each field is emitted.
+namespace). For an `OCIRepository` source, `SourceSecretRef`, `SourceProvider` and
+`SourceInsecure` give the registry credentials, OIDC provider and plain-HTTP access in both
+modes; `ImagePullSecret` is for the Flux controller images, not the source. See
+[Flux Engine](/api-reference/flux-engine/) for how each field is emitted.
 
 ### Node
 
