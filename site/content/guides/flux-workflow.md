@@ -631,7 +631,9 @@ bundle gave two Kustomizations one name and was refused. What to do:
 - **A new name another Kustomization already has is refused.** The application `web` of the
   bundle `platform` is now applied by `platform-web`. If a bundle, a node or another layout
   already has a Kustomization of that name, the integration refuses the tree and names both,
-  where the old name `web` was free. Set `ManifestLayout.KustomizationName` on the layout, or
+  where the old name `web` was free. One written with the `config.kubernetes.io/local-config`
+  annotation at any value but `"false"` does not count: kustomize drops it from the build
+  (go-kure/kure#1059). Set `ManifestLayout.KustomizationName` on the layout, or
   `KustomizationName` on the other owner.
 - **Keep an old name** by setting `ManifestLayout.KustomizationName` on the layout.
 

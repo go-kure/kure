@@ -76,8 +76,9 @@ Placement (FluxIntegratedPerLayout vs FluxSeparate) is configured per call on
 tree's: `IntegrateWithLayout` sets it on every layout it integrates,
 whatever placement the tree was walked with. A tree that already holds Flux
 Kustomizations an earlier integration or the caller placed keeps the placement
-they were made for (another is refused; Kustomizations an application emits
-do not count), and a refused call leaves the tree exactly as it was. See
+they were made for (another is refused; Kustomizations an application emits,
+and ones kustomize drops as local-config, do not count), and a refused call
+leaves the tree exactly as it was. See
 [Layout Integration](#layout-integration).
 
 ## Resource Generation
@@ -594,7 +595,12 @@ identity — kind, namespace and name, whatever the API version (a `v1beta2` `Gi
 same Source as the generated `v1` one) — anywhere in the tree, top-level or inside a `List`, and
 every Source the pass places in another layout, must have the same API version and content, or the
 integration is refused. Content is compared as the objects' unstructured form, so a typed Source
-and an unstructured copy of it are the same.
+and an unstructured copy of it are the same. A Kustomization or Source written with kustomize's
+`config.kubernetes.io/local-config` annotation at any string value but `"false"` does not count
+anywhere in the integration: kustomize drops it from the build, so it never reaches the cluster.
+It is no existing object to collide with or keep, no copy of a Source to host in place of the
+generated one, no member or child of an umbrella, and it marks no directory as a Flux build
+(go-kure/kure#1059). With no annotation, or `"false"`, it is built and counts as above.
 
 Under the integrated placements every Source the integration generates is hosted **once, in the
 root node's layout**, whichever layouts hold the Kustomizations that use it (go-kure/kure#876),
