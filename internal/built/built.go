@@ -387,15 +387,17 @@ func LocalConfig(obj runtime.Object) (bool, error) {
 	if !ok {
 		return false, nil
 	}
+	// The writers marshal the value to JSON and decode that before they
+	// write YAML, so a json.Marshaler's escaped string is written unescaped.
 	text, err := json.Marshal(value)
 	if err != nil {
 		return false, errors.Wrapf(err, "marshal the %s annotation", konfig.IgnoredByKustomizeAnnotation)
 	}
-	switch string(text) {
-	case `false`, `"false"`:
-		return false, nil
+	var decoded any
+	if err := json.Unmarshal(text, &decoded); err != nil {
+		return false, errors.Wrapf(err, "decode the %s annotation", konfig.IgnoredByKustomizeAnnotation)
 	}
-	return true, nil
+	return decoded != false && decoded != "false", nil
 }
 
 // writtenObject returns obj as it is written: an unstructured object from its
