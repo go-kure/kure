@@ -3,6 +3,7 @@ package fluxcd
 import (
 	jsonPkg "encoding/json"
 	"math"
+	"reflect"
 	"testing"
 	"time"
 
@@ -1764,6 +1765,52 @@ func TestSetFluxInstanceSync(t *testing.T) {
 	SetFluxInstanceSync(obj, sync)
 	if obj.Spec.Sync != sync {
 		t.Error("Sync not set")
+	}
+}
+
+// TestSetFluxInstanceSyncAccess: each setter writes its own field on an
+// existing sync and leaves every other field as it was, and creates a sync
+// holding that field alone when there is none.
+func TestSetFluxInstanceSyncAccess(t *testing.T) {
+	for name, tc := range map[string]struct {
+		set  func(*fluxv1.FluxInstance)
+		want fluxv1.Sync
+	}{
+		"pull secret": {
+			set:  func(obj *fluxv1.FluxInstance) { SetFluxInstanceSyncPullSecret(obj, "registry-creds") },
+			want: fluxv1.Sync{PullSecret: "registry-creds"},
+		},
+		"provider": {
+			set:  func(obj *fluxv1.FluxInstance) { SetFluxInstanceSyncProvider(obj, "aws") },
+			want: fluxv1.Sync{Provider: "aws"},
+		},
+	} {
+		t.Run(name+" without a sync", func(t *testing.T) {
+			obj := CreateFluxInstance("flux", "flux-system")
+			tc.set(obj)
+			want := CreateFluxInstance("flux", "flux-system")
+			want.Spec.Sync = &tc.want
+			if !reflect.DeepEqual(obj, want) {
+				t.Errorf("got %#v\nwant %#v", obj, want)
+			}
+		})
+		t.Run(name+" on a sync", func(t *testing.T) {
+			base := fluxv1.Sync{Kind: "OCIRepository", URL: "oci://registry.example.com/fleet", Ref: "latest", Path: "./demo"}
+			obj := CreateFluxInstance("flux", "flux-system")
+			sync := base
+			obj.Spec.Sync = &sync
+			tc.set(obj)
+			want := CreateFluxInstance("flux", "flux-system")
+			wantSync := base
+			wantSync.PullSecret, wantSync.Provider = tc.want.PullSecret, tc.want.Provider
+			want.Spec.Sync = &wantSync
+			if !reflect.DeepEqual(obj, want) {
+				t.Errorf("got %#v\nwant %#v", obj, want)
+			}
+			if obj.Spec.Sync != &sync {
+				t.Error("the existing sync was replaced, not written")
+			}
+		})
 	}
 }
 

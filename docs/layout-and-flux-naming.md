@@ -183,14 +183,19 @@ directly under the walked root (`addSeparateFluxToLayout` in `layout_integrator.
 - `distribution.registry` and `distribution.version` are written verbatim. `v0.2.0-beta.15` wrote
   an empty value too, as an empty string; since
   [go-kure/kure#975](https://github.com/go-kure/kure/issues/975) an empty value is an error.
-- `sync` is emitted only when `SourceURL` is set.
+- `sync` is emitted only when `SourceURL` is set. For an `OCIRepository` sync it carries
+  `pullSecret` and `provider` from `SourceSecretRef` and `SourceProvider`, and `SourceInsecure` adds
+  a `spec.kustomize` patch setting `spec.insecure` on the operator's sync source
+  ([go-kure/kure#1060](https://github.com/go-kure/kure/issues/1060)).
 
 **Bootstrap, gotk mode.** Emits the vendored components, a Kustomization whose `spec.path` is
 the top directory of the written tree (section 1.4), and a Source when `SourceURL` is set
 (`generateGotkBootstrap` and `generateFluxSystemKustomization` in `bootstrap_generator.go`). That
 is the directory the FluxInstance `sync.path` names: both modes take it from `bootstrapDir`, since
 go-kure/kure#979 (`v0.2.0-beta.15` wrote `manifests/<root>`). The Source and the Kustomization's
-`sourceRef` are named after the root node whatever the rules are (`sourceName`).
+`sourceRef` are named after the root node whatever the rules are (`sourceName`). An
+`OCIRepository` Source takes `secretRef`, `provider` and `insecure` from the same three options
+(`generateOCISource`).
 
 ### 1.7 Collision guards
 

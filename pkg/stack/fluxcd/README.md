@@ -908,6 +908,31 @@ fmt.Println(fi.Name, fi.Spec.Sync.Name, fi.Spec.Sync.Ref)
   the CRD accepts no other. `BootstrapGenerator.BootstrapName` names the bootstrap Kustomization
   only.
 
+### Source access
+
+Three `BootstrapConfig` options say how an `OCIRepository` sync source reaches a private or
+plain-HTTP registry (go-kure/kure#1060). Unset, the output is what it was before they existed.
+
+| Option | gotk `OCIRepository` | flux-operator `FluxInstance` |
+|---|---|---|
+| `SourceSecretRef` | `spec.secretRef.name` | `spec.sync.pullSecret` |
+| `SourceProvider` | `spec.provider` | `spec.sync.provider` |
+| `SourceInsecure` | `spec.insecure: true` | a `spec.kustomize` patch |
+
+`SourceSecretRef` names a `kubernetes.io/dockerconfigjson` Secret with the registry credentials.
+It is not `ImagePullSecret`, which is for the Flux controller images. `SourceProvider` is one of
+`generic`, `aws`, `azure` and `gcp`, the values both CRDs take for an `OCIRepository`.
+
+A `FluxInstance` sync has no insecure field. So in flux-operator mode `SourceInsecure` adds one
+`spec.kustomize` patch that sets `spec.insecure: true` on the `OCIRepository` the operator
+generates for the sync, matched by group, kind and name. The name is `SyncName`, or, when that is
+empty, the `FluxInstance`'s namespace, which is how the operator names that source.
+
+Both `GenerateBootstrap` and `GenerateFluxInstance` refuse, with nothing returned:
+- any of the three without `SourceURL`, where no source is generated for it to apply to;
+- any of the three with a `GitRepository` source, which they are not defined for;
+- a `SourceProvider` an `OCIRepository` does not take, `github` included.
+
 ### Root node name
 
 Without a `ClusterName` the root node's name is the gotk bootstrap Kustomization's `spec.path`

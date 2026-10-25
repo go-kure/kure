@@ -993,6 +993,31 @@ func SetFluxInstanceSync(obj *fluxv1.FluxInstance, sync *fluxv1.Sync) {
 	obj.Spec.Sync = sync
 }
 
+// SetFluxInstanceSyncPullSecret sets the Secret holding the credentials for the
+// sync source (spec.sync.pullSecret), creating spec.sync when it is nil. A sync
+// created here still needs its kind, URL, ref and path, which the CRD requires.
+// This is the source's secret, not the one for the Flux controller images
+// (spec.distribution.imagePullSecret).
+func SetFluxInstanceSyncPullSecret(obj *fluxv1.FluxInstance, name string) {
+	if obj.Spec.Sync == nil {
+		obj.Spec.Sync = &fluxv1.Sync{}
+	}
+	obj.Spec.Sync.PullSecret = name
+}
+
+// SetFluxInstanceSyncProvider sets the OIDC provider the sync source
+// authenticates with (spec.sync.provider), creating spec.sync when it is nil. A
+// sync created here still needs its kind, URL, ref and path, which the CRD
+// requires. The CRD accepts generic, aws, azure, gcp and github, gcp only for an
+// OCIRepository or Bucket and github only for a GitRepository; this setter does
+// not check the value.
+func SetFluxInstanceSyncProvider(obj *fluxv1.FluxInstance, provider string) {
+	if obj.Spec.Sync == nil {
+		obj.Spec.Sync = &fluxv1.Sync{}
+	}
+	obj.Spec.Sync.Provider = provider
+}
+
 // FluxReport setters
 
 // SetFluxReportCluster sets the cluster info.

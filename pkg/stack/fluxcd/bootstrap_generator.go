@@ -2,12 +2,15 @@ package fluxcd
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	"github.com/fluxcd/flux2/v2/pkg/manifestgen/install"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"github.com/fluxcd/pkg/apis/kustomize"
+	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -135,6 +138,10 @@ func (bg *BootstrapGenerator) SupportedBootstrapModes() []string {
 // toolkit. dir is the directory the bootstrap Kustomization applies
 // (bootstrapDir).
 func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node, dir string) ([]client.Object, error) {
+	if err := validateSourceAccess(config, sourceName(rootNode)); err != nil {
+		return nil, err
+	}
+
 	var resources []client.Object
 
 	// Generate core Flux components
@@ -447,6 +454,72 @@ func resolvedSyncRef(config *stack.BootstrapConfig) string {
 	return ref
 }
 
+// ociSourceProviders are the providers an OCIRepository source authenticates
+// with: the OCIRepository CRD's enum (source-controller
+// api/v1/ocirepository_types.go), which is also what the FluxInstance CRD
+// admits for an OCIRepository sync.
+var ociSourceProviders = []string{
+	sourcev1.GenericOCIProvider,
+	sourcev1.AmazonOCIProvider,
+	sourcev1.AzureOCIProvider,
+	sourcev1.GoogleOCIProvider,
+}
+
+// validateSourceAccess refuses source access options that would not reach a
+// source: any of them without SourceURL, where no source is generated, or with
+// a GitRepository source, which they are not defined for; and a SourceProvider
+// an OCIRepository does not take. name is the object the error is about. Both
+// modes call it before building anything, so GenerateFluxInstance refuses what
+// GenerateBootstrap refuses.
+func validateSourceAccess(config *stack.BootstrapConfig, name string) error {
+	var set []string
+	if config.SourceSecretRef != "" {
+		set = append(set, "sourceSecretRef")
+	}
+	if config.SourceProvider != "" {
+		set = append(set, "sourceProvider")
+	}
+	if config.SourceInsecure {
+		set = append(set, "sourceInsecure")
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	fields := strings.Join(set, ", ")
+	if config.SourceURL == "" {
+		return errors.ResourceValidationError("BootstrapConfig", name, fields,
+			"source access options need sourceURL: without it no source is generated for them to apply to", nil)
+	}
+	if kind := resolvedSourceKind(config); kind != "OCIRepository" {
+		return errors.ResourceValidationError("BootstrapConfig", name, fields,
+			fmt.Sprintf("source access options apply to an OCIRepository source only, not a %s", kind), nil)
+	}
+	if config.SourceProvider != "" && !slices.Contains(ociSourceProviders, config.SourceProvider) {
+		return errors.NewValidationError("sourceProvider", config.SourceProvider, "BootstrapConfig", ociSourceProviders)
+	}
+	return nil
+}
+
+// syncInsecurePatch returns the FluxInstance kustomize patch that sets
+// spec.insecure on the OCIRepository flux-operator generates for the sync. The
+// sync has no field for it. The operator names that source after sync.name, or
+// after the FluxInstance's namespace when sync.name is empty, and applies
+// spec.kustomize patches to every object it builds, the sync source included.
+func (bg *BootstrapGenerator) syncInsecurePatch(config *stack.BootstrapConfig) kustomize.Patch {
+	name := config.SyncName
+	if name == "" {
+		name = bg.DefaultNamespace
+	}
+	return kustomize.Patch{
+		Patch: "- op: add\n  path: /spec/insecure\n  value: true\n",
+		Target: &kustomize.Selector{
+			Group: sourcev1.GroupVersion.Group,
+			Kind:  sourcev1.OCIRepositoryKind,
+			Name:  name,
+		},
+	}
+}
+
 // generateFluxSystemKustomization creates a Kustomization for the flux-system.
 // Its spec.path is dir, the directory bootstrapDir names, "." for the root of
 // the source. Its sourceRef stays on the root node's name (sourceName).
@@ -524,6 +597,11 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 	or.Spec.URL = config.SourceURL
 	or.Spec.Interval = metav1.Duration{Duration: bg.DefaultInterval}
 	pubfluxcd.SetOCIRepositoryReference(or, &sourcev1.OCIRepositoryRef{Tag: ref})
+	if config.SourceSecretRef != "" {
+		pubfluxcd.SetOCIRepositorySecretRef(or, &meta.LocalObjectReference{Name: config.SourceSecretRef})
+	}
+	or.Spec.Provider = config.SourceProvider
+	or.Spec.Insecure = config.SourceInsecure
 
 	return or, nil
 }
@@ -595,6 +673,9 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 	if err := requireDistribution(config); err != nil {
 		return nil, err
 	}
+	if err := validateSourceAccess(config, FluxInstanceName); err != nil {
+		return nil, err
+	}
 
 	spec := fluxv1.FluxInstanceSpec{
 		Distribution: fluxv1.Distribution{
@@ -621,6 +702,11 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 			Ref:      resolvedSyncRef(config),
 			Path:     syncPath(dir),
 			Interval: &metav1.Duration{Duration: bg.DefaultInterval},
+		}
+		spec.Sync.PullSecret = config.SourceSecretRef
+		spec.Sync.Provider = config.SourceProvider
+		if config.SourceInsecure {
+			spec.Kustomize = &fluxv1.Kustomize{Patches: []kustomize.Patch{bg.syncInsecurePatch(config)}}
 		}
 	}
 

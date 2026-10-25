@@ -191,7 +191,8 @@ func ExampleCreateFluxInstance() {
 	// Pointer setters remain for the optional blocks: SetFluxInstanceCluster,
 	// SetFluxInstanceSharding, SetFluxInstanceStorage, SetFluxInstanceKustomize,
 	// SetFluxInstanceSync, SetFluxInstanceWait, SetFluxInstanceCommonMetadata and
-	// SetFluxInstanceMigrateResources.
+	// SetFluxInstanceMigrateResources. SetFluxInstanceSyncPullSecret and
+	// SetFluxInstanceSyncProvider write one field of spec.sync, creating it if nil.
 	fmt.Println(instance.Spec.Distribution.Variant)
 	// Output: upstream-alpine
 }

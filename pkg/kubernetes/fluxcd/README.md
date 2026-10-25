@@ -67,6 +67,10 @@ Additional setters: `SetOCIRepositoryLayerSelector`, `SetOCIRepositoryVerify`,
 `SetOCIRepositoryCertSecretRef`, `SetOCIRepositoryProxySecretRef`, `SetOCIRepositoryTimeout`,
 `SetOCIRepositoryIgnore`.
 
+The OIDC provider and plain-HTTP access are plain fields with no setter: assign them,
+`oci.Spec.Provider = "aws"` and `oci.Spec.Insecure = true`. A setter for a single plain field
+is outside the [builder contract](/api-reference/kubernetes-builders/).
+
 ### HelmRepository
 
 **HTTP/HTTPS repository:**
@@ -328,7 +332,8 @@ instance.Spec.Distribution.Variant = "upstream-alpine" // Distribution is a plai
 // Pointer setters remain for the optional blocks: SetFluxInstanceCluster,
 // SetFluxInstanceSharding, SetFluxInstanceStorage, SetFluxInstanceKustomize,
 // SetFluxInstanceSync, SetFluxInstanceWait, SetFluxInstanceCommonMetadata and
-// SetFluxInstanceMigrateResources.
+// SetFluxInstanceMigrateResources. SetFluxInstanceSyncPullSecret and
+// SetFluxInstanceSyncProvider write one field of spec.sync, creating it if nil.
 fmt.Println(instance.Spec.Distribution.Variant)
 ```
 <!-- doc-example:end -->
