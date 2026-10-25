@@ -705,6 +705,14 @@ type LayoutIntentAugmenter interface {
 
 A config that implements only `LayoutAugmenter` keeps today's presence-only behaviour unchanged.
 
+A walk calls `AugmentLayout` once, right after the `Generate` call it belongs to. The layout it
+passes holds, in `Resources`, the very objects that call returned. Read them there, never from
+state `Generate` saved. `Application.Generate` and `Bundle.Generate` never augment. Each walk
+augments a new layout: for an unchanged config an augmenter adds the same things every time and
+keeps no state the next call depends on. `WantsOwnLayout()` answers from the config alone. A
+wrapper config that embeds the `stack.ApplicationConfig` interface hides both interfaces;
+forward them (see [Stack](/api-reference/stack/) § Generation contract).
+
 After `AugmentLayout` returns, every layout below the per-app layout that leaves `FileNaming` unset
 takes its parent's (see [File Naming Modes](#file-naming-modes)).
 
