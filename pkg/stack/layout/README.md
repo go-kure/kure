@@ -350,6 +350,10 @@ inner Kustomization.
 - **WalkCluster()**: Standard hierarchical layout (Node → Bundle → App structure)
 - **WalkClusterByPackage()**: Groups by PackageRef for multi-source scenarios
 
+Both skip an entry of an application's `Generate` result that is nil or holds a nil
+`client.Object` interface: it holds nothing to write, so it gets no file and no
+`kustomization.yaml` entry.
+
 ### 4. Writing System
 - **WriteManifest()**: Config-driven writing — uses `Config` to resolve file naming, kustomization mode, and directory structure
 - **WriteToDisk()**: Self-contained method on ManifestLayout — uses the layout's own `FileNaming` and `FluxPlacement` fields
