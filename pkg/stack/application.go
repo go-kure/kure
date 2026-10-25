@@ -39,10 +39,10 @@ func (d DeliveryIntent) IsZero() bool { return d == DeliveryIntent{} }
 //
 // What Generate returns belongs to the caller from the moment it returns:
 // the slice, every object it points to, and every map, slice and pointer
-// those objects hold. kure writes into them (Bundle.Generate adds the
+// those objects hold. kure writes to the objects (Bundle.Generate adds the
 // bundle's labels and annotations an object lacks; the Flux integrator adds
-// an application's delivery annotations), and so may a caller that holds the
-// layout. An implementation therefore never returns an object, or anything
+// an application's delivery annotations), and a caller that holds the layout
+// may write into any of it. An implementation therefore never returns an object, or anything
 // inside one, that it keeps or has returned before: it builds each result
 // fresh, or returns a deep copy of a cached one.
 //
