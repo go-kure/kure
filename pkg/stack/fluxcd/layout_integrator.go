@@ -533,7 +533,9 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) erro
 // kept one in whatever form it has, generatedKustomizations), with the
 // creation rule integrated placement adds: a CR exists only once the
 // Kustomization whose directory references reach its file has applied, and a
-// CR the root directory reaches is created by the Flux bootstrap. Under
+// CR the root directory reaches is created by the Flux bootstrap. A CR the
+// build of another Kustomization of the tree also writes exists once either
+// applies, and is awaited from neither (soleCreator). Under
 // separate placement every CR sits in flux-system, which the root lists, so
 // GenerateFromLayout's own check is the whole story.
 func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string]bool) error {
@@ -541,7 +543,7 @@ func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string
 	if err != nil {
 		return err
 	}
-	return checkReconcileOrder(t.kusts, t.creator, t.applied)
+	return checkReconcileOrder(t.kusts, t.soleCreator, t.applied)
 }
 
 // buildDirectories returns, in pre-order, the layouts whose directories a
