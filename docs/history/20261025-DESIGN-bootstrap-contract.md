@@ -25,10 +25,11 @@ both. In flux-operator mode kure emits a FluxInstance, and flux-operator renders
 
 | Concern | Contract | Today |
 |---|---|---|
-| Documents | One source and one Kustomization per bootstrap, in both modes | Holds; the modes test enforces it |
+| Documents | With `SourceURL` set, one source and one Kustomization per bootstrap, in both modes | Holds; the modes test enforces it. Without `SourceURL` the modes differ: gotk emits the Kustomization alone, flux-operator no sync (`testdata/bootstrap-modes/no-source.txt`). That case is outside the contract |
 | Directory | The tree's top directory (`layout.TopDirectory`), spelled per mode (`demo`, `./demo`) | Holds |
 | Namespace | The generator's `DefaultNamespace` for the source, the Kustomization and the FluxInstance. The Kustomization's `sourceRef` names no namespace, so it resolves in its own | Holds |
-| Source kind, URL, interval | From `BootstrapConfig`, the same in both modes | Holds |
+| Source kind, URL | From `BootstrapConfig`, the same in both modes | Holds |
+| Source interval | From the generator's `BootstrapGenerator.DefaultInterval`, not `BootstrapConfig`: the gotk source (`bootstrap_generator.go:572`, `:598`) and the FluxInstance sync (`:704`) | Holds |
 | Access | `SourceSecretRef`, `SourceProvider`, `SourceInsecure` (go-kure/kure#1060) | Holds, stacked below this PR |
 | Names | `SyncName` names the source and the Kustomization in both modes | flux-operator only. gotk names the source after the root node and the Kustomization `BootstrapName` |
 | Ref selector | Tag, or a semver range, chosen explicitly | Tag only |
@@ -78,9 +79,9 @@ The issue's own probe showed that the path and namespace work. The rest is bound
 
 `TestBootstrapModes_RootIdentities` renders nine configs in both modes and reduces each mode to
 its root as the cluster sees it. In flux-operator mode that is modelled from the v0.58.1
-template. The test holds both modes to one root each. It fails when they disagree on the source
-kind, namespace, URL, revision, interval or access, the Kustomization namespace, or the
-directory. Every other difference is stored as `<- differs` in the comparison files, so a change
+template. The test holds both modes to one root each, at most one source in gotk mode. With
+`SourceURL` set, it fails when they disagree on the source kind, namespace, URL, revision,
+interval or access, the Kustomization namespace, or the directory. Every other difference is stored as `<- differs` in the comparison files, so a change
 in either mode shows up in review.
 
 The recorded differences today:
