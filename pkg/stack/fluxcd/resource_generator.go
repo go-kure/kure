@@ -748,11 +748,13 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string,
 			APIVersion: kustv1.GroupVersion.String(),
 			Kind:       "Kustomization",
 		},
+		// Copies: the Kustomization is the caller's to edit, and shares no
+		// map with the bundle (go-kure/kure#1082).
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        b.UnitName(),
 			Namespace:   g.DefaultNamespace,
-			Labels:      b.Labels,
-			Annotations: b.Annotations,
+			Labels:      maps.Clone(b.Labels),
+			Annotations: maps.Clone(b.Annotations),
 		},
 		Spec: kustv1.KustomizationSpec{
 			Interval: metav1.Duration{Duration: interval},

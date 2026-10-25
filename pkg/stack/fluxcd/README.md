@@ -125,6 +125,16 @@ Each directory that renders bundles produces one Flux Kustomization resource (se
 - Source reference from `Bundle.SourceRef` (and a Source when it has a `URL`)
 - Dependency ordering from `Bundle.DependsOn` and `Bundle.NamedDependsOn`
 - Interval and pruning configuration
+- `metadata.labels` and `metadata.annotations` from `Bundle.Labels` and `Bundle.Annotations`
+
+A Kustomization holds copies of the bundle's label and annotation maps, never the maps
+themselves, whichever entry point builds it (`GenerateFromCluster`, `GenerateFromLayout`,
+`GenerateForBundle`, `CreateLayoutWithResources`, `IntegrateWithLayout`): editing a Kustomization
+kure returns leaves the bundle, and so what later generations from it produce, as it was. An
+application's own objects are passed through without copying (a delivery intent gives an object a
+new annotations map, see [Delivery intent](#delivery-intent)): an edit of one reaches whatever the
+config shares it with, so a config that builds every object, map and pointer per call keeps its
+next call unchanged.
 
 `GenerateFromCluster` walks the cluster itself, so it renders every application and runs every
 `LayoutAugmenter`: their errors surface there. It walks with the `layout.LayoutRules` it is given,
