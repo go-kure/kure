@@ -30,8 +30,10 @@ func Annotations(obj client.Object) map[string]any {
 
 // AddAnnotations gives obj each annotation of want whose key it does not
 // carry, and keeps every annotation it carries as written (Annotations). It
-// returns how to put obj's annotations back as they were, or nil when obj
-// already carries every key of want.
+// returns how to put obj back exactly as it was, or nil when it changed
+// nothing: when obj already carries every key of want, or when obj is
+// unstructured and its metadata is present but no map, which holds no
+// annotations and takes none.
 func AddAnnotations(obj client.Object, want map[string]string) func() {
 	have := Annotations(obj)
 	changed := false
@@ -43,8 +45,8 @@ func AddAnnotations(obj client.Object, want map[string]string) func() {
 	if !changed {
 		return nil
 	}
-	meta, ok := unstructuredMetadata(obj)
-	if !ok {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok || u == nil {
 		orig := obj.GetAnnotations()
 		merged := make(map[string]string, len(orig)+len(want))
 		maps.Copy(merged, want)
@@ -52,8 +54,19 @@ func AddAnnotations(obj client.Object, want map[string]string) func() {
 		obj.SetAnnotations(merged)
 		return func() { obj.SetAnnotations(orig) }
 	}
-	u := obj.(*unstructured.Unstructured)
-	_, hadMeta := u.Object["metadata"]
+	hadObject := u.Object != nil
+	raw, hadMeta := u.Object["metadata"]
+	meta, isMap := raw.(map[string]any)
+	if hadMeta && !isMap {
+		return nil
+	}
+	if !hadObject {
+		u.Object = map[string]any{}
+	}
+	if !hadMeta {
+		meta = map[string]any{}
+		u.Object["metadata"] = meta
+	}
 	orig, hadAnnotations := meta["annotations"]
 	merged := make(map[string]any, len(have)+len(want))
 	for k, v := range want {
@@ -61,11 +74,10 @@ func AddAnnotations(obj client.Object, want map[string]string) func() {
 	}
 	maps.Copy(merged, have)
 	meta["annotations"] = merged
-	if !hadMeta {
-		u.Object["metadata"] = meta
-	}
 	return func() {
 		switch {
+		case !hadObject:
+			u.Object = nil
 		case !hadMeta:
 			delete(u.Object, "metadata")
 		case hadAnnotations:
