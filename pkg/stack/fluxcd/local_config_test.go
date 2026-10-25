@@ -236,17 +236,35 @@ func TestLocalConfig_SourceNamesake(t *testing.T) {
 // the same object, carries the application's delivery annotations; a dropped
 // copy is not, so the generated Source carries none of them. The dropped copy
 // is annotated all the same: kustomize patches it before it drops it.
+//
+// A value that is no Go string, as an unstructured object decoded from YAML
+// holds it, stays as it is: the delivery annotations are added beside it.
 func TestLocalConfig_SourceNamesakeDelivery(t *testing.T) {
 	webRef := &stack.SourceRef{Kind: "GitRepository", Name: "web-git", Namespace: "flux-system", URL: "https://example.com/web.git", Branch: "main"}
+	type namesake struct {
+		name     string
+		annotate func(t *testing.T) client.Object
+		value    any
+	}
+	var namesakes []namesake
+	for _, tc := range localConfigCases {
+		if tc.dropped { // a kept copy is a competing definition, refused (TestLocalConfig_SourceNamesake)
+			namesakes = append(namesakes, namesake{tc.name, func(*testing.T) client.Object {
+				return annotateLocalConfig(gitRepository("web-git", "https://example.com/other.git"), tc.value)
+			}, *tc.value})
+		}
+	}
+	for _, tc := range localConfigValueCases {
+		if tc.dropped {
+			namesakes = append(namesakes, namesake{tc.name, func(t *testing.T) client.Object {
+				return annotateLocalConfigValue(t, gitRepository("web-git", "https://example.com/other.git"), tc.value)
+			}, tc.value})
+		}
+	}
 	for _, placement := range integratedPlacements {
-		for _, tc := range localConfigCases {
-			if !tc.dropped {
-				continue // a competing definition, refused (TestLocalConfig_SourceNamesake)
-			}
+		for _, tc := range namesakes {
 			t.Run(string(placement)+"/"+tc.name, func(t *testing.T) {
-				other := gitRepository("web-git", "https://example.com/other.git")
-				annotateLocalConfig(other, tc.value)
-				var o client.Object = other
+				o := tc.annotate(t)
 				platformApp := stack.NewApplication("sources", "default", &fakeAppConfig{objs: []*client.Object{&o}})
 				platformApp.Delivery = stack.DeliveryIntent{PruneProtection: true, ForceReplace: true}
 				web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", SourceRef: webRef, Applications: []*stack.Application{cmApp("web-app")}}}
@@ -263,10 +281,13 @@ func TestLocalConfig_SourceNamesakeDelivery(t *testing.T) {
 						if r.GetObjectKind().GroupVersionKind().Kind != "GitRepository" || r.GetName() != "web-git" {
 							continue
 						}
-						a := r.GetAnnotations()
+						a := writtenAnnotations(r)
 						if droppedByBuild(r) {
 							if a[stack.AnnotationFluxPruneKey] != stack.AnnotationFluxPruneDisabled || a[stack.AnnotationFluxForceKey] != stack.AnnotationFluxForceEnabled {
 								t.Errorf("the dropped copy's annotations = %v, want the application's delivery annotations", a)
+							}
+							if v, ok := a[localConfigAnnotation]; !ok || !reflect.DeepEqual(v, tc.value) {
+								t.Errorf("the dropped copy's annotations = %v, want %s still at %#v", a, localConfigAnnotation, tc.value)
 							}
 							continue
 						}
@@ -457,8 +478,23 @@ func walkLayouts(l *layout.ManifestLayout, fn func(*layout.ManifestLayout)) {
 // droppedByBuild reports whether a kustomize build drops obj: its local-config
 // annotation is set to any value but "false".
 func droppedByBuild(obj client.Object) bool {
-	v, ok := obj.GetAnnotations()[localConfigAnnotation]
-	return ok && v != "false"
+	v, ok := writtenAnnotations(obj)[localConfigAnnotation]
+	return ok && v != "false" && v != false
+}
+
+// writtenAnnotations returns obj's annotations as written: an unstructured
+// object's map as it is, whatever the type of its values.
+func writtenAnnotations(obj client.Object) map[string]any {
+	if u, ok := obj.(*unstructured.Unstructured); ok {
+		a, _, _ := unstructured.NestedFieldNoCopy(u.Object, "metadata", "annotations")
+		m, _ := a.(map[string]any)
+		return m
+	}
+	m := map[string]any{}
+	for k, v := range obj.GetAnnotations() {
+		m[k] = v
+	}
+	return m
 }
 
 // gitRepository returns a typed GitRepository flux-system/name with url.
