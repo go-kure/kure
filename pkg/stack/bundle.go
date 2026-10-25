@@ -478,9 +478,7 @@ func (a *Bundle) InitializeUmbrella() {
 // returned is not written, so a map the config also uses elsewhere (a
 // selector, a pod template's labels) keeps its value, and the new map is
 // shared with neither the bundle nor another object. A nil entry, or one
-// holding a nil object, is returned as it is and gets nothing. (The layout
-// walker skips a nil entry too, but not yet one holding a nil object:
-// go-kure/kure#1095.)
+// holding a nil object, is returned as it is and gets nothing.
 func (a *Bundle) Generate() ([]*client.Object, error) {
 	var resources []*client.Object
 	for _, app := range a.Applications {
