@@ -606,11 +606,13 @@ same Source as the generated `v1` one) — anywhere in the tree, top-level or in
 every Source the pass places in another layout, must have the same API version and content, or the
 integration is refused. Content is compared as the objects' unstructured form, so a typed Source
 and an unstructured copy of it are the same. A Kustomization or Source written with kustomize's
-`config.kubernetes.io/local-config` annotation at any string value but `"false"` does not count
-anywhere in the integration: kustomize drops it from the build, so it never reaches the cluster.
+`config.kubernetes.io/local-config` annotation at any value but `false` (the string `"false"` or
+the boolean `false`; `"False"`, a number and `null` are other values, as kustomize reads them)
+does not count anywhere in the integration: kustomize drops it from the build, so it never
+reaches the cluster.
 It is no existing object to collide with or keep, no copy of a Source to host in place of the
 generated one, no member or child of an umbrella, and it marks no directory as a Flux build
-(go-kure/kure#1059). With no annotation, or `"false"`, it is built and counts as above. It
+(go-kure/kure#1059). With no annotation, or `false`, it is built and counts as above. It
 still may not share a kustomize build with an object of its identity: kustomize registers both
 before it drops it, and refuses the second. The writers refuse such a tree, as they refuse one
 object held twice in a build.
@@ -727,8 +729,8 @@ An application may emit the Flux Source that a bundle's `SourceRef` also derives
 integrated placements the two are one object, hosted once per build. With an intent on that
 application, the derived Source carries the same annotations, so every copy that is applied is
 the same. A Source the application emits with `config.kubernetes.io/local-config` (any value but
-`"false"`) is dropped by kustomize and so is no copy that is applied: the derived Source does not
-take its application's annotations from it. The dropped copy is annotated all the same, as
+`false`, the string or the boolean) is dropped by kustomize and so is no copy that is applied:
+the derived Source does not take its application's annotations from it. The dropped copy is annotated all the same, as
 kustomize patches it before it drops it.
 
 An object or generator that already carries one of these annotations with **another** value is

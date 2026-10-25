@@ -1564,9 +1564,10 @@ func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 
 // builtItems returns l's resources as resourceItems does, without the objects
 // a kustomize build drops: one written with kustomize's local-config
-// annotation at any string value but "false" (built.LocalConfig). Such an
-// object never reaches the cluster, so it is no existing Kustomization or
-// Source, no member of the tree and builds nothing (go-kure/kure#1059).
+// annotation at any value but false, the string "false" or the boolean false
+// (built.LocalConfig). Such an object never reaches the cluster, so it is no
+// existing Kustomization or Source, no member of the tree and builds nothing
+// (go-kure/kure#1059).
 func builtItems(l *layout.ManifestLayout) ([]client.Object, error) {
 	objs, err := resourceItems(l)
 	if err != nil {
