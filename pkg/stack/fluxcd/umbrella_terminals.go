@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"github.com/fluxcd/pkg/apis/kustomize"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/errors"
@@ -43,6 +45,11 @@ var (
 // resources). Every other Flux Kustomization of the tree, an application's for
 // one, is indexed too (others): it is applied like a member, and counts as a
 // leaf.
+//
+// A member's spec.path is a directory of the tree: the integration generated
+// or kept it for that directory, on that directory's source. Another's is
+// only when readsLocalBuild says so; else its build applies nothing of the
+// tree (go-kure/kure#1062).
 type kustomizationTree struct {
 	root     *layout.ManifestLayout
 	kusts    []*kustv1.Kustomization
@@ -62,9 +69,12 @@ type kustomizationTree struct {
 	otherDeps map[string][]string
 	otherKeys []string
 	otherObjs map[string]client.Object
-	otherErr  error
-	reached   map[string]map[*layout.ManifestLayout]bool
-	fromRoot  map[*layout.ManifestLayout]bool
+	// otherSpecs holds each other Kustomization in typed form, absent for
+	// one that cannot be read so (otherErr).
+	otherSpecs map[string]*kustv1.Kustomization
+	otherErr   error
+	reached    map[string]map[*layout.ManifestLayout]bool
+	fromRoot   map[*layout.ManifestLayout]bool
 }
 
 // memberFilter returns the Flux Kustomizations of l that are members of the
@@ -84,15 +94,16 @@ func generatedMembers(generated map[string]bool) memberFilter {
 // selects.
 func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (*kustomizationTree, error) {
 	t := &kustomizationTree{
-		root:      root,
-		byKey:     map[string]*kustv1.Kustomization{},
-		hostOf:    map[string]*layout.ManifestLayout{},
-		layoutAt:  map[string]*layout.ManifestLayout{},
-		others:    map[*layout.ManifestLayout][]string{},
-		otherDeps: map[string][]string{},
-		otherObjs: map[string]client.Object{},
-		reached:   map[string]map[*layout.ManifestLayout]bool{},
-		fromRoot:  map[*layout.ManifestLayout]bool{},
+		root:       root,
+		byKey:      map[string]*kustv1.Kustomization{},
+		hostOf:     map[string]*layout.ManifestLayout{},
+		layoutAt:   map[string]*layout.ManifestLayout{},
+		others:     map[*layout.ManifestLayout][]string{},
+		otherDeps:  map[string][]string{},
+		otherObjs:  map[string]client.Object{},
+		otherSpecs: map[string]*kustv1.Kustomization{},
+		reached:    map[string]map[*layout.ManifestLayout]bool{},
+		fromRoot:   map[*layout.ManifestLayout]bool{},
 	}
 	var index func(l *layout.ManifestLayout) error
 	index = func(l *layout.ManifestLayout) error {
@@ -130,6 +141,7 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 				}
 				continue
 			}
+			t.otherSpecs[key] = spec
 			for _, d := range spec.Spec.DependsOn {
 				ns := d.Namespace
 				if ns == "" {
@@ -167,13 +179,18 @@ func dependencyKey(namespace, entry string) string {
 }
 
 // builds returns the layouts the build of the Kustomization with key reaches,
-// or nil when its spec.path is no layout of the tree.
+// or nil when its spec.path is no layout of the tree, or it is no member and
+// its build is not the tree's (readsLocalBuild).
 func (t *kustomizationTree) builds(key string) map[*layout.ManifestLayout]bool {
 	if r, ok := t.reached[key]; ok {
 		return r
 	}
 	var r map[*layout.ManifestLayout]bool
-	if k := t.byKey[key]; k != nil {
+	k := t.byKey[key]
+	if k == nil && t.readsLocalBuild(key) {
+		k = t.otherSpecs[key]
+	}
+	if k != nil {
 		if l := t.layoutAt[path.Clean(k.Spec.Path)]; l != nil {
 			r = map[*layout.ManifestLayout]bool{}
 			for _, b := range buildDirectories(l) {
@@ -206,9 +223,29 @@ func (t *kustomizationTree) creator(key string) string {
 	return best
 }
 
-// applied lists the members the apply of the member with key writes: those
-// its build reaches. With wait it waits for all of them, whoever else (the
-// bootstrap) also creates them.
+// readsLocalBuild reports whether the Flux Kustomization with key, which is
+// no member, builds from this tree, so that its spec.path is the directory of
+// the tree it names. A path alone does not say so: the same path in another
+// repository, or on another cluster, is another directory. It holds only when
+// the Kustomization sets no spec.kubeConfig (with one, it applies to, and
+// health-checks on, that cluster), a member writes it (writer), and its
+// spec.sourceRef names the Source that member's own does (sourceRefKey, an
+// omitted namespace each Kustomization's own; the identity, not the URL it
+// fetches). One the bootstrap or nothing writes, or that cannot be read in
+// typed form, builds from no directory of the tree: it applies nothing the
+// tree holds, and adds no edge.
+func (t *kustomizationTree) readsLocalBuild(key string) bool {
+	k := t.otherSpecs[key]
+	if k == nil || k.Spec.KubeConfig != nil {
+		return false
+	}
+	w := t.byKey[t.writer(key)]
+	return w != nil && sourceRefKey(k.Spec.SourceRef, k.Namespace) == sourceRefKey(w.Spec.SourceRef, w.Namespace)
+}
+
+// applied lists the members the apply of the Kustomization with key writes:
+// those its build reaches. With wait it waits for all of them, whoever else
+// (the bootstrap) also creates them.
 func (t *kustomizationTree) applied(key string) []string {
 	r := t.builds(key)
 	if r == nil {
@@ -230,11 +267,23 @@ func (t *kustomizationTree) applied(key string) []string {
 // application's file written into one of its directories counts), in build
 // order.
 func (t *kustomizationTree) children(key string) []string {
+	if t.byKey[key] == nil {
+		return nil // a leaf: its subtree is its author's
+	}
+	return t.written(key)
+}
+
+// written lists every Flux Kustomization the apply of the Kustomization with
+// key writes, as children does for a member, and for another whose build is
+// the tree's (readsLocalBuild): what its wait waits for.
+func (t *kustomizationTree) written(key string) []string {
 	out := t.applied(key)
-	r := t.builds(key)
-	k := t.byKey[key]
-	if r == nil || k == nil {
+	if t.builds(key) == nil {
 		return out
+	}
+	k := t.byKey[key]
+	if k == nil {
+		k = t.otherSpecs[key]
 	}
 	for _, b := range buildScope(t.layoutAt[path.Clean(k.Spec.Path)]) {
 		for _, other := range t.others[b] {
@@ -395,7 +444,11 @@ func (t *kustomizationTree) within(u, d string) bool {
 // UmbrellasDoNotWait). A Flux Kustomization an application emits, or one whose
 // spec.path is no layout of its tree, is a leaf. Each root is indexed on its
 // own, because a spec.path is relative to its own tree; the trees are those an
-// integration returned, with or without the setting.
+// integration returned, with or without the setting. Unlike the integration's
+// own checks, it does not judge a Kustomization's context: every Flux
+// Kustomization an application does not emit counts as building the layout
+// its spec.path names, whatever its spec.sourceRef or spec.kubeConfig
+// (go-kure/kure#1077).
 //
 // It returns an error that wraps ErrUmbrellaTerminals, and no map, for a
 // Kustomization identity found in two of the trees, for an umbrella without a
@@ -510,10 +563,33 @@ func typedKustomization(obj client.Object) (*kustv1.Kustomization, error) {
 	return nil, errors.Wrapf(err, "read Flux Kustomization %q in typed form", crKey(obj.GetNamespace(), obj.GetName()))
 }
 
-// kustomizationChecks returns the keys of the Flux Kustomizations k's
-// spec.healthChecks name; an entry without namespace is in k's.
-func kustomizationChecks(k *kustv1.Kustomization) []string {
-	var out []string
+// awaitedKustomizations returns the Flux Kustomizations whose state k's
+// readiness waits for, as kustomize-controller polls them: with wait, those
+// its apply wrote (applied; nil when unknown), and otherwise those its
+// spec.healthChecks name (checkedKustomizations). Flux reads both sets with
+// the same status readers, so both are split alike. applied says what the
+// apply wrote here: nothing, for one on another cluster (readsLocalBuild).
+func awaitedKustomizations(k *kustv1.Kustomization, applied func() []string) (ready, exist []string) {
+	if !k.Spec.Wait {
+		return checkedKustomizations(k)
+	}
+	if applied == nil {
+		return nil, nil
+	}
+	return splitByExprs(k, applied())
+}
+
+// checkedKustomizations returns the Flux Kustomizations k's spec.healthChecks
+// name, an entry without namespace in k's, whether or not k sets wait (under
+// which Flux ignores them). ready are those it waits Ready for; exist those an
+// entry of spec.healthCheckExprs decides instead (splitByExprs). With
+// spec.kubeConfig set Flux polls another cluster: a name there is not this
+// tree's Kustomization, and none is returned.
+func checkedKustomizations(k *kustv1.Kustomization) (ready, exist []string) {
+	if k.Spec.KubeConfig != nil {
+		return nil, nil
+	}
+	var targets []string
 	for _, hc := range k.Spec.HealthChecks {
 		if hc.Kind != "Kustomization" || !strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") {
 			continue
@@ -522,7 +598,23 @@ func kustomizationChecks(k *kustv1.Kustomization) []string {
 		if ns == "" {
 			ns = k.Namespace
 		}
-		out = append(out, crKey(ns, hc.Name))
+		targets = append(targets, crKey(ns, hc.Name))
 	}
-	return out
+	return splitByExprs(k, targets)
+}
+
+// splitByExprs splits targets, Flux Kustomizations k polls, into those it
+// waits Ready for and those it needs only to exist. When an entry of
+// k's spec.healthCheckExprs matches Flux Kustomizations, Flux evaluates that
+// expression instead of their readiness, and needs each to exist to read it.
+// An entry matches by group and kind, its version ignored, and one without a
+// kind matches its whole group, as Flux matches them.
+func splitByExprs(k *kustv1.Kustomization, targets []string) (ready, exist []string) {
+	if slices.ContainsFunc(k.Spec.HealthCheckExprs, func(e kustomize.CustomHealthCheck) bool {
+		gk := schema.FromAPIVersionAndKind(e.APIVersion, e.Kind).GroupKind()
+		return gk.Group == kustv1.GroupVersion.Group && (e.Kind == "" || gk.Kind == "Kustomization")
+	}) {
+		return nil, targets
+	}
+	return targets, nil
 }

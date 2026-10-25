@@ -336,6 +336,10 @@ type existingCR struct {
 	// dependsOn holds its spec.dependsOn entries
 	// (fluxKustomizationDependsOn).
 	dependsOn []string
+	// source is the Source its spec.sourceRef names, and remote whether it
+	// sets spec.kubeConfig (fluxKustomizationSource).
+	source string
+	remote bool
 }
 
 // sourceScope is what a layout's subtree takes from the nearest layout
@@ -899,6 +903,65 @@ func postBuildChanges(rf *resource.Factory, k *kustv1.Kustomization, obj client.
 	return "", nil
 }
 
+// keeps reports whether e, a Flux Kustomization already in the tree, may be
+// kept for one that reads source (sourceRefKey) on this cluster.
+func (e existingCR) keeps(source string) bool {
+	return e.source == source && !e.remote
+}
+
+// describeSource says what e reads, for a refusal.
+func (e existingCR) describeSource() string {
+	src := "on " + e.source
+	if e.source == "" {
+		src = "without a spec.sourceRef kind and name"
+	}
+	if e.remote {
+		src += ", with spec.kubeConfig"
+	}
+	return src
+}
+
+// keepsLayoutCR reports whether e, already in the tree with the name and
+// spec.path of child's per-layout CR, is kept for it: when it reads the
+// Source this integration would give the CR (layoutSource) on this cluster.
+// When that Source cannot be resolved the CR is kept as before, neither its
+// Source nor its cluster judged; otherwise one that differs is not kept, and add refuses it as
+// a namesake. One on a Source its own apply delivers, which layoutSource
+// passes over, is kept too: checkSourcesAreHostedBeforeUse refuses it, and
+// says why.
+func (p *integratedPlacement) keepsLayoutCR(e existingCR, child *layout.ManifestLayout, scope sourceScope) bool {
+	if holdsLayout(child, p.root) && p.derivable[e.source] {
+		return true
+	}
+	ref, err := p.layoutSource(child, scope)
+	if err != nil {
+		return true
+	}
+	return e.keeps(sourceRefKey(ref, p.gen.DefaultNamespace))
+}
+
+// fluxKustomizationSource returns, for obj, a Flux Kustomization as
+// fluxKustomizationPath reads one, the Source its spec.sourceRef names
+// (sourceRefKey, an omitted namespace obj's own; "" when it cannot be read,
+// or names no kind and name) and whether it sets spec.kubeConfig.
+func fluxKustomizationSource(obj client.Object) (source string, remote bool) {
+	var ref kustv1.CrossNamespaceSourceReference
+	switch o := obj.(type) {
+	case *kustv1.Kustomization:
+		ref, remote = o.Spec.SourceRef, o.Spec.KubeConfig != nil
+	case *unstructured.Unstructured:
+		_, remote, _ = unstructured.NestedFieldNoCopy(o.Object, "spec", "kubeConfig")
+		m, _, _ := unstructured.NestedMap(o.Object, "spec", "sourceRef")
+		ref.Kind, _ = m["kind"].(string)
+		ref.Name, _ = m["name"].(string)
+		ref.Namespace, _ = m["namespace"].(string)
+	}
+	if ref.Kind == "" || ref.Name == "" {
+		return "", remote
+	}
+	return sourceRefKey(ref, obj.GetNamespace()), remote
+}
+
 // set indexes Kustomizations by namespace/name.
 func set(kusts []*kustv1.Kustomization) map[string]*kustv1.Kustomization {
 	out := make(map[string]*kustv1.Kustomization, len(kusts))
@@ -913,7 +976,9 @@ func set(kusts []*kustv1.Kustomization) map[string]*kustv1.Kustomization {
 // waits for every dependsOn to be Ready; Ready waits for being applied and for
 // every Kustomization it health-checks — unless wait is set, when Flux ignores
 // health checks and waits for everything the Kustomization applied (applied,
-// if set, lists the generated CRs among it). creator, if set, names the
+// if set, lists the generated CRs among it); one a healthCheckExprs predicate
+// decides needs only to exist, and none on another cluster (spec.kubeConfig)
+// counts (awaitedKustomizations). creator, if set, names the
 // Kustomization whose apply creates a CR. Identities are namespace/name;
 // references to objects outside the set (other namespaces, Kustomizations an
 // application emits) are not modelled. A cycle is a deadlock on a fresh install: a merge can close one
@@ -935,27 +1000,23 @@ func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string)
 				edges[apply] = append(edges[apply], "ready "+dep)
 			}
 		}
-		if !k.Spec.Wait {
-			for _, hc := range k.Spec.HealthChecks {
-				if hc.Kind != "Kustomization" || !strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") {
-					continue
-				}
-				ns := hc.Namespace
-				if ns == "" {
-					ns = k.Namespace
-				}
-				if checked := crKey(ns, hc.Name); set[checked] != nil {
-					edges[ready] = append(edges[ready], "ready "+checked)
-				}
-			}
+		var appliedBy func() []string
+		if applied != nil {
+			appliedBy = func() []string { return applied(key) }
 		}
-		if k.Spec.Wait && applied != nil {
-			for _, x := range applied(key) {
+		awaited, exist := awaitedKustomizations(k, appliedBy)
+		for _, x := range awaited {
+			if set[x] != nil {
 				edges[ready] = append(edges[ready], "ready "+x)
 			}
 		}
 		if creator == nil {
 			continue
+		}
+		for _, x := range exist {
+			if c := creator(x); set[x] != nil && c != "" {
+				edges[ready] = append(edges[ready], "apply "+c)
+			}
 		}
 		if c := creator(key); c != "" {
 			edges[apply] = append(edges[apply], "apply "+c)
@@ -1062,7 +1123,7 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 			if child.ApplicationFileMode == layout.AppFileUnset {
 				child.ApplicationFileMode = layout.AppFilePerResource
 			}
-			if e, ok := p.existing[crKey(p.gen.DefaultNamespace, name)]; ok && e.host == l && e.path == child.FullRepoPath() {
+			if e, ok := p.existing[crKey(p.gen.DefaultNamespace, name)]; ok && e.host == l && e.path == child.FullRepoPath() && p.keepsLayoutCR(e, child, scope) {
 				// Placed by an earlier integration: kept as is, so its
 				// source need not be resolved again. It is still one of
 				// this integration's CRs for the reconcile-order check.
@@ -1397,7 +1458,15 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 			p.generated[key] = true
 			if e, ok := p.existing[key]; ok {
 				if e.host == host && e.path == k.Spec.Path {
-					continue
+					// Kept only when it reads what this one would: its
+					// spec.path is then the directory of this tree. On another
+					// Source, or another cluster, it is another Kustomization
+					// of the same name (go-kure/kure#1062).
+					if e.keeps(sourceRefKey(k.Spec.SourceRef, k.Namespace)) {
+						continue
+					}
+					return errors.Errorf("layout %q already has Flux Kustomization %q with spec.path %q%s, %s; this integration generates one of that name for %s on %s, without spec.kubeConfig: %s",
+						e.host.FullRepoPath(), k.Name, e.path, heldBy(p.ix, key, e.host), e.describeSource(), by.owner, sourceRefKey(k.Spec.SourceRef, k.Namespace), nameApart(by.field, by.owner))
 				}
 				return errors.Errorf("layout %q already has Flux Kustomization %q with spec.path %q%s; this integration generates one of that name for %s, with spec.path %q in layout %q: %s",
 					e.host.FullRepoPath(), k.Name, e.path, heldBy(p.ix, key, e.host), by.owner, k.Spec.Path, host.FullRepoPath(), nameApart(by.field, by.owner))
@@ -1477,7 +1546,8 @@ func indexExistingKustomizations(ml, skip *layout.ManifestLayout) (map[string]ex
 			if prev, dup := out[key]; dup {
 				return errors.Errorf("Flux Kustomization name %q is present twice (in layout %q with spec.path %q and in layout %q with spec.path %q): Kustomization names must be unique", r.GetName(), prev.host.FullRepoPath(), prev.path, l.FullRepoPath(), path)
 			}
-			out[key] = existingCR{host: l, path: path, dependsOn: fluxKustomizationDependsOn(r)}
+			source, remote := fluxKustomizationSource(r)
+			out[key] = existingCR{host: l, path: path, dependsOn: fluxKustomizationDependsOn(r), source: source, remote: remote}
 		}
 		for _, c := range l.Children {
 			if err := walk(c); err != nil {
