@@ -142,6 +142,14 @@ for _, child := range ml.(*layout.ManifestLayout).Children {
 ```
 <!-- doc-example:end -->
 
+`CreateLayoutWithResources` walks the cluster and calls each application's `Generate` once. What
+`Generate` returns belongs to the caller, and kure writes into it: the bundle's labels and
+annotations, and an application's delivery annotations. A config therefore returns fresh objects
+on every call, or deep copies of a cached result. Each entry point walks again, so validating
+with one and laying out with another generates twice. A wrapper config forwards `Validator` and
+the layout augmenter interfaces, or loses them. See [Stack](/api-reference/stack/) § Generation
+contract.
+
 The layout is yours to edit before writing it. Every Kustomization in it holds copies of its
 bundle's labels and annotations, so an edit there leaves the cluster's bundles, and what the next
 generation from them produces, as they were. The applications' objects are the ones their configs
