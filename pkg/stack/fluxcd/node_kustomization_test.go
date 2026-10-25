@@ -463,6 +463,9 @@ func TestLayoutKustomization_CallerPlacedUnderTheOldName(t *testing.T) {
 		placed.Name = "myapp"
 		placed.Namespace = "flux-system"
 		placed.Spec.Path = app.FullRepoPath()
+		// The bundle's source, which the generated one would read: kept only
+		// on it (go-kure/kure#1062).
+		placed.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{Kind: "GitRepository", Name: "flux-system"}
 		unit.Resources = append(unit.Resources, placed)
 		if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(root, c, rules); err != nil {
 			t.Fatalf("IntegrateWithLayout: %v", err)
