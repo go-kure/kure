@@ -170,7 +170,7 @@ them to `fluxcd.SetHelmReleaseValues`.
 `FluxInstance`'s `spec.sync`, creating `spec.sync` when it is nil. One they create holds only that
 field: its `kind`, `url`, `ref` and `path`, which the CRD requires, are yours to set. An `OCIRepository`'s
 provider and plain-HTTP setting have no helper, since each is a single non-pointer field: assign
-`repo.Spec.Provider` and `repo.Spec.Insecure` directly.
+them on the `OCIRepository`, `oci.Spec.Provider = "aws"` and `oci.Spec.Insecure = true`.
 
 See the [FluxCD Builders reference](/api-reference/fluxcd-builders) for all available resource types.
 
