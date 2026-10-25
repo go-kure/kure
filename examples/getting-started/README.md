@@ -79,4 +79,8 @@ type ApplicationConfig interface {
 
 The `Generate` method returns a slice of Kubernetes objects (Deployments, Services,
 ConfigMaps, etc.) that the layout writer serialises to YAML. See `RedisConfig` and
-`WebAppConfig` in `main.go` for complete examples.
+`WebAppConfig` in `main.go` for complete examples. Both build their objects afresh on every
+call, and give each field its own map and pointer (`appLabels` is called once per labels field,
+and the replica count is copied out of the config): what `Generate` returns belongs to the
+caller, and kure writes into it, so a map shared by two fields, or a pointer into the config,
+would let an edit of one reach the other.

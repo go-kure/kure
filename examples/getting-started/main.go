@@ -145,7 +145,19 @@ func run() error {
 //
 // Each type below implements stack.ApplicationConfig by providing
 // a Generate method that returns Kubernetes objects.
+//
+// What Generate returns belongs to the caller, and kure writes into
+// it (a bundle's labels, for one). So every call builds its objects
+// afresh, and every map and pointer is built per field: a labels map
+// shared with a selector, or a pointer into the config, would let an
+// edit of one reach the other.
 // ---------------------------------------------------------------
+
+// appLabels returns a new map of the labels that select an
+// application's pods; each field that holds them gets its own.
+func appLabels(name string) map[string]string {
+	return map[string]string{"app": name}
+}
 
 // RedisConfig generates the Namespace and a Deployment for a Redis instance.
 type RedisConfig struct {
@@ -156,7 +168,6 @@ type RedisConfig struct {
 // Generate produces the Namespace the instance runs in and a single-replica
 // Redis Deployment.
 func (c *RedisConfig) Generate(app *stack.Application) ([]*client.Object, error) {
-	labels := map[string]string{"app": app.Name}
 	replicas := int32(1)
 
 	dep := &appsv1.Deployment{
@@ -167,13 +178,13 @@ func (c *RedisConfig) Generate(app *stack.Application) ([]*client.Object, error)
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      app.Name,
 			Namespace: c.Namespace,
-			Labels:    labels,
+			Labels:    appLabels(app.Name),
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{MatchLabels: labels},
+			Selector: &metav1.LabelSelector{MatchLabels: appLabels(app.Name)},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				ObjectMeta: metav1.ObjectMeta{Labels: appLabels(app.Name)},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
 						Name:  app.Name,
@@ -206,7 +217,8 @@ type WebAppConfig struct {
 // Generate produces the Namespace the application runs in, a Deployment and a
 // ClusterIP Service.
 func (c *WebAppConfig) Generate(app *stack.Application) ([]*client.Object, error) {
-	labels := map[string]string{"app": app.Name}
+	// A copy: the Deployment must not point into the config.
+	replicas := c.Replicas
 
 	dep := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
@@ -216,13 +228,13 @@ func (c *WebAppConfig) Generate(app *stack.Application) ([]*client.Object, error
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      app.Name,
 			Namespace: c.Namespace,
-			Labels:    labels,
+			Labels:    appLabels(app.Name),
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: &c.Replicas,
-			Selector: &metav1.LabelSelector{MatchLabels: labels},
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{MatchLabels: appLabels(app.Name)},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				ObjectMeta: metav1.ObjectMeta{Labels: appLabels(app.Name)},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
 						Name:  app.Name,
@@ -246,10 +258,10 @@ func (c *WebAppConfig) Generate(app *stack.Application) ([]*client.Object, error
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      app.Name,
 			Namespace: c.Namespace,
-			Labels:    labels,
+			Labels:    appLabels(app.Name),
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: labels,
+			Selector: appLabels(app.Name),
 			Ports: []corev1.ServicePort{{
 				Name:     "http",
 				Port:     c.Port,
