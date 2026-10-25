@@ -728,7 +728,10 @@ its output does not change.
 An application may emit the Flux Source that a bundle's `SourceRef` also derives; under the
 integrated placements the two are one object, hosted once per build. With an intent on that
 application, the derived Source carries the same annotations, so every copy that is applied is
-the same.
+the same. A Source the application emits with `config.kubernetes.io/local-config` (any value but
+`"false"`) is dropped by kustomize and so is no copy that is applied: the derived Source does not
+take its application's annotations from it. The dropped copy is annotated all the same, as
+kustomize patches it before it drops it.
 
 An object or generator that already carries one of these annotations with **another** value is
 refused, with an error naming the application, the object (kind, namespace/name) or generator, the

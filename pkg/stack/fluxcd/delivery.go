@@ -49,7 +49,9 @@ func deliveryAnnotations(d stack.DeliveryIntent) map[string]string {
 // sources maps the identity (sourceKey) of every Flux Source among those
 // objects to the annotations its application's intent asks for. A Source the
 // integration derives with that identity is the same object, so it carries
-// them too (integratedPlacement.add).
+// them too (integratedPlacement.add). A Source kustomize drops
+// (built.LocalConfig) is no object of the build, so it maps nothing; it is
+// annotated all the same, since kustomize patches it before it drops it.
 func applyDeliveryIntents(ml *layout.ManifestLayout) (sources map[string]map[string]string, undo func(), err error) {
 	sources = map[string]map[string]string{}
 	var undos []func()
@@ -88,8 +90,8 @@ func applyDeliveryIntents(ml *layout.ManifestLayout) (sources map[string]map[str
 					if u != nil {
 						undos = append(undos, u)
 					}
-					if key, ok := sourceKey(item); ok {
-						sources[key], _ = merge(sources[key], want)
+					if err := recordDeliverySource(sources, item, want); err != nil {
+						return errors.Wrapf(err, "application %q", rec.Application.Name)
 					}
 				}
 				written, err := verifyWritten(obj, want)
@@ -98,9 +100,9 @@ func applyDeliveryIntents(ml *layout.ManifestLayout) (sources map[string]map[str
 				}
 				// A Source the Go value gave no access to, raw JSON for one,
 				// is the application's as well.
-				for _, built := range written {
-					if key, ok := sourceKey(&unstructured.Unstructured{Object: built}); ok {
-						sources[key], _ = merge(sources[key], want)
+				for _, w := range written {
+					if err := recordDeliverySource(sources, &unstructured.Unstructured{Object: w}, want); err != nil {
+						return errors.Wrapf(err, "application %q", rec.Application.Name)
 					}
 				}
 			}
@@ -122,6 +124,24 @@ func applyDeliveryIntents(ml *layout.ManifestLayout) (sources map[string]map[str
 		return nil, nil, err
 	}
 	return sources, undo, nil
+}
+
+// recordDeliverySource maps obj's identity in sources to want when obj is a
+// Flux Source the build keeps; one kustomize drops (built.LocalConfig) maps
+// nothing.
+func recordDeliverySource(sources map[string]map[string]string, obj client.Object, want map[string]string) error {
+	key, ok := sourceKey(obj)
+	if !ok {
+		return nil
+	}
+	local, err := built.LocalConfig(obj)
+	if err != nil {
+		return err
+	}
+	if !local {
+		sources[key], _ = merge(sources[key], want)
+	}
+	return nil
 }
 
 // refuseDeliveryIntent fails when an application the tree under ml records
