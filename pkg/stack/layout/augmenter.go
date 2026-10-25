@@ -19,6 +19,15 @@ import (
 // entries to their per-app ManifestLayout after resource generation. The
 // walker invokes AugmentLayout when app.Config satisfies this interface.
 //
+// A walk calls AugmentLayout once, right after the Generate call it belongs
+// to, on the application's own layout; that layout's Resources are the very
+// objects the call returned. The augmenter reads them there, never from
+// state Generate saved. It runs only where the walk gives the application a
+// layout of its own (see LayoutIntentAugmenter for flat grouping), and
+// never from Application.Generate or Bundle.Generate. Each walk augments a
+// new layout, so for an unchanged config an augmenter adds the same things
+// every time and keeps no state the next call depends on.
+//
 // The interface lives in the layout package (rather than pkg/stack alongside
 // Validator) because ApplicationConfig — defined in pkg/stack — cannot
 // reference *ManifestLayout without creating an import cycle: the layout
@@ -47,6 +56,9 @@ type LayoutAugmenter interface {
 //
 // A config that does not implement this interface keeps LayoutAugmenter's
 // existing presence-only behaviour unchanged.
+//
+// WantsOwnLayout answers from the config alone: the same config gives the
+// same answer on every call.
 //
 // The interface lives in the layout package for the same import-cycle
 // reason as LayoutAugmenter above.
