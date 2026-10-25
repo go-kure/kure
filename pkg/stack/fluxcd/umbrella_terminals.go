@@ -236,24 +236,20 @@ func (t *kustomizationTree) creator(key string) string {
 // omitted namespace each Kustomization's own; the identity, not the URL it
 // fetches). One the bootstrap or nothing writes, or that cannot be read in
 // typed form, builds from no directory of the tree: it applies nothing the
-// tree holds, and adds no edge. So does one that transforms its build
-// (transformsBuild): what it writes is not what the directory holds.
+// tree holds, and adds no edge. One that transforms its build (spec.patches,
+// spec.components, spec.namePrefix, spec.nameSuffix, spec.targetNamespace)
+// still reads that directory: the transform is not modelled, and what the
+// directory holds is kept as what it applies. A renamed or moved
+// Kustomization keeps its dependsOn, which kustomize does not rewrite, so
+// dropping the edges would admit a deadlock; keeping them may refuse a
+// build that deletes the object (go-kure/kure#1094).
 func (t *kustomizationTree) readsLocalBuild(key string) bool {
 	k := t.otherSpecs[key]
-	if k == nil || k.Spec.KubeConfig != nil || transformsBuild(k) {
+	if k == nil || k.Spec.KubeConfig != nil {
 		return false
 	}
 	w := t.byKey[t.writer(key)]
 	return w != nil && sourceRefKey(k.Spec.SourceRef, k.Namespace) == sourceRefKey(w.Spec.SourceRef, w.Namespace)
-}
-
-// transformsBuild reports whether k changes which objects its build writes,
-// or their names, in a way the reconcile-order check does not model:
-// spec.patches (a patch can delete an object), spec.components,
-// spec.namePrefix, spec.nameSuffix or spec.targetNamespace.
-func transformsBuild(k *kustv1.Kustomization) bool {
-	s := k.Spec
-	return len(s.Patches) > 0 || len(s.Components) > 0 || s.NamePrefix != "" || s.NameSuffix != "" || s.TargetNamespace != ""
 }
 
 // applied lists the members the apply of the Kustomization with key writes:
