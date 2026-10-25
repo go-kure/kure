@@ -1321,10 +1321,11 @@ writes, and the build of a Kustomization the tree holds writes too, exists once 
 When that other Kustomization, and each Kustomization whose apply creates it up to one the Flux
 bootstrap applies, depends on nothing and sets no spec field but `interval`, `retryInterval`,
 `timeout`, `path`, `sourceRef`, `prune`, `deletionPolicy`, `force`, `wait`, `healthChecks` and
-`healthCheckExprs`, no check on the written one waits for the apply of either. Otherwise the
-other may wait for, or never write, what it would create (`suspend`, `commonMetadata`
-annotations such as `kustomize.toolkit.fluxcd.io/ssa: Ignore`, `spec.ignore`, …), and the
-checks wait for the generated one's apply. A health check on another cluster
+`healthCheckExprs`, and when neither the written one nor any of those carries a
+`kustomize.toolkit.fluxcd.io/` annotation but `substitute`, no check on the written one waits
+for the apply of either. Otherwise the other may wait for, or never write, what it would create
+(`suspend`, `commonMetadata` annotations, `kustomize.toolkit.fluxcd.io/ssa: Ignore` on the
+object itself, `spec.ignore`, …), and the checks wait for the generated one's apply. A health check on another cluster
 (`spec.kubeConfig`) names none of the tree's Kustomizations. Where a `spec.healthCheckExprs` entry matches Flux
 Kustomizations (by group and kind, whatever version, or the whole group for an entry without a
 kind), Flux evaluates that predicate instead of their readiness: the check waits for the checked

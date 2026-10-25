@@ -512,6 +512,8 @@ func TestReconcileContext_PlacedOrderAnotherWriter(t *testing.T) {
 		dependsOn   bool
 		suspend     bool
 		annotations map[string]string
+		writerMeta  map[string]string
+		targetMeta  map[string]string
 		refused     bool
 	}{
 		"emitted by platform":              {emitter: "platform"},
@@ -525,6 +527,16 @@ func TestReconcileContext_PlacedOrderAnotherWriter(t *testing.T) {
 			annotations: map[string]string{"kustomize.toolkit.fluxcd.io/reconcile": "disabled"}},
 		"emitted by platform, another annotation": {emitter: "platform", refused: true,
 			annotations: map[string]string{"example.com/team": "web"}},
+		"emitted by platform, itself ssa ignore": {emitter: "platform", refused: true,
+			writerMeta: map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "Ignore"}},
+		"emitted by platform, itself labelled": {emitter: "platform",
+			writerMeta: map[string]string{"example.com/team": "web"}},
+		"emitted by platform, sub ssa ignore": {emitter: "platform", refused: true,
+			targetMeta: map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "Ignore"}},
+		"emitted by platform, sub reconcile disabled": {emitter: "platform", refused: true,
+			targetMeta: map[string]string{"kustomize.toolkit.fluxcd.io/reconcile": "disabled"}},
+		"emitted by platform, sub substitute disabled": {emitter: "platform",
+			targetMeta: map[string]string{"kustomize.toolkit.fluxcd.io/substitute": "disabled"}},
 	}
 	build := func(emitter string, app *stack.Application) *stack.Cluster {
 		platformApp, subApp := cmApp("platform-app"), cmApp("sub-app")
@@ -564,6 +576,7 @@ func TestReconcileContext_PlacedOrderAnotherWriter(t *testing.T) {
 				if c.annotations != nil {
 					k.Spec.CommonMetadata = &kustv1.CommonMetadata{Annotations: c.annotations}
 				}
+				k.SetAnnotations(c.writerMeta)
 				if c.dependsOn {
 					k.Spec.DependsOn = []kustv1.DependencyReference{{Name: findKept(off, "web").Name}}
 				}
@@ -572,6 +585,17 @@ func TestReconcileContext_PlacedOrderAnotherWriter(t *testing.T) {
 				ml, err := integrate(cl)
 				if err != nil {
 					t.Fatalf("first integration: %v", err)
+				}
+				if c.targetMeta != nil {
+					sub := findKept(ml, "sub")
+					a := sub.GetAnnotations()
+					if a == nil {
+						a = map[string]string{}
+					}
+					for n, v := range c.targetMeta {
+						a[n] = v
+					}
+					sub.SetAnnotations(a)
 				}
 				p := findKept(ml, "platform")
 				p.Spec.Wait = false
