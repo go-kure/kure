@@ -8,8 +8,8 @@
 > `pkg/stack/fluxcd/bootstrap_modes_test.go` and the comparisons it stores under
 > `pkg/stack/fluxcd/testdata/bootstrap-modes/`.
 
-**Status: proposed.** The maintainer decides on the pull request that adds this note, in
-particular between the two contracts under Options considered.
+**Status: decided.** The maintainer chose the supported root contract (option 2 under Options
+considered) and the rule under Prune compatibility.
 
 ---
 
@@ -44,7 +44,7 @@ modes test models.
 
 **Selectors.** ASSUMPTION, to be confirmed on go-kure/kure#1068 by the consumer that asked:
 "selectors" means the OCI reference selector (`tag`, `semver`, `semverFilter`, `digest` in
-source-controller `OCIRepositoryRef`). This note proposes semver alongside tag. Digest and the
+source-controller `OCIRepositoryRef`). The contract adds semver alongside tag. Digest and the
 layer selector are the same mechanism and can follow on request.
 
 **Git sources keep today's scope.** go-kure/kure#1060 confines source access to OCI, and this
@@ -108,13 +108,13 @@ The consumer owns the root, and builds it with the ordinary builders. The owners
 - the consumer emits exactly one of each, in the namespace kure installs into;
 - `BootstrapConfig.Source*`, `SyncName` and `Prune` are deprecated.
 
-Not recommended:
+Not chosen:
 - It moves a solved problem (path, namespace, kind, ref, access) back to every consumer.
 - It breaks every caller that relies on today's root.
 - It leaves flux-operator mode with a sync-less FluxInstance, which gives up the operator's own
   reconciliation of its root.
 
-### 2. Supported root contract, with sync expressed by patches where needed — recommended
+### 2. Supported root contract, with sync expressed by patches where needed — chosen
 
 As in Decision. It is additive:
 - each new field defaults to today's output;
@@ -135,13 +135,13 @@ mode does not remove the consumer's rebuild.
 
 Today an unset `Prune` means no garbage collection in gotk mode and garbage collection in
 flux-operator mode. Making flux-operator honour "unset means false" would silently stop garbage
-collection on every existing flux-operator cluster that never set `Prune`. The proposed rule:
+collection on every existing flux-operator cluster that never set `Prune`. The rule:
 - an **explicit** `Prune` is honoured in both modes;
 - **unset** keeps each mode's default: false for gotk, true for flux-operator;
 - the godoc states this instead of promising false.
 
-The maintainer may prefer the stricter rule, unset meaning false everywhere, with a release note.
-That is a behaviour change and is recorded as the alternative.
+The stricter rule, unset meaning false everywhere with a release note, was considered and not
+chosen: it is a behaviour change for every flux-operator cluster that never set `Prune`.
 
 ## Follow-ups
 
