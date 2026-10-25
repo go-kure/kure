@@ -316,6 +316,12 @@ rule on a bundle it is handed directly (`GenerateForBundle`), and the bootstrap
 generator checks the root node's name as a directory name wherever it builds a
 path from it.
 
+`Bundle.Generate` returns the objects of the bundle's applications and gives
+each one the bundle's `Labels` and `Annotations` it does not carry. A key the
+object already carries keeps the object's value. Every annotation the object
+carries stays as written, also on an unstructured object whose value is no
+string (a YAML boolean or number): only the missing keys are added.
+
 ### Application
 
 An individual Kubernetes workload. Applications use the `ApplicationConfig` interface to generate their resources.
