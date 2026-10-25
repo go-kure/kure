@@ -1317,13 +1317,24 @@ another Source, and one applying to another cluster build no directory of this t
 wait, and are never refused for one. Nor does one that transforms its build (`spec.patches`,
 `spec.components`, `spec.namePrefix`, `spec.nameSuffix` or `spec.targetNamespace`), since what
 it writes is then not what the directory holds. A Kustomization that a generated one's build
-writes, and the build of a Kustomization the tree holds writes too, exists once either applies:
-no check on it waits for the apply of either. A health check on another cluster
+writes, and the build of a Kustomization the tree holds writes too, exists once either applies.
+When that other Kustomization, and each Kustomization whose apply creates it up to one the Flux
+bootstrap applies, depends on nothing, no check on the written one waits for the apply of either.
+Otherwise the other may wait for what it would create, and the checks wait for the generated
+one's apply. A health check on another cluster
 (`spec.kubeConfig`) names none of the tree's Kustomizations. Where a `spec.healthCheckExprs` entry matches Flux
 Kustomizations (by group and kind, whatever version, or the whole group for an entry without a
 kind), Flux evaluates that predicate instead of their readiness: the check waits for the checked
 Kustomization to exist, so for the apply that writes it, not for it to be Ready. The same holds
 for what a `wait` polls.
+
+Where these checks cannot tell what a build writes or waits for, they keep the wait, so they may
+refuse a tree that would converge. They do not model a generated Kustomization's patches
+rewriting a child Kustomization's spec, objects that `kustomize.toolkit.fluxcd.io/ssa: Ignore` or
+`kustomize.toolkit.fluxcd.io/reconcile: disabled` excludes from an apply, `spec.ignore`,
+`spec.postBuild` substitution or `spec.suspend` (go-kure/kure#1094). A tree refused for one of them integrates
+once the dependency or health check that closes the reported chain is dropped, or names another
+Kustomization.
 
 The rules apply to the Kustomizations the call generates. One kept from an earlier integration
 is not rewritten; it is refused when it breaks R1 (with `ErrUmbrellaWait`, for `wait` or any
