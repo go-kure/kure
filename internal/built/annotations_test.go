@@ -106,26 +106,70 @@ func TestAddAnnotations_Typed(t *testing.T) {
 	t.Run("existing annotations", func(t *testing.T) {
 		obj := typedConfigMap("app")
 		obj.Annotations = map[string]string{"team": "web"}
+		obj.Data = map[string]string{"k": "v"}
+		before := obj.DeepCopy()
 		undo := AddAnnotations(obj, map[string]string{"prune": "disabled", "team": "ops"})
 		if want := map[string]string{"team": "web", "prune": "disabled"}; !reflect.DeepEqual(obj.Annotations, want) {
 			t.Errorf("annotations = %#v, want %#v", obj.Annotations, want)
 		}
 		undo()
-		if want := map[string]string{"team": "web"}; !reflect.DeepEqual(obj.Annotations, want) {
-			t.Errorf("undo left %#v, want %#v", obj.Annotations, want)
+		if !reflect.DeepEqual(obj, before) {
+			t.Errorf("undo left %#v, want %#v", obj, before)
 		}
 	})
 	t.Run("no annotations", func(t *testing.T) {
 		obj := typedConfigMap("app")
+		before := obj.DeepCopy()
 		undo := AddAnnotations(obj, map[string]string{"prune": "disabled"})
 		if want := map[string]string{"prune": "disabled"}; !reflect.DeepEqual(obj.Annotations, want) {
 			t.Errorf("annotations = %#v, want %#v", obj.Annotations, want)
 		}
 		undo()
-		if obj.Annotations != nil {
-			t.Errorf("undo left %#v, want nil", obj.Annotations)
+		if !reflect.DeepEqual(obj, before) {
+			t.Errorf("undo left %#v, want %#v", obj, before)
 		}
 	})
+}
+
+// An unstructured object with no Object map, or whose metadata is no map,
+// takes the getter/setter path: it reads no annotations, and undo puts the
+// object back as it was.
+func TestAddAnnotations_UnstructuredFallback(t *testing.T) {
+	want := map[string]string{"prune": "disabled"}
+	t.Run("nil Object", func(t *testing.T) {
+		obj := &unstructured.Unstructured{}
+		if got := Annotations(obj); got != nil {
+			t.Errorf("Annotations = %#v, want nil", got)
+		}
+		undo := AddAnnotations(obj, want)
+		if undo == nil {
+			t.Fatal("AddAnnotations returned no undo for a change")
+		}
+		if got := obj.GetAnnotations(); !reflect.DeepEqual(got, want) {
+			t.Errorf("annotations = %#v, want %#v", got, want)
+		}
+		undo()
+		if got := obj.GetAnnotations(); got != nil {
+			t.Errorf("undo left annotations %#v, want none", got)
+		}
+	})
+	for name, meta := range map[string]any{"null metadata": nil, "string metadata": "x"} {
+		t.Run(name, func(t *testing.T) {
+			obj := &unstructured.Unstructured{Object: map[string]any{"kind": "ConfigMap", "metadata": meta}}
+			before := runtime.DeepCopyJSON(obj.Object)
+			if got := Annotations(obj); got != nil {
+				t.Errorf("Annotations = %#v, want nil", got)
+			}
+			undo := AddAnnotations(obj, want)
+			if undo == nil {
+				t.Fatal("AddAnnotations returned no undo for a change")
+			}
+			undo()
+			if !reflect.DeepEqual(obj.Object, before) {
+				t.Errorf("undo left %#v, want %#v", obj.Object, before)
+			}
+		})
+	}
 }
 
 func TestAddAnnotations_NoChange(t *testing.T) {
