@@ -171,7 +171,7 @@ Registered before go-kure/kure#1067 closes, each with its completion criteria in
 
 1. **Generated objects stop sharing the caller's maps** (go-kure/kure#1082). The Flux
    Kustomization and the bundle builder clone `Labels` and `Annotations`; the Argo CD
-   Application already copies them. Done when a test edits every generated object's maps in
+   Application already copies the labels and carries no annotations. Done when a test edits every generated object's maps in
    place and the input `Bundle` is unchanged.
 2. **`Bundle.Generate` writes into copies and skips nil entries** (go-kure/kure#1083), as the
    walker does. Done when a test with a labels map shared with a selector, and one with a nil
