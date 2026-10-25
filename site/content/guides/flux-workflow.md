@@ -142,6 +142,12 @@ for _, child := range ml.(*layout.ManifestLayout).Children {
 ```
 <!-- doc-example:end -->
 
+The layout is yours to edit before writing it. Every Kustomization in it holds copies of its
+bundle's labels and annotations, so an edit there leaves the cluster's bundles, and what the next
+generation from them produces, as they were. The applications' objects are the ones their configs
+returned, passed through without copying. See the
+[Flux Engine reference](/api-reference/flux-engine/) § Resource Generation.
+
 ## Step 4: Write to Disk
 
 <!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowWrite -->

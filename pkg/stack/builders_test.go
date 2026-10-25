@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -941,6 +942,32 @@ func TestDeepCopyBundle_NamedDependsOn(t *testing.T) {
 	got.NamedDependsOn = append(got.NamedDependsOn, "dep3")
 	if len(b.NamedDependsOn) != 2 {
 		t.Error("appending to copy affected original")
+	}
+}
+
+// TestDeepCopyBundle_CopiesMetadataMaps: the copy's label and annotation maps
+// are its own, so an in-place edit of either bundle's leaves the other as it
+// was (go-kure/kure#1082).
+func TestDeepCopyBundle_CopiesMetadataMaps(t *testing.T) {
+	b := &Bundle{
+		Name:        "bundle",
+		Labels:      map[string]string{"team": "shop"},
+		Annotations: map[string]string{"owner": "shop"},
+	}
+	got := deepCopyBundle(b)
+	if !reflect.DeepEqual(got.Labels, b.Labels) || !reflect.DeepEqual(got.Annotations, b.Annotations) {
+		t.Fatalf("copy has labels %v and annotations %v, want %v and %v", got.Labels, got.Annotations, b.Labels, b.Annotations)
+	}
+	got.Labels["edited"] = "x"
+	got.Annotations["edited"] = "x"
+	if want := map[string]string{"team": "shop"}; !reflect.DeepEqual(b.Labels, want) {
+		t.Errorf("original labels = %v after editing the copy's, want %v", b.Labels, want)
+	}
+	if want := map[string]string{"owner": "shop"}; !reflect.DeepEqual(b.Annotations, want) {
+		t.Errorf("original annotations = %v after editing the copy's, want %v", b.Annotations, want)
+	}
+	if empty := deepCopyBundle(&Bundle{Name: "bundle"}); empty.Labels != nil || empty.Annotations != nil {
+		t.Errorf("copy of a bundle without maps has labels %v and annotations %v, want nil", empty.Labels, empty.Annotations)
 	}
 }
 

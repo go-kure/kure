@@ -3,6 +3,7 @@ package stack
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -132,7 +133,8 @@ func remapNodeDependsOn(copies map[*Node]*Node) {
 }
 
 // deepCopyBundle creates a copy of a Bundle with a new slice header for each
-// slice field, but shallow-copies the slice contents. In particular,
+// slice field and a copy of its Labels and Annotations maps, but
+// shallow-copies the slice contents. In particular,
 // *Application and *Bundle pointers are shared between the original and the
 // copy.
 //
@@ -159,8 +161,8 @@ func deepCopyBundle(b *Bundle) *Bundle {
 		ParentPath:         b.ParentPath,
 		SourceRef:          b.SourceRef,
 		Interval:           b.Interval,
-		Labels:             b.Labels,
-		Annotations:        b.Annotations,
+		Labels:             maps.Clone(b.Labels),
+		Annotations:        maps.Clone(b.Annotations),
 		Description:        b.Description,
 		Prune:              b.Prune,
 		Wait:               b.Wait,
