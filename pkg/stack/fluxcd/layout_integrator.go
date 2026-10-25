@@ -94,7 +94,11 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 	// earlier integration's, or a caller's) was placed by them, so it is not
 	// re-placed; and a refused call puts the tree back as it was.
 	if ml.FluxPlacement != rules.FluxPlacement {
-		if placed := placedKustomization(ml); placed != "" {
+		placed, err := placedKustomization(ml)
+		if err != nil {
+			return err
+		}
+		if placed != "" {
 			return errors.Errorf("layout %q already holds Flux Kustomization %q, placed for %q: it cannot be integrated again as %q", ml.FullRepoPath(), placed, ml.FluxPlacement, rules.FluxPlacement)
 		}
 	}
@@ -165,8 +169,9 @@ func saveLayouts(l *layout.ManifestLayout) func() {
 // placedKustomization returns the name of a Flux Kustomization in the tree
 // under ml that no application emitted — one an earlier integration or the
 // caller placed — or "" when there is none. A Kustomization an application
-// emits is that application's output (OriginBundleObjects), not a placement.
-func placedKustomization(ml *layout.ManifestLayout) string {
+// emits is that application's output (OriginBundleObjects), not a placement,
+// and one a kustomize build drops (built.LocalConfig) places nothing.
+func placedKustomization(ml *layout.ManifestLayout) (string, error) {
 	emitted := map[client.Object]bool{}
 	var collect func(l *layout.ManifestLayout)
 	collect = func(l *layout.ManifestLayout) {
@@ -182,22 +187,29 @@ func placedKustomization(ml *layout.ManifestLayout) string {
 		}
 	}
 	collect(ml)
-	var find func(l *layout.ManifestLayout) string
-	find = func(l *layout.ManifestLayout) string {
+	var find func(l *layout.ManifestLayout) (string, error)
+	find = func(l *layout.ManifestLayout) (string, error) {
 		for _, r := range l.Resources {
-			if _, ok := fluxKustomizationPath(r); ok && !emitted[r] {
-				return r.GetName()
+			if _, ok := fluxKustomizationPath(r); !ok || emitted[r] {
+				continue
+			}
+			local, err := built.LocalConfig(r)
+			if err != nil {
+				return "", errors.Wrapf(err, "layout %q: read an object as written", l.FullRepoPath())
+			}
+			if !local {
+				return r.GetName(), nil
 			}
 		}
 		for _, c := range l.Children {
 			if c == nil {
 				continue
 			}
-			if name := find(c); name != "" {
-				return name
+			if name, err := find(c); name != "" || err != nil {
+				return name, err
 			}
 		}
-		return ""
+		return "", nil
 	}
 	return find(ml)
 }
@@ -478,7 +490,7 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) erro
 	var walk func(l *layout.ManifestLayout) error
 	walk = func(l *layout.ManifestLayout) error {
 		layoutAt[path.Clean(l.FullRepoPath())] = l
-		objs, err := resourceItems(l)
+		objs, err := builtItems(l)
 		if err != nil {
 			return err
 		}
@@ -595,7 +607,7 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout
 		scope := buildScope(b)
 		copies := map[string][]hostedObject{}
 		for _, l := range scope {
-			objs, err := resourceItems(l)
+			objs, err := builtItems(l)
 			if err != nil {
 				return err
 			}
@@ -1454,8 +1466,9 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 // indexExistingKustomizations records every Flux Kustomization already in the
 // tree under ml (an earlier integration's, a caller's, or one an application
 // emits), typed or unstructured, keyed by namespace/name. skip, if set, is left
-// out. A Kustomization inside a List counts: kustomize builds a List's items.
-// One identity present twice is a collision before anything is added:
+// out. A Kustomization inside a List counts: kustomize builds a List's items;
+// one a build drops as local-config does not (builtItems). One identity
+// present twice is a collision before anything is added:
 // kustomize would register the id twice.
 func indexExistingKustomizations(ml, skip *layout.ManifestLayout) (map[string]existingCR, error) {
 	out := map[string]existingCR{}
@@ -1464,7 +1477,7 @@ func indexExistingKustomizations(ml, skip *layout.ManifestLayout) (map[string]ex
 		if l == nil || l == skip {
 			return nil
 		}
-		objs, err := resourceItems(l)
+		objs, err := builtItems(l)
 		if err != nil {
 			return err
 		}
@@ -1491,8 +1504,8 @@ func indexExistingKustomizations(ml, skip *layout.ManifestLayout) (map[string]ex
 
 // indexExistingSources records every Flux Source already in the tree under ml
 // (an earlier integration's, a caller's, or one an application emits), typed
-// or unstructured, top-level or inside a List, keyed by sourceKey. skip, if
-// set, is left out.
+// or unstructured, top-level or inside a List, keyed by sourceKey, but one a
+// build drops as local-config (builtItems). skip, if set, is left out.
 func indexExistingSources(ml, skip *layout.ManifestLayout) (map[string][]hostedObject, error) {
 	out := map[string][]hostedObject{}
 	var walk func(l *layout.ManifestLayout) error
@@ -1500,7 +1513,7 @@ func indexExistingSources(ml, skip *layout.ManifestLayout) (map[string][]hostedO
 		if l == nil || l == skip {
 			return nil
 		}
-		objs, err := resourceItems(l)
+		objs, err := builtItems(l)
 		if err != nil {
 			return err
 		}
@@ -1545,6 +1558,29 @@ func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 			return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
 		}
 		out = append(out, objs...)
+	}
+	return out, nil
+}
+
+// builtItems returns l's resources as resourceItems does, without the objects
+// a kustomize build drops: one written with kustomize's local-config
+// annotation at any string value but "false" (built.LocalConfig). Such an
+// object never reaches the cluster, so it is no existing Kustomization or
+// Source, no member of the tree and builds nothing (go-kure/kure#1059).
+func builtItems(l *layout.ManifestLayout) ([]client.Object, error) {
+	objs, err := resourceItems(l)
+	if err != nil {
+		return nil, err
+	}
+	out := objs[:0]
+	for _, obj := range objs {
+		local, err := built.LocalConfig(obj)
+		if err != nil {
+			return nil, errors.Wrapf(err, "layout %q: read an object as written", l.FullRepoPath())
+		}
+		if !local {
+			out = append(out, obj)
+		}
 	}
 	return out, nil
 }
@@ -2271,14 +2307,14 @@ func normalizeRulesPlacement(rules layout.LayoutRules) layout.LayoutRules {
 // generatedKustomizations returns, in typed form and in the order of l's
 // resources, a List's in the List's place, the Flux Kustomizations of l that
 // this integration placed or kept (generated: their namespace/name keys). It
-// reads l as kustomize builds it (resourceItems), so one the integration kept
+// reads l as kustomize builds it (builtItems), so one the integration kept
 // in place of its own (add) counts in whatever form it has: typed,
 // unstructured or inside a List. One that is not typed is converted through
 // its JSON, and a conversion failure is an error naming the layout and the
 // object, never a Kustomization the integrator's checks leave out
 // (go-kure/kure#979).
 func generatedKustomizations(l *layout.ManifestLayout, generated map[string]bool) ([]*kustv1.Kustomization, error) {
-	objs, err := resourceItems(l)
+	objs, err := builtItems(l)
 	if err != nil {
 		return nil, err
 	}

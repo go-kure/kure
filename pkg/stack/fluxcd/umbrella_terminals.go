@@ -9,6 +9,7 @@ import (
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/internal/built"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
@@ -107,7 +108,7 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 			t.byKey[key] = k
 			t.hostOf[key] = l
 		}
-		objs, err := resourceItems(l)
+		objs, err := builtItems(l)
 		if err != nil {
 			return err
 		}
@@ -441,7 +442,9 @@ func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, er
 // root but those an application emits (layout.ManifestLayout
 // OriginBundleObjects), in typed form. An application object that is a List
 // emits its items (objectItems), so they are matched by identity (crKey), not
-// by the object provenance records.
+// by the object provenance records. A Kustomization a kustomize build drops
+// (builtItems) is neither emitted nor a member: an application's dropped
+// namesake hides no member of that name.
 func nonApplicationMembers(root *layout.ManifestLayout) memberFilter {
 	emitted := map[string]bool{}
 	var collect func(l *layout.ManifestLayout) error
@@ -456,7 +459,14 @@ func nonApplicationMembers(root *layout.ManifestLayout) memberFilter {
 					return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
 				}
 				for _, item := range items {
-					if _, ok := fluxKustomizationPath(item); ok {
+					if _, ok := fluxKustomizationPath(item); !ok {
+						continue
+					}
+					local, err := built.LocalConfig(item)
+					if err != nil {
+						return errors.Wrapf(err, "layout %q: read an object as written", l.FullRepoPath())
+					}
+					if !local {
 						emitted[crKey(item.GetNamespace(), item.GetName())] = true
 					}
 				}
@@ -476,7 +486,7 @@ func nonApplicationMembers(root *layout.ManifestLayout) memberFilter {
 		if collectErr != nil {
 			return nil, collectErr
 		}
-		objs, err := resourceItems(l)
+		objs, err := builtItems(l)
 		if err != nil {
 			return nil, err
 		}
