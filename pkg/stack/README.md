@@ -443,8 +443,8 @@ A caller that holds the layout may edit them as well. So:
 `Application.Generate` runs `Validate` and `Generate` on every call and never augments a layout;
 only a walk does. The tests in `pkg/stack/layout/generation_contract_test.go` (walks) and
 `pkg/stack/generation_contract_test.go` (workflow entry points) show the call counts per walk
-and per entry point, what the augmenter sees and where it is skipped, that a failed walk leaves
-nothing behind, that one walk's edits stay out of the next for fresh and deep-copying configs
+and per entry point, what the augmenter sees and where it is skipped, that a failed walk returns
+no layout and a later walk uses nothing from it, that one walk's edits stay out of the next for fresh and deep-copying configs
 but not for a shared cache, and what each wrapper shape keeps. No test shows the concurrency
 rule: it is a property of kure's code.
 
