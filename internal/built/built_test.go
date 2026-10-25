@@ -11,6 +11,11 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/kustomize/api/krusty"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
+
+	kio "github.com/go-kure/kure/pkg/io"
 )
 
 func configMap(name string) *unstructured.Unstructured {
@@ -651,29 +656,61 @@ func TestObjects_ShapesApimachineryCannotRead(t *testing.T) {
 	}
 }
 
+// localConfigValues is the local-config annotation at each kind of value an
+// unstructured object can hold, as one decoded from YAML holds it: local
+// unless it is absent or written as false, the string or the boolean.
+var localConfigValues = []struct {
+	name  string
+	value any
+	want  bool
+}{
+	{"the string true", "true", true},
+	{"another string", "x", true},
+	{"the empty string", "", true},
+	{"the string false", "false", false},
+	{"the string False", "False", true},
+	{"the string FALSE", "FALSE", true},
+	{"the boolean true", true, true},
+	{"the boolean false", false, false},
+	{"an integer", int64(0), true},
+	{"a float", float64(1.5), true},
+	{"null", nil, true},
+	{"a map", map[string]any{"false": false}, true},
+	{"a list", []any{"false"}, true},
+}
+
+// annotatedConfigMap is an unstructured ConfigMap carrying the local-config
+// annotation at value.
+func annotatedConfigMap(value any) *unstructured.Unstructured {
+	cm := configMap("c")
+	cm.Object["metadata"].(map[string]any)["annotations"] = map[string]any{"config.kubernetes.io/local-config": value}
+	return cm
+}
+
 // TestLocalConfig: the local-config annotation is read from what is written,
-// at any string value but "false".
+// at any value but false, the string or the boolean.
 func TestLocalConfig(t *testing.T) {
-	annotated := func(value any) *unstructured.Unstructured {
-		cm := configMap("c")
-		cm.Object["metadata"].(map[string]any)["annotations"] = map[string]any{"config.kubernetes.io/local-config": value}
-		return cm
-	}
 	typed := typedConfigMap("c")
 	typed.Annotations = map[string]string{"config.kubernetes.io/local-config": "true"}
+	typedFalse := typedConfigMap("c")
+	typedFalse.Annotations = map[string]string{"config.kubernetes.io/local-config": "false"}
 	cases := []struct {
 		name string
 		obj  runtime.Object
 		want bool
 	}{
 		{"no annotation", configMap("c"), false},
-		{"true", annotated("true"), true},
-		{"another value", annotated("x"), true},
-		{"the empty string", annotated(""), true},
-		{"false", annotated("false"), false},
-		{"null", annotated(nil), false},
-		{"no string", annotated(true), false},
 		{"a typed object", typed, true},
+		{"a typed object at false", typedFalse, false},
+		{"raw JSON at the boolean true", &runtime.Unknown{Raw: []byte(`{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"c","annotations":{"config.kubernetes.io/local-config":true}}}`)}, true},
+		{"raw JSON at the boolean false", &runtime.Unknown{Raw: []byte(`{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"c","annotations":{"config.kubernetes.io/local-config":false}}}`)}, false},
+	}
+	for _, v := range localConfigValues {
+		cases = append(cases, struct {
+			name string
+			obj  runtime.Object
+			want bool
+		}{v.name, annotatedConfigMap(v.value), v.want})
 	}
 	for _, c := range cases {
 		got, err := LocalConfig(c.obj)
@@ -682,6 +719,39 @@ func TestLocalConfig(t *testing.T) {
 		}
 		if got != c.want {
 			t.Errorf("%s: LocalConfig = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// TestLocalConfig_Kustomize: LocalConfig is what a kustomize build does. Each
+// value is written as the writers write it and built; the object is local
+// exactly when the build drops it.
+func TestLocalConfig_Kustomize(t *testing.T) {
+	for _, v := range localConfigValues {
+		obj := annotatedConfigMap(v.value)
+		var written client.Object = obj.DeepCopy()
+		data, err := kio.EncodeObjectsToYAML([]*client.Object{&written})
+		if err != nil {
+			t.Fatalf("%s: write: %v", v.name, err)
+		}
+		fs := filesys.MakeFsInMemory()
+		if err := fs.WriteFile("/k/object.yaml", data); err != nil {
+			t.Fatal(err)
+		}
+		if err := fs.WriteFile("/k/kustomization.yaml", []byte("resources:\n- object.yaml\n")); err != nil {
+			t.Fatal(err)
+		}
+		m, err := krusty.MakeKustomizer(krusty.MakeDefaultOptions()).Run(fs, "/k")
+		if err != nil {
+			t.Fatalf("%s: kustomize build: %v\n%s", v.name, err, data)
+		}
+		dropped := m.Size() == 0
+		local, err := LocalConfig(obj)
+		if err != nil {
+			t.Fatalf("%s: LocalConfig: %v", v.name, err)
+		}
+		if local != dropped {
+			t.Errorf("%s: LocalConfig = %v, but kustomize drops the object: %v\n%s", v.name, local, dropped, data)
 		}
 	}
 }

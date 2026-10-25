@@ -150,8 +150,8 @@ func localConfig(obj *unstructured.Unstructured, value string) *unstructured.Uns
 }
 
 // TestWriters_LocalConfigWithoutAPIVersion: an object with kustomize's
-// local-config annotation at any string value but "false" is not judged on its
-// apiVersion. A build drops it without requiring one, so it is written as
+// local-config annotation at any value but false (the string "false" or the
+// boolean false) is not judged on its apiVersion. A build drops it without requiring one, so it is written as
 // before.
 func TestWriters_LocalConfigWithoutAPIVersion(t *testing.T) {
 	cases := map[string]func(t *testing.T) client.Object{
