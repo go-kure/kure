@@ -106,12 +106,15 @@ Under the ArgoCD workflow the same value names the Application. A `NamedDependsO
 such a resource, so it reaches a bundle that sets `KustomizationName` by that value.
 
 `Bundle.Generate` returns its applications' objects with the bundle's `Labels` and `Annotations`
-added; an object's own value for a key wins. Where the bundle sets labels (or annotations), each
-object is given a new labels (or annotations) map, so a map its config also uses elsewhere (a
-Deployment's selector or pod template labels) is not written, and the new map is shared with
-neither the bundle nor another object. A nil entry, or one holding no object (a nil
-`client.Object`, or a nil pointer of an object type such as `(*corev1.ConfigMap)(nil)`), is
-returned as it is and gets nothing.
+added; an object's own value for a key wins. Every annotation the object carries stays as
+written, also on an unstructured object whose value is no string (a YAML boolean or number): only
+the missing keys are added. Where the bundle sets labels, each object is given a new labels map;
+where it sets annotations, each object that lacks one of them is given a new annotations map, and
+one that carries them all keeps its own. A map its config also uses elsewhere (a Deployment's
+selector or pod template labels) is not written, and a new map is shared with neither the bundle
+nor another object. A nil entry, or one holding no object (a nil `client.Object`, or a nil
+pointer of an object type such as `(*corev1.ConfigMap)(nil)`), is returned as it is and gets
+nothing.
 
 A nil `DependsOn` entry is refused by `Bundle.Validate`, with the bundle's path (an umbrella
 descendant's from the bundle that was validated: `platform/infra/db`) and the entry's index; the
@@ -327,12 +330,6 @@ apply a rule themselves: the generator checks the whole Kustomization name
 rule on a bundle it is handed directly (`GenerateForBundle`), and the bootstrap
 generator checks the root node's name as a directory name wherever it builds a
 path from it.
-
-`Bundle.Generate` returns the objects of the bundle's applications and gives
-each one the bundle's `Labels` and `Annotations` it does not carry. A key the
-object already carries keeps the object's value. Every annotation the object
-carries stays as written, also on an unstructured object whose value is no
-string (a YAML boolean or number): only the missing keys are added.
 
 ### Application
 
