@@ -209,11 +209,12 @@ func TestReconcileContext_ExistenceIsAwaited(t *testing.T) {
 }
 
 // hand-written building web's own directory writes inner as web does, so
-// inner exists, and can become Ready, once either applies: hand-written's
-// check on inner waits for nothing web's apply does, whether a
-// healthCheckExprs predicate decides it or it waits for readiness, through
-// an explicit health check or wait. Accepted: web depending on hand-written
-// closes no cycle.
+// inner could exist once either applies. The check does not model such an
+// alternate creator (whether hand-written applies depends on controller
+// settings the tree does not carry), so hand-written's check on inner, by a
+// health check, a predicate or its wait, waits for web's apply, and web
+// depending on hand-written is refused: a false refusal, kept on purpose
+// (go-kure/kure#1094).
 func TestReconcileContext_TargetItsOwnBuildWrites(t *testing.T) {
 	checksInner := func(k *kustv1.Kustomization) {
 		k.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "inner"}}
@@ -238,11 +239,10 @@ func TestReconcileContext_TargetItsOwnBuildWrites(t *testing.T) {
 				c := noWaitCluster(platform, true)
 				web := c.Node.Children[1].Bundle
 				web.Applications = append(web.Applications, fluxKustomizationApp("inner-app", "inner"))
-				ml, err := integrateNoWait(c, nodeOnly, placement)
-				if err != nil {
-					t.Fatalf("CreateLayoutWithResources: %v", err)
+				_, err := integrateNoWait(c, nodeOnly, placement)
+				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "ready flux-system/hand-written -> ready flux-system/inner -> apply flux-system/inner -> apply flux-system/web") {
+					t.Fatalf("got %v, want ErrUmbrellaDependency naming hand-written's wait for web's apply", err)
 				}
-				assertDependsOn(t, ml, "web", "hand-written")
 			})
 		}
 	}
@@ -507,47 +507,22 @@ func TestReconcileContext_PlacedOrderReadsExpressions(t *testing.T) {
 
 // As above, sub decided by a predicate (read as readiness), but an
 // application also emits hand-written, building web's directory on the
-// tree's Source, so that it creates sub too. Emitted by platform, which the
-// bootstrap creates, it applies without waiting for anything: sub is
-// applied, and can become Ready, without web's apply, and
-// the tree is accepted, also when platform's application is written as one
-// file into platform's directory. Emitted by sub, it exists only once sub
-// has applied; depending on web, only once web is Ready; suspended, or with
-// any spec field that may change what it applies (common metadata of any
-// kind among them), it may never write sub: each way sub still waits for
-// web's apply, and the cycle is refused.
+// tree's Source, so that it writes sub too. Whoever emits it, sub's creation
+// still waits for web's apply: a Kustomization the tree's own build also
+// writes is not modelled as an alternate creator (whether it applies depends
+// on controller settings the tree does not carry: a watch label selector,
+// cross-namespace Source references being blocked, a default service
+// account), so the cycle is refused, a false refusal where hand-written
+// applies freely (go-kure/kure#1094). Also when platform's application is
+// written as one file into platform's directory.
 func TestReconcileContext_PlacedOrderAnotherWriter(t *testing.T) {
 	cases := map[string]struct {
-		emitter     string
-		single      bool
-		dependsOn   bool
-		suspend     bool
-		annotations map[string]string
-		writerMeta  map[string]string
-		targetMeta  map[string]string
-		refused     bool
+		emitter string
+		single  bool
 	}{
-		"emitted by platform":              {emitter: "platform"},
-		"emitted by platform, one file":    {emitter: "platform", single: true},
-		"emitted by sub":                   {emitter: "sub", refused: true},
-		"emitted by platform, waiting web": {emitter: "platform", dependsOn: true, refused: true},
-		"emitted by platform, suspended":   {emitter: "platform", suspend: true, refused: true},
-		"emitted by platform, ssa ignore": {emitter: "platform", refused: true,
-			annotations: map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "Ignore"}},
-		"emitted by platform, reconcile disabled": {emitter: "platform", refused: true,
-			annotations: map[string]string{"kustomize.toolkit.fluxcd.io/reconcile": "disabled"}},
-		"emitted by platform, another annotation": {emitter: "platform", refused: true,
-			annotations: map[string]string{"example.com/team": "web"}},
-		"emitted by platform, itself ssa ignore": {emitter: "platform", refused: true,
-			writerMeta: map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "Ignore"}},
-		"emitted by platform, itself labelled": {emitter: "platform",
-			writerMeta: map[string]string{"example.com/team": "web"}},
-		"emitted by platform, sub ssa ignore": {emitter: "platform", refused: true,
-			targetMeta: map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "Ignore"}},
-		"emitted by platform, sub reconcile disabled": {emitter: "platform", refused: true,
-			targetMeta: map[string]string{"kustomize.toolkit.fluxcd.io/reconcile": "disabled"}},
-		"emitted by platform, sub substitute disabled": {emitter: "platform",
-			targetMeta: map[string]string{"kustomize.toolkit.fluxcd.io/substitute": "disabled"}},
+		"emitted by platform":           {emitter: "platform"},
+		"emitted by platform, one file": {emitter: "platform", single: true},
+		"emitted by sub":                {emitter: "sub"},
 	}
 	build := func(emitter string, app *stack.Application) *stack.Cluster {
 		platformApp, subApp := cmApp("platform-app"), cmApp("sub-app")
@@ -583,44 +558,19 @@ func TestReconcileContext_PlacedOrderAnotherWriter(t *testing.T) {
 				}
 				k := handWritten("hand-written")
 				k.Spec.Path = path.Clean(findKept(off, "web").Spec.Path)
-				k.Spec.Suspend = c.suspend
-				if c.annotations != nil {
-					k.Spec.CommonMetadata = &kustv1.CommonMetadata{Annotations: c.annotations}
-				}
-				k.SetAnnotations(c.writerMeta)
-				if c.dependsOn {
-					k.Spec.DependsOn = []kustv1.DependencyReference{{Name: findKept(off, "web").Name}}
-				}
 				var o client.Object = k
 				cl := build(c.emitter, stack.NewApplication(c.emitter+"-app", "default", &fakeAppConfig{objs: []*client.Object{&o}}))
 				ml, err := integrate(cl)
 				if err != nil {
 					t.Fatalf("first integration: %v", err)
 				}
-				if c.targetMeta != nil {
-					sub := findKept(ml, "sub")
-					a := sub.GetAnnotations()
-					if a == nil {
-						a = map[string]string{}
-					}
-					for n, v := range c.targetMeta {
-						a[n] = v
-					}
-					sub.SetAnnotations(a)
-				}
 				p := findKept(ml, "platform")
 				p.Spec.Wait = false
 				p.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: findKept(ml, "sub").Name}}
 				p.Spec.HealthCheckExprs = []kustomize.CustomHealthCheck{currentExpr(kustv1.GroupVersion.String(), "Kustomization")}
 				err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, cl, rules)
-				if c.refused {
-					if err == nil || !strings.Contains(err.Error(), "can never all become Ready") {
-						t.Fatalf("got %v, want a reconcile-order refusal (%s)", err, describeKustomizations(ml))
-					}
-					return
-				}
-				if err != nil {
-					t.Fatalf("IntegrateWithLayout: %v (%s)", err, describeKustomizations(ml))
+				if err == nil || !strings.Contains(err.Error(), "can never all become Ready") {
+					t.Fatalf("got %v, want a reconcile-order refusal (%s)", err, describeKustomizations(ml))
 				}
 			})
 		}
