@@ -158,6 +158,63 @@ func TestLocalConfig_SourceNamesake(t *testing.T) {
 	}
 }
 
+// TestLocalConfig_SourceNamesakeDelivery: the application emitting the
+// Source namesake asks for prune protection and forced replacement. A copy
+// kustomize builds is the application's Source, and the generated one, being
+// the same object, carries the application's delivery annotations; a dropped
+// copy is not, so the generated Source carries none of them. The dropped copy
+// is annotated all the same: kustomize patches it before it drops it.
+func TestLocalConfig_SourceNamesakeDelivery(t *testing.T) {
+	webRef := &stack.SourceRef{Kind: "GitRepository", Name: "web-git", Namespace: "flux-system", URL: "https://example.com/web.git", Branch: "main"}
+	for _, placement := range integratedPlacements {
+		for _, tc := range localConfigCases {
+			if !tc.dropped {
+				continue // a competing definition, refused (TestLocalConfig_SourceNamesake)
+			}
+			t.Run(string(placement)+"/"+tc.name, func(t *testing.T) {
+				other := gitRepository("web-git", "https://example.com/other.git")
+				annotateLocalConfig(other, tc.value)
+				var o client.Object = other
+				platformApp := stack.NewApplication("sources", "default", &fakeAppConfig{objs: []*client.Object{&o}})
+				platformApp.Delivery = stack.DeliveryIntent{PruneProtection: true, ForceReplace: true}
+				web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", SourceRef: webRef, Applications: []*stack.Application{cmApp("web-app")}}}
+				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
+				rules := propertyGroupings["nodeOnly"]
+				rules.FluxPlacement = placement
+				ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+				if err != nil {
+					t.Fatalf("CreateLayoutWithResources: %v", err)
+				}
+				generated := 0
+				walkLayouts(ml, func(l *layout.ManifestLayout) {
+					for _, r := range l.Resources {
+						if r.GetObjectKind().GroupVersionKind().Kind != "GitRepository" || r.GetName() != "web-git" {
+							continue
+						}
+						a := r.GetAnnotations()
+						if droppedByBuild(r) {
+							if a[stack.AnnotationFluxPruneKey] != stack.AnnotationFluxPruneDisabled || a[stack.AnnotationFluxForceKey] != stack.AnnotationFluxForceEnabled {
+								t.Errorf("the dropped copy's annotations = %v, want the application's delivery annotations", a)
+							}
+							continue
+						}
+						generated++
+						if _, ok := a[stack.AnnotationFluxPruneKey]; ok {
+							t.Errorf("the generated web-git carries %s: %v", stack.AnnotationFluxPruneKey, a)
+						}
+						if _, ok := a[stack.AnnotationFluxForceKey]; ok {
+							t.Errorf("the generated web-git carries %s: %v", stack.AnnotationFluxForceKey, a)
+						}
+					}
+				})
+				if generated != 1 {
+					t.Errorf("found %d generated web-git, want 1", generated)
+				}
+			})
+		}
+	}
+}
+
 // TestLocalConfig_DuplicateNameOneDropped: one Kustomization name present
 // twice. In directories applied separately, the integration refuses it when
 // kustomize builds both copies and admits it when it drops one, and the tree
