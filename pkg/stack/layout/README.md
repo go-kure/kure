@@ -710,8 +710,10 @@ passes holds, in `Resources`, the very objects that call returned. Read them the
 state `Generate` saved. `Application.Generate` and `Bundle.Generate` never augment. Each walk
 augments a new layout: for an unchanged config an augmenter adds the same things every time and
 keeps no state the next call depends on. `WantsOwnLayout()` answers from the config alone. A
-wrapper config that embeds the `stack.ApplicationConfig` interface hides both interfaces;
-forward them (see [Stack](/api-reference/stack/) § Generation contract).
+wrapper config that embeds the `stack.ApplicationConfig` interface hides both interfaces, so
+under `GroupFlat` it gets no layout of its own and no `AugmentLayout`; one that forwards
+`AugmentLayout` without `WantsOwnLayout` gets its own layout whatever the wrapped config
+answers. Forward both (see [Stack](/api-reference/stack/) § Generation contract).
 
 After `AugmentLayout` returns, every layout below the per-app layout that leaves `FileNaming` unset
 takes its parent's (see [File Naming Modes](#file-naming-modes)).

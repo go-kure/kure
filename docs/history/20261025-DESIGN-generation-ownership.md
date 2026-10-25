@@ -7,7 +7,8 @@
 > augmentation contracts") is decided. The normative text is the godoc of
 > `stack.ApplicationConfig`, `layout.LayoutAugmenter` and `layout.LayoutIntentAugmenter`, with
 > `pkg/stack/README.md` § Generation contract; the executable form is
-> `pkg/stack/layout/generation_contract_test.go`.
+> `pkg/stack/layout/generation_contract_test.go` (walks) and
+> `pkg/stack/generation_contract_test.go` (workflow entry points).
 
 **Status: proposed.** The maintainer decides on the pull request that adds this note.
 
@@ -39,11 +40,15 @@ A contract on the interfaces that exist, with executable tests, and no new API:
   `Application.Generate` and `Bundle.Generate` never augment. A new walk augments a new layout
   again: for an unchanged config the augmenter adds the same things.
 - **Optional interfaces are found on the config value itself.** `Validator`
-  (`application.go:73`), `LayoutAugmenter` (`walker.go:716`, `:757`) and `LayoutIntentAugmenter`
+  (`application.go:98`), `LayoutAugmenter` (`walker.go:716`, `:757`) and `LayoutIntentAugmenter`
   (`walker.go:745`) are type assertions on `app.Config`. A wrapper that embeds the
   `ApplicationConfig` interface has `Generate` alone in its method set and hides all three.
-  The loss is silent: no validation, no augmentation, and presence-only placement. A wrapper
-  embeds the concrete type or forwards each interface it wants kure to see.
+  The loss is silent: no validation, no augmentation and, because kure no longer sees a
+  `LayoutAugmenter`, no layout of its own under flat application grouping: its resources merge
+  into the bundle's directory (`walker.go:668-671`), even where the wrapped config wants its
+  own. A wrapper embeds the concrete type or forwards each interface it wants kure to see.
+  Forwarding `AugmentLayout` without `WantsOwnLayout` is presence-only placement: the wrapper
+  gets a layout of its own under flat grouping whatever the wrapped config answers.
 - **Reusing a validated result means memoizing with a copy.** A config may validate and render
   once and return a deep copy of the cached result on every call. That conforms, and the walk
   then costs a copy instead of a render. kure does not copy on receipt.
@@ -60,9 +65,9 @@ The audit the issue asked for, at `289ba622`:
 | The augmenter is handed the layout whose `Resources` are that call's objects | `walker.go:675-679`, `:714-724` |
 | Flat grouping reads `WantsOwnLayout` once per application, short-circuited | `walker.go:668`, `:744-759` |
 | Each entry point walks once: Flux `CreateLayoutWithResources`, `GenerateFromCluster`; Argo CD `GenerateFromCluster`, `CreateLayoutWithResources` | `fluxcd/layout_integrator.go:250`, `fluxcd/resource_generator.go:165`, `argocd/argo.go:59`, `:324` |
-| No goroutines and no memoization in `pkg/stack` | `rg 'go func\|errgroup'` and `rg -i cache` over `pkg/stack`, non-test files |
+| No goroutines in `pkg/stack`, and nothing memoizes a generation result (its one cache holds the parsed Flux Operator install manifest) | `rg 'go func\|errgroup'` and `rg -i cache` over `pkg/stack`, non-test files; `fluxcd/flux_operator_install.go:47` |
 | `Bundle.Generate` writes bundle labels and annotations into the map the object already holds | `bundle.go:487-516` |
-| The Flux integrator sets delivery annotations on the application's objects, in place, with undo | `fluxcd/delivery.go:150-164`; derived Source `fluxcd/layout_integrator.go:1425-1430` |
+| The Flux integrator sets delivery annotations on the application's objects, in place, with undo | `fluxcd/delivery.go:152-164`; derived Source `fluxcd/layout_integrator.go:1425-1430` |
 | The only ownership text so far | `fluxcd/README.md:720-723` (delivery annotations persist on reused pointers) |
 | The getting-started example aliases a config field into its output and shares one labels map three ways | `examples/getting-started/main.go:222`; labels at `:159-176` and `:209-225` |
 
@@ -76,12 +81,14 @@ The audit found three ownership defects. Each has its own follow-up below:
   `Labels: b.Labels, Annotations: b.Annotations` (`fluxcd/resource_generator.go:754-755`).
   Editing a returned Kustomization's labels in place edits `Bundle.Labels`, and through it every
   later generation. A probe confirmed this for `GenerateFromCluster` (labels and annotations)
-  and `CreateLayoutWithResources` (labels). The Argo CD Application (`argocd/argo.go:187`) and
-  the bundle builder (`stack/builders.go:162-163`) assign the same maps.
+  and `CreateLayoutWithResources` (labels). The bundle builder's copy (`stack/builders.go:162-163`)
+  assigns the same maps. The Argo CD Application does not: it is unstructured, and its
+  `SetLabels` (`argocd/argo.go:187`) copies the map into the object, so no edit to it reaches
+  `Bundle.Labels`.
 - **`Bundle.Generate` writes into a shared map.** When an object's labels map is also its
   selector's, as in the getting-started example, the selector gains the bundle's labels.
   `Bundle.Generate` also dereferences each entry without the nil check the walker has
-  (`bundle.go:489` against `walker.go:661`), so a nil entry panics there once the bundle sets
+  (`bundle.go:489` against `walker.go:662-664`), so a nil entry panics there once the bundle sets
   labels or annotations.
 - **The example teaches aliasing** (`examples/getting-started/main.go:159-176`, `:209-225`, `:222`).
 
@@ -104,22 +111,28 @@ Rejected for now:
 - Memoizing with a copy (option 3) gives the same result with no new API.
 - A wrapper type cannot forward optional interfaces generically: Go method sets are fixed.
 - `stack` cannot name `*ManifestLayout`, which is why `LayoutAugmenter` lives in `layout`
-  (`layout/augmenter.go:22-25`).
+  (`layout/augmenter.go:31-34`).
 
 Reopen it if a consumer shows that hand-written copying is error-prone in practice. The
 conformance helper below is meant to show that.
 
 ### 3. A contract on the existing interfaces, with tests — chosen
 
-Godoc and README state the rules above. `generation_contract_test.go` pins kure's half:
+Godoc and README state the rules above. The two `generation_contract_test.go` files pin kure's
+half:
 - one `Generate`, `Validate` and `AugmentLayout` per application per walk;
+- one of each per call to every workflow entry point (Flux and Argo CD `GenerateFromCluster`,
+  `CreateLayoutWithResources`);
 - the augmenter sees that call's objects;
 - where augmentation is skipped;
 - a failed walk leaves no result;
 - a caller's edit stays in its walk for fresh and copying configs, and leaks for a shared cache;
-- what each wrapper shape keeps.
+- what each wrapper shape keeps, under both application groupings: validation, augmentation and
+  a layout of its own.
 
-Six one-line mutations of `walker.go` and `application.go` were each caught.
+Six one-line mutations of `walker.go` and `application.go` were each caught, as were a second
+walk in any of the four entry points and a forwarding wrapper that drops `WantsOwnLayout`. The
+"no concurrency" rule is a statement about kure's code, not something a test can show.
 
 ## Copy cost
 
@@ -140,8 +153,12 @@ config that chooses to memoize. Mandating it for every config, or doing it insid
   pointer. Key the cache on everything `Generate` reads, `*Application` included, and drop it
   when the config changes.
 - **Wrappers**: embed the concrete type, or forward `Validate`, `AugmentLayout` and
-  `WantsOwnLayout` explicitly. A test that walks the wrapped config and counts augmenter calls
-  catches a lost interface.
+  `WantsOwnLayout` explicitly. A test that walks the wrapped config catches a lost interface
+  only where that interface changes what it counts: `Validate` calls show a lost `Validator`
+  under any grouping, and augmenter calls a lost `LayoutAugmenter` wherever the wrapped config
+  would be augmented (`GroupByName`, or flat grouping where it wants its own layout). A lost
+  `WantsOwnLayout` shows only under flat application grouping with a wrapped config whose
+  `WantsOwnLayout()` is false, where the wrapper is then augmented once instead of never.
 - **Augmenters**: read the application's objects from `ml.Resources`. Add the same things for
   the same config every time. Keep no state between calls that the next call depends on.
 - **Consumers**: a layout you hold owns its objects. To integrate again after a change, walk
@@ -153,9 +170,9 @@ config that chooses to memoize. Mandating it for every config, or doing it insid
 Registered before go-kure/kure#1067 closes, each with its completion criteria in the issue:
 
 1. **Generated objects stop sharing the caller's maps** (go-kure/kure#1082). The Flux
-   Kustomization, the Argo CD Application and the bundle builder clone `Labels` and
-   `Annotations`. Done when a test edits every generated object's maps in place and the input
-   `Bundle` is unchanged.
+   Kustomization and the bundle builder clone `Labels` and `Annotations`; the Argo CD
+   Application already copies them. Done when a test edits every generated object's maps in
+   place and the input `Bundle` is unchanged.
 2. **`Bundle.Generate` writes into copies and skips nil entries** (go-kure/kure#1083), as the
    walker does. Done when a test with a labels map shared with a selector, and one with a nil
    entry, both pass.
