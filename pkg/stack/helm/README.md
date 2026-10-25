@@ -86,6 +86,31 @@ fmt.Print(string(manifests))
 ```
 <!-- doc-example:end -->
 
+**Digest pinning (OCI only, optional):**
+
+`WithDigest` pins an OCI chart to a manifest digest. `RenderChart` still pulls `chartURL:version`,
+then compares the digest of the manifest it received with the pinned one, and returns an error
+naming both when they differ, before rendering anything. A tag re-pushed with other content is
+refused instead of rendered. The digest must be `sha256:` followed by 64 lowercase hex characters;
+any other value, the empty string included, is refused before the pull. HTTP repositories have no
+manifest digest, so `RenderChart` refuses `WithDigest` for them.
+
+<!-- doc-example: pkg/stack/helm ExampleWithDigest -->
+```go
+manifests, err := helm.RenderChart(
+    "oci://registry.example.com/charts/cilium",
+    "1.16.5",
+    nil,
+    // the manifest digest 1.16.5 is pinned to; any other is an error
+    helm.WithDigest("sha256:3f1c5a9e0b7d2468ace13579bdf02468ace13579bdf02468ace13579bdf02468"),
+)
+if err != nil {
+    panic(err)
+}
+fmt.Print(string(manifests))
+```
+<!-- doc-example:end -->
+
 ## API
 
 <!-- doc-example:excerpt the declarations from render.go, not calls -->
@@ -102,9 +127,11 @@ fmt.Print(string(manifests))
 // version is the chart version tag (e.g. "1.16.5").
 // values are merged on top of the chart's default values.
 // opts customizes the release identity; see WithReleaseName and WithNamespace.
+// WithDigest pins an OCI chart to a manifest digest.
 func RenderChart(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error)
 
-// RenderOption customizes the release identity used to render a chart.
+// RenderOption customizes how a chart is rendered: the release identity, or
+// the digest an OCI chart must match.
 type RenderOption func(*renderOptions)
 
 // WithReleaseName sets the release name used during rendering.
@@ -112,6 +139,11 @@ func WithReleaseName(name string) RenderOption
 
 // WithNamespace sets the release namespace used during rendering.
 func WithNamespace(namespace string) RenderOption
+
+// WithDigest pins an OCI chart to a manifest digest ("sha256:" + 64 lowercase
+// hex). A pulled manifest with another digest is an error; HTTP repositories
+// refuse the option.
+func WithDigest(digest string) RenderOption
 ```
 
 ## SplitByHookWeight
@@ -196,5 +228,7 @@ func SplitByHookWeight(objects []client.Object) []HookGroup
   and any templates that produce empty output.
 - The `.Release.Name` defaults to `"release"` and `.Release.Namespace` to
   `"default"`; override either with `WithReleaseName`/`WithNamespace`.
+- Without `WithDigest`, an OCI chart is rendered from whatever manifest the tag points to when it
+  is pulled.
 - Comma-separated hook annotations (e.g. `"pre-install,post-install"`) are
   treated as a single opaque phase and placed in the unknown group.
