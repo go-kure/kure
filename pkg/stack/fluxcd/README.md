@@ -1306,9 +1306,10 @@ reads the Source of the Kustomization whose apply writes it (its `spec.sourceRef
 namespace its own; the Source's identity, so another Source of the same repository, at another
 ref, is another Source) and sets no `spec.kubeConfig`. One the Flux bootstrap writes, one on
 another Source, and one applying to another cluster build no directory of this tree: they add no
-wait, and are never refused for one. Nor does one that transforms its build (`spec.patches`,
-`spec.components`, `spec.namePrefix`, `spec.nameSuffix` or `spec.targetNamespace`), since what
-it writes is then not what the directory holds. A Kustomization that a generated one's build
+wait, and are never refused for one. One that transforms its build (`spec.patches`,
+`spec.components`, `spec.namePrefix`, `spec.nameSuffix` or `spec.targetNamespace`) keeps the
+wait on all the directory holds: the transform is not modelled, and a renamed or moved
+Kustomization still depends on what it did before. A Kustomization that a generated one's build
 writes, and the build of a Kustomization the tree holds writes too, exists once either applies.
 When that other Kustomization, and each Kustomization whose apply creates it up to one the Flux
 bootstrap applies, depends on nothing and sets no spec field but `interval`, `retryInterval`,
@@ -1328,7 +1329,9 @@ Where these checks cannot tell what a build writes or waits for, they keep the w
 refuse a tree that would converge. They do not model a generated Kustomization's patches
 rewriting a child Kustomization's spec, objects that `kustomize.toolkit.fluxcd.io/ssa: Ignore` or
 `kustomize.toolkit.fluxcd.io/reconcile: disabled` excludes from an apply, `spec.ignore`,
-`spec.postBuild` substitution or `spec.suspend` (go-kure/kure#1094). A tree refused for one of them integrates
+`spec.postBuild` substitution, `spec.suspend`, or a build's own transforms (`spec.patches`,
+which may delete what the directory holds, `spec.components`, `spec.namePrefix`,
+`spec.nameSuffix`, `spec.targetNamespace`) (go-kure/kure#1094). A tree refused for one of them integrates
 once the dependency or health check that closes the reported chain is dropped, or names another
 Kustomization.
 

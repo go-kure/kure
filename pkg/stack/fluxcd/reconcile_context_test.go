@@ -282,8 +282,12 @@ func webBuildDirectory(t *testing.T, placement layout.FluxPlacement) string {
 // TestReconcileContext_SameSourceWaitIsACycle, but transforming what its
 // build writes: a patch can delete web from it, a component add to it, a
 // name prefix or suffix, or a target namespace, change which Kustomizations
-// it writes. The check does not model them, so the build is no longer read
-// as the tree's directory, and the rewrite is accepted.
+// it writes. The check does not model them, so it keeps the wait on all the
+// directory holds and refuses the cycle through web. With a component, a
+// name prefix or suffix, or a target namespace, web (renamed or moved) is
+// still applied and still depends on hand-written, since dependsOn is no
+// reference kustomize rewrites: a deadlock. A patch deleting web is a false
+// refusal, kept on purpose (go-kure/kure#1094).
 func TestReconcileContext_TransformedBuildIsUnknown(t *testing.T) {
 	cases := map[string]func(k *kustv1.Kustomization){
 		"patch deleting web": func(k *kustv1.Kustomization) {
@@ -298,14 +302,13 @@ func TestReconcileContext_TransformedBuildIsUnknown(t *testing.T) {
 		for _, placement := range integratedPlacements {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
 				dir := webDirectory(t, placement)
-				ml, err := integrateWithHandWritten(placement, func(k *kustv1.Kustomization) {
+				_, err := integrateWithHandWritten(placement, func(k *kustv1.Kustomization) {
 					k.Spec.Wait, k.Spec.Path = true, dir
 					edit(k)
 				})
-				if err != nil {
-					t.Fatalf("CreateLayoutWithResources: %v", err)
+				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "ready flux-system/hand-written -> ready flux-system/web -> apply flux-system/web") {
+					t.Fatalf("got %v, want ErrUmbrellaDependency naming the chain through web", err)
 				}
-				assertDependsOn(t, ml, "web", "hand-written")
 			})
 		}
 	}
