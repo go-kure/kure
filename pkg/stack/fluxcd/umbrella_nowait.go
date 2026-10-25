@@ -369,10 +369,11 @@ func (t *kustomizationTree) soleCreator(key string) string {
 
 // writtenByOther reports whether a Kustomization that is no member, whose
 // build is the tree's (localOthers), writes the one with key and applies
-// without waiting for anything (appliesFreely).
+// without waiting for anything (appliesFreely). The one with key must carry
+// no annotation by which an apply may skip it (plainMeta).
 func (t *kustomizationTree) writtenByOther(key string) bool {
 	host := t.hostOf[key]
-	if host == nil {
+	if host == nil || !plainMeta(t.kustomization(key)) {
 		return false
 	}
 	for _, o := range t.localOthers() {
@@ -390,7 +391,8 @@ func (t *kustomizationTree) writtenByOther(key string) bool {
 // waiting for anything: o, and each Kustomization whose apply writes the one
 // before it (writer), is read in typed form, sets no field that may change
 // what it applies (plainSpec) and depends on nothing, and the first that
-// writer names no writer of is one the Flux bootstrap applies. Otherwise o may
+// writer names no writer of is one the Flux bootstrap applies; each carries
+// no annotation by which the apply writing it may skip it (plainMeta). Otherwise o may
 // never apply, or write, the one after it, or wait, directly or not,
 // for what it would create (o is written by that Kustomization's own apply,
 // or depends on one that waits for it): the check then keeps the member's
@@ -399,11 +401,8 @@ func (t *kustomizationTree) appliesFreely(o string) bool {
 	seen := map[string]bool{}
 	for x := o; !seen[x]; x = t.writer(x) {
 		seen[x] = true
-		k := t.byKey[x]
-		if k == nil {
-			k = t.otherSpecs[x]
-		}
-		if k == nil || !plainSpec(k) || len(t.deps(x)) > 0 {
+		k := t.kustomization(x)
+		if k == nil || !plainSpec(k) || !plainMeta(k) || len(t.deps(x)) > 0 {
 			return false
 		}
 		if t.writer(x) == "" {
@@ -412,6 +411,31 @@ func (t *kustomizationTree) appliesFreely(o string) bool {
 		}
 	}
 	return false
+}
+
+// kustomization is the typed Kustomization with key x, a member or not, or
+// nil.
+func (t *kustomizationTree) kustomization(x string) *kustv1.Kustomization {
+	if k := t.byKey[x]; k != nil {
+		return k
+	}
+	return t.otherSpecs[x]
+}
+
+// plainMeta reports whether k is non-nil and carries no
+// kustomize.toolkit.fluxcd.io/ annotation but substitute, which changes only
+// the substitution of its own fields. Any other (ssa: Ignore, reconcile:
+// disabled, ...) may keep the apply that writes k from creating it.
+func plainMeta(k *kustv1.Kustomization) bool {
+	if k == nil {
+		return false
+	}
+	for a := range k.GetAnnotations() {
+		if strings.HasPrefix(a, "kustomize.toolkit.fluxcd.io/") && a != "kustomize.toolkit.fluxcd.io/substitute" {
+			return false
+		}
+	}
+	return true
 }
 
 // plainSpec reports whether k sets no field but those that change neither
