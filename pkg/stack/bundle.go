@@ -2,6 +2,7 @@ package stack
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -470,6 +471,16 @@ func (a *Bundle) InitializeUmbrella() {
 	}
 }
 
+// Generate returns the objects of every application in the bundle, in order,
+// with the bundle's labels and annotations added to each object; an object's
+// own value for a key wins. Where the bundle sets labels (or annotations),
+// each object is given a new labels (or annotations) map: the one its config
+// returned is not written, so a map the config also uses elsewhere (a
+// selector, a pod template's labels) keeps its value, and the new map is
+// shared with neither the bundle nor another object. A nil entry, or one
+// holding a nil object, is returned as it is and gets nothing. (The layout
+// walker skips a nil entry too, but not yet one holding a nil object:
+// go-kure/kure#1095.)
 func (a *Bundle) Generate() ([]*client.Object, error) {
 	var resources []*client.Object
 	for _, app := range a.Applications {
@@ -480,43 +491,31 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 		resources = append(resources, addresources...)
 	}
 
-	// Propagate bundle labels to all generated resources.
-	// Application-specific labels take precedence.
-	// Direct mutation on *r is correct: client.Object is an interface backed by
-	// a pointer, so the underlying concrete object is modified in place.
-	if len(a.Labels) > 0 {
-		for _, r := range resources {
-			labels := (*r).GetLabels()
-			if labels == nil {
-				labels = make(map[string]string, len(a.Labels))
-			}
-			for k, v := range a.Labels {
-				if _, exists := labels[k]; !exists {
-					labels[k] = v
-				}
-			}
-			(*r).SetLabels(labels)
+	// Setting the maps through *r is correct: client.Object is an interface
+	// backed by a pointer, so the underlying concrete object is modified in
+	// place.
+	for _, r := range resources {
+		if r == nil || *r == nil {
+			continue
 		}
-	}
-
-	// Propagate bundle annotations to all generated resources.
-	// Application-specific annotations take precedence.
-	if len(a.Annotations) > 0 {
-		for _, r := range resources {
-			annotations := (*r).GetAnnotations()
-			if annotations == nil {
-				annotations = make(map[string]string, len(a.Annotations))
-			}
-			for k, v := range a.Annotations {
-				if _, exists := annotations[k]; !exists {
-					annotations[k] = v
-				}
-			}
-			(*r).SetAnnotations(annotations)
+		if len(a.Labels) > 0 {
+			(*r).SetLabels(withBundleEntries((*r).GetLabels(), a.Labels))
+		}
+		if len(a.Annotations) > 0 {
+			(*r).SetAnnotations(withBundleEntries((*r).GetAnnotations(), a.Annotations))
 		}
 	}
 
 	return resources, nil
+}
+
+// withBundleEntries returns a new map holding own and each entry of bundle
+// whose key own does not set. Neither map is written.
+func withBundleEntries(own, bundle map[string]string) map[string]string {
+	out := make(map[string]string, len(own)+len(bundle))
+	maps.Copy(out, bundle)
+	maps.Copy(out, own)
+	return out
 }
 
 // GetParent returns the runtime parent reference (may be nil).
