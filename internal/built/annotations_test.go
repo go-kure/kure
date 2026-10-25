@@ -131,10 +131,10 @@ func TestAddAnnotations_Typed(t *testing.T) {
 	})
 }
 
-// An unstructured object with no Object map, or whose metadata is no map,
-// takes the getter/setter path: it reads no annotations, and undo puts the
-// object back as it was.
-func TestAddAnnotations_UnstructuredFallback(t *testing.T) {
+// An unstructured object with no Object map gains one, and undo takes it away
+// again. One whose metadata is present but no map holds no annotations and
+// takes none: AddAnnotations leaves it as it is and returns no undo.
+func TestAddAnnotations_UnstructuredEdges(t *testing.T) {
 	want := map[string]string{"prune": "disabled"}
 	t.Run("nil Object", func(t *testing.T) {
 		obj := &unstructured.Unstructured{}
@@ -145,12 +145,13 @@ func TestAddAnnotations_UnstructuredFallback(t *testing.T) {
 		if undo == nil {
 			t.Fatal("AddAnnotations returned no undo for a change")
 		}
-		if got := obj.GetAnnotations(); !reflect.DeepEqual(got, want) {
-			t.Errorf("annotations = %#v, want %#v", got, want)
+		after := map[string]any{"metadata": map[string]any{"annotations": map[string]any{"prune": "disabled"}}}
+		if !reflect.DeepEqual(obj.Object, after) {
+			t.Errorf("object = %#v, want %#v", obj.Object, after)
 		}
 		undo()
-		if got := obj.GetAnnotations(); got != nil {
-			t.Errorf("undo left annotations %#v, want none", got)
+		if !reflect.DeepEqual(obj, &unstructured.Unstructured{}) {
+			t.Errorf("undo left %#v, want an empty Unstructured", obj)
 		}
 	})
 	for name, meta := range map[string]any{"null metadata": nil, "string metadata": "x"} {
@@ -160,13 +161,11 @@ func TestAddAnnotations_UnstructuredFallback(t *testing.T) {
 			if got := Annotations(obj); got != nil {
 				t.Errorf("Annotations = %#v, want nil", got)
 			}
-			undo := AddAnnotations(obj, want)
-			if undo == nil {
-				t.Fatal("AddAnnotations returned no undo for a change")
+			if undo := AddAnnotations(obj, want); undo != nil {
+				t.Error("AddAnnotations returned an undo for metadata that is no map")
 			}
-			undo()
 			if !reflect.DeepEqual(obj.Object, before) {
-				t.Errorf("undo left %#v, want %#v", obj.Object, before)
+				t.Errorf("object changed to %#v, want %#v", obj.Object, before)
 			}
 		})
 	}
