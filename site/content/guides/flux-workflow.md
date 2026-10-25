@@ -286,7 +286,9 @@ What changed, and what to do:
   Kustomization of yours builds.
 - **Kustomization names are unique in a tree.** Two Flux Kustomizations with one namespace and
   name are refused wherever they sit, also in directories that are applied separately and inside
-  a `List`: they are one object in the cluster.
+  a `List`: they are one object in the cluster. One kustomize drops as local-config does not
+  count here, since it never reaches the cluster; in the same kustomize build as its namesake it
+  is still refused, as kustomize refuses it.
 - **Objects without a kind or an apiVersion are refused** (breaking change in go-kure/kure#1020).
   Each resource, and each item of a `List` however deep, must be written with both; a typed
   object whose `TypeMeta` is unset has neither. kustomize fails on a document without a kind, and

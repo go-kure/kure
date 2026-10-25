@@ -600,7 +600,10 @@ and an unstructured copy of it are the same. A Kustomization or Source written w
 anywhere in the integration: kustomize drops it from the build, so it never reaches the cluster.
 It is no existing object to collide with or keep, no copy of a Source to host in place of the
 generated one, no member or child of an umbrella, and it marks no directory as a Flux build
-(go-kure/kure#1059). With no annotation, or `"false"`, it is built and counts as above.
+(go-kure/kure#1059). With no annotation, or `"false"`, it is built and counts as above. It
+still may not share a kustomize build with an object of its identity: kustomize registers both
+before it drops it, and refuses the second. The writers refuse such a tree, as they refuse one
+object held twice in a build.
 
 Under the integrated placements every Source the integration generates is hosted **once, in the
 root node's layout**, whichever layouts hold the Kustomizations that use it (go-kure/kure#876),
