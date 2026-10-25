@@ -767,6 +767,12 @@ is no default for either: the caller supplies both, which is why the defaults ta
 row for them. `"gotk"` mode reads the same two fields and keeps accepting them empty: there an
 empty `FluxVersion` means the vendored release and an empty `Registry` the upstream registry.
 
+`ImagePullSecret` names the Secret the Flux controller images are pulled with, and both modes
+carry it: `"gotk"` mode passes it to the install options, which add it to every controller
+`Deployment`, and `"flux-operator"` mode sets it as the `FluxInstance`'s
+`spec.distribution.imagePullSecret`. Empty sets none. It covers the controller images only; it
+is not a credential for the sync source.
+
 The `"flux-operator"` bundle is vendored from the upstream flux-operator release and pinned
 in lockstep with the `github.com/controlplaneio-fluxcd/flux-operator` Go module
 (`FluxOperatorVersion`, currently **v0.58.1**). Renovate re-vendors the bundle and updates

@@ -1127,6 +1127,11 @@ distribution version and registry, and Kure has no default for either. If one is
 `GenerateBootstrap` returns an error naming the missing field and emits nothing, rather than a
 `FluxInstance` that cannot work. `"gotk"` mode accepts both empty.
 
+To pull the Flux controller images from a private registry, set `ImagePullSecret` to the name of
+the pull Secret. Both modes use it: `"gotk"` mode adds it to every controller `Deployment`, and
+`"flux-operator"` mode sets it as the `FluxInstance`'s distribution `imagePullSecret`. It is for
+the controller images only, not a credential for the sync source.
+
 The `"flux-operator"` bundle is vendored from one specific upstream flux-operator release
 (`FluxOperatorVersion`), so upgrading Kure can also change the CRDs it installs. A CRD that
 tightens validation rejects objects the previous release accepted — for example a

@@ -677,10 +677,13 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 		return nil, err
 	}
 
+	// ImagePullSecret is the controller images' pull secret, the one gotk mode
+	// passes to its install options; empty leaves the field out.
 	spec := fluxv1.FluxInstanceSpec{
 		Distribution: fluxv1.Distribution{
-			Version:  config.FluxVersion,
-			Registry: config.Registry,
+			Version:         config.FluxVersion,
+			Registry:        config.Registry,
+			ImagePullSecret: config.ImagePullSecret,
 		},
 	}
 
