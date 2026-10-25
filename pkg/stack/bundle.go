@@ -8,6 +8,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/internal/built"
 	"github.com/go-kure/kure/pkg/errors"
 )
 
@@ -473,14 +474,16 @@ func (a *Bundle) InitializeUmbrella() {
 
 // Generate returns the objects of every application in the bundle, in order,
 // with the bundle's labels and annotations added to each object; an object's
-// own value for a key wins. Where the bundle sets labels (or annotations),
-// each object is given a new labels (or annotations) map: the one its config
-// returned is not written, so a map the config also uses elsewhere (a
-// selector, a pod template's labels) keeps its value, and the new map is
-// shared with neither the bundle nor another object. A nil entry, or one
-// holding a nil object, is returned as it is and gets nothing. (The layout
-// walker skips a nil entry too, but not yet one holding a nil object:
-// go-kure/kure#1095.)
+// own value for a key wins, and its annotations stay as written, also a
+// non-string value on an unstructured object. Where the bundle sets labels,
+// each object is given a new labels map; where it sets annotations, each
+// object that lacks one of them is given a new annotations map, and one that
+// carries them all keeps its own. The map its config returned is not written,
+// so a map the config also uses elsewhere (a selector, a pod template's
+// labels) keeps its value, and a new map is shared with neither the bundle
+// nor another object. A nil entry, or one holding a nil object, is returned
+// as it is and gets nothing. (The layout walker skips a nil entry too, but
+// not yet one holding a nil object: go-kure/kure#1095.)
 func (a *Bundle) Generate() ([]*client.Object, error) {
 	var resources []*client.Object
 	for _, app := range a.Applications {
@@ -502,7 +505,9 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 			(*r).SetLabels(withBundleEntries((*r).GetLabels(), a.Labels))
 		}
 		if len(a.Annotations) > 0 {
-			(*r).SetAnnotations(withBundleEntries((*r).GetAnnotations(), a.Annotations))
+			// The object's annotations stay as written: on an unstructured
+			// object a value need not be a string.
+			built.AddAnnotations(*r, a.Annotations)
 		}
 	}
 

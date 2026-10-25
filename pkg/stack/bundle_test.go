@@ -2,11 +2,13 @@ package stack
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -217,6 +219,32 @@ func TestBundleGenerateAnnotationPropagation(t *testing.T) {
 		annotations := (*resources[0]).GetAnnotations()
 		if annotations[AnnotationFluxPruneKey] != AnnotationFluxPruneDisabled {
 			t.Fatalf("expected prune annotation, got %v", annotations)
+		}
+	})
+
+	t.Run("annotations merged into an unstructured resource whose annotations are not all strings", func(t *testing.T) {
+		u := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "v1", "kind": "ConfigMap",
+			"metadata": map[string]any{"name": "cm", "annotations": map[string]any{
+				"config.kubernetes.io/local-config": true,
+				"existing":                          "value",
+			}},
+		}}
+		obj := client.Object(u)
+		app := NewApplication("app1", "ns1", &fakeConfig{objs: []*client.Object{&obj}})
+		b := &Bundle{
+			Name:         "test",
+			Applications: []*Application{app},
+			Annotations:  map[string]string{"new-key": "new-value", "existing": "bundle"},
+		}
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		got, _, _ := unstructured.NestedFieldNoCopy((*resources[0]).(*unstructured.Unstructured).Object, "metadata", "annotations")
+		want := map[string]any{"config.kubernetes.io/local-config": true, "existing": "value", "new-key": "new-value"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("annotations = %#v, want %#v", got, want)
 		}
 	})
 
