@@ -10,6 +10,8 @@ import (
 	kustv1beta2 "github.com/fluxcd/kustomize-controller/api/v1beta2"
 	"github.com/fluxcd/pkg/apis/kustomize"
 	metaapi "github.com/fluxcd/pkg/apis/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
@@ -252,6 +254,78 @@ func TestReconcileContext_KeptKustomizationSource(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+// A kept Kustomization read from YAML is unstructured, and there a
+// spec.kubeConfig of null is no kubeConfig, as it is once decoded into the
+// typed object: the Kustomization is kept. One that names a kubeConfig is
+// still a namesake.
+func TestReconcileContext_KeptUnstructuredKubeConfig(t *testing.T) {
+	cases := map[string]struct {
+		kubeConfig any
+		want       string
+	}{
+		"null":            {nil, ""},
+		"another cluster": {map[string]any{"secretRef": map[string]any{"name": "remote-kubeconfig"}}, "with spec.kubeConfig"},
+	}
+	rules := withPlacement(nodeOnly, layout.FluxIntegratedPerBundle)
+	build := func() *stack.Cluster { return noWaitCluster(srBundle("platform", cmApp("platform-app")), false) }
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			c2 := build()
+			ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c2, rules)
+			if err != nil {
+				t.Fatalf("first integration: %v", err)
+			}
+			kept := findKept(ml, "platform")
+			replaceUnstructured(t, ml, kept, func(u *unstructured.Unstructured) {
+				if err := unstructured.SetNestedField(u.Object, runtime.DeepCopyJSONValue(c.kubeConfig), "spec", "kubeConfig"); err != nil {
+					t.Fatal(err)
+				}
+			})
+			err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c2, rules)
+			if c.want == "" {
+				if err != nil {
+					t.Fatalf("got %v, want the Kustomization kept", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), `already has Flux Kustomization "platform"`) || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("got %v, want platform refused as a namesake %s", err, c.want)
+			}
+		})
+	}
+}
+
+// replaceUnstructured replaces obj, wherever ml holds it, with its
+// unstructured form after edit.
+func replaceUnstructured(t *testing.T, ml *layout.ManifestLayout, obj client.Object, edit func(*unstructured.Unstructured)) {
+	t.Helper()
+	m, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := &unstructured.Unstructured{Object: m}
+	u.SetGroupVersionKind(kustv1.GroupVersion.WithKind(kustv1.KustomizationKind))
+	edit(u)
+	var walk func(l *layout.ManifestLayout) bool
+	walk = func(l *layout.ManifestLayout) bool {
+		for i, r := range l.Resources {
+			if r == obj {
+				l.Resources[i] = u
+				return true
+			}
+		}
+		for _, c := range l.Children {
+			if walk(c) {
+				return true
+			}
+		}
+		return false
+	}
+	if !walk(ml) {
+		t.Fatalf("%s is not in the layout", obj.GetName())
 	}
 }
 
