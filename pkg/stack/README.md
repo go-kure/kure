@@ -61,8 +61,9 @@ source — `SourceKind`, `SourceURL`,
 and Kustomization it creates (empty leaves it to the operator, which uses the `FluxInstance`
 namespace). For an `OCIRepository` source, `SourceSecretRef`, `SourceProvider` and
 `SourceInsecure` give the registry credentials, OIDC provider and plain-HTTP access in both
-modes; `ImagePullSecret` is for the Flux controller images, not the source. See
-[Flux Engine](/api-reference/flux-engine/) for how each field is emitted.
+modes; `ImagePullSecret` is for the Flux controller images, not the source. `Prune` reaches the
+`gotk` bootstrap Kustomization only: flux-operator prunes its sync Kustomization whatever it says
+(go-kure/kure#1088). See [Flux Engine](/api-reference/flux-engine/) for how each field is emitted.
 
 ### Node
 
