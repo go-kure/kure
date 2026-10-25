@@ -1319,7 +1319,7 @@ wait, and are never refused for one. Nor does one that transforms its build (`sp
 it writes is then not what the directory holds. A Kustomization that a generated one's build
 writes, and the build of a Kustomization the tree holds writes too, exists once either applies.
 When that other Kustomization, and each Kustomization whose apply creates it up to one the Flux
-bootstrap applies, depends on nothing, no check on the written one waits for the apply of either.
+bootstrap applies, depends on nothing and is not suspended, no check on the written one waits for the apply of either.
 Otherwise the other may wait for what it would create, and the checks wait for the generated
 one's apply. A health check on another cluster
 (`spec.kubeConfig`) names none of the tree's Kustomizations. Where a `spec.healthCheckExprs` entry matches Flux
