@@ -30,7 +30,7 @@ both. In flux-operator mode kure emits a FluxInstance, and flux-operator renders
 | Namespace | The generator's `DefaultNamespace` for the source, the Kustomization and the FluxInstance. The Kustomization's `sourceRef` names no namespace, so it resolves in its own | Holds |
 | Source kind, URL | From `BootstrapConfig`, the same in both modes | Holds |
 | Source interval | From the generator's `BootstrapGenerator.DefaultInterval`, not `BootstrapConfig`: the gotk source (`bootstrap_generator.go:572`, `:598`) and the FluxInstance sync (`:704`) | Holds |
-| Access | `SourceSecretRef`, `SourceProvider`, `SourceInsecure` (go-kure/kure#1060) | Holds, stacked below this PR |
+| Access | `SourceSecretRef`, `SourceProvider`, `SourceInsecure` (go-kure/kure#1060) | Holds, on main |
 | Names | `SyncName` names the source and the Kustomization in both modes | flux-operator only. gotk names the source after the root node and the Kustomization `BootstrapName` |
 | Ref selector | Tag, or a semver range, chosen explicitly | Tag only |
 | Prune | An explicit `Prune` reaches the root Kustomization in both modes | gotk only. flux-operator always prunes |
