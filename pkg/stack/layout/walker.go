@@ -657,9 +657,11 @@ func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) (
 		if err != nil {
 			return nil, err
 		}
+		// A nil entry, or one holding a nil object, holds nothing to write:
+		// it is skipped.
 		var objs []client.Object
 		for _, o := range objsPtr {
-			if o == nil {
+			if o == nil || *o == nil {
 				continue
 			}
 			objs = append(objs, *o)

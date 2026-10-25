@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -83,6 +84,41 @@ func TestRenderApps_NilObjectPointer(t *testing.T) {
 	// Nil object pointers are skipped; no resources added.
 	if len(parent.Resources) != 0 {
 		t.Errorf("expected 0 resources when only nil pointers returned, got %d", len(parent.Resources))
+	}
+}
+
+// TestWalkCluster_NilObjectEntrySkipped: a nil entry and an entry holding a
+// nil object are both skipped, whether the application has a directory of its
+// own or is written into its bundle's, and the tree is written without them.
+func TestWalkCluster_NilObjectEntrySkipped(t *testing.T) {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cfg")
+	obj.SetNamespace("default")
+	var o client.Object = obj
+	var nilObj client.Object
+
+	for name, rules := range map[string]LayoutRules{
+		"own directory":     {ApplicationGrouping: GroupByName},
+		"flat applications": {ApplicationGrouping: GroupFlat},
+	} {
+		t.Run(name, func(t *testing.T) {
+			app := stack.NewApplication("web", "default", &flattenFakeConfig{objs: []*client.Object{nil, &nilObj, &o}})
+			bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+			cluster := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "apps", Bundle: bundle}}
+
+			ml, err := WalkCluster(cluster, rules)
+			if err != nil {
+				t.Fatalf("WalkCluster: %v", err)
+			}
+			if got, want := subtreeResources(ml), []client.Object{obj}; !reflect.DeepEqual(got, want) {
+				t.Errorf("resources = %#v, want %#v", got, want)
+			}
+			if err := WriteManifest(t.TempDir(), DefaultLayoutConfig(), ml); err != nil {
+				t.Fatalf("WriteManifest: %v", err)
+			}
+		})
 	}
 }
 
