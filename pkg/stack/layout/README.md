@@ -350,8 +350,9 @@ inner Kustomization.
 - **WalkCluster()**: Standard hierarchical layout (Node → Bundle → App structure)
 - **WalkClusterByPackage()**: Groups by PackageRef for multi-source scenarios
 
-Both skip an entry of an application's `Generate` result that is nil or holds a nil
-`client.Object` interface: it holds nothing to write, so it gets no file and no
+Both skip an entry of an application's `Generate` result that is nil or holds no object (a nil
+`client.Object` interface, or a nil pointer of an object type such as
+`(*corev1.ConfigMap)(nil)`): it holds nothing to write, so it gets no file and no
 `kustomization.yaml` entry.
 
 ### 4. Writing System

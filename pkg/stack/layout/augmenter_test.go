@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -87,9 +88,10 @@ func TestRenderApps_NilObjectPointer(t *testing.T) {
 	}
 }
 
-// TestWalkCluster_NilObjectEntrySkipped: a nil entry and an entry holding a
-// nil object are both skipped, whether the application has a directory of its
-// own or is written into its bundle's, and the tree is written without them.
+// TestWalkCluster_NilObjectEntrySkipped: a nil entry, an entry holding a nil
+// object and one holding a nil pointer of an object type are all skipped,
+// whether the application has a directory of its own or is written into its
+// bundle's, and the tree is written without them.
 func TestWalkCluster_NilObjectEntrySkipped(t *testing.T) {
 	obj := &unstructured.Unstructured{}
 	obj.SetAPIVersion("v1")
@@ -98,13 +100,15 @@ func TestWalkCluster_NilObjectEntrySkipped(t *testing.T) {
 	obj.SetNamespace("default")
 	var o client.Object = obj
 	var nilObj client.Object
+	var nilCM *corev1.ConfigMap
+	typedNil := client.Object(nilCM)
 
 	for name, rules := range map[string]LayoutRules{
 		"own directory":     {ApplicationGrouping: GroupByName},
 		"flat applications": {ApplicationGrouping: GroupFlat},
 	} {
 		t.Run(name, func(t *testing.T) {
-			app := stack.NewApplication("web", "default", &flattenFakeConfig{objs: []*client.Object{nil, &nilObj, &o}})
+			app := stack.NewApplication("web", "default", &flattenFakeConfig{objs: []*client.Object{nil, &nilObj, &typedNil, &o}})
 			bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
 			cluster := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "apps", Bundle: bundle}}
 

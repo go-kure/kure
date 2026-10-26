@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/internal/nilobj"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 )
@@ -657,11 +658,12 @@ func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) (
 		if err != nil {
 			return nil, err
 		}
-		// A nil entry, or one holding a nil object, holds nothing to write:
-		// it is skipped.
+		// A nil entry, or one holding no object (a nil client.Object or a
+		// nil pointer of an object type), holds nothing to write: it is
+		// skipped.
 		var objs []client.Object
 		for _, o := range objsPtr {
-			if o == nil || *o == nil {
+			if o == nil || nilobj.Is(*o) {
 				continue
 			}
 			objs = append(objs, *o)

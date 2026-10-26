@@ -102,8 +102,9 @@ such a resource, so it reaches a bundle that sets `KustomizationName` by that va
 added; an object's own value for a key wins. Where the bundle sets labels (or annotations), each
 object is given a new labels (or annotations) map, so a map its config also uses elsewhere (a
 Deployment's selector or pod template labels) is not written, and the new map is shared with
-neither the bundle nor another object. A nil entry, or one holding a nil object, is returned as
-it is and gets nothing.
+neither the bundle nor another object. A nil entry, or one holding no object (a nil
+`client.Object`, or a nil pointer of an object type such as `(*corev1.ConfigMap)(nil)`), is
+returned as it is and gets nothing.
 
 A nil `DependsOn` entry is refused by `Bundle.Validate`, with the bundle's path (an umbrella
 descendant's from the bundle that was validated: `platform/infra/db`) and the entry's index; the

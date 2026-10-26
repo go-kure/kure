@@ -8,6 +8,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/internal/nilobj"
 	"github.com/go-kure/kure/pkg/errors"
 )
 
@@ -480,7 +481,8 @@ func (a *Bundle) InitializeUmbrella() {
 // returned is not written, so a map the config also uses elsewhere (a
 // selector, a pod template's labels) keeps its value, and the new map is
 // shared with neither the bundle nor another object. A nil entry, or one
-// holding a nil object, is returned as it is and gets nothing.
+// holding no object (a nil client.Object, or a nil pointer of an object type
+// such as (*corev1.ConfigMap)(nil)), is returned as it is and gets nothing.
 func (a *Bundle) Generate() ([]*client.Object, error) {
 	var resources []*client.Object
 	for _, app := range a.Applications {
@@ -495,7 +497,7 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 	// backed by a pointer, so the underlying concrete object is modified in
 	// place.
 	for _, r := range resources {
-		if r == nil || *r == nil {
+		if r == nil || nilobj.Is(*r) {
 			continue
 		}
 		if len(a.Labels) > 0 {
