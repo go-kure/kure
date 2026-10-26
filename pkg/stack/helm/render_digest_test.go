@@ -40,8 +40,17 @@ type fakeRegistry struct {
 // different manifest digests, as a re-pushed tag does.
 func newFakeRegistry(t *testing.T, annotation string) *fakeRegistry {
 	t.Helper()
-	chartTar := buildMinimalChartTar(t, "testchart", "0.1.0")
-	config := []byte(`{"apiVersion":"v2","name":"testchart","version":"0.1.0"}`)
+	return newFakeRegistryWithChart(t, annotation, "0.1.0", "0.1.0", buildMinimalChartTar(t, "testchart", "0.1.0"))
+}
+
+// newFakeRegistryWithChart serves chartTar, whose Chart.yaml version is
+// chartVersion, as charts/testchart under tag.
+func newFakeRegistryWithChart(t *testing.T, annotation, tag, chartVersion string, chartTar []byte) *fakeRegistry {
+	t.Helper()
+	config, err := json.Marshal(map[string]string{"apiVersion": "v2", "name": "testchart", "version": chartVersion})
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
 	manifest, err := json.Marshal(map[string]any{
 		"schemaVersion": 2,
 		"mediaType":     "application/vnd.oci.image.manifest.v1+json",
@@ -62,7 +71,7 @@ func newFakeRegistry(t *testing.T, annotation string) *fakeRegistry {
 	}
 	fr := &fakeRegistry{
 		repo:     "charts/testchart",
-		tag:      "0.1.0",
+		tag:      tag,
 		manifest: manifest,
 		blobs: map[string][]byte{
 			sha256Digest(config):   config,
