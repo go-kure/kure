@@ -415,11 +415,18 @@ func validateRootName(rootNode *stack.Node, rules layout.LayoutRules) error {
 // OCIRepository and the bootstrap Kustomization's sourceRef (sourceName), so
 // the name has to be a DNS-1123 subdomain. No root node and an unnamed root
 // take [DefaultSourceName]. When [syncNamesGotkRoot], SyncName names the
-// source instead and the root name is not checked here; validateRootName
-// still checks it as a directory.
+// source and the bootstrap Kustomization instead, so SyncName is the name
+// checked, as a Flux Kustomization name ([stack.ValidateKustomizationName]);
+// the root name is then checked only as a directory, by validateRootName.
 func validateRootSourceName(config *stack.BootstrapConfig, rootNode *stack.Node) error {
+	if syncNamesGotkRoot(config) {
+		if err := stack.ValidateKustomizationName(config.SyncName); err != nil {
+			return errors.ResourceValidationError("BootstrapConfig", config.SyncName, "syncName", err.Error(), nil)
+		}
+		return nil
+	}
 	name := rootName(rootNode)
-	if name == "" || syncNamesGotkRoot(config) {
+	if name == "" {
 		return nil
 	}
 	if problems := validation.IsDNS1123Subdomain(name); len(problems) > 0 {

@@ -131,7 +131,8 @@ type BootstrapConfig struct {
 	// the Kustomization after the generator's BootstrapName. The CRD caps it
 	// at 63 characters and makes it immutable once set, so changing it means
 	// recreating the FluxInstance; in gotk mode it means new objects under the
-	// new name.
+	// new name, and the gotk generator refuses a value that is not a valid Flux
+	// Kustomization name (ValidateKustomizationName).
 	SyncName string `yaml:"syncName,omitempty"`
 
 	// Prune controls garbage collection on the bootstrap Kustomization.
