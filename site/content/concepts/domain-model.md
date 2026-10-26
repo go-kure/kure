@@ -85,7 +85,8 @@ An individual Kubernetes workload or resource set. Applications implement the `A
 What `Generate` returns belongs to the caller, and kure writes into it (bundle labels and
 annotations, delivery annotations). A config therefore returns fresh objects on every call, or
 deep copies of a cached result. Each walk calls it once per application, and nothing is memoized
-across walks. See [Stack](/api-reference/stack/) § Generation contract.
+across walks. See [Stack](/api-reference/stack/) § Generation contract, and check a config
+against it with [Stack Test Helpers](/api-reference/stacktest/).
 
 An application can also state a **delivery intent** (`Application.Delivery`): `PruneProtection`
 keeps its objects in the cluster when they are removed from the source, and `ForceReplace` allows

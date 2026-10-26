@@ -3,6 +3,7 @@ package stack_test
 import (
 	"fmt"
 	"strconv"
+	"testing"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -12,6 +13,7 @@ import (
 	"github.com/go-kure/kure/pkg/stack"
 	_ "github.com/go-kure/kure/pkg/stack/fluxcd" // registers the "flux" workflow provider
 	"github.com/go-kure/kure/pkg/stack/layout"
+	"github.com/go-kure/kure/pkg/stack/stacktest"
 )
 
 // The README's Go blocks are generated from these functions
@@ -35,6 +37,10 @@ func (c *myConfig) Generate(app *stack.Application) ([]*client.Object, error) {
 	cm.Data = map[string]string{"port": strconv.Itoa(c.Port)}
 	var obj client.Object = cm
 	return []*client.Object{&obj}, nil
+}
+
+func TestMyConfig_Conformance(t *testing.T) {
+	stacktest.AssertGeneration(t, stack.NewApplication("app", "default", &myConfig{Port: 8080}))
 }
 
 func ExampleNewCluster() {

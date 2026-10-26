@@ -83,6 +83,7 @@ ENABLED_PAGES=(
 	pkg/stack/fluxcd/README.md
 	pkg/stack/helm/README.md
 	pkg/stack/layout/README.md
+	pkg/stack/stacktest/README.md
 	pkg/versions/README.md
 	site/content/_index.md
 	site/content/api-reference/_index.md

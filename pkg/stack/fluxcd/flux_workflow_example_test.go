@@ -16,6 +16,7 @@ import (
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/layout"
+	"github.com/go-kure/kure/pkg/stack/stacktest"
 )
 
 // The Go blocks of the "Generating Flux Manifests" guide
@@ -31,6 +32,10 @@ func (workloadApp) Generate(app *stack.Application) ([]*client.Object, error) {
 	var dep client.Object = kubernetes.CreateDeployment(app.Name, app.Namespace)
 	var svc client.Object = kubernetes.CreateService(app.Name, app.Namespace)
 	return []*client.Object{&dep, &svc}, nil
+}
+
+func TestWorkloadApp_Conformance(t *testing.T) {
+	stacktest.AssertGeneration(t, stack.NewApplication("frontend", "web", workloadApp{}))
 }
 
 var (

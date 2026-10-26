@@ -26,6 +26,10 @@ packages:
     readme: pkg/stack/README.md
     guides: [guides/flux-workflow, concepts/domain-model]
     mount: {target: api-reference/stack.md, title: Stack, weight: 10, group: Core Domain, desc: "Cluster, Node, Bundle, Application domain model"}
+  - path: pkg/stack/stacktest
+    readme: pkg/stack/stacktest/README.md
+    guides: [concepts/domain-model]
+    mount: {target: api-reference/stacktest.md, title: Stack Test Helpers, weight: 15, group: Core Domain, desc: "Generation-contract checks for ApplicationConfig authors"}
   - path: pkg/stack/fluxcd
     readme: pkg/stack/fluxcd/README.md
     guides: [guides/flux-workflow]

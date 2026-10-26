@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"testing"
 	"time"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
@@ -18,6 +19,7 @@ import (
 	"github.com/go-kure/kure/pkg/kubernetes/fluxcd"
 	"github.com/go-kure/kure/pkg/manifest"
 	"github.com/go-kure/kure/pkg/stack"
+	"github.com/go-kure/kure/pkg/stack/stacktest"
 )
 
 // The Go blocks of the "Using Kure as a Library" guide
@@ -33,6 +35,10 @@ type deploymentApp struct{}
 func (deploymentApp) Generate(app *stack.Application) ([]*client.Object, error) {
 	var obj client.Object = kubernetes.CreateDeployment(app.Name, app.Namespace)
 	return []*client.Object{&obj}, nil
+}
+
+func TestDeploymentApp_Conformance(t *testing.T) {
+	stacktest.AssertGeneration(t, stack.NewApplication("frontend", "web", deploymentApp{}))
 }
 
 // exportedObjects is what the guide's encoding examples serialize: a
