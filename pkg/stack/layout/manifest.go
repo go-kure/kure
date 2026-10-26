@@ -153,9 +153,10 @@ type ManifestLayout struct {
 // FluxKustomizationRecord is what a Flux Kustomization kure placed or kept in a
 // layout read when the integration ended: its identity, its spec.path as
 // path.Clean leaves it, the Source its spec.sourceRef names (an omitted
-// namespace the Kustomization's own) and whether it sets spec.kubeConfig. A
-// record is compared as a whole, so a caller recording its own Kustomization
-// cleans Path the same way.
+// namespace the Kustomization's own) and whether it sets spec.kubeConfig.
+// fluxcd.UmbrellaTerminals compares records as kure reads identities: Path
+// cleaned, an omitted Namespace "default", an omitted SourceNamespace the
+// record's Namespace.
 type FluxKustomizationRecord struct {
 	Namespace, Name string
 	Path            string

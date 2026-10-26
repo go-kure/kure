@@ -483,8 +483,8 @@ files by name. An augmenter that needs the old names sets `FileNamingDefault` on
   The integrator also records, on every layout, the Flux Kustomizations it placed or kept there
   (`SetFluxKustomizations`, read back with `FluxKustomizations`): each one's identity, `spec.path`
   as `path.Clean` leaves it, Source and whether it sets `spec.kubeConfig`, as
-  `FluxKustomizationRecord` values; a caller's own record cleans its `Path` the same way, since a
-  record is compared as a whole. It is
+  `FluxKustomizationRecord` values, compared as kure reads identities (`Path` cleaned, an omitted
+  `Namespace` `default`, an omitted `SourceNamespace` the record's `Namespace`). It is
   written only by an integration that succeeds, as its last step: a refused one leaves every
   record as it was. Like the build marker the record is in memory only; `fluxcd.UmbrellaTerminals` reads it, and a caller that
   places Flux Kustomizations itself records them there to have them read.

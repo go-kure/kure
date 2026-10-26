@@ -595,8 +595,8 @@ func (t *kustomizationTree) within(u, d string) bool {
 // changed after the integration (it may no longer build this tree's
 // directory), and every one of a tree built by hand or read back from disk,
 // which carries no record (go-kure/kure#1077). A caller placing Flux
-// Kustomizations itself records them with SetFluxKustomizations, each Path
-// cleaned with path.Clean, to have them read as umbrellas.
+// Kustomizations itself records them with SetFluxKustomizations to have them
+// read as umbrellas; a record is compared in normal form (normalRecord).
 //
 // It returns an error that wraps ErrUmbrellaTerminals, and no map, for a
 // Kustomization identity found in two of the trees, for an umbrella without a
@@ -644,10 +644,11 @@ func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, er
 // recordedMembers selects, in typed form, the Flux Kustomizations of l that the
 // integration recorded there (layout.ManifestLayout FluxKustomizations,
 // recordFluxKustomizations) and that still read what was recorded: identity,
-// cleaned spec.path, Source and presence of spec.kubeConfig. It reads l as
-// kustomize builds it (builtItems), so a recorded one counts in whatever form
-// it is held, and one a build drops is none. A recorded identity that cannot
-// be read in typed form is an error naming the layout.
+// cleaned spec.path, Source and presence of spec.kubeConfig, both sides read
+// as kure reads identities (normalRecord). It reads l as kustomize builds it
+// (builtItems), so a recorded one counts in whatever form it is held, and one
+// a build drops is none. A recorded identity that cannot be read in typed form
+// is an error naming the layout.
 func recordedMembers(l *layout.ManifestLayout) ([]*kustv1.Kustomization, error) {
 	recs := l.FluxKustomizations()
 	if len(recs) == 0 {
@@ -671,11 +672,27 @@ func recordedMembers(l *layout.ManifestLayout) ([]*kustv1.Kustomization, error) 
 		if err != nil {
 			return nil, errors.Wrapf(err, "layout %q", l.FullRepoPath())
 		}
-		if slices.Contains(recs, fluxKustomizationRecord(k)) {
+		cur := normalRecord(fluxKustomizationRecord(k))
+		if slices.ContainsFunc(recs, func(r layout.FluxKustomizationRecord) bool { return normalRecord(r) == cur }) {
 			out = append(out, k)
 		}
 	}
 	return out, nil
+}
+
+// normalRecord is r read as kure reads identities (crKey): an omitted
+// namespace is "default", an omitted Source namespace the Kustomization's own,
+// and the path cleaned. Two records that differ only in those forms name the
+// same Kustomization, path and Source.
+func normalRecord(r layout.FluxKustomizationRecord) layout.FluxKustomizationRecord {
+	if r.Namespace == "" {
+		r.Namespace = "default"
+	}
+	if r.SourceNamespace == "" {
+		r.SourceNamespace = r.Namespace
+	}
+	r.Path = path.Clean(r.Path)
+	return r
 }
 
 // typedKustomization returns the Flux Kustomization obj in typed form.
