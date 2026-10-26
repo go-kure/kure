@@ -19,7 +19,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	sigsyaml "sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/pkg/errors"
 	kio "github.com/go-kure/kure/pkg/io"
@@ -595,7 +594,7 @@ func validateSourceVerify(v *stack.SourceVerification, name string) error {
 			if at := strings.IndexFunc(p.pattern, yamlUnsafe); at >= 0 {
 				r, _ := utf8.DecodeRuneInString(p.pattern[at:])
 				return errors.ResourceValidationError("BootstrapConfig", name, field,
-					fmt.Sprintf("%q holds %U, which YAML output does not keep as written; write it as the regular-expression escape \\x{%x}", p.pattern, r, r), nil)
+					fmt.Sprintf("%q holds %U, which Flux's build does not keep as written; write it as the regular-expression escape \\x{%x}", p.pattern, r, r), nil)
 			}
 		}
 	}
@@ -607,9 +606,13 @@ func validateSourceVerify(v *stack.SourceVerification, name string) error {
 // (U+0080 to U+009F) and the noncharacters U+FFFE and U+FFFF literally, and
 // reads that JSON back as YAML 1.1, which folds NEL (U+0085) into a space as a
 // line break and refuses the others. Other characters, C0 controls included,
-// come back as written. A pattern passes through it in pkg/io's default YAML
-// encoding, in both modes, and in flux-operator's patch build, so such a
-// character would change or fail there.
+// come back as written. kure's own output keeps such a character, but Flux's
+// builds write every object with kustomize's AsYaml, which is that marshal:
+// flux-operator's, which applies the verify patch, and kustomize-controller's,
+// which applies the gotk sync source where the caller writes it into the tree
+// the bootstrap Kustomization applies. A pattern holding one would come out
+// changed or fail the build there
+// (TestBootstrapSourceVerify_OperatorBuildRefuses).
 func yamlUnsafe(r rune) bool {
 	return (r >= 0x7f && r <= 0x9f) || r == 0xfffe || r == 0xffff
 }
@@ -739,10 +742,12 @@ func (bg *BootstrapGenerator) syncSemVerPatch(config *stack.BootstrapConfig) kus
 // spec.verify (sourceVerification) to the sync's OCIRepository
 // (syncSourceTarget). The sync has no field for it, and the operator's
 // template writes no spec.verify, so the patch adds it rather than replacing.
-// Its patterns hold no character yamlUnsafe reports (validateSourceVerify),
-// so they survive the YAML round trips the patch takes unchanged.
+// The body is written with pkg/io, which keeps every string as written. Its
+// patterns hold no character yamlUnsafe reports (validateSourceVerify), which
+// the operator's build would change or fail on.
 func (bg *BootstrapGenerator) syncVerifyPatch(config *stack.BootstrapConfig) (kustomize.Patch, error) {
-	body, err := sigsyaml.Marshal([]map[string]any{{
+	var body kio.Buffer
+	err := body.Marshal([]map[string]any{{
 		"op":    "add",
 		"path":  "/spec/verify",
 		"value": sourceVerification(config),
@@ -750,7 +755,7 @@ func (bg *BootstrapGenerator) syncVerifyPatch(config *stack.BootstrapConfig) (ku
 	if err != nil {
 		return kustomize.Patch{}, errors.Wrap(err, "marshal the sync source's verify patch")
 	}
-	return kustomize.Patch{Patch: string(body), Target: bg.syncSourceTarget(config)}, nil
+	return kustomize.Patch{Patch: body.String(), Target: bg.syncSourceTarget(config)}, nil
 }
 
 // generateFluxSystemKustomization creates a Kustomization for the flux-system.
