@@ -2,6 +2,7 @@ package fluxcd_test
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -716,18 +717,25 @@ func TestGenerateBootstrapGotkSyncName(t *testing.T) {
 		}
 	})
 
-	// A root name that is a valid directory but not a valid object name is
-	// refused only where it names the source: SyncName set with a SourceURL
-	// names the source instead, so the root is then checked as a directory
-	// alone, as flux-operator mode checks it.
-	t.Run("root name not an object name", func(t *testing.T) {
+	// The name checked as an object name is the one that names the source:
+	// the root's, unless SyncName set with a SourceURL names it instead. Then
+	// SyncName is checked as a Flux Kustomization name, since it names the
+	// Kustomization too, and the root as a directory alone, as flux-operator
+	// mode checks it.
+	t.Run("name checks", func(t *testing.T) {
+		const url = "oci://registry.example.com/fleet"
 		for _, tc := range []struct {
-			name, url, syncName string
-			wantErr             bool
+			name, root, url, syncName string
+			wantErr                   bool
 		}{
-			{"SyncName names the source", "oci://registry.example.com/fleet", "fleet", false},
-			{"SyncName unset", "oci://registry.example.com/fleet", "", true},
-			{"no SourceURL", "", "fleet", true},
+			{"SyncName names the source, root not an object name", "Prod", url, "fleet", false},
+			{"SyncName unset, root not an object name", "Prod", url, "", true},
+			{"no SourceURL, root not an object name", "Prod", "", "fleet", true},
+			{"SyncName with upper case", "prod", url, "Fleet", true},
+			{"SyncName with underscore", "prod", url, "fleet_src", true},
+			{"SyncName at the Kustomization limit", "prod", url, strings.Repeat("a", 63), false},
+			{"SyncName over the Kustomization limit", "prod", url, strings.Repeat("a", 64), true},
+			{"invalid SyncName without SourceURL is unused", "prod", "", "Fleet", false},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				_, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(&stack.BootstrapConfig{
@@ -736,10 +744,10 @@ func TestGenerateBootstrapGotkSyncName(t *testing.T) {
 					FluxVersion: fluxstack.GotkVersion,
 					SourceURL:   tc.url,
 					SyncName:    tc.syncName,
-				}, &stack.Node{Name: "Prod"}, layout.LayoutRules{})
+				}, &stack.Node{Name: tc.root}, layout.LayoutRules{})
 				if (err != nil) != tc.wantErr {
 					t.Errorf("GenerateBootstrap(root %q, SyncName %q, SourceURL %q) error = %v, want error %v",
-						"Prod", tc.syncName, tc.url, err, tc.wantErr)
+						tc.root, tc.syncName, tc.url, err, tc.wantErr)
 				}
 			})
 		}
