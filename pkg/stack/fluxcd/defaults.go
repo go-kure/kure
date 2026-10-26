@@ -43,13 +43,15 @@ const (
 	DefaultNamespace = "flux-system"
 
 	// DefaultSourceName is the name given to a generated GitRepository or
-	// OCIRepository when the root node has no name of its own.
+	// OCIRepository when the root node has no name of its own and
+	// BootstrapConfig.SyncName names none.
 	DefaultSourceName = "flux-system"
 
-	// DefaultBootstrapName is the name given to the bootstrap Kustomization. It
-	// is not derived from the root node. Override it by assigning
-	// [BootstrapGenerator.BootstrapName]. It does not reach the FluxInstance,
-	// whose name is fixed — see [FluxInstanceName].
+	// DefaultBootstrapName is the name given to the gotk bootstrap
+	// Kustomization. It is not derived from the root node. Override it by
+	// assigning [BootstrapGenerator.BootstrapName]; BootstrapConfig.SyncName,
+	// set with a SourceURL, takes precedence over both. It does not reach the
+	// FluxInstance, whose name is fixed — see [FluxInstanceName].
 	DefaultBootstrapName = "flux-system"
 
 	// FluxInstanceName is the metadata.name of the FluxInstance emitted in

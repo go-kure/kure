@@ -644,38 +644,77 @@ func TestFluxOperatorBootstrapCarriesSyncName(t *testing.T) {
 	}
 }
 
-// TestGenerateBootstrapGotkIgnoresSyncName is a differential: SyncName is a
-// flux-operator input, so gotk-mode output must be identical with and without
-// it. The oracle is the generator's own output for the unset case. Both calls
-// build from the vendored GotkVersion bundle, so neither touches the network.
-func TestGenerateBootstrapGotkIgnoresSyncName(t *testing.T) {
-	generate := func(syncName string) []client.Object {
+// TestGenerateBootstrapGotkSyncName pins SyncName in gotk mode
+// (go-kure/kure#1089). With a SourceURL it names the source and the bootstrap
+// Kustomization, whose sourceRef follows, ahead of the root node's name and
+// BootstrapName; unset, those two still name them. Without a SourceURL it
+// changes nothing, as in flux-operator mode, where no sync is emitted then:
+// the oracle is the generator's own output with SyncName unset. Every call
+// builds from the vendored GotkVersion bundle, so none touches the network.
+func TestGenerateBootstrapGotkSyncName(t *testing.T) {
+	generate := func(t *testing.T, kind, url, syncName string) []client.Object {
 		t.Helper()
 		bg := fluxstack.NewBootstrapGenerator()
+		bg.BootstrapName = "bootstrap"
 		resources, err := bg.GenerateBootstrap(&stack.BootstrapConfig{
 			Enabled:     true,
-			FluxMode:    "gotk",
+			FluxMode:    fluxstack.ModeGotk,
 			FluxVersion: fluxstack.GotkVersion,
-			SourceKind:  "GitRepository",
-			SourceURL:   "https://github.com/org/fleet.git",
+			SourceKind:  kind,
+			SourceURL:   url,
 			SourceRef:   "main",
 			SyncName:    syncName,
 		}, &stack.Node{Name: "prod"}, layout.LayoutRules{})
-
 		if err != nil {
-			t.Fatalf("GenerateBootstrap(syncName=%q) error = %v", syncName, err)
-		}
-		if len(resources) == 0 {
-			t.Fatalf("GenerateBootstrap(syncName=%q) returned no resources", syncName)
+			t.Fatalf("GenerateBootstrap(syncName=%q): %v", syncName, err)
 		}
 		return resources
 	}
-
-	without := generate("")
-	with := generate("stack-src")
-	if !reflect.DeepEqual(without, with) {
-		t.Errorf("gotk output changed when SyncName was set: %d resources without, %d with", len(without), len(with))
+	// names reports the root the output carries: "Kind name" of the source,
+	// the Kustomization's name and its sourceRef.
+	names := func(t *testing.T, objs []client.Object) (source, kust, ref string) {
+		t.Helper()
+		for _, obj := range objs {
+			switch o := obj.(type) {
+			case *sourcev1.GitRepository:
+				source = "GitRepository " + o.Name
+			case *sourcev1.OCIRepository:
+				source = "OCIRepository " + o.Name
+			case *kustv1.Kustomization:
+				kust, ref = o.Name, o.Spec.SourceRef.Kind+" "+o.Spec.SourceRef.Name
+			}
+		}
+		return source, kust, ref
 	}
+
+	for _, tc := range []struct {
+		name, kind, url, syncName     string
+		wantSource, wantKust, wantRef string
+	}{
+		{"git, SyncName set", "GitRepository", "https://git.example.com/fleet.git", "fleet",
+			"GitRepository fleet", "fleet", "GitRepository fleet"},
+		{"oci, SyncName set", "OCIRepository", "oci://registry.example.com/fleet", "fleet",
+			"OCIRepository fleet", "fleet", "OCIRepository fleet"},
+		{"git, SyncName unset", "GitRepository", "https://git.example.com/fleet.git", "",
+			"GitRepository prod", "bootstrap", "GitRepository prod"},
+		{"oci, SyncName unset", "OCIRepository", "oci://registry.example.com/fleet", "",
+			"OCIRepository prod", "bootstrap", "OCIRepository prod"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source, kust, ref := names(t, generate(t, tc.kind, tc.url, tc.syncName))
+			if source != tc.wantSource || kust != tc.wantKust || ref != tc.wantRef {
+				t.Errorf("source %q, Kustomization %q, sourceRef %q; want %q, %q, %q",
+					source, kust, ref, tc.wantSource, tc.wantKust, tc.wantRef)
+			}
+		})
+	}
+
+	t.Run("no SourceURL", func(t *testing.T) {
+		without, with := generate(t, "", "", ""), generate(t, "", "", "fleet")
+		if !reflect.DeepEqual(without, with) {
+			t.Errorf("gotk output without a SourceURL changed when SyncName was set: %d resources without, %d with", len(without), len(with))
+		}
+	})
 }
 
 func TestGenerateFluxInstanceNoSyncWhenNoSourceURL(t *testing.T) {

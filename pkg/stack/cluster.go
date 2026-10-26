@@ -121,12 +121,17 @@ type BootstrapConfig struct {
 	// spec.insecure on the OCIRepository the operator generates for the sync.
 	SourceInsecure bool `yaml:"sourceInsecure,omitempty"`
 
-	// SyncName names the source and Kustomization that the FluxInstance sync
-	// creates (spec.sync.name). flux-operator mode only: gotk mode ignores it.
-	// It has no effect without SourceURL, because no sync block is emitted
-	// then. Empty leaves the name to the operator, which defaults it to the
-	// FluxInstance's namespace. The CRD caps it at 63 characters and makes it
-	// immutable once set, so changing it means recreating the FluxInstance.
+	// SyncName names the bootstrap source and Kustomization in both modes: in
+	// flux-operator mode the ones the FluxInstance sync creates
+	// (spec.sync.name), in gotk mode the OCIRepository or GitRepository and the
+	// Kustomization kure emits, whose sourceRef follows. It has no effect
+	// without SourceURL, because no source is emitted then in either mode.
+	// Empty keeps each mode's names: the operator names both after the
+	// FluxInstance's namespace; gotk names the source after the root node and
+	// the Kustomization after the generator's BootstrapName. The CRD caps it
+	// at 63 characters and makes it immutable once set, so changing it means
+	// recreating the FluxInstance; in gotk mode it means new objects under the
+	// new name.
 	SyncName string `yaml:"syncName,omitempty"`
 
 	// Prune controls garbage collection on the bootstrap Kustomization.
