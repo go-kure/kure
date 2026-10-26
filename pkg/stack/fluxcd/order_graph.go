@@ -183,11 +183,11 @@ func apiGroup(apiVersion string) string {
 // v1.9.5 internal/inventory/inventory.go:170-173). It is certain when every
 // match sits in a directory exactly one member's build holds (hostWriters),
 // the same member for all, and that member's build transforms nothing
-// (transformsBuild). An object written with no namespace where the check
-// names one, or one where the check names none, may be the checked object
-// once applied; so may a configMapGenerator entry whose name the check's
-// starts with, as kustomize appends a content hash. Either leaves the writer
-// uncertain.
+// (transformsBuild). A check that names no namespace, or a match written with
+// none, leaves the writer uncertain: a namespaced object may be applied in
+// another namespace than its file says, and a cluster-scoped one may exist
+// before any apply. So does a configMapGenerator entry whose name the check's
+// starts with, as kustomize appends a content hash.
 func (t *kustomizationTree) objectWriter(apiVersion, kind, namespace, name string) (string, error) {
 	if err := t.objectIndex(); err != nil {
 		return "", err
@@ -201,13 +201,12 @@ func (t *kustomizationTree) objectWriter(apiVersion, kind, namespace, name strin
 		if o.group != group || o.kind != kind || o.name != name {
 			continue
 		}
-		if o.namespace != namespace {
-			if o.namespace == "" || namespace == "" {
-				return "", nil
-			}
-			continue
+		if o.namespace == "" {
+			return "", nil
 		}
-		hosts = append(hosts, o.host)
+		if o.namespace == namespace {
+			hosts = append(hosts, o.host)
+		}
 	}
 	if group == "" && kind == "ConfigMap" {
 		for _, gen := range t.generators {
