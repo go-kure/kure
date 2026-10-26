@@ -2,10 +2,12 @@ package fluxcd
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Masterminds/semver/v3"
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
@@ -17,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	sigsyaml "sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/pkg/errors"
 	kio "github.com/go-kure/kure/pkg/io"
@@ -509,8 +512,9 @@ var ociSourceProviders = []string{
 
 // validateSourceAccess refuses source access options that would not reach a
 // source: any of them without SourceURL, where no source is generated, or with
-// a GitRepository source, which they are not defined for; and a SourceProvider
-// an OCIRepository does not take. name is the object the error is about. Both
+// a GitRepository source, which they are not defined for; a SourceProvider
+// an OCIRepository does not take; and a SourceVerify validateSourceVerify
+// refuses. name is the object the error is about. Both
 // modes call it before building anything, so GenerateFluxInstance refuses what
 // GenerateBootstrap refuses.
 func validateSourceAccess(config *stack.BootstrapConfig, name string) error {
@@ -523,6 +527,9 @@ func validateSourceAccess(config *stack.BootstrapConfig, name string) error {
 	}
 	if config.SourceInsecure {
 		set = append(set, "sourceInsecure")
+	}
+	if config.SourceVerify != nil {
+		set = append(set, "sourceVerify")
 	}
 	if len(set) == 0 {
 		return nil
@@ -539,7 +546,87 @@ func validateSourceAccess(config *stack.BootstrapConfig, name string) error {
 	if config.SourceProvider != "" && !slices.Contains(ociSourceProviders, config.SourceProvider) {
 		return errors.NewValidationError("sourceProvider", config.SourceProvider, "BootstrapConfig", ociSourceProviders)
 	}
+	return validateSourceVerify(config.SourceVerify, name)
+}
+
+// ociVerifyProviders are the signature providers an OCIRepository verifies
+// with: the OCIRepository CRD's enum for spec.verify.provider
+// (source-controller api/v1/ociverification_types.go), which declares no
+// constants for them. The first is the CRD's default.
+var ociVerifyProviders = []string{"cosign", "notation"}
+
+// validateSourceVerify refuses a SourceVerify the source would not admit or
+// could not use: a provider outside ociVerifyProviders, and an identity match
+// whose issuer or subject is empty or not a Go regular expression. The CRD
+// requires both without a minimum length, so an empty pattern, which matches
+// every identity, would pass admission; kure refuses it, as it would verify
+// nothing about the signer. A bad pattern would fail only once the source is
+// reconciled. A pattern holding a character yamlUnsafe reports is refused as
+// well: written literally it would not reach the source as written. No rule
+// across fields is checked. nil is no verification.
+func validateSourceVerify(v *stack.SourceVerification, name string) error {
+	if v == nil {
+		return nil
+	}
+	if v.Provider != "" && !slices.Contains(ociVerifyProviders, v.Provider) {
+		return errors.NewValidationError("sourceVerify.provider", v.Provider, "BootstrapConfig", ociVerifyProviders)
+	}
+	for i, m := range v.MatchOIDCIdentity {
+		for _, p := range []struct{ field, pattern string }{{"issuer", m.Issuer}, {"subject", m.Subject}} {
+			field := fmt.Sprintf("sourceVerify.matchOIDCIdentity[%d].%s", i, p.field)
+			if p.pattern == "" {
+				return errors.ResourceValidationError("BootstrapConfig", name, field,
+					"an identity match needs a pattern: an empty one matches every signer", nil)
+			}
+			if _, err := regexp.Compile(p.pattern); err != nil {
+				return errors.ResourceValidationError("BootstrapConfig", name, field,
+					fmt.Sprintf("%q is not a Go regular expression", p.pattern), err)
+			}
+			if at := strings.IndexFunc(p.pattern, yamlUnsafe); at >= 0 {
+				r, _ := utf8.DecodeRuneInString(p.pattern[at:])
+				return errors.ResourceValidationError("BootstrapConfig", name, field,
+					fmt.Sprintf("%q holds %U, which YAML output does not keep as written; write it as the regular-expression escape \\x{%x}", p.pattern, r, r), nil)
+			}
+		}
+	}
 	return nil
+}
+
+// yamlUnsafe reports a character that sigs.k8s.io/yaml does not keep in a
+// string: it marshals through JSON, which writes DEL, the C1 controls
+// (U+0080 to U+009F) and the noncharacters U+FFFE and U+FFFF literally, and
+// reads that JSON back as YAML 1.1, which folds NEL (U+0085) into a space as a
+// line break and refuses the others. Other characters, C0 controls included,
+// come back as written. A pattern passes through it in pkg/io's default YAML
+// encoding, in both modes, and in flux-operator's patch build, so such a
+// character would change or fail there.
+func yamlUnsafe(r rune) bool {
+	return (r >= 0x7f && r <= 0x9f) || r == 0xfffe || r == 0xffff
+}
+
+// sourceVerification converts SourceVerify to the source's spec.verify: an
+// empty provider becomes the CRD's default, as the upstream field has no
+// omitempty and an empty provider fails the enum; an empty Secret name sets no
+// reference. nil when SourceVerify is unset.
+func sourceVerification(config *stack.BootstrapConfig) *sourcev1.OCIRepositoryVerification {
+	v := config.SourceVerify
+	if v == nil {
+		return nil
+	}
+	out := &sourcev1.OCIRepositoryVerification{Provider: v.Provider}
+	if out.Provider == "" {
+		out.Provider = ociVerifyProviders[0]
+	}
+	if v.SecretRef != "" {
+		out.SecretRef = &meta.LocalObjectReference{Name: v.SecretRef}
+	}
+	for _, m := range v.MatchOIDCIdentity {
+		out.MatchOIDCIdentity = append(out.MatchOIDCIdentity, sourcev1.OIDCIdentityMatch{Issuer: m.Issuer, Subject: m.Subject})
+	}
+	if v.TrustedRootSecretRef != "" {
+		out.TrustedRootSecretRef = &meta.LocalObjectReference{Name: v.TrustedRootSecretRef}
+	}
+	return out
 }
 
 // syncSourceTarget selects the OCIRepository flux-operator generates for the
@@ -613,6 +700,24 @@ func (bg *BootstrapGenerator) syncSemVerPatch(config *stack.BootstrapConfig) kus
 		Patch:  "- op: replace\n  path: /spec/ref\n  value:\n    semver: " + strconv.Quote(config.SourceSemVer) + "\n",
 		Target: bg.syncSourceTarget(config),
 	}
+}
+
+// syncVerifyPatch returns the FluxInstance kustomize patch that adds
+// spec.verify (sourceVerification) to the sync's OCIRepository
+// (syncSourceTarget). The sync has no field for it, and the operator's
+// template writes no spec.verify, so the patch adds it rather than replacing.
+// Its patterns hold no character yamlUnsafe reports (validateSourceVerify),
+// so they survive the YAML round trips the patch takes unchanged.
+func (bg *BootstrapGenerator) syncVerifyPatch(config *stack.BootstrapConfig) (kustomize.Patch, error) {
+	body, err := sigsyaml.Marshal([]map[string]any{{
+		"op":    "add",
+		"path":  "/spec/verify",
+		"value": sourceVerification(config),
+	}})
+	if err != nil {
+		return kustomize.Patch{}, errors.Wrap(err, "marshal the sync source's verify patch")
+	}
+	return kustomize.Patch{Patch: string(body), Target: bg.syncSourceTarget(config)}, nil
 }
 
 // generateFluxSystemKustomization creates a Kustomization for the flux-system.
@@ -703,6 +808,9 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 	}
 	or.Spec.Provider = config.SourceProvider
 	or.Spec.Insecure = config.SourceInsecure
+	if config.SourceVerify != nil {
+		pubfluxcd.SetOCIRepositoryVerify(or, sourceVerification(config))
+	}
 
 	return or, nil
 }
@@ -818,6 +926,13 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 		}
 		if config.SourceSemVer != "" {
 			patches = append(patches, bg.syncSemVerPatch(config))
+		}
+		if config.SourceVerify != nil {
+			p, err := bg.syncVerifyPatch(config)
+			if err != nil {
+				return nil, err
+			}
+			patches = append(patches, p)
 		}
 		if len(patches) > 0 {
 			spec.Kustomize = &fluxv1.Kustomize{Patches: patches}

@@ -972,13 +972,15 @@ fmt.Println(fi.Name, fi.Spec.Sync.Name, fi.Spec.Sync.Ref)
 ### Source access
 
 Three `BootstrapConfig` options say how an `OCIRepository` sync source reaches a private or
-plain-HTTP registry (go-kure/kure#1060). Unset, the output is what it was before they existed.
+plain-HTTP registry (go-kure/kure#1060), and a fourth, `SourceVerify`, makes it verify the
+artifact's signature (go-kure/kure#1091). Unset, the output is what it was before they existed.
 
 | Option | gotk `OCIRepository` | flux-operator `FluxInstance` |
 |---|---|---|
 | `SourceSecretRef` | `spec.secretRef.name` | `spec.sync.pullSecret` |
 | `SourceProvider` | `spec.provider` | `spec.sync.provider` |
 | `SourceInsecure` | `spec.insecure: true` | a `spec.kustomize` patch |
+| `SourceVerify` | `spec.verify` | a `spec.kustomize` patch |
 
 `SourceSecretRef` names a `kubernetes.io/dockerconfigjson` Secret with the registry credentials.
 It is not `ImagePullSecret`, which is for the Flux controller images. `SourceProvider` is one of
@@ -989,10 +991,28 @@ A `FluxInstance` sync has no insecure field. So in flux-operator mode `SourceIns
 generates for the sync, matched by group, kind and name. The name is `SyncName`, or, when that is
 empty, the `FluxInstance`'s namespace, which is how the operator names that source.
 
+`SourceVerify` is a `stack.SourceVerification`, source-controller's `OCIRepositoryVerification`
+in kure's own type: a `Provider`, `cosign` or `notation`; a `SecretRef` naming the Secret with
+the trusted public keys; `MatchOIDCIdentity`, the issuer and subject patterns a keyless cosign
+signature's certificate must match; and a `TrustedRootSecretRef` naming the Secret with a
+self-hosted Sigstore `trusted_root.json`. An empty `Provider` is written as `cosign`, the CRD's
+default. A sync has no verify field either, so in flux-operator mode it is a second patch on the
+same source, after the insecure one, adding `spec.verify`; both modes then verify the same way.
+
 Both `GenerateBootstrap` and `GenerateFluxInstance` refuse, with nothing returned:
-- any of the three without `SourceURL`, where no source is generated for it to apply to;
-- any of the three with a `GitRepository` source, which they are not defined for;
-- a `SourceProvider` an `OCIRepository` does not take, `github` included.
+- any of the four without `SourceURL`, where no source is generated for it to apply to;
+- any of the four with a `GitRepository` source, which they are not defined for;
+- a `SourceProvider` an `OCIRepository` does not take, `github` included;
+- a `SourceVerify` provider other than `cosign` and `notation`;
+- an identity match whose issuer or subject is empty, which would match any signer, or is not a
+  Go regular expression, which source-controller would reject only at reconcile;
+- an issuer or subject holding DEL, a C1 control (U+0080 to U+009F, NEL among them) or the
+  noncharacter U+FFFE or U+FFFF. The YAML round trip that carries the pattern, in kure's default
+  YAML encoding in both modes and in the operator's patch build, would fold NEL into a space and
+  refuse the others; the pattern can match one with a regular-expression escape, such as `\x{85}`.
+
+The verification's cross-field rules (which provider takes which fields) are source-controller's
+and are not checked here, and the Secrets it names are the caller's to create.
 
 ### Semver source ref
 

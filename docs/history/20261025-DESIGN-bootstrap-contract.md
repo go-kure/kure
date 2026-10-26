@@ -34,7 +34,7 @@ both. In flux-operator mode kure emits a FluxInstance, and flux-operator renders
 | Names | `SyncName` names the source and the Kustomization in both modes | Holds, on main (go-kure/kure#1089). Unset, gotk still names the source after the root node and the Kustomization `BootstrapName` |
 | Ref selector | Tag, or a semver range, chosen explicitly | Holds: `SourceSemVer` (go-kure/kure#1090); the two modes resolve the same revision (`testdata/bootstrap-modes/oci-semver.txt`) |
 | Prune | An explicit `Prune` reaches the root Kustomization in both modes | gotk only. flux-operator always prunes |
-| Verification | OCI signature verification, in both modes | Not expressible |
+| Verification | OCI signature verification, in both modes | Holds: `SourceVerify` (go-kure/kure#1091); the two modes verify alike (`testdata/bootstrap-modes/source-verify.txt`) |
 
 In flux-operator mode, anything `spec.sync` cannot express reaches the rendered objects as a
 targeted `spec.kustomize.patches` entry: a JSON6902 patch on the sync's source or Kustomization,

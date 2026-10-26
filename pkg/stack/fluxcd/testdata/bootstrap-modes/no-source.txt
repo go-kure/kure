@@ -10,6 +10,7 @@ source.interval                   | -                                           
 source.secretRef                  | -                                            | -
 source.provider                   | -                                            | -
 source.insecure                   | -                                            | -
+source.verify                     | -                                            | -
 kustomization                     | Kustomization flux-system/flux-system        | -   <- differs
 kustomization.namespace           | flux-system                                  | -   <- differs
 kustomization.sourceRef           | OCIRepository prod                           | -   <- differs

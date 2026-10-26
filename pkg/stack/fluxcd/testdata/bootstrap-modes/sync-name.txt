@@ -10,6 +10,7 @@ source.interval                   | 1h0m0s                                      
 source.secretRef                  | -                                            | -
 source.provider                   | -                                            | -
 source.insecure                   | false                                        | false
+source.verify                     | -                                            | -
 kustomization                     | Kustomization flux-system/fleet              | Kustomization flux-system/fleet
 kustomization.namespace           | flux-system                                  | flux-system
 kustomization.sourceRef           | OCIRepository fleet                          | OCIRepository fleet

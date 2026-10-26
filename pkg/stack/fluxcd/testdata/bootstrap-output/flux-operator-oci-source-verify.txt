@@ -1,0 +1,50 @@
+=== install bundle: 13 objects, sha256 7dc8a08f8d4bc78d81cdb2420d1c1c480b0ed9d1c1ddcc79befd4fce557403f8 ===
+ClusterRole: 4
+ClusterRoleBinding: 1
+CustomResourceDefinition: 4
+Deployment: 1
+Namespace: 1
+Service: 1
+ServiceAccount: 1
+=== generated: 1 objects ===
+apiVersion: fluxcd.controlplane.io/v1
+kind: FluxInstance
+metadata:
+  name: flux
+  namespace: flux-system
+spec:
+  distribution:
+    registry: ghcr.io/fluxcd
+    version: v2.9.5
+  kustomize:
+    patches:
+      - patch: |
+          - op: add
+            path: /spec/insecure
+            value: true
+        target:
+          group: source.toolkit.fluxcd.io
+          kind: OCIRepository
+          name: flux-system
+      - patch: |
+          - op: add
+            path: /spec/verify
+            value:
+              matchOIDCIdentity:
+              - issuer: ^https://token.actions.githubusercontent.com$
+                subject: ^https://github.com/example/fleet/.*$
+              - issuer: ^https://accounts.google.com$
+                subject: ^release@example.com$
+              provider: cosign
+              trustedRootSecretRef:
+                name: sigstore-root
+        target:
+          group: source.toolkit.fluxcd.io
+          kind: OCIRepository
+          name: flux-system
+  sync:
+    interval: 1h0m0s
+    kind: OCIRepository
+    path: ./demo
+    ref: v1.2.3
+    url: oci://registry.example.com/fleet
