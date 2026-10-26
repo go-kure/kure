@@ -58,12 +58,14 @@ type ResourceGenerator struct {
 	// LayoutIntegrator with FluxIntegratedPerLayout or FluxIntegratedPerBundle
 	// applies all three, GenerateForBundle applies R1 and R2 to the one
 	// bundle, and the other entry points refuse the setting. The zero value
-	// leaves every output as it is without it. A Flux Kustomization is read
-	// in its context: its spec.path is a directory of the tree only when it
-	// reads the Source of the Kustomization whose apply writes it, without
-	// spec.kubeConfig, and so its wait waits for what that directory holds,
-	// also when it transforms its build (patches, components, name prefix or
-	// suffix, target namespace: not modelled, so the wait is kept);
+	// leaves every output as it is without it. A Flux Kustomization the
+	// integration did not place is read in its context: its spec.path is a
+	// directory of the tree only when it reads the Source of the
+	// Kustomization whose apply writes it, without spec.kubeConfig, and so
+	// its wait waits for what that directory holds, also when it transforms
+	// its build (patches, components, name prefix or suffix, target
+	// namespace: not modelled, so the wait is kept; with patches or
+	// components, also for the Flux Kustomizations held as local config);
 	// a health check on another cluster names none of the tree's
 	// Kustomizations, and a spec.healthCheckExprs entry for Flux
 	// Kustomizations is read as a wait for the checked one to be Ready,

@@ -322,6 +322,88 @@ func TestReconcileContext_TransformedBuildIsUnknown(t *testing.T) {
 	}
 }
 
+// A build that patches what it holds may write a Kustomization the tree
+// holds as local config: kustomize transforms before it drops local-config
+// objects, so a patch, or a component's, setting the annotation to "false"
+// keeps it. hand-written waits for the seed directory, which holds inner,
+// local config, depending on web; web depends on hand-written once
+// rewritten. With a patch or a component the check keeps the wait on inner
+// too and refuses the cycle; without one, or with a transform that cannot
+// change an annotation, inner is dropped and the rewrite is accepted.
+func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
+	patch := "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: inner\n  namespace: flux-system\n  annotations:\n    " + localConfigAnnotation + `: "false"` + "\n"
+	cases := map[string]struct {
+		edit    func(k *kustv1.Kustomization)
+		refused bool
+	}{
+		"patch":       {func(k *kustv1.Kustomization) { k.Spec.Patches = []kustomize.Patch{{Patch: patch}} }, true},
+		"component":   {func(k *kustv1.Kustomization) { k.Spec.Components = []string{"../keep-inner"} }, true},
+		"no patch":    {func(*kustv1.Kustomization) {}, false},
+		"name prefix": {func(k *kustv1.Kustomization) { k.Spec.NamePrefix = "x-" }, false},
+	}
+	build := func(edit func(k *kustv1.Kustomization), dir string) *stack.Cluster {
+		k := handWritten("hand-written")
+		k.Spec.Wait = true
+		if dir != "" {
+			k.Spec.Path = dir
+		}
+		edit(k)
+		var hw client.Object = k
+		dropped := "true"
+		var inner client.Object = annotateLocalConfig(handWritten("inner", "web"), &dropped)
+		apps := []*stack.Application{
+			stack.NewApplication("platform-app", "default", &fakeAppConfig{objs: []*client.Object{&hw}}),
+			stack.NewApplication("seed-app", "default", &fakeAppConfig{objs: []*client.Object{&inner}}),
+		}
+		return noWaitCluster(srBundle("platform", apps...), true)
+	}
+	for _, placement := range integratedPlacements {
+		first, err := integrateNoWait(build(func(*kustv1.Kustomization) {}, ""), nodeOnly, placement)
+		if err != nil {
+			t.Fatalf("%s: first integration: %v", placement, err)
+		}
+		seed := hostDirectory(t, first, "inner")
+		for name, c := range cases {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				ml, err := integrateNoWait(build(c.edit, seed), nodeOnly, placement)
+				if !c.refused {
+					if err != nil {
+						t.Fatalf("got %v, want the rewrite accepted", err)
+					}
+					assertDependsOn(t, ml, "web", "hand-written")
+					return
+				}
+				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "ready flux-system/hand-written -> ready flux-system/inner -> apply flux-system/inner -> ready flux-system/web -> apply flux-system/web") {
+					t.Fatalf("got %v, want ErrUmbrellaDependency naming the chain through inner", err)
+				}
+			})
+		}
+	}
+}
+
+// hostDirectory is the directory of the layout of ml that holds the object
+// named name.
+func hostDirectory(t *testing.T, ml *layout.ManifestLayout, name string) string {
+	t.Helper()
+	var dir string
+	var walk func(l *layout.ManifestLayout)
+	walk = func(l *layout.ManifestLayout) {
+		for _, r := range l.Resources {
+			if r.GetName() == name {
+				dir = l.FullRepoPath()
+			}
+		}
+		for _, c := range l.Children {
+			walk(c)
+		}
+	}
+	walk(ml)
+	if dir == "" {
+		t.Fatalf("no layout holds %q", name)
+	}
+	return dir
+}
+
 // A Kustomization kept from the tree in place of a generated one must read
 // what the generated one would, on this cluster: its spec.path is a directory
 // of this tree only then. One on another Source, or with spec.kubeConfig, is
