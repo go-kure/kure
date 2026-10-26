@@ -140,8 +140,9 @@ A `DirName` must be one path segment (`ValidateDirectoryName`): not `.` or `..`,
 or not the layout rules give the bundle a directory. It is no object name, so it need not be a
 DNS-1123 subdomain: `00_Infra` is valid.
 
-`NewBundle` validates the bundle it builds; fields set afterwards are checked by
-`Bundle.Validate`:
+`NewBundle` keeps a copy of the labels map it is given (a nil map stays nil), so editing that map
+after the call leaves the bundle as it was built. It validates the bundle it builds; fields set
+afterwards are checked by `Bundle.Validate`:
 
 <!-- doc-example: pkg/stack ExampleNewBundle -->
 ```go

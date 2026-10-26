@@ -227,9 +227,11 @@ type SubstituteRef struct {
 }
 
 // NewBundle constructs a Bundle with the given name, resources and labels.
-// It returns an error if validation fails.
+// The labels map is copied (a nil map stays nil), so editing it after the
+// call leaves the bundle as it was built. It returns an error if validation
+// fails.
 func NewBundle(name string, resources []*Application, labels map[string]string) (*Bundle, error) {
-	a := &Bundle{Name: name, Applications: resources, Labels: labels}
+	a := &Bundle{Name: name, Applications: resources, Labels: maps.Clone(labels)}
 	if err := a.Validate(); err != nil {
 		return nil, err
 	}
