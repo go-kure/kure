@@ -86,15 +86,18 @@ func TestBundleGenerate_ObjectsDoNotShareBundleMaps(t *testing.T) {
 	}
 }
 
-// TestBundleGenerate_NilEntrySkipped: a nil entry, and an entry holding a nil
-// object, are returned as they are and get no labels, with no panic; the
-// other objects still get the bundle's labels and annotations.
+// TestBundleGenerate_NilEntrySkipped: a nil entry, an entry holding a nil
+// object and one holding a nil pointer of an object type are returned as they
+// are and get no labels, with no panic; the other objects still get the
+// bundle's labels and annotations.
 func TestBundleGenerate_NilEntrySkipped(t *testing.T) {
 	var nilObj client.Object
+	var nilCM *corev1.ConfigMap
+	typedNil := client.Object(nilCM)
 	obj := client.Object(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "a"}})
 	b := &Bundle{
 		Name:         "web",
-		Applications: []*Application{NewApplication("web", "default", &fakeConfig{objs: []*client.Object{nil, &nilObj, &obj}})},
+		Applications: []*Application{NewApplication("web", "default", &fakeConfig{objs: []*client.Object{nil, &nilObj, &typedNil, &obj}})},
 		Labels:       map[string]string{"team": "shop"},
 		Annotations:  map[string]string{"owner": "shop"},
 	}
@@ -102,7 +105,7 @@ func TestBundleGenerate_NilEntrySkipped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
-	if len(res) != 3 || res[0] != nil || res[1] != &nilObj || *res[1] != nil {
+	if len(res) != 4 || res[0] != nil || res[1] != &nilObj || *res[1] != nil || res[2] != &typedNil || *res[2] != typedNil {
 		t.Fatalf("Generate = %v, want the nil entries returned as they are", res)
 	}
 	if want := map[string]string{"team": "shop"}; !reflect.DeepEqual(obj.GetLabels(), want) {

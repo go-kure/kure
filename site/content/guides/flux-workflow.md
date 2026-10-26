@@ -145,8 +145,9 @@ for _, child := range ml.(*layout.ManifestLayout).Children {
 The layout is yours to edit before writing it. Every Kustomization in it holds copies of its
 bundle's labels and annotations, so an edit there leaves the cluster's bundles, and what the next
 generation from them produces, as they were. The applications' objects are the ones their configs
-returned, passed through without copying; an entry that is nil or holds a nil object holds
-nothing to write and is skipped. See the
+returned, passed through without copying; an entry that is nil or holds no object (a nil
+`client.Object`, or a nil pointer such as `(*corev1.ConfigMap)(nil)`) holds nothing to write and
+is skipped. See the
 [Flux Engine reference](/api-reference/flux-engine/) § Resource Generation.
 
 ## Step 4: Write to Disk
