@@ -332,25 +332,33 @@ func TestReconcileContext_TransformedBuildIsUnknown(t *testing.T) {
 // change an annotation, inner is dropped and the rewrite is accepted, even
 // where hand-written depends on it by name. A kept inner that health-checks
 // web, instead of depending on it, closes the same cycle through its own
-// readiness.
+// readiness. So does the kept inner where another application's directory
+// holds a live inner with no dependsOn: the wait reaches the kept copy, read
+// on its own (renamed by a prefix, it is not the live one either).
 func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 	patch := "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: inner\n  namespace: flux-system\n  annotations:\n    " + localConfigAnnotation + `: "false"` + "\n"
 	cases := map[string]struct {
 		edit    func(k *kustv1.Kustomization)
 		check   bool
 		refused bool
+		live    bool
 	}{
-		"patch":                  {func(k *kustv1.Kustomization) { k.Spec.Patches = []kustomize.Patch{{Patch: patch}} }, false, true},
-		"component":              {func(k *kustv1.Kustomization) { k.Spec.Components = []string{"../keep-inner"} }, false, true},
-		"patch, health check":    {func(k *kustv1.Kustomization) { k.Spec.Patches = []kustomize.Patch{{Patch: patch}} }, true, true},
-		"no patch":               {func(*kustv1.Kustomization) {}, false, false},
-		"no patch, health check": {func(*kustv1.Kustomization) {}, true, false},
+		"patch and prefix, live namesake": {func(k *kustv1.Kustomization) {
+			k.Spec.Patches = []kustomize.Patch{{Patch: patch}}
+			k.Spec.NamePrefix = "x-"
+		}, false, true, true},
+		"patch, live namesake, health check": {func(k *kustv1.Kustomization) { k.Spec.Patches = []kustomize.Patch{{Patch: patch}} }, true, true, true},
+		"patch":                              {func(k *kustv1.Kustomization) { k.Spec.Patches = []kustomize.Patch{{Patch: patch}} }, false, true, false},
+		"component":                          {func(k *kustv1.Kustomization) { k.Spec.Components = []string{"../keep-inner"} }, false, true, false},
+		"patch, health check":                {func(k *kustv1.Kustomization) { k.Spec.Patches = []kustomize.Patch{{Patch: patch}} }, true, true, false},
+		"no patch":                           {func(*kustv1.Kustomization) {}, false, false, false},
+		"no patch, health check":             {func(*kustv1.Kustomization) {}, true, false, false},
 		"no patch, dependsOn inner": {func(k *kustv1.Kustomization) {
 			k.Spec.DependsOn = []kustv1.DependencyReference{{Name: "inner"}}
-		}, false, false},
-		"name prefix": {func(k *kustv1.Kustomization) { k.Spec.NamePrefix = "x-" }, false, false},
+		}, false, false, false},
+		"name prefix": {func(k *kustv1.Kustomization) { k.Spec.NamePrefix = "x-" }, false, false, false},
 	}
-	build := func(edit func(k *kustv1.Kustomization), dir string, check bool) *stack.Cluster {
+	build := func(edit func(k *kustv1.Kustomization), dir string, check, live bool) *stack.Cluster {
 		k := handWritten("hand-written")
 		k.Spec.Wait = true
 		if dir != "" {
@@ -369,17 +377,21 @@ func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 			stack.NewApplication("platform-app", "default", &fakeAppConfig{objs: []*client.Object{&hw}}),
 			stack.NewApplication("seed-app", "default", &fakeAppConfig{objs: []*client.Object{&inner}}),
 		}
+		if live {
+			var namesake client.Object = handWritten("inner")
+			apps = append(apps, stack.NewApplication("live-app", "default", &fakeAppConfig{objs: []*client.Object{&namesake}}))
+		}
 		return noWaitCluster(srBundle("platform", apps...), true)
 	}
 	for _, placement := range integratedPlacements {
-		first, err := integrateNoWait(build(func(*kustv1.Kustomization) {}, "", false), nodeOnly, placement)
+		first, err := integrateNoWait(build(func(*kustv1.Kustomization) {}, "", false, false), nodeOnly, placement)
 		if err != nil {
 			t.Fatalf("%s: first integration: %v", placement, err)
 		}
 		seed := hostDirectory(t, first, "inner")
 		for name, c := range cases {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
-				ml, err := integrateNoWait(build(c.edit, seed, c.check), nodeOnly, placement)
+				ml, err := integrateNoWait(build(c.edit, seed, c.check, c.live), nodeOnly, placement)
 				if !c.refused {
 					if err != nil {
 						t.Fatalf("got %v, want the rewrite accepted", err)
@@ -390,6 +402,12 @@ func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 				chain := "ready flux-system/hand-written -> ready flux-system/inner -> apply flux-system/inner -> ready flux-system/web -> apply flux-system/web"
 				if c.check {
 					chain = "ready flux-system/hand-written -> ready flux-system/inner -> ready flux-system/web -> apply flux-system/web"
+				}
+				if c.live {
+					chain = "ready flux-system/hand-written -> ready flux-system/inner (local config) -> apply flux-system/inner (local config) -> ready flux-system/web -> apply flux-system/web"
+					if c.check {
+						chain = "ready flux-system/hand-written -> ready flux-system/inner (local config) -> ready flux-system/web -> apply flux-system/web"
+					}
 				}
 				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), chain) {
 					t.Fatalf("got %v, want ErrUmbrellaDependency naming the chain through inner", err)

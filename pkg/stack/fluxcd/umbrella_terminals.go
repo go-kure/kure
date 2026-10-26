@@ -340,13 +340,25 @@ func (t *kustomizationTree) written(key string) []string {
 			continue
 		}
 		for _, other := range t.dropped[b] {
-			if other != key {
-				out = append(out, other)
+			if other == key {
+				continue
 			}
+			if t.byKey[other] != nil || t.otherObjs[other] != nil {
+				other += keptCopy
+			}
+			out = append(out, other)
 		}
 	}
 	return out
 }
+
+// keptCopy marks, in what written returns, a Flux Kustomization the tree
+// holds as local config where a member or other Kustomization of the tree has
+// the same key: what a patched build waits for is then that copy, read on
+// its own (deps, orderPath), not the namesake, which keeps its own spec. A
+// name a dependsOn or health check gives reads the namesake only
+// (go-kure/kure#1133).
+const keptCopy = " (local config)"
 
 // patchesBuild reports whether k, a Flux Kustomization that is no member,
 // patches what its build holds: spec.patches, or a component, which may carry
@@ -378,6 +390,9 @@ func (t *kustomizationTree) deps(key string) []string {
 		}
 		return out
 	}
+	if base, ok := strings.CutSuffix(key, keptCopy); ok {
+		return t.droppedDeps[base]
+	}
 	if t.keptDropped(key) {
 		return t.droppedDeps[key]
 	}
@@ -388,8 +403,9 @@ func (t *kustomizationTree) deps(key string) []string {
 // holds only as local config (dropped) that a build may still apply: the
 // build of another Kustomization that is the tree's (readsLocalBuild) and
 // patches what it holds (patchesBuild) holds it, so a patch may keep it. A
-// member or other Kustomization with the same key is read instead. One no
-// such build holds is not there, whoever names it.
+// member or other Kustomization with the same key is read instead, and that
+// build's wait reaches the copy under its own node (keptCopy). One no such
+// build holds is not there, whoever names it.
 func (t *kustomizationTree) keptDropped(key string) bool {
 	if t.byKey[key] != nil || t.otherObjs[key] != nil {
 		return false
