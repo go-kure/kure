@@ -909,9 +909,9 @@ integrator := fluxcd.NewLayoutIntegrator(gen)
 The integrated placements apply all three rules. `GenerateForBundle` applies
 the first two to the one Kustomization it returns, and `GenerateFromLayout`,
 `GenerateFromCluster` and `FluxSeparate` refuse the setting.
-These checks read a Kustomization's `spec.path` as a directory of the tree
-only when it reads the Source of the Kustomization that applies it, on this
-cluster; a health check on another cluster (`spec.kubeConfig`) waits for no
+These checks read the `spec.path` of a Kustomization the integration did not
+place as a directory of the tree only when it reads the Source of the
+Kustomization that applies it, on this cluster; a health check on another cluster (`spec.kubeConfig`) waits for no
 readiness here, and a `spec.healthCheckExprs` predicate on Flux Kustomizations
 is read as a readiness wait, whatever it says.
 `fluxcd.UmbrellaTerminals` returns each umbrella's terminal leaves, for a

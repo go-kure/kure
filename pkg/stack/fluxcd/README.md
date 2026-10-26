@@ -1308,18 +1308,22 @@ instead of nested waits:
   `ErrUmbrellaDependency` too, since the umbrella does not wait and so is Ready before what it
   applies. The error names the terminal leaves to name instead.
 
-These checks read a Flux Kustomization in its context. A Kustomization's `spec.path` is a
-directory of the tree, and its `wait` waits for what that directory's build applies, only when it
-reads the Source of the Kustomization whose apply writes it (its `spec.sourceRef`, an omitted
+These checks read a Flux Kustomization in its context. One the integration places or keeps builds
+the directory of the tree its `spec.path` names. For any other (an application's, or the
+caller's), `spec.path` is a directory of the tree, and its `wait` waits for what that directory's
+build applies, only when it reads the Source of the Kustomization whose apply writes it (its `spec.sourceRef`, an omitted
 namespace its own; the Source's identity, so another Source of the same repository, at another
-ref, is another Source) and sets no `spec.kubeConfig`. One the Flux bootstrap writes, one on
-another Source, and one applying to another cluster build no directory of this tree: they add no
-wait, and are never refused for one. Their `dependsOn` and health checks are still judged: such a
-Kustomization that depends on, or health-checks, one that cannot be Ready before it is refused
-as any other. One that transforms its build (`spec.patches`,
+ref, is another Source) and sets no `spec.kubeConfig`. Such a Kustomization the Flux bootstrap
+writes, one on another Source, and one applying to another cluster build no directory of this
+tree: they add no wait, and are never refused for one. Their `dependsOn` and health checks are
+still judged: such a Kustomization that depends on, or health-checks, one that cannot be Ready
+before it is refused as any other. One that transforms its build (`spec.patches`,
 `spec.components`, `spec.namePrefix`, `spec.nameSuffix` or `spec.targetNamespace`) keeps the
 wait on all the directory holds: the transform is not modelled, and a renamed or moved
-Kustomization still depends on what it did before. A health check on another cluster
+Kustomization still depends on what it did before. One that patches its build (`spec.patches`,
+or `spec.components`, which may carry patches) also waits for the Flux Kustomizations the
+directory holds as local config: kustomize patches before it drops local config, so a patch may
+keep one. A health check on another cluster
 (`spec.kubeConfig`) names none of the tree's Kustomizations. Health-check expressions on Flux
 Kustomizations (`spec.healthCheckExprs`) are read conservatively, as readiness: an expression is
 arbitrary CEL and may itself wait for the `Ready` condition, so the check, and what a `wait`

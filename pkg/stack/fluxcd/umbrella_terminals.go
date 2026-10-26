@@ -72,8 +72,16 @@ type kustomizationTree struct {
 	// one that cannot be read so (otherErr).
 	otherSpecs map[string]*kustv1.Kustomization
 	otherErr   error
-	reached    map[string]map[*layout.ManifestLayout]bool
-	fromRoot   map[*layout.ManifestLayout]bool
+	// dropped lists, per layout, the keys of the Flux Kustomizations it holds
+	// that a build drops as local config (builtItems), droppedObjs each
+	// object and droppedDeps its spec.dependsOn as keys. They are no member,
+	// other or writer: only the wait of a build that patches what it holds
+	// (patchesBuild), which may keep one, reads them.
+	dropped     map[*layout.ManifestLayout][]string
+	droppedObjs map[string]client.Object
+	droppedDeps map[string][]string
+	reached     map[string]map[*layout.ManifestLayout]bool
+	fromRoot    map[*layout.ManifestLayout]bool
 }
 
 // memberFilter returns the Flux Kustomizations of l that are members of the
@@ -93,16 +101,19 @@ func generatedMembers(generated map[string]bool) memberFilter {
 // selects.
 func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (*kustomizationTree, error) {
 	t := &kustomizationTree{
-		root:       root,
-		byKey:      map[string]*kustv1.Kustomization{},
-		hostOf:     map[string]*layout.ManifestLayout{},
-		layoutAt:   map[string]*layout.ManifestLayout{},
-		others:     map[*layout.ManifestLayout][]string{},
-		otherDeps:  map[string][]string{},
-		otherObjs:  map[string]client.Object{},
-		otherSpecs: map[string]*kustv1.Kustomization{},
-		reached:    map[string]map[*layout.ManifestLayout]bool{},
-		fromRoot:   map[*layout.ManifestLayout]bool{},
+		root:        root,
+		byKey:       map[string]*kustv1.Kustomization{},
+		hostOf:      map[string]*layout.ManifestLayout{},
+		layoutAt:    map[string]*layout.ManifestLayout{},
+		others:      map[*layout.ManifestLayout][]string{},
+		otherDeps:   map[string][]string{},
+		otherObjs:   map[string]client.Object{},
+		otherSpecs:  map[string]*kustv1.Kustomization{},
+		dropped:     map[*layout.ManifestLayout][]string{},
+		droppedObjs: map[string]client.Object{},
+		droppedDeps: map[string][]string{},
+		reached:     map[string]map[*layout.ManifestLayout]bool{},
+		fromRoot:    map[*layout.ManifestLayout]bool{},
 	}
 	var index func(l *layout.ManifestLayout) error
 	index = func(l *layout.ManifestLayout) error {
@@ -147,6 +158,31 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 					ns = obj.GetNamespace()
 				}
 				t.otherDeps[key] = append(t.otherDeps[key], crKey(ns, d.Name))
+			}
+		}
+		items, err := resourceItems(l)
+		if err != nil {
+			return err
+		}
+		for _, obj := range items {
+			if _, ok := fluxKustomizationPath(obj); !ok {
+				continue
+			}
+			// builtItems read the annotation of every item without error.
+			if local, _ := built.LocalConfig(obj); !local {
+				continue
+			}
+			key := crKey(obj.GetNamespace(), obj.GetName())
+			t.dropped[l] = append(t.dropped[l], key)
+			t.droppedObjs[key] = obj
+			if spec, err := typedKustomization(obj); err == nil {
+				for _, d := range spec.Spec.DependsOn {
+					ns := d.Namespace
+					if ns == "" {
+						ns = obj.GetNamespace()
+					}
+					t.droppedDeps[key] = append(t.droppedDeps[key], crKey(ns, d.Name))
+				}
 			}
 		}
 		for _, child := range l.Children {
@@ -235,7 +271,8 @@ func (t *kustomizationTree) creator(key string) string {
 // tree holds, and adds no edge. One that transforms its build (spec.patches,
 // spec.components, spec.namePrefix, spec.nameSuffix, spec.targetNamespace)
 // still reads that directory: the transform is not modelled, and what the
-// directory holds is kept as what it applies. A renamed or moved
+// directory holds is kept as what it applies, with a patch also what it holds
+// as local config (patchesBuild). A renamed or moved
 // Kustomization keeps its dependsOn, which kustomize does not rewrite, so
 // dropping the edges would admit a deadlock; keeping them may refuse a
 // build that deletes the object (go-kure/kure#1094).
@@ -290,14 +327,34 @@ func (t *kustomizationTree) written(key string) []string {
 	if k == nil {
 		k = t.otherSpecs[key]
 	}
+	patched := t.byKey[key] == nil && patchesBuild(k)
 	for _, b := range buildScope(t.layoutAt[path.Clean(k.Spec.Path)]) {
 		for _, other := range t.others[b] {
 			if other != key {
 				out = append(out, other)
 			}
 		}
+		if !patched {
+			continue
+		}
+		for _, other := range t.dropped[b] {
+			if other != key {
+				out = append(out, other)
+			}
+		}
 	}
 	return out
+}
+
+// patchesBuild reports whether k, a Flux Kustomization that is no member,
+// patches what its build holds: spec.patches, or a component, which may carry
+// patches. kustomize transforms before it drops the objects local config
+// marks (builtItems), so a patch setting that annotation to "false" keeps one,
+// and its wait waits for it: what the build holds as local config counts as
+// written too. A name prefix or suffix, or a target namespace, changes no
+// annotation.
+func patchesBuild(k *kustv1.Kustomization) bool {
+	return len(k.Spec.Patches) > 0 || len(k.Spec.Components) > 0
 }
 
 // isUmbrella reports whether the Kustomization with key is an umbrella: a
@@ -319,7 +376,10 @@ func (t *kustomizationTree) deps(key string) []string {
 		}
 		return out
 	}
-	return t.otherDeps[key]
+	if d, ok := t.otherDeps[key]; ok {
+		return d
+	}
+	return t.droppedDeps[key]
 }
 
 // terminals returns the terminal leaves of umbrella u: for each Kustomization
