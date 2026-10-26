@@ -1147,6 +1147,11 @@ neither `Registry` nor `ImagePullSecret` reaches the flux-operator `Deployment` 
 install bundle: its image is pulled as upstream ships it, from its upstream registry with no pull
 secret.
 
+`Prune` sets garbage collection on the bootstrap Kustomization in `"gotk"` mode only, and unset
+emits `prune: false`. In `"flux-operator"` mode it reaches nothing: the operator renders its sync
+Kustomization with `prune: true` whatever the config says, so `Prune: false` does not keep
+objects that leave the source (go-kure/kure#1088).
+
 The `"flux-operator"` bundle is vendored from one specific upstream flux-operator release
 (`FluxOperatorVersion`), so upgrading Kure can also change the CRDs it installs. A CRD that
 tightens validation rejects objects the previous release accepted — for example a
