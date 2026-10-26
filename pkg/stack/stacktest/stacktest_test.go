@@ -480,6 +480,11 @@ func TestCheckGeneration_Errors(t *testing.T) {
 		{"keys 1 and \"1\"", app(genFunc(func() ([]*client.Object, error) {
 			return objs(&unstructured.Unstructured{Object: map[string]any{"m": map[any]any{1: "int", "1": "string"}}}), nil
 		})), `unsupported map at "[0].(*unstructured.Unstructured).Object[m].(map[interface {}]interface {})": two keys print as [1]`},
+		// Whichever entry MapRange returns first, the alike keys are
+		// refused before the func value is reached.
+		{"alike keys beside a func", app(genFunc(func() ([]*client.Object, error) {
+			return objs(&unstructured.Unstructured{Object: map[string]any{"m": map[any]any{1: func() {}, "1": 0}}}), nil
+		})), `unsupported map at "[0].(*unstructured.Unstructured).Object[m].(map[interface {}]interface {})": two keys print as [1]`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

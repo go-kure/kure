@@ -126,15 +126,21 @@ func (w *walk) value(v reflect.Value, p path) error {
 		return w.storage(key, record{start: start, isMap: true, kind: "map", path: p}, func() error {
 			// Two keys that print alike (two NaNs, or 1 and "1" in a
 			// map[any]any) would give two values one path, and which is
-			// walked first is up to MapRange: refused, like a func.
+			// walked first is up to MapRange: refused, like a func, and
+			// before any entry is walked, so the error does not depend on
+			// that order either.
+			entries := sortedEntries(v)
+			texts := make([]string, len(entries))
 			seen := map[string]bool{}
-			for _, e := range sortedEntries(v) {
-				text := "[" + fmt.Sprint(e.key) + "]"
-				if seen[text] {
-					return errors.Errorf("unsupported map at %q: two keys print as %s", p.String(), text)
+			for i, e := range entries {
+				texts[i] = "[" + fmt.Sprint(e.key) + "]"
+				if seen[texts[i]] {
+					return errors.Errorf("unsupported map at %q: two keys print as %s", p.String(), texts[i])
 				}
-				seen[text] = true
-				kp := p.child(text)
+				seen[texts[i]] = true
+			}
+			for i, e := range entries {
+				kp := p.child(texts[i])
 				if err := w.value(e.key, kp); err != nil {
 					return err
 				}
