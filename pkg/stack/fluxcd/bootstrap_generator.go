@@ -112,7 +112,7 @@ func (bg *BootstrapGenerator) GenerateBootstrap(config *stack.BootstrapConfig, r
 		if err := validateRootName(rootNode, rules); err != nil {
 			return nil, err
 		}
-		if err := validateRootSourceName(rootNode); err != nil {
+		if err := validateRootSourceName(config, rootNode); err != nil {
 			return nil, err
 		}
 		dir, err := bootstrapDir(rootNode, rules)
@@ -359,23 +359,29 @@ func sourceName(rootNode *stack.Node) string {
 	return DefaultSourceName
 }
 
+// syncNamesGotkRoot reports whether [stack.BootstrapConfig.SyncName] names the
+// gotk bootstrap source and Kustomization: when it is set and a source is
+// emitted (SourceURL), as flux-operator names its sync objects
+// (go-kure/kure#1089). The root node's name then names no object.
+func syncNamesGotkRoot(config *stack.BootstrapConfig) bool {
+	return config.SyncName != "" && config.SourceURL != ""
+}
+
 // gotkSourceName is the name of the gotk bootstrap source, and so of the
 // bootstrap Kustomization's sourceRef: [stack.BootstrapConfig.SyncName] when
-// it is set and a source is emitted (SourceURL), as flux-operator names its
-// sync source; [sourceName] otherwise (go-kure/kure#1089).
+// [syncNamesGotkRoot]; [sourceName] otherwise.
 func gotkSourceName(config *stack.BootstrapConfig, rootNode *stack.Node) string {
-	if config.SyncName != "" && config.SourceURL != "" {
+	if syncNamesGotkRoot(config) {
 		return config.SyncName
 	}
 	return sourceName(rootNode)
 }
 
 // gotkKustomizationName is the name of the gotk bootstrap Kustomization:
-// [stack.BootstrapConfig.SyncName] under the same condition as
-// [gotkSourceName], so both modes name the root alike; [BootstrapName]
-// otherwise.
+// [stack.BootstrapConfig.SyncName] when [syncNamesGotkRoot], so both modes
+// name the root alike; [BootstrapName] otherwise.
 func (bg *BootstrapGenerator) gotkKustomizationName(config *stack.BootstrapConfig) string {
-	if config.SyncName != "" && config.SourceURL != "" {
+	if syncNamesGotkRoot(config) {
 		return config.SyncName
 	}
 	return bg.bootstrapName()
@@ -403,10 +409,12 @@ func validateRootName(rootNode *stack.Node, rules layout.LayoutRules) error {
 // object name. In gotk mode a named root names the generated GitRepository or
 // OCIRepository and the bootstrap Kustomization's sourceRef (sourceName), so
 // the name has to be a DNS-1123 subdomain. No root node and an unnamed root
-// take [DefaultSourceName].
-func validateRootSourceName(rootNode *stack.Node) error {
+// take [DefaultSourceName]. When [syncNamesGotkRoot], SyncName names the
+// source instead and the root name is not checked here; validateRootName
+// still checks it as a directory.
+func validateRootSourceName(config *stack.BootstrapConfig, rootNode *stack.Node) error {
 	name := rootName(rootNode)
-	if name == "" {
+	if name == "" || syncNamesGotkRoot(config) {
 		return nil
 	}
 	if problems := validation.IsDNS1123Subdomain(name); len(problems) > 0 {

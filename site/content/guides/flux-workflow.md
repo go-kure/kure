@@ -1211,7 +1211,8 @@ and an unnamed root are valid. Under a `ClusterName` the path is the cluster dir
 bootstrap does not check the name as a directory name; the walk still does, as a named root node
 is the directory `<ClusterName>/<root>` of the written tree. In `"gotk"` mode a named root also names the generated source and
 the bootstrap Kustomization's `sourceRef`, so there it must be a DNS-1123 subdomain as well:
-`Prod` and `prod_root` are refused.
+`Prod` and `prod_root` are refused. With `SyncName` and `SourceURL` both set, `SyncName` names
+those objects instead and the root name is checked only as a directory name.
 
 ### Bootstrap namespace
 

@@ -821,7 +821,9 @@ go-kure/kure#1030, shortens the one name kure composes itself, a layout's
   and under rules with a `ClusterName` no path is built from it (go-kure/kure#979, item 9).
   In gotk mode a named root also names the generated `GitRepository` or `OCIRepository` and the
   bootstrap Kustomization's `sourceRef`, so there it must be a DNS-1123 subdomain as well
-  (`validateRootSourceName`), with or without a `SourceURL`.
+  (`validateRootSourceName`), with or without a `SourceURL` — unless `SyncName` and `SourceURL`
+  are both set, when `SyncName` names those objects instead (go-kure/kure#1089) and the root
+  name is checked only as a directory.
 - **Per-layout Kustomizations.** Under `FluxIntegratedPerLayout` a directory that renders no
   bundle gets a Kustomization of its own, named as
   [go-kure/kure#973](https://github.com/go-kure/kure/issues/973) describes. The integrator checks

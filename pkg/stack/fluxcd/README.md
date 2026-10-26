@@ -983,6 +983,8 @@ not use the root name and do not check it.
 In `gotk` mode a named root is also an object name: the generated `GitRepository` or
 `OCIRepository` and the bootstrap Kustomization's `sourceRef` carry it. There the name must be a
 DNS-1123 subdomain as well, with or without a `SourceURL`; `Prod` and `prod_root` are refused.
+The exception is `SyncName` set with a `SourceURL`: `SyncName` then names those objects, and the
+root name is checked only as a directory name, as in `flux-operator` mode.
 
 ## Configuration
 
