@@ -520,6 +520,31 @@ func TestMissedCycles_UncertainWriterAddsNoEdge(t *testing.T) {
 			c.Node.Children[1].Bundle.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "b-cm"}}}
 			return c
 		}},
+		// b-longer writes b-cm, and a's patches may rename a-cm to b-cm, so
+		// a's own apply may write it.
+		"a patches its build": {cluster: func() *stack.Cluster {
+			c := pairCluster(check("default", "b-cm"), []client.Object{cm("default", "a-cm")}, []client.Object{cm("default", "b-cm")})
+			c.Node.Children[0].Bundle.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "a-cm"}}}
+			return c
+		}},
+		// b-longer writes red/ready; a's application emits h, whose build is
+		// a's directory with targetNamespace red, so h applies blue/ready as
+		// red/ready.
+		"another Kustomization's build moves it into the checked namespace": {
+			cluster: func() *stack.Cluster {
+				return pairCluster(check("red", "ready"), []client.Object{cm("default", "a-cm"), cm("blue", "ready")}, []client.Object{cm("red", "ready")})
+			},
+			walked: func(t *testing.T, ml *layout.ManifestLayout) {
+				a := findLayout(ml, "a-cm")
+				if a == nil {
+					t.Fatal("no layout holds a-cm")
+				}
+				h := handWritten("h")
+				h.Spec.Path = "./" + a.FullRepoPath()
+				h.Spec.TargetNamespace = "red"
+				a.Resources = append(a.Resources, h)
+			},
+		},
 	}
 	for name, c := range cases {
 		for _, placement := range append(slices.Clone(integratedPlacements), layout.FluxSeparate) {
