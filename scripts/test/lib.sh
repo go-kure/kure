@@ -173,7 +173,8 @@ assert_out_not_contains() {
 
 # with_stub_go <mode> -- override STUB_GO_MODE (default "ok", set by
 # new_fixture) for a case needing missing/badpath/norequire/editfail/hang
-# instead, or "absent" for the one-file always-fail shim (see below).
+# instead, or "absent" for the one-file always-fail shim (see below). "hang"
+# also needs STUB_GO_HANG_LOG, the file the stub logs its start and its fate to.
 # Must be called AFTER new_fixture.
 with_stub_go() {
     local mode="$1"

@@ -26,7 +26,7 @@
 #                                 invocation makes the script validate a different tree than
 #                                 the one it lives in -- do not set it outside the test harness.
 #   SYNC_VERSIONS_PROBE_TIMEOUT - override the 10s timeout on the validate_mvs_floors `go list`
-#                                 probe, so the harness's timeout case runs in ~1s instead of 10s.
+#                                 probe, so the harness's timeout case runs in ~2s instead of 10s.
 #   SYNC_VERSIONS_TIMEOUT_CMD   - override the resolved `timeout`/`gtimeout` binary name (even to
 #                                 "" for none), so the harness can exercise the unbounded fallback
 #                                 without making a real `timeout` unresolvable on PATH.

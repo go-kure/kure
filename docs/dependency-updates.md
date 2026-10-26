@@ -270,16 +270,24 @@ real `timeout`/`gtimeout` on the machine *running the test suite* to pass — th
 test-harness-only prerequisite, narrower than and separate from production's graceful
 degradation, where a real stalled module proxy or git remote has no such bound.
 
-For case 09: it stubs `go list` to sleep 5s (faking a hang) and asserts
-`SYNC_VERSIONS_PROBE_TIMEOUT` bounds it to ~1s. On a host with neither binary, the probe isn't
-bounded, so the stub's 5s sleep runs to completion and `go list` "succeeds" (echoing a `go.mod`
-path) — but the case does **not** then fail on its warning-text assertion. The unbounded
-success reaches step 4 (`go mod edit -json` against that path), which the same stub fails for
-every mode but `ok`/`norequire`/`editfail`; `validate_mvs_floors` reports this as a hard
-**error** ("could not read ... go.mod requirements ... rc=3"), not the "could not resolve ...
-skipping" **warning** the case asserts, so `check` itself exits 1. The case therefore fails on
-its earlier `assert_rc 0`, not on the warning-text assertion, in ~6-11s (the 5s sleep plus the
-rest of `check`'s own guards) — confirmed by direct reproduction, not by hanging indefinitely.
+For case 09: it stubs `go list` to sleep 30s (faking a hang, past the 10s production default)
+and sets `SYNC_VERSIONS_PROBE_TIMEOUT=2`. It times the probe, not the whole `check` run: the
+stub logs its start and whether the timeout killed it (`STUB_GO_HANG_LOG`), with its own age
+at that moment from `ps -o etime=`, and the case asserts that it ran once, was killed, and was
+under 6s old when killed. The age counts from when `timeout` launched the probe, so a slow
+probe start is included and cannot hide an ignored override. Contention in `check`'s other
+guards no longer counts, so a loaded host does not fail it; an ignored override still does,
+because the probe then runs to the 10s default. The override is 2s, not
+1s, so the stub can start and arm its TERM trap before the timeout fires. On a host with neither
+binary, the probe isn't bounded, so the stub's 30s sleep runs to completion and `go list`
+"succeeds" (echoing a `go.mod` path) — but the case does **not** then fail on its probe
+assertions or its warning-text assertion. The unbounded success reaches step 4 (`go mod edit
+-json` against that path), which the same stub fails for every mode but
+`ok`/`norequire`/`editfail`; `validate_mvs_floors` reports this as a hard **error** ("could not
+read ... go.mod requirements ... rc=3"), not the "could not resolve ... skipping" **warning**
+the case asserts, so `check` itself exits 1. The case therefore fails on its earlier
+`assert_rc 0`, after the 30s sleep plus the rest of `check`'s own guards, not by hanging
+indefinitely.
 For case 36: with no real `timeout`/`gtimeout`, `resolve_timeout_bin` cannot resolve `TIMEOUT_BIN`
 and emits its startup warning, which is exactly the text `36-timeout-present-no-warning.sh`
 asserts is *absent* — so the case fails outright rather than skipping.

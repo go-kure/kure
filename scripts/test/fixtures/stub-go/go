@@ -46,7 +46,46 @@ if [[ "${1:-}" == "list" ]]; then
             exit 0
             ;;
         hang)
-            sleep 5
+            # Fake a stuck probe that records its own fate in
+            # $STUB_GO_HANG_LOG (a "start" line, then "killed <age>" or
+            # "completed <age>"), so case 09 times the probe alone rather
+            # than the whole `check` run. <age> is this process's age in
+            # whole seconds from `ps -o etime=`: `timeout` forked this PID and
+            # `env` and the interpreter exec in place, so the age runs from
+            # the moment `timeout` started counting, slow startup included.
+            # The sleep outlasts the 10s production default, so an ignored
+            # override shows as a kill near 10s and a missing timeout as
+            # "completed". It runs in the background so the TERM trap fires
+            # at once (bash defers a trap until a foreground child exits),
+            # and the trap kills it so no orphan keeps the caller's $(...)
+            # pipe open. The trap is armed before anything else, so an early
+            # TERM still gets logged, and it ignores TERM itself: `timeout`
+            # signals the child and then its whole process group, which
+            # would also kill the trap's `ps` subshell.
+            log="${STUB_GO_HANG_LOG:?stub go: hang mode needs STUB_GO_HANG_LOG}"
+            sleeper=""
+            # age_s -- set $age to this process's age in seconds, from
+            # etime's [[dd-]hh:]mm:ss (GNU and BSD ps alike); "" if unreadable.
+            age_s() {
+                local et d=0 h=0 m s rest
+                et=$(ps -o etime= -p "$$" 2>/dev/null | tr -d ' ') || et=""
+                case "$et" in *-*) d="${et%%-*}"; et="${et#*-}" ;; esac
+                s="${et##*:}"
+                rest="${et%:*}"
+                m="${rest##*:}"
+                if [[ "$rest" == *:* ]]; then h="${rest%%:*}"; fi
+                age=""
+                if [[ "$et" == *:* && "$d$h$m$s" =~ ^[0-9]+$ ]]; then
+                    age=$(( 10#$d * 86400 + 10#$h * 3600 + 10#$m * 60 + 10#$s ))
+                fi
+            }
+            trap 'trap "" TERM; if [[ -n "$sleeper" ]]; then kill "$sleeper" 2>/dev/null || true; fi; age_s; echo "killed $age" >> "$log"; exit 143' TERM
+            echo "start" >> "$log"
+            sleep 30 >/dev/null 2>&1 &
+            sleeper=$!
+            wait "$sleeper"
+            age_s
+            echo "completed $age" >> "$log"
             echo "$root/floor/go.mod"
             exit 0
             ;;
