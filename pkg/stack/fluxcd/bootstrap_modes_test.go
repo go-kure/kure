@@ -35,6 +35,11 @@ import (
 // interval 10m0s and prune true, fixed).
 type rootView map[string]string
 
+// syncNamed are the fields SyncName decides: with it set, both modes name the
+// source and the Kustomization after it and must agree on them as well
+// (go-kure/kure#1089). Unset, each mode keeps its own names.
+var syncNamed = map[string]bool{"source": true, "kustomization": true, "kustomization.sourceRef": true}
+
 // rootFields is the order the comparison lists the fields in. same marks the
 // fields both modes must agree on: they decide what the cluster pulls and
 // applies. The others are recorded, so a difference is visible and a change
@@ -307,7 +312,7 @@ func TestBootstrapModes_RootIdentities(t *testing.T) {
 				mark := ""
 				if g != o {
 					mark = "   <- differs"
-					if f.same && config.SourceURL != "" {
+					if (f.same || config.SyncName != "" && syncNamed[f.name]) && config.SourceURL != "" {
 						t.Errorf("%s: gotk %q, flux-operator %q; both modes must agree on it", f.name, g, o)
 					}
 				}

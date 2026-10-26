@@ -32,11 +32,11 @@ type BootstrapGenerator struct {
 	DefaultNamespace string
 	// DefaultInterval is the default reconciliation interval
 	DefaultInterval time.Duration
-	// BootstrapName is the name given to the bootstrap Kustomization. It is not
-	// derived from the root node, and BootstrapConfig carries no equivalent
-	// input, so this field is the only way to override [DefaultBootstrapName].
-	// Leaving it empty means the default, not a nameless object — see
-	// [BootstrapGenerator.bootstrapName].
+	// BootstrapName is the name given to the gotk bootstrap Kustomization. It
+	// is not derived from the root node. [stack.BootstrapConfig.SyncName]
+	// takes precedence when it is set with a SourceURL: it then names the
+	// Kustomization and its source in both modes. Leaving it empty means the
+	// default, not a nameless object — see [BootstrapGenerator.bootstrapName].
 	//
 	// It does not name the FluxInstance. That object's metadata.name is fixed
 	// at [FluxInstanceName] by the flux-operator CRD, which admits no other
@@ -140,7 +140,7 @@ func (bg *BootstrapGenerator) SupportedBootstrapModes() []string {
 // toolkit. dir is the directory the bootstrap Kustomization applies
 // (bootstrapDir).
 func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node, dir string) ([]client.Object, error) {
-	if err := validateSourceAccess(config, sourceName(rootNode)); err != nil {
+	if err := validateSourceAccess(config, gotkSourceName(config, rootNode)); err != nil {
 		return nil, err
 	}
 	if err := validateSourceSemVer(config, sourceName(rootNode)); err != nil {
@@ -364,6 +364,28 @@ func sourceName(rootNode *stack.Node) string {
 	return DefaultSourceName
 }
 
+// gotkSourceName is the name of the gotk bootstrap source, and so of the
+// bootstrap Kustomization's sourceRef: [stack.BootstrapConfig.SyncName] when
+// it is set and a source is emitted (SourceURL), as flux-operator names its
+// sync source; [sourceName] otherwise (go-kure/kure#1089).
+func gotkSourceName(config *stack.BootstrapConfig, rootNode *stack.Node) string {
+	if config.SyncName != "" && config.SourceURL != "" {
+		return config.SyncName
+	}
+	return sourceName(rootNode)
+}
+
+// gotkKustomizationName is the name of the gotk bootstrap Kustomization:
+// [stack.BootstrapConfig.SyncName] under the same condition as
+// [gotkSourceName], so both modes name the root alike; [BootstrapName]
+// otherwise.
+func (bg *BootstrapGenerator) gotkKustomizationName(config *stack.BootstrapConfig) string {
+	if config.SyncName != "" && config.SourceURL != "" {
+		return config.SyncName
+	}
+	return bg.bootstrapName()
+}
+
 // validateRootName checks the root node's name where it is about to become a
 // path segment: of the gotk bootstrap Kustomization's spec.path and of the
 // FluxInstance's sync.path. The bootstrap entry points take a node, not a
@@ -580,7 +602,8 @@ func (bg *BootstrapGenerator) syncSemVerPatch(config *stack.BootstrapConfig) kus
 
 // generateFluxSystemKustomization creates a Kustomization for the flux-system.
 // Its spec.path is dir, the directory bootstrapDir names, "." for the root of
-// the source. Its sourceRef stays on the root node's name (sourceName).
+// the source. Its name is gotkKustomizationName, and its sourceRef names the
+// source generateSource emits (gotkSourceName).
 func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.BootstrapConfig, rootNode *stack.Node, dir string) client.Object {
 	kust := &kustv1.Kustomization{
 		TypeMeta: metav1.TypeMeta{
@@ -588,7 +611,7 @@ func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.Boot
 			Kind:       "Kustomization",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      bg.bootstrapName(),
+			Name:      bg.gotkKustomizationName(config),
 			Namespace: bg.DefaultNamespace,
 		},
 		Spec: kustv1.KustomizationSpec{
@@ -597,7 +620,7 @@ func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.Boot
 			Prune:    pruneValue(config.Prune),
 			SourceRef: kustv1.CrossNamespaceSourceReference{
 				Kind: resolvedSourceKind(config),
-				Name: sourceName(rootNode),
+				Name: gotkSourceName(config, rootNode),
 			},
 		},
 	}
@@ -618,14 +641,14 @@ func (bg *BootstrapGenerator) generateSource(config *stack.BootstrapConfig, root
 // generateGitSource creates a GitRepository source for bootstrap from config.
 func (bg *BootstrapGenerator) generateGitSource(config *stack.BootstrapConfig, rootNode *stack.Node) (client.Object, error) {
 	if config.SourceURL == "" {
-		return nil, errors.ResourceValidationError("BootstrapConfig", sourceName(rootNode), "sourceURL",
+		return nil, errors.ResourceValidationError("BootstrapConfig", gotkSourceName(config, rootNode), "sourceURL",
 			"a GitRepository source requires sourceURL; there is no default repository", nil)
 	}
 	if err := checkDefaultInterval("BootstrapGenerator", bg.DefaultInterval); err != nil {
 		return nil, err
 	}
 
-	gr := pubfluxcd.CreateGitRepository(sourceName(rootNode), bg.DefaultNamespace)
+	gr := pubfluxcd.CreateGitRepository(gotkSourceName(config, rootNode), bg.DefaultNamespace)
 	gr.Spec.URL = config.SourceURL
 	gr.Spec.Interval = metav1.Duration{Duration: bg.DefaultInterval}
 
@@ -639,7 +662,7 @@ func (bg *BootstrapGenerator) generateGitSource(config *stack.BootstrapConfig, r
 // generateOCISource creates an OCI source for bootstrap from config.
 func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, rootNode *stack.Node) (client.Object, error) {
 	if config.SourceURL == "" {
-		return nil, errors.ResourceValidationError("BootstrapConfig", sourceName(rootNode), "sourceURL",
+		return nil, errors.ResourceValidationError("BootstrapConfig", gotkSourceName(config, rootNode), "sourceURL",
 			"an OCIRepository source requires sourceURL; there is no default registry", nil)
 	}
 	if err := checkDefaultInterval("BootstrapGenerator", bg.DefaultInterval); err != nil {
@@ -656,7 +679,7 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 		}
 	}
 
-	or := pubfluxcd.CreateOCIRepository(sourceName(rootNode), bg.DefaultNamespace)
+	or := pubfluxcd.CreateOCIRepository(gotkSourceName(config, rootNode), bg.DefaultNamespace)
 	or.Spec.URL = config.SourceURL
 	or.Spec.Interval = metav1.Duration{Duration: bg.DefaultInterval}
 	pubfluxcd.SetOCIRepositoryReference(or, ref)

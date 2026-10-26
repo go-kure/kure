@@ -36,8 +36,11 @@ func bootstrapOutputConfigs() map[string]*stack.BootstrapConfig {
 	const oci, git = "oci://registry.example.com/fleet", "https://git.example.com/fleet.git"
 	named := config(fluxstack.DefaultFluxMode, "OCIRepository", oci, "v1.2.3")
 	named.SyncName = "fleet"
+	gotkNamed := config(fluxstack.ModeGotk, "OCIRepository", oci, "v1.2.3")
+	gotkNamed.SyncName = "fleet"
 	return map[string]*stack.BootstrapConfig{
 		"gotk-oci":                config(fluxstack.ModeGotk, "OCIRepository", oci, "v1.2.3"),
+		"gotk-oci-named":          gotkNamed,
 		"gotk-oci-default-ref":    config(fluxstack.ModeGotk, "", oci, ""),
 		"gotk-git":                config(fluxstack.ModeGotk, "GitRepository", git, "main"),
 		"flux-operator-oci":       config(fluxstack.DefaultFluxMode, "OCIRepository", oci, "v1.2.3"),
