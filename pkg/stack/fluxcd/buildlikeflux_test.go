@@ -52,8 +52,8 @@ type fluxInput struct {
 	result string
 }
 
-// fluxInputs holds every distinct build buildLikeFlux made, by fluxInputKey,
-// for buildsAsFlux.
+// fluxInputs holds the first build buildLikeFlux made of each distinct tree,
+// by fluxInputKey, for buildsAsFlux.
 var fluxInputs sync.Map
 
 // buildLikeFlux builds path in tree as Flux's SecureBuild does, with its
@@ -79,7 +79,12 @@ func buildLikeFlux(t *testing.T, tree, path string) (resmap.ResMap, error) {
 		t.Fatal(err)
 	}
 	rm, err := krustyLikeFlux(fsys, path)
-	fluxInputs.LoadOrStore(fluxInputKey(files, dir), fluxInput{files: files, dir: dir, result: buildResult(rm, err, tree)})
+	in := fluxInput{files: files, dir: dir, result: buildResult(rm, err, tree)}
+	// The replay builds each distinct tree once, so a build of a tree already
+	// built is held to the first build of it here.
+	if first, loaded := fluxInputs.LoadOrStore(fluxInputKey(files, dir), in); loaded && first.(fluxInput).result != in.result {
+		t.Errorf("buildLikeFlux built %s otherwise than it built the same tree before\n--- before\n%s\n--- now\n%s", dir, first.(fluxInput).result, in.result)
+	}
 	return rm, err
 }
 
