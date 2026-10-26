@@ -1338,12 +1338,11 @@ Kustomization.
 Three cycles are known to pass these checks unrefused (go-kure/kure#1133): one through a health
 check on an object that is not a Flux Kustomization, which is not read; one closed on a
 later integration by a `dependsOn` the integration did not rewrite there, since only rewritten
-dependencies are checked; and one through a local-config copy a patched build may keep, through
-that copy's own `wait`, which is not followed, or, where the tree also holds a live Kustomization
-with its name, through a `dependsOn` or health check naming it, which reads only the live one.
-Two such copies with one name in separate builds are read as one, with their `dependsOn` merged
-and the rest from the last indexed, so an earlier one's `wait` or health checks are not read; and
-a copy named as the build that keeps it, kept under a prefix, is not read at all.
+dependencies are checked; and one through a local-config copy a patched build may keep. Such a
+copy is read as written in its directory: the keeping build's transforms (name prefix,
+`targetNamespace`, patches beyond the annotation) are not applied to it, so a cycle that depends
+on them can pass; its own `wait` is not followed; and a name it shares with a live Kustomization
+reads only the live one, or, with another such copy in a separate build, both as one entry.
 
 The rules apply to the Kustomizations the call generates. One kept from an earlier integration
 is not rewritten; it is refused when it breaks R1 (with `ErrUmbrellaWait`, for `wait` or any
