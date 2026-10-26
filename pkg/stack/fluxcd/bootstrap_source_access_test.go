@@ -305,6 +305,65 @@ func TestBootstrapSourceAccess_Refused(t *testing.T) {
 			edit:  func(c *stack.BootstrapConfig) { c.SourceProvider = "AWS" },
 			names: "sourceProvider",
 		},
+		"verify without a source": {
+			edit: func(c *stack.BootstrapConfig) {
+				c.SourceURL, c.SourceVerify = "", &stack.SourceVerification{SecretRef: "cosign-pub"}
+			},
+			names: "sourceVerify",
+		},
+		"verify on a GitRepository": {
+			edit: func(c *stack.BootstrapConfig) {
+				c.SourceKind, c.SourceURL = "GitRepository", "https://git.example.com/fleet.git"
+				c.SourceVerify = &stack.SourceVerification{SecretRef: "cosign-pub"}
+			},
+			names: "sourceVerify",
+		},
+		"unknown verify provider": {
+			edit:  func(c *stack.BootstrapConfig) { c.SourceVerify = &stack.SourceVerification{Provider: "sigstore"} },
+			names: "sourceVerify.provider",
+		},
+		"identity with an empty issuer": {
+			edit: func(c *stack.BootstrapConfig) {
+				c.SourceVerify = &stack.SourceVerification{MatchOIDCIdentity: []stack.OIDCIdentityMatch{{Subject: "^ci$"}}}
+			},
+			names: "sourceVerify.matchOIDCIdentity[0].issuer",
+		},
+		"identity with a subject that is not a regular expression": {
+			edit: func(c *stack.BootstrapConfig) {
+				c.SourceVerify = &stack.SourceVerification{MatchOIDCIdentity: []stack.OIDCIdentityMatch{
+					{Issuer: "^https://issuer$", Subject: "^ci$"},
+					{Issuer: "^https://issuer$", Subject: "("},
+				}}
+			},
+			names: "sourceVerify.matchOIDCIdentity[1].subject",
+		},
+		// A character the YAML round trip folds (NEL) or refuses (DEL, a
+		// noncharacter) in a pattern that compiles.
+		"identity with a NEL in its subject": {
+			edit: func(c *stack.BootstrapConfig) {
+				c.SourceVerify = &stack.SourceVerification{MatchOIDCIdentity: []stack.OIDCIdentityMatch{
+					{Issuer: "^https://issuer$", Subject: "^[^\u0085]+$"},
+				}}
+			},
+			names: "sourceVerify.matchOIDCIdentity[0].subject",
+		},
+		"identity with a DEL in its issuer": {
+			edit: func(c *stack.BootstrapConfig) {
+				c.SourceVerify = &stack.SourceVerification{MatchOIDCIdentity: []stack.OIDCIdentityMatch{
+					{Issuer: "^https://issuer\x7f$", Subject: "^ci$"},
+				}}
+			},
+			names: "sourceVerify.matchOIDCIdentity[0].issuer",
+		},
+		"identity with a noncharacter in its subject": {
+			edit: func(c *stack.BootstrapConfig) {
+				c.SourceVerify = &stack.SourceVerification{MatchOIDCIdentity: []stack.OIDCIdentityMatch{
+					{Issuer: "^https://issuer$", Subject: "^ci$"},
+					{Issuer: "^https://issuer$", Subject: "^ci\xef\xbf\xbe$"},
+				}}
+			},
+			names: "sourceVerify.matchOIDCIdentity[1].subject",
+		},
 	}
 	check := func(t *testing.T, got any, err error, names string) {
 		t.Helper()

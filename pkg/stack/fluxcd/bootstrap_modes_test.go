@@ -2,6 +2,7 @@ package fluxcd_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -54,6 +55,7 @@ var rootFields = []struct {
 	{"source.secretRef", true},
 	{"source.provider", true},
 	{"source.insecure", true},
+	{"source.verify", true},
 	{"kustomization", false},
 	{"kustomization.namespace", true},
 	{"kustomization.sourceRef", false},
@@ -88,6 +90,9 @@ func gotkRoot(t *testing.T, objs []client.Object) rootView {
 			}
 			v["source.provider"] = o.Spec.Provider
 			v["source.insecure"] = fmt.Sprint(o.Spec.Insecure)
+			if o.Spec.Verify != nil {
+				v["source.verify"] = canonicalJSON(t, o.Spec.Verify)
+			}
 		case *sourcev1.GitRepository:
 			sources++
 			v["source"] = "GitRepository " + o.Namespace + "/" + o.Name
@@ -157,8 +162,8 @@ func operatorRoot(t *testing.T, objs []client.Object) rootView {
 	v["source.url"] = s.URL
 	switch s.Kind {
 	case "OCIRepository":
-		// The revision and insecure are read from the source the patches
-		// produce, so a patch that does not apply does not count.
+		// The revision, insecure and verify are read from the source the
+		// patches produce, so a patch that does not apply does not count.
 		spec := appliedSyncSource(t, fi, name)
 		ref, _ := spec["ref"].(map[string]any)
 		tag, _ := ref["tag"].(string)
@@ -169,6 +174,9 @@ func operatorRoot(t *testing.T, objs []client.Object) rootView {
 			v["source.revision"] = "semver " + r
 		}
 		v["source.insecure"] = fmt.Sprint(spec["insecure"] == true)
+		if verify, found := spec["verify"]; found {
+			v["source.verify"] = canonicalJSON(t, verify)
+		}
 	case "GitRepository":
 		v["source.ref"], v["source.revision"] = "name: "+s.Ref, s.Ref
 	}
@@ -236,6 +244,18 @@ func appliedSyncSource(t *testing.T, fi *fluxv1.FluxInstance, name string) map[s
 	return spec
 }
 
+// canonicalJSON renders v as JSON with its object keys sorted, so a typed
+// spec field and the same field read back from a kustomize build compare as
+// text.
+func canonicalJSON(t *testing.T, v any) string {
+	t.Helper()
+	out, err := json.Marshal(asGeneric(t, v))
+	if err != nil {
+		t.Fatalf("marshalling %T canonically: %v", v, err)
+	}
+	return string(out)
+}
+
 // bootstrapModeConfigs is the shared matrix: each config is rendered in both
 // modes.
 func bootstrapModeConfigs() map[string]*stack.BootstrapConfig {
@@ -259,6 +279,12 @@ func bootstrapModeConfigs() map[string]*stack.BootstrapConfig {
 	access.SourceSecretRef, access.SourceProvider, access.SourceInsecure = "registry-auth", "generic", true
 	semver := config("OCIRepository", oci, "")
 	semver.SourceSemVer = ">=1.0.0 <2.0.0"
+	verify := config("OCIRepository", oci, "v1.2.3")
+	verify.SourceInsecure = true
+	verify.SourceVerify = &stack.SourceVerification{MatchOIDCIdentity: []stack.OIDCIdentityMatch{
+		{Issuer: "^https://token.actions.githubusercontent.com$", Subject: "^https://github.com/example/fleet/.*$"},
+		{Issuer: "^https://accounts.google.com$", Subject: "^release@example.com$"},
+	}}
 	return map[string]*stack.BootstrapConfig{
 		"oci-tag":         config("OCIRepository", oci, "v1.2.3"),
 		"oci-default-ref": config("", oci, ""),
@@ -269,6 +295,7 @@ func bootstrapModeConfigs() map[string]*stack.BootstrapConfig {
 		"prune-true":      pruneOn,
 		"source-access":   access,
 		"oci-semver":      semver,
+		"source-verify":   verify,
 		"no-source":       config("", "", ""),
 	}
 }

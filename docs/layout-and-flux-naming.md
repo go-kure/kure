@@ -189,7 +189,9 @@ directly under the walked root (`addSeparateFluxToLayout` in `layout_integrator.
   ([go-kure/kure#1060](https://github.com/go-kure/kure/issues/1060)). `SourceSemVer` adds a
   second patch on the same source, replacing its `spec.ref` with `semver: <range>`; `sync.ref`
   stays `DefaultSourceRef`, since it takes a tag only
-  ([go-kure/kure#1090](https://github.com/go-kure/kure/issues/1090)).
+  ([go-kure/kure#1090](https://github.com/go-kure/kure/issues/1090)). `SourceVerify` adds one more,
+  after the others, adding `spec.verify`
+  ([go-kure/kure#1091](https://github.com/go-kure/kure/issues/1091)).
 
 **Bootstrap, gotk mode.** Emits the vendored components, a Kustomization whose `spec.path` is
 the top directory of the written tree (section 1.4), and a Source when `SourceURL` is set
@@ -198,7 +200,8 @@ is the directory the FluxInstance `sync.path` names: both modes take it from `bo
 go-kure/kure#979 (`v0.2.0-beta.15` wrote `manifests/<root>`). The Source and the Kustomization's
 `sourceRef` are named after the root node whatever the rules are (`sourceName`). An
 `OCIRepository` Source takes `secretRef`, `provider` and `insecure` from the same three options,
-and `ref.semver` instead of `ref.tag` when `SourceSemVer` is set (`generateOCISource`).
+`ref.semver` instead of `ref.tag` when `SourceSemVer` is set, and `verify` from `SourceVerify`
+(`generateOCISource`).
 
 ### 1.7 Collision guards
 

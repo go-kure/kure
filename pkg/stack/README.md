@@ -61,7 +61,8 @@ source — `SourceKind`, `SourceURL`,
 and Kustomization it creates (empty leaves it to the operator, which uses the `FluxInstance`
 namespace). For an `OCIRepository` source, `SourceSecretRef`, `SourceProvider` and
 `SourceInsecure` give the registry credentials, OIDC provider and plain-HTTP access in both
-modes, and `SourceSemVer` selects its tag by a semver range instead of `SourceRef`.
+modes, `SourceVerify` (a `SourceVerification`) makes it verify the artifact's signature, and
+`SourceSemVer` selects its tag by a semver range instead of `SourceRef`.
 `ImagePullSecret` names the Secret the Flux controller images are pulled with, in both modes:
 the gotk install option, or the `FluxInstance` distribution's `imagePullSecret`. It is not
 a credential for the sync source. In `flux-operator` mode neither `Registry` nor

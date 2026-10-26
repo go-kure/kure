@@ -10,6 +10,7 @@ source.interval                   | 1h0m0s                                      
 source.secretRef                  | registry-auth                                | registry-auth
 source.provider                   | generic                                      | generic
 source.insecure                   | true                                         | true
+source.verify                     | -                                            | -
 kustomization                     | Kustomization flux-system/flux-system        | Kustomization flux-system/flux-system
 kustomization.namespace           | flux-system                                  | flux-system
 kustomization.sourceRef           | OCIRepository prod                           | OCIRepository flux-system   <- differs
