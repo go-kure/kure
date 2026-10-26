@@ -242,7 +242,8 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 // Kustomization K), here over every Kustomization of the tree, or nil when
 // there is none (orderGraph). "ready K" needs "apply K", what K's wait or its
 // Kustomization health checks wait for (awaitedKustomizations), and the apply
-// of the member writing each other object K health-checks; "apply K"
+// of the member certain to write each other object K health-checks
+// (objectWriter); "apply K"
 // needs every Kustomization K depends on Ready, and the member whose apply
 // writes K applied (writer), also when another Kustomization's build writes K
 // as well: that one is no alternate creator. A Kustomization
@@ -250,7 +251,7 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 // wait waits for what its build writes only when that build is the tree's
 // (readsLocalBuild), and for nothing the tree holds otherwise.
 func (t *kustomizationTree) orderPath(from, to string) ([]string, error) {
-	g := t.newOrderGraph()
+	g := t.newOrderGraph(true)
 	seen := map[string]bool{}
 	var walk func(n string) ([]string, error)
 	walk = func(n string) ([]string, error) {

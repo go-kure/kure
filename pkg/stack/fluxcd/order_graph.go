@@ -1,6 +1,7 @@
 package fluxcd
 
 import (
+	"path"
 	"slices"
 	"strings"
 
@@ -12,17 +13,21 @@ import (
 )
 
 // orderGraph is the graph checkReconcileOrder judges ("ready K" and "apply K"
-// for each Kustomization K) over every Flux Kustomization of a tree, members
-// and others alike: the graph orderPath walks and checkTreeOrder judges. Each
-// node's successors are computed once.
+// for each Kustomization K) over the Flux Kustomizations of a tree: the graph
+// orderPath walks and checkTreeOrder judges. With others it follows every
+// Kustomization of the tree, members and others alike, as UmbrellasDoNotWait
+// reads them; without, a Kustomization that is no member waits for nothing
+// here: what it waits for is its author's. Each node's successors are
+// computed once.
 type orderGraph struct {
 	t       *kustomizationTree
+	others  bool
 	writers map[string]string
 	succ    map[string][]string
 }
 
-func (t *kustomizationTree) newOrderGraph() *orderGraph {
-	return &orderGraph{t: t, writers: map[string]string{}, succ: map[string][]string{}}
+func (t *kustomizationTree) newOrderGraph(others bool) *orderGraph {
+	return &orderGraph{t: t, others: others, writers: map[string]string{}, succ: map[string][]string{}}
 }
 
 // next returns what node n waits for. "apply K" needs every Kustomization K
@@ -33,7 +38,8 @@ func (t *kustomizationTree) newOrderGraph() *orderGraph {
 // (objectWriter): Flux fetches a checked object before it evaluates any
 // healthCheckExprs entry, so an expression, whatever it says, still waits for
 // the object to exist. Under wait Flux ignores health checks, and on another
-// cluster (spec.kubeConfig) none names an object of the tree.
+// cluster (spec.kubeConfig) none names an object of the tree. Without others,
+// a Kustomization that is no member has no successor.
 func (g *orderGraph) next(n string) ([]string, error) {
 	if out, ok := g.succ[n]; ok {
 		return out, nil
@@ -41,6 +47,10 @@ func (g *orderGraph) next(n string) ([]string, error) {
 	t := g.t
 	kind, key, _ := strings.Cut(n, " ")
 	var out []string
+	if !g.others && t.byKey[key] == nil {
+		g.succ[n] = out
+		return out, nil
+	}
 	if kind == "apply" {
 		for _, d := range t.deps(key) {
 			out = append(out, "ready "+d)
@@ -75,7 +85,7 @@ func (g *orderGraph) next(n string) ([]string, error) {
 				if isFluxKustomizationCheck(hc.APIVersion, hc.Kind) {
 					continue // read by awaitedKustomizations
 				}
-				w, err := t.objectWriter(hc.APIVersion, hc.Kind, hc.Namespace, hc.Name, k.Namespace)
+				w, err := t.objectWriter(hc.APIVersion, hc.Kind, hc.Namespace, hc.Name)
 				if err != nil {
 					return nil, err
 				}
@@ -164,18 +174,21 @@ func apiGroup(apiVersion string) string {
 }
 
 // objectWriter names the member whose apply writes the object a health check
-// on apiVersion, kind, namespace and name of a Kustomization in checkerNS
-// names: the innermost writer (hostWriter) of every layout holding a match,
-// "" when the Flux bootstrap or no member writes one. It matches by group,
-// kind and name, the version ignored as Flux resolves it; an empty apiVersion
-// is apps/v1, as Flux reads it (kustomize-controller v1.9.5
-// internal/inventory/inventory.go:170-173). It matches more than Flux finds,
-// never less: a check with no namespace matches the checker's namespace as
-// well as a cluster-scoped object, an object written with no namespace, whose
-// applied namespace depends on the build and the controller, matches any, and
-// a configMapGenerator entry matches its name with any suffix, as kustomize
-// appends a content hash to it.
-func (t *kustomizationTree) objectWriter(apiVersion, kind, namespace, name, checkerNS string) (string, error) {
+// on apiVersion, kind, namespace and name names, only when that is certain:
+// "" otherwise, and the check adds no edge. A check that waits for an object
+// another apply may also create does not wait for this one, and an edge
+// that may not exist would refuse a tree that converges. It matches by group,
+// kind, namespace and name as written, the version ignored as Flux resolves
+// it; an empty apiVersion is apps/v1, as Flux reads it (kustomize-controller
+// v1.9.5 internal/inventory/inventory.go:170-173). It is certain when every
+// match sits in a directory exactly one member's build holds (hostWriters),
+// the same member for all, and that member's build transforms nothing
+// (transformsBuild). An object written with no namespace where the check
+// names one, or one where the check names none, may be the checked object
+// once applied; so may a configMapGenerator entry whose name the check's
+// starts with, as kustomize appends a content hash. Either leaves the writer
+// uncertain.
+func (t *kustomizationTree) objectWriter(apiVersion, kind, namespace, name string) (string, error) {
 	if err := t.objectIndex(); err != nil {
 		return "", err
 	}
@@ -183,44 +196,94 @@ func (t *kustomizationTree) objectWriter(apiVersion, kind, namespace, name, chec
 		apiVersion = "apps/v1"
 	}
 	group := apiGroup(apiVersion)
-	if namespace == "" {
-		namespace = checkerNS
-	}
 	var hosts []*layout.ManifestLayout
 	for _, o := range t.objects {
-		if o.group == group && o.kind == kind && o.name == name && (o.namespace == "" || o.namespace == namespace) {
-			hosts = append(hosts, o.host)
+		if o.group != group || o.kind != kind || o.name != name {
+			continue
 		}
+		if o.namespace != namespace {
+			if o.namespace == "" || namespace == "" {
+				return "", nil
+			}
+			continue
+		}
+		hosts = append(hosts, o.host)
 	}
 	if group == "" && kind == "ConfigMap" {
 		for _, gen := range t.generators {
 			if name == gen.name || strings.HasPrefix(name, gen.name+"-") {
-				hosts = append(hosts, gen.host)
+				return "", nil
 			}
 		}
 	}
-	best, bestLen := "", -1
+	writer := ""
 	for _, h := range hosts {
-		w := t.hostWriter(h, "")
-		if w == "" {
-			continue
+		ws, ok := t.hostWriters(h)
+		if !ok || len(ws) != 1 || (writer != "" && ws[0] != writer) {
+			return "", nil
 		}
-		if l := len(t.byKey[w].Spec.Path); l > bestLen {
-			best, bestLen = w, l
+		writer = ws[0]
+	}
+	if writer == "" || transformsBuild(t.byKey[writer]) {
+		return "", nil
+	}
+	return writer, nil
+}
+
+// hostWriters lists the Flux Kustomizations of the tree whose build holds
+// layout host: every member, and every other on this cluster, whatever its
+// Source, whose spec.path names a directory whose build holds it. ok is false
+// when that is not known: the Flux bootstrap applies host, or a Kustomization
+// of the tree cannot be read in typed form, so its spec.path is unknown.
+func (t *kustomizationTree) hostWriters(host *layout.ManifestLayout) ([]string, bool) {
+	if host == nil || slices.Contains(buildScope(t.root), host) {
+		return nil, false
+	}
+	holds := func(p string) bool {
+		l := t.layoutAt[path.Clean(p)]
+		return l != nil && slices.Contains(buildScope(l), host)
+	}
+	var out []string
+	for _, k := range t.kusts {
+		if holds(k.Spec.Path) {
+			out = append(out, crKey(k.Namespace, k.Name))
 		}
 	}
-	return best, nil
+	for _, keys := range t.others {
+		for _, key := range keys {
+			k := t.otherSpecs[key]
+			if k == nil {
+				return nil, false
+			}
+			if k.Spec.KubeConfig == nil && holds(k.Spec.Path) {
+				out = append(out, key)
+			}
+		}
+	}
+	return out, true
+}
+
+// transformsBuild reports whether k's build may change what its directory
+// holds, so that an object of it may be applied under another identity, or
+// not at all: spec.patches, spec.components (which may carry patches),
+// spec.namePrefix, spec.nameSuffix or spec.targetNamespace.
+func transformsBuild(k *kustv1.Kustomization) bool {
+	return k == nil || len(k.Spec.Patches) > 0 || len(k.Spec.Components) > 0 ||
+		k.Spec.NamePrefix != "" || k.Spec.NameSuffix != "" || k.Spec.TargetNamespace != ""
 }
 
 // checkTreeOrder refuses a tree whose Flux Kustomizations can never all become
 // Ready because of a cycle through a member: a strongly connected component of
-// the order graph (orderGraph) over every Flux Kustomization of the tree that
-// holds a cycle and a member's node. The graph is entered at the members'
-// nodes. A cycle made only of Kustomizations the integration did not place is
-// their author's, and is not refused here. The error names one cycle, as
-// checkReconcileOrder does.
-func (t *kustomizationTree) checkTreeOrder() error {
-	g := t.newOrderGraph()
+// the order graph (orderGraph) that holds a cycle and a member's node. The
+// graph is entered at the members' nodes. Without others it judges the
+// members' edges only, each dependsOn as written and each health check whose
+// object has a certain writer (objectWriter); with others, under
+// UmbrellasDoNotWait, it follows the other Kustomizations of the tree as
+// orderPath does. A cycle made only of Kustomizations the integration did not
+// place is their author's, and is not refused here. The error names one
+// cycle, as checkReconcileOrder does.
+func (t *kustomizationTree) checkTreeOrder(others bool) error {
+	g := t.newOrderGraph(others)
 	var starts []string
 	for _, k := range t.kusts {
 		key := crKey(k.Namespace, k.Name)
