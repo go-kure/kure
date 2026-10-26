@@ -3,9 +3,11 @@ package fluxcd
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	"github.com/fluxcd/flux2/v2/pkg/manifestgen/install"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
@@ -139,6 +141,9 @@ func (bg *BootstrapGenerator) SupportedBootstrapModes() []string {
 // (bootstrapDir).
 func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node, dir string) ([]client.Object, error) {
 	if err := validateSourceAccess(config, sourceName(rootNode)); err != nil {
+		return nil, err
+	}
+	if err := validateSourceSemVer(config, sourceName(rootNode)); err != nil {
 		return nil, err
 	}
 
@@ -500,23 +505,76 @@ func validateSourceAccess(config *stack.BootstrapConfig, name string) error {
 	return nil
 }
 
-// syncInsecurePatch returns the FluxInstance kustomize patch that sets
-// spec.insecure on the OCIRepository flux-operator generates for the sync. The
-// sync has no field for it. The operator names that source after sync.name, or
-// after the FluxInstance's namespace when sync.name is empty, and applies
-// spec.kustomize patches to every object it builds, the sync source included.
-func (bg *BootstrapGenerator) syncInsecurePatch(config *stack.BootstrapConfig) kustomize.Patch {
+// syncSourceTarget selects the OCIRepository flux-operator generates for the
+// sync, for a FluxInstance kustomize patch. The operator names that source
+// after sync.name, or after the FluxInstance's namespace when sync.name is
+// empty, and applies spec.kustomize patches to every object it builds, the
+// sync source included.
+func (bg *BootstrapGenerator) syncSourceTarget(config *stack.BootstrapConfig) *kustomize.Selector {
 	name := config.SyncName
 	if name == "" {
 		name = bg.DefaultNamespace
 	}
+	return &kustomize.Selector{
+		Group: sourcev1.GroupVersion.Group,
+		Kind:  sourcev1.OCIRepositoryKind,
+		Name:  name,
+	}
+}
+
+// syncInsecurePatch returns the FluxInstance kustomize patch that sets
+// spec.insecure on the sync's OCIRepository (syncSourceTarget). The sync has no
+// field for it.
+func (bg *BootstrapGenerator) syncInsecurePatch(config *stack.BootstrapConfig) kustomize.Patch {
 	return kustomize.Patch{
-		Patch: "- op: add\n  path: /spec/insecure\n  value: true\n",
-		Target: &kustomize.Selector{
-			Group: sourcev1.GroupVersion.Group,
-			Kind:  sourcev1.OCIRepositoryKind,
-			Name:  name,
-		},
+		Patch:  "- op: add\n  path: /spec/insecure\n  value: true\n",
+		Target: bg.syncSourceTarget(config),
+	}
+}
+
+// validateSourceSemVer refuses a SourceSemVer that would not select the
+// source's revision: without SourceURL, where no source is generated; with a
+// GitRepository source, which takes no semver range here; with a SourceRef,
+// an explicit tag that would compete with the range; and a range that does not
+// parse, which source-controller would reject only once the source is
+// reconciled. name is the object the error is about. Both modes call it before
+// building anything, as they call validateSourceAccess.
+func validateSourceSemVer(config *stack.BootstrapConfig, name string) error {
+	if config.SourceSemVer == "" {
+		return nil
+	}
+	if config.SourceURL == "" {
+		return errors.ResourceValidationError("BootstrapConfig", name, "sourceSemVer",
+			"sourceSemVer needs sourceURL: without it no source is generated for it to apply to", nil)
+	}
+	if kind := resolvedSourceKind(config); kind != "OCIRepository" {
+		return errors.ResourceValidationError("BootstrapConfig", name, "sourceSemVer",
+			fmt.Sprintf("sourceSemVer applies to an OCIRepository source only, not a %s", kind), nil)
+	}
+	if config.SourceRef != "" {
+		return errors.ResourceValidationError("BootstrapConfig", name, "sourceSemVer, sourceRef",
+			"sourceSemVer and sourceRef both choose the OCI tag; set one of them", nil)
+	}
+	// source-controller parses ref.semver with the same library
+	// (ocirepository_controller.go, semver.NewConstraint).
+	if _, err := semver.NewConstraint(config.SourceSemVer); err != nil {
+		return errors.ResourceValidationError("BootstrapConfig", name, "sourceSemVer",
+			fmt.Sprintf("sourceSemVer %q is not a semver range", config.SourceSemVer), err)
+	}
+	return nil
+}
+
+// syncSemVerPatch returns the FluxInstance kustomize patch that replaces
+// spec.ref on the sync's OCIRepository (syncSourceTarget) with ref.semver. The
+// sync's ref is a tag only, rendered unquoted, so the range cannot go there: it
+// stays the default tag, which the field requires and the patch replaces
+// whole. The range is double-quoted, as unquoted a range such as ">=1.0.0" or
+// "*" is YAML syntax; Go's quoting is YAML's for the characters a range that
+// validateSourceSemVer admits can hold.
+func (bg *BootstrapGenerator) syncSemVerPatch(config *stack.BootstrapConfig) kustomize.Patch {
+	return kustomize.Patch{
+		Patch:  "- op: replace\n  path: /spec/ref\n  value:\n    semver: " + strconv.Quote(config.SourceSemVer) + "\n",
+		Target: bg.syncSourceTarget(config),
 	}
 }
 
@@ -588,15 +646,20 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 		return nil, err
 	}
 
-	ref := config.SourceRef
-	if ref == "" {
-		ref = DefaultSourceRef
+	// A SourceSemVer comes without a SourceRef (validateSourceSemVer), so the
+	// range is the whole ref.
+	ref := &sourcev1.OCIRepositoryRef{SemVer: config.SourceSemVer}
+	if config.SourceSemVer == "" {
+		ref.Tag = config.SourceRef
+		if ref.Tag == "" {
+			ref.Tag = DefaultSourceRef
+		}
 	}
 
 	or := pubfluxcd.CreateOCIRepository(sourceName(rootNode), bg.DefaultNamespace)
 	or.Spec.URL = config.SourceURL
 	or.Spec.Interval = metav1.Duration{Duration: bg.DefaultInterval}
-	pubfluxcd.SetOCIRepositoryReference(or, &sourcev1.OCIRepositoryRef{Tag: ref})
+	pubfluxcd.SetOCIRepositoryReference(or, ref)
 	if config.SourceSecretRef != "" {
 		pubfluxcd.SetOCIRepositorySecretRef(or, &meta.LocalObjectReference{Name: config.SourceSecretRef})
 	}
@@ -676,6 +739,9 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 	if err := validateSourceAccess(config, FluxInstanceName); err != nil {
 		return nil, err
 	}
+	if err := validateSourceSemVer(config, FluxInstanceName); err != nil {
+		return nil, err
+	}
 
 	// ImagePullSecret is the controller images' pull secret, the one gotk mode
 	// passes to its install options; empty leaves the field out.
@@ -708,8 +774,15 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 		}
 		spec.Sync.PullSecret = config.SourceSecretRef
 		spec.Sync.Provider = config.SourceProvider
+		var patches []kustomize.Patch
 		if config.SourceInsecure {
-			spec.Kustomize = &fluxv1.Kustomize{Patches: []kustomize.Patch{bg.syncInsecurePatch(config)}}
+			patches = append(patches, bg.syncInsecurePatch(config))
+		}
+		if config.SourceSemVer != "" {
+			patches = append(patches, bg.syncSemVerPatch(config))
+		}
+		if len(patches) > 0 {
+			spec.Kustomize = &fluxv1.Kustomize{Patches: patches}
 		}
 	}
 

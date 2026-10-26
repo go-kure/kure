@@ -1320,6 +1320,19 @@ They apply to an `OCIRepository` source with `SourceURL` set. Anything else is r
 `GitRepository` source, no `SourceURL`, or a provider an `OCIRepository` does not take.
 `ImagePullSecret` is a different secret: it is for pulling the Flux controller images.
 
+To follow a release line instead of a fixed tag, set `SourceSemVer` to a semver range and leave
+`SourceRef` empty:
+
+```go
+config.SourceSemVer = ">=1.0.0 <2.0.0"
+```
+
+In `"gotk"` mode the range is the generated `OCIRepository`'s `spec.ref.semver`. In
+`"flux-operator"` mode it is a `spec.kustomize` patch replacing `spec.ref` on the operator's sync
+source, because `spec.sync.ref` takes only a tag. Both pull the highest tag inside the range. A
+range with a `SourceRef`, with a `GitRepository` source, without `SourceURL`, or one that does not
+parse is refused.
+
 ## Further Reading
 
 - [Stack](/api-reference/stack) - Domain model reference

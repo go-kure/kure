@@ -513,7 +513,8 @@ empty. A Git ref that already starts with `refs/` — a tag, say — passes thro
 flux-operator mode only: the gotk source still puts any Git `SourceRef` into `ref.branch`, so
 there a full reference is not equivalent. Before this, `spec.sync.ref` was `SourceRef` verbatim:
 an empty OCI tag where the gotk source used `latest`, and a bare branch name where Flux needs a
-full reference.
+full reference. A `SourceSemVer` range takes the tag's place in both modes, as
+[Semver source ref](#semver-source-ref) describes.
 
 ### `prune` and `wait` are inputs, not policy
 
@@ -954,6 +955,32 @@ Both `GenerateBootstrap` and `GenerateFluxInstance` refuse, with nothing returne
 - any of the three without `SourceURL`, where no source is generated for it to apply to;
 - any of the three with a `GitRepository` source, which they are not defined for;
 - a `SourceProvider` an `OCIRepository` does not take, `github` included.
+
+### Semver source ref
+
+`BootstrapConfig.SourceSemVer` selects the `OCIRepository` sync source's tag by a semver range,
+such as `>=1.0.0 <2.0.0`, instead of the fixed tag `SourceRef` names (go-kure/kure#1090). Unset,
+the output is what it was before it existed.
+
+| Mode | Where the range goes |
+|---|---|
+| gotk | the `OCIRepository`'s `spec.ref`, as `semver` and nothing else |
+| flux-operator | a `spec.kustomize` patch replacing `spec.ref` on the sync's `OCIRepository` |
+
+A `FluxInstance` sync's `ref` is a tag only, and the operator writes it into the source unquoted,
+where a range such as `>=1.0.0` or `*` would be YAML syntax. So `spec.sync.ref` stays
+`DefaultSourceRef`, which the field requires, and the patch replaces the whole `spec.ref` with
+`semver: <range>`. It is matched as the `SourceInsecure` patch is, by group, kind and name, and the
+two sit side by side when both are set. Either way the source resolves to the same revision in
+both modes: the highest tag inside the range.
+
+Both `GenerateBootstrap` and `GenerateFluxInstance` refuse, with nothing returned:
+- `SourceSemVer` without `SourceURL`, where no source is generated for it to apply to;
+- `SourceSemVer` with a `GitRepository` source;
+- `SourceSemVer` with a `SourceRef`, `latest` included: the range and an explicit tag would both
+  choose the revision;
+- a `SourceSemVer` that does not parse as a range, checked with the library source-controller
+  parses it with, so it is refused at generation rather than at reconcile.
 
 ### Root node name
 
