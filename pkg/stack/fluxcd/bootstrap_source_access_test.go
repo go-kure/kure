@@ -397,3 +397,35 @@ func TestBootstrapSourceAccess_Refused(t *testing.T) {
 		}
 	}
 }
+
+// TestBootstrapSourceVerify_RefusalNamesSource: in gotk mode every
+// verification refusal names the source it is about, SyncName when it names
+// the source and the root node otherwise, never the other one.
+func TestBootstrapSourceVerify_RefusalNamesSource(t *testing.T) {
+	refused := map[string]stack.SourceVerification{
+		"unknown provider": {Provider: "sigstore"},
+		"empty issuer":     {MatchOIDCIdentity: []stack.OIDCIdentityMatch{{Subject: "^ci$"}}},
+		"bad subject":      {MatchOIDCIdentity: []stack.OIDCIdentityMatch{{Issuer: "^https://issuer$", Subject: "("}}},
+		"NEL in a subject": {MatchOIDCIdentity: []stack.OIDCIdentityMatch{{Issuer: "^https://issuer$", Subject: "^[^\u0085]+$"}}},
+	}
+	for name, verify := range refused {
+		for _, syncName := range []string{"", "fleet"} {
+			want, other := "'prod'", "'fleet'"
+			if syncName != "" {
+				want, other = other, want
+			}
+			t.Run(name+"/syncName="+syncName, func(t *testing.T) {
+				config := accessConfig(fluxstack.ModeGotk, sourceAccess{})
+				config.SyncName = syncName
+				config.SourceVerify = &verify
+				_, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config, &stack.Node{Name: "prod"}, accessRules)
+				if err == nil {
+					t.Fatal("error = nil, want a refusal")
+				}
+				if msg := err.Error(); !strings.Contains(msg, want) || strings.Contains(msg, other) {
+					t.Errorf("error %q names the wrong source: want %s, not %s", msg, want, other)
+				}
+			})
+		}
+	}
+}
