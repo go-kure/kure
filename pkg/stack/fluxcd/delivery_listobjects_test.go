@@ -58,10 +58,12 @@ func listedCluster(obj client.Object, more ...*stack.Application) *stack.Cluster
 // the application's own Go value, and every writer's output applies the
 // object with it.
 func TestDeliveryIntent_ObjectInListWithoutObjectMetadata(t *testing.T) {
+	t.Parallel()
 	want := map[string]string{pruneKey: "disabled"}
 	for name, build := range heldIn {
 		for _, placement := range placements {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				t.Parallel()
 				held := heldConfigMap()
 				c := listedCluster(build(held), cmApp("other"))
 				ml := integrated(t, c, recursiveRules("nodeOnly", placement))

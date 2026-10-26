@@ -473,6 +473,7 @@ func rootLayoutCRName(t *testing.T, build func() *stack.Cluster, rules layout.La
 // the bootstrap used to be pointed at the root node's directory, and these
 // were refused).
 func TestIntegrate_RootBuildChangesHostedSource(t *testing.T) {
+	t.Parallel()
 	const templatedURL = "https://${GIT_HOST}/shared.git"
 	rootPatch := func(p stack.Patch) func(root, a *stack.Bundle) {
 		return func(root, _ *stack.Bundle) { root.Patches = []stack.Patch{p} }
@@ -523,6 +524,7 @@ func TestIntegrate_RootBuildChangesHostedSource(t *testing.T) {
 	} {
 		for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout} {
 			t.Run("root bundle/"+string(placement)+"/"+tc.name, func(t *testing.T) {
+				t.Parallel()
 				rules := propertyGroupings["nodeOnly"]
 				rules.FluxPlacement = placement
 				integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
@@ -569,6 +571,7 @@ func TestIntegrate_RootBuildChangesHostedSource(t *testing.T) {
 		}
 
 		t.Run("root node's layout/"+tc.name, func(t *testing.T) {
+			t.Parallel()
 			const rootDir = "prod/platform"
 			rules := propertyGroupings["nodeOnly"]
 			rules.FluxPlacement = layout.FluxIntegratedPerLayout

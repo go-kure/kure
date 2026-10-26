@@ -18,6 +18,7 @@ import (
 // sync.path, so every entry point checks it as a directory name. An unnamed
 // root and no root at all stay valid.
 func TestBootstrap_RootNodeName(t *testing.T) {
+	t.Parallel()
 	config := func(mode string) *stack.BootstrapConfig {
 		return &stack.BootstrapConfig{
 			Enabled:     true,
@@ -65,6 +66,7 @@ func TestBootstrap_RootNodeName(t *testing.T) {
 		}
 		for _, mode := range []string{fluxstack.ModeGotk, fluxstack.DefaultFluxMode} {
 			t.Run(tt.name+"/GenerateBootstrap/"+mode, func(t *testing.T) {
+				t.Parallel()
 				objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config(mode), tt.root, layout.LayoutRules{})
 				check(t, err, tt.wantErr, name)
 				if tt.wantErr != "" && objs != nil {

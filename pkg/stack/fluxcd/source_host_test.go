@@ -409,6 +409,7 @@ func sourceHostRefusal(placement layout.FluxPlacement, grouping, clusterName, sh
 // directory that hosts the generated Sources and so needs a Source the tree
 // does not generate.
 func TestGeneratedSourceIsHostedBeforeItsKustomizations(t *testing.T) {
+	t.Parallel()
 	// No ClusterName directory, the root of the tree as one, and one and two
 	// directories above the root node.
 	clusterNames := []string{"", ".", "prod", "env/prod"}

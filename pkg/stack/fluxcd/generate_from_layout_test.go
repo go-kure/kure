@@ -509,6 +509,7 @@ func fluxPaths(t *testing.T, p string) []string {
 }
 
 func TestEverySpecPathIsAWrittenDirectory(t *testing.T) {
+	t.Parallel()
 	placements := []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle}
 	shapes := slices.Sorted(maps.Keys(propertyShapes))
 	groupingRules := allGroupings()
@@ -519,6 +520,7 @@ func TestEverySpecPathIsAWrittenDirectory(t *testing.T) {
 				for _, shape := range shapes {
 					name := fmt.Sprintf("%s/%s/ClusterName=%q/%s", placement, grouping, clusterName, shape)
 					t.Run(name, func(t *testing.T) {
+						t.Parallel()
 						c := propertyShapes[shape]()
 						rules := groupingRules[grouping]
 						rules.FluxPlacement = placement
