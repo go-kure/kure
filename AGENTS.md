@@ -462,6 +462,7 @@ the map and run `bash site/scripts/gen-docs-tables.sh`.
 | Package Changed | Auto-Synced (README) | Guides to Review |
 |-----------------|---------------------|------------------|
 | `pkg/stack/` | `api-reference/stack` | `guides/flux-workflow`, `concepts/domain-model` |
+| `pkg/stack/stacktest/` | `api-reference/stacktest` | `concepts/domain-model` |
 | `pkg/stack/fluxcd/` | `api-reference/flux-engine` | `guides/flux-workflow` |
 | `pkg/stack/layout/` | `api-reference/layout` | `guides/flux-workflow` |
 | `pkg/io/` | `api-reference/io` | `guides/library-usage` |

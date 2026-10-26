@@ -454,6 +454,10 @@ no layout and a later walk uses nothing from it, that one walk's edits stay out 
 but not for a shared cache, and what each wrapper shape keeps. No test shows the concurrency
 rule: it is a property of kure's code.
 
+To hold a config of your own to this contract, call `stacktest.AssertGeneration` from its tests
+([Stack Test Helpers](/api-reference/stacktest/)): it fails for anything two calls share or one
+result reaches twice, and `stacktest.InterfacesOf` shows what a wrapper hides.
+
 ## Fluent Builder API
 
 For ergonomic cluster construction, use the fluent builder. Builder methods

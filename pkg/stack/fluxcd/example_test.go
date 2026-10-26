@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"testing"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/layout"
+	"github.com/go-kure/kure/pkg/stack/stacktest"
 )
 
 // The README's Go blocks are generated from these functions
@@ -26,6 +28,10 @@ type configMapApp struct{}
 func (configMapApp) Generate(app *stack.Application) ([]*client.Object, error) {
 	var obj client.Object = kubernetes.CreateConfigMap(app.Name, app.Namespace)
 	return []*client.Object{&obj}, nil
+}
+
+func TestConfigMapApp_Conformance(t *testing.T) {
+	stacktest.AssertGeneration(t, stack.NewApplication("web", "default", configMapApp{}))
 }
 
 // exampleCluster is the cluster the examples generate from: a root node

@@ -5,12 +5,14 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"testing"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/kubernetes"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
+	"github.com/go-kure/kure/pkg/stack/stacktest"
 )
 
 // The README's Go blocks are generated from these functions
@@ -24,6 +26,10 @@ type exampleApp struct{}
 func (exampleApp) Generate(app *stack.Application) ([]*client.Object, error) {
 	var obj client.Object = kubernetes.CreateConfigMap(app.Name, app.Namespace)
 	return []*client.Object{&obj}, nil
+}
+
+func TestExampleApp_Conformance(t *testing.T) {
+	stacktest.AssertGeneration(t, stack.NewApplication("api", "default", exampleApp{}))
 }
 
 // exampleCluster is the cluster the examples walk: a root node "apps" whose

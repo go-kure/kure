@@ -17,6 +17,7 @@ For full Go API documentation, see [pkg.go.dev/github.com/go-kure/kure](https://
 | Package | Description | Reference |
 |---------|-------------|-----------|
 | [Stack](/api-reference/stack/) | Cluster, Node, Bundle, Application domain model | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack) |
+| [Stack Test Helpers](/api-reference/stacktest/) | Generation-contract checks for ApplicationConfig authors | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/stacktest) |
 | [Flux Engine](/api-reference/flux-engine/) | FluxCD workflow implementation | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/fluxcd) |
 | [Layout Engine](/api-reference/layout/) | Manifest directory organization | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/layout) |
 

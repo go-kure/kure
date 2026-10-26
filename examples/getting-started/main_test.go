@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-kure/kure/internal/kuretest"
 	"github.com/go-kure/kure/pkg/stack"
+	"github.com/go-kure/kure/pkg/stack/stacktest"
 )
 
 // TestRun exercises the complete getting-started pipeline end-to-end, holds
@@ -121,6 +122,13 @@ func TestGenerate_SharesNothing(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGenerate_Conformance holds both configs to the generation contract
+// with the stacktest helper a config author would use.
+func TestGenerate_Conformance(t *testing.T) {
+	stacktest.AssertGeneration(t, stack.NewApplication("redis", "cache", &RedisConfig{Namespace: "cache", Image: "redis:7-alpine"}))
+	stacktest.AssertGeneration(t, stack.NewApplication("web-app", "web", &WebAppConfig{Namespace: "web", Image: "nginx:1.27-alpine", Replicas: 2, Port: 80}))
 }
 
 // labelMaps names every label map of the Deployments and Services in objs.

@@ -2,12 +2,14 @@ package stack_test
 
 import (
 	"fmt"
+	"testing"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/kubernetes"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
+	"github.com/go-kure/kure/pkg/stack/stacktest"
 )
 
 // The tree example of the "Domain Model" concept page
@@ -22,6 +24,10 @@ type workload struct{}
 func (workload) Generate(app *stack.Application) ([]*client.Object, error) {
 	var obj client.Object = kubernetes.CreateConfigMap(app.Name, app.Namespace)
 	return []*client.Object{&obj}, nil
+}
+
+func TestWorkload_Conformance(t *testing.T) {
+	stacktest.AssertGeneration(t, stack.NewApplication("frontend", "web", workload{}))
 }
 
 var (
