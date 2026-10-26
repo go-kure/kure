@@ -297,16 +297,18 @@ func overlaps(a, b record) bool {
 // match is a pair of overlapping records, by index into their walks.
 type match struct{ i, j int }
 
-// matches returns every pair (i in a, j in b) of overlapping records, sorted
-// by i then j. Ranges are matched by a scan of b sorted by start, cut short
-// by the largest end among the records before each point; maps by identity.
-func matches(a, b []record) []match {
+// rangeIndex finds the range records of b that overlap a given range: b's
+// ranges sorted by start, each with the largest end at or before it.
+type rangeIndex struct {
+	b      []record
+	ranges []int
+	maxEnd []uintptr
+}
+
+func newRangeIndex(b []record) rangeIndex {
 	var ranges []int
-	maps := map[uintptr][]int{}
 	for j, r := range b {
-		if r.isMap {
-			maps[r.start] = append(maps[r.start], j)
-		} else {
+		if !r.isMap {
 			ranges = append(ranges, j)
 		}
 	}
@@ -318,6 +320,40 @@ func matches(a, b []record) []match {
 			maxEnd[x] = maxEnd[x-1]
 		}
 	}
+	return rangeIndex{b: b, ranges: ranges, maxEnd: maxEnd}
+}
+
+// each calls f with the index of every range record of b that overlaps r.
+func (ix rangeIndex) each(r record, f func(j int)) {
+	// The last range starting before r ends; scan back while some range at
+	// or before x can still reach past r's start.
+	x := sort.Search(len(ix.ranges), func(x int) bool { return ix.b[ix.ranges[x]].start >= r.end }) - 1
+	for ; x >= 0 && ix.maxEnd[x] > r.start; x-- {
+		if j := ix.ranges[x]; overlaps(r, ix.b[j]) {
+			f(j)
+		}
+	}
+}
+
+func sortMatches(ms []match) {
+	sort.Slice(ms, func(x, y int) bool {
+		if ms[x].i != ms[y].i {
+			return ms[x].i < ms[y].i
+		}
+		return ms[x].j < ms[y].j
+	})
+}
+
+// matches returns every pair (i in a, j in b) of overlapping records, sorted
+// by i then j. Ranges are matched through a rangeIndex of b; maps by identity.
+func matches(a, b []record) []match {
+	maps := map[uintptr][]int{}
+	for j, r := range b {
+		if r.isMap {
+			maps[r.start] = append(maps[r.start], j)
+		}
+	}
+	ix := newRangeIndex(b)
 
 	var out []match
 	for i, r := range a {
@@ -327,21 +363,42 @@ func matches(a, b []record) []match {
 			}
 			continue
 		}
-		// The last range starting before r ends; scan back while some
-		// range at or before x can still reach past r's start.
-		x := sort.Search(len(ranges), func(x int) bool { return b[ranges[x]].start >= r.end }) - 1
-		for ; x >= 0 && maxEnd[x] > r.start; x-- {
-			if j := ranges[x]; overlaps(r, b[j]) {
+		ix.each(r, func(j int) { out = append(out, match{i, j}) })
+	}
+	sortMatches(out)
+	return out
+}
+
+// earliest returns, for each record that overlaps an earlier record of the
+// same walk, the pair (i, j) with the smallest such i, sorted by i then j.
+// These are the pairs of matches(rs, rs) that report considers with
+// oncePerSecond, found without building every pair: n results holding the
+// same map would give n² of them.
+func earliest(rs []record) []match {
+	firstMap := map[uintptr]int{}
+	ix := newRangeIndex(rs)
+
+	var out []match
+	for j, r := range rs {
+		if r.isMap {
+			if i, ok := firstMap[r.start]; ok {
 				out = append(out, match{i, j})
+			} else {
+				firstMap[r.start] = j
 			}
+			continue
+		}
+		i := -1
+		ix.each(r, func(k int) {
+			if k < j && (i < 0 || k < i) {
+				i = k
+			}
+		})
+		if i >= 0 {
+			out = append(out, match{i, j})
 		}
 	}
-	sort.Slice(out, func(x, y int) bool {
-		if out[x].i != out[y].i {
-			return out[x].i < out[y].i
-		}
-		return out[x].j < out[y].j
-	})
+	sortMatches(out)
 	return out
 }
 
@@ -418,13 +475,7 @@ func internal(walks ...*walk) []Sharing {
 	var out []Sharing
 	seen := map[string]bool{}
 	for _, w := range walks {
-		var ms []match
-		for _, m := range matches(w.records, w.records) {
-			if m.i < m.j {
-				ms = append(ms, m)
-			}
-		}
-		found, ids := report(w.records, w.records, ms, true)
+		found, ids := report(w.records, w.records, earliest(w.records), true)
 		for k, s := range found {
 			if !seen[ids[k]] {
 				seen[ids[k]] = true
