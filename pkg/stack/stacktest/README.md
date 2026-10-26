@@ -4,7 +4,7 @@
 
 Checks an `ApplicationConfig` against the generation contract from the config author's own tests.
 
-The contract (`stack.ApplicationConfig`; the [Stack README](../README.md) § Generation contract)
+The contract (`stack.ApplicationConfig`; the [Stack](/api-reference/stack/) page § Generation contract)
 says that what `Generate` returns belongs to the caller: kure writes to the returned objects, and
 so may the caller. A config that hands out the same object, map, slice or pointer twice therefore
 lets one result's edits reach another, and nothing fails at the point of the mistake. Neither does

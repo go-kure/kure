@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -469,6 +470,48 @@ func TestCheckGeneration_WithinOneResult(t *testing.T) {
 	}
 	if !reflect.DeepEqual(report.Internal, want) {
 		t.Errorf("Internal:\n got %+v\nwant %+v", report.Internal, want)
+	}
+}
+
+// TestCheckGeneration_ManyResultsShareOneMap holds the cost of a value many
+// results share to the results, not to their pairs: n results holding one
+// map would give n² pairs of 16 bytes, of which n-1 are reported.
+func TestCheckGeneration_ManyResultsShareOneMap(t *testing.T) {
+	const n = 4000
+	cfg := genFunc(func() ([]*client.Object, error) {
+		labels := map[string]string{"app": "web"}
+		out := make([]client.Object, n)
+		for i := range out {
+			cm := freshConfigMap()
+			cm.Name = fmt.Sprintf("web-%d", i)
+			cm.Labels = labels
+			out[i] = cm
+		}
+		return objs(out...), nil
+	})
+	var before, after goruntime.MemStats
+	goruntime.GC()
+	goruntime.ReadMemStats(&before)
+	report, err := stacktest.CheckGeneration(app(cfg))
+	goruntime.ReadMemStats(&after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Shared) != 0 {
+		t.Errorf("Shared = %d sharings, want none", len(report.Shared))
+	}
+	if len(report.Internal) != n-1 {
+		t.Fatalf("Internal = %d sharings, want %d", len(report.Internal), n-1)
+	}
+	for _, s := range report.Internal {
+		if s.Kind != "map" || s.First != "[0].(*v1.ConfigMap).ObjectMeta.Labels" {
+			t.Fatalf("Internal holds %+v, want each later result against the first", s)
+		}
+	}
+	alloc, pairs := after.TotalAlloc-before.TotalAlloc, uint64(n*n*16)
+	t.Logf("CheckGeneration allocated %d bytes for %d results", alloc, n)
+	if alloc >= pairs {
+		t.Errorf("CheckGeneration allocated %d bytes, the size of the n² pair set (%d)", alloc, pairs)
 	}
 }
 
