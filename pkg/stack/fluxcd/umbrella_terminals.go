@@ -577,18 +577,26 @@ func (t *kustomizationTree) within(u, d string) bool {
 // find as given. The caller applies the same rewrite to such a name: a
 // dependsOn on a key of the map becomes one on each of its values.
 //
-// An umbrella is a Flux Kustomization of a tree whose build applies at least
-// one Flux Kustomization: its spec.path is a layout of the tree, and the
-// directories a kustomize build of that layout includes host another Flux
-// Kustomization. The terminal leaves are those the integrator writes (see
-// UmbrellasDoNotWait). A Flux Kustomization an application emits, or one whose
-// spec.path is no layout of its tree, is a leaf. Each root is indexed on its
-// own, because a spec.path is relative to its own tree; the trees are those an
-// integration returned, with or without the setting. Unlike the integration's
-// own checks, it does not judge a Kustomization's context: every Flux
-// Kustomization an application does not emit counts as building the layout
-// its spec.path names, whatever its spec.sourceRef or spec.kubeConfig
-// (go-kure/kure#1077).
+// An umbrella is a Flux Kustomization the integration placed or kept whose
+// build applies at least one Flux Kustomization: its spec.path is a layout of
+// the tree, and the directories a kustomize build of that layout includes host
+// another Flux Kustomization. The terminal leaves are those the integrator
+// writes (see UmbrellasDoNotWait). Each root is indexed on its own, because a
+// spec.path is relative to its own tree; the trees are those an integration
+// returned, with or without the setting.
+//
+// Which Kustomizations the integration placed or kept is what it recorded in
+// each layout (layout.ManifestLayout FluxKustomizations): one counts only while
+// it still reads what was recorded, the same spec.path, spec.sourceRef and
+// presence of spec.kubeConfig, in whatever form it is held (typed,
+// unstructured or a List item). Every other Flux Kustomization is a leaf,
+// whatever its spec.path names: one an application emits and the integration
+// did not keep, one a caller added, one whose Source, cluster or path was
+// changed after the integration (it may no longer build this tree's
+// directory), and every one of a tree built by hand or read back from disk,
+// which carries no record (go-kure/kure#1077). A caller placing Flux
+// Kustomizations itself records them with SetFluxKustomizations to have them
+// read as umbrellas.
 //
 // It returns an error that wraps ErrUmbrellaTerminals, and no map, for a
 // Kustomization identity found in two of the trees, for an umbrella without a
@@ -602,7 +610,7 @@ func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, er
 		if root == nil {
 			continue
 		}
-		t, err := indexKustomizationTree(root, nonApplicationMembers(root))
+		t, err := indexKustomizationTree(root, recordedMembers)
 		if err == nil {
 			err = t.otherErr
 		}
@@ -633,71 +641,41 @@ func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, er
 	return out, nil
 }
 
-// nonApplicationMembers selects every Flux Kustomization of the tree under
-// root but those an application emits (layout.ManifestLayout
-// OriginBundleObjects), in typed form. An application object that is a List
-// emits its items (objectItems), so they are matched by identity (crKey), not
-// by the object provenance records. A Kustomization a kustomize build drops
-// (builtItems) is neither emitted nor a member: an application's dropped
-// namesake hides no member of that name.
-func nonApplicationMembers(root *layout.ManifestLayout) memberFilter {
-	emitted := map[string]bool{}
-	var collect func(l *layout.ManifestLayout) error
-	collect = func(l *layout.ManifestLayout) error {
-		for _, b := range l.OriginBundles() {
-			for _, o := range l.OriginBundleObjects(b) {
-				if o == nil {
-					continue
-				}
-				items, err := objectItems(o)
-				if err != nil {
-					return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-				}
-				for _, item := range items {
-					if _, ok := fluxKustomizationPath(item); !ok {
-						continue
-					}
-					local, err := built.LocalConfig(item)
-					if err != nil {
-						return errors.Wrapf(err, "layout %q: read an object as written", l.FullRepoPath())
-					}
-					if !local {
-						emitted[crKey(item.GetNamespace(), item.GetName())] = true
-					}
-				}
-			}
-		}
-		for _, c := range l.Children {
-			if c != nil {
-				if err := collect(c); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
+// recordedMembers selects, in typed form, the Flux Kustomizations of l that the
+// integration recorded there (layout.ManifestLayout FluxKustomizations,
+// recordFluxKustomizations) and that still read what was recorded: identity,
+// cleaned spec.path, Source and presence of spec.kubeConfig. It reads l as
+// kustomize builds it (builtItems), so a recorded one counts in whatever form
+// it is held, and one a build drops is none. A recorded identity that cannot
+// be read in typed form is an error naming the layout.
+func recordedMembers(l *layout.ManifestLayout) ([]*kustv1.Kustomization, error) {
+	recs := l.FluxKustomizations()
+	if len(recs) == 0 {
+		return nil, nil
 	}
-	collectErr := collect(root)
-	return func(l *layout.ManifestLayout) ([]*kustv1.Kustomization, error) {
-		if collectErr != nil {
-			return nil, collectErr
+	objs, err := builtItems(l)
+	if err != nil {
+		return nil, err
+	}
+	var out []*kustv1.Kustomization
+	for _, obj := range objs {
+		if _, ok := fluxKustomizationPath(obj); !ok {
+			continue
 		}
-		objs, err := builtItems(l)
+		if !slices.ContainsFunc(recs, func(r layout.FluxKustomizationRecord) bool {
+			return crKey(r.Namespace, r.Name) == crKey(obj.GetNamespace(), obj.GetName())
+		}) {
+			continue
+		}
+		k, err := typedKustomization(obj)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "layout %q", l.FullRepoPath())
 		}
-		var out []*kustv1.Kustomization
-		for _, obj := range objs {
-			if _, ok := fluxKustomizationPath(obj); !ok || emitted[crKey(obj.GetNamespace(), obj.GetName())] {
-				continue
-			}
-			k, err := typedKustomization(obj)
-			if err != nil {
-				return nil, errors.Wrapf(err, "layout %q", l.FullRepoPath())
-			}
+		if slices.Contains(recs, fluxKustomizationRecord(k)) {
 			out = append(out, k)
 		}
-		return out, nil
 	}
+	return out, nil
 }
 
 // typedKustomization returns the Flux Kustomization obj in typed form.

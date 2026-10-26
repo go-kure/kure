@@ -915,7 +915,9 @@ Kustomization that applies it, on this cluster; a health check on another cluste
 readiness here, and a `spec.healthCheckExprs` predicate on Flux Kustomizations
 is read as a readiness wait, whatever it says.
 `fluxcd.UmbrellaTerminals` returns each umbrella's terminal leaves, for a
-dependency written from outside the tree. The full rules and refusals are in
+dependency written from outside the tree, for trees as an integration returned
+them: only a Kustomization the integration recorded, still on the recorded
+path, Source and cluster, counts as an umbrella. The full rules and refusals are in
 the [Flux Engine reference](/api-reference/flux-engine/#with-umbrellasdonotwait).
 
 ### Umbrellas without child health checks
