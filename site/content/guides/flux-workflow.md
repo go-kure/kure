@@ -1302,9 +1302,11 @@ fmt.Println(fi.Name, fi.Spec.Sync.Name, fi.Spec.Sync.Ref)
 ```
 <!-- doc-example:end -->
 
-It only takes effect with `SourceURL` set, since neither mode emits a source without one. kure does
-not validate the value. The CRD caps it at 63 characters and makes it immutable once set, so renaming
-the sync of a running cluster means recreating the `FluxInstance`. It is distinct from the
+It only takes effect with `SourceURL` set, since neither mode emits a source without one. In
+`"gotk"` mode kure checks it as a Flux Kustomization name and refuses one that is not valid. In
+`"flux-operator"` mode kure does not validate the value. The CRD caps it at 63 characters and makes
+it immutable once set, so renaming the sync of a running cluster means recreating the
+`FluxInstance`. It is distinct from the
 `FluxInstance`'s own `metadata.name`, which is always `flux` (`fluxcd.FluxInstanceName`): the
 flux-operator CRD rejects any other name at admission. The generator's
 `BootstrapName` names only the `"gotk"` bootstrap Kustomization, and only while `SyncName` is
