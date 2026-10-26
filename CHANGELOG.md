@@ -16,6 +16,59 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-beta.18] - 2026-10-26
+
+### Added
+
+- Let a generator omit an umbrella's child health checks
+- Registry credentials, provider and plain HTTP for the bootstrap source
+- Pin an OCI chart render to a manifest digest
+
+### Build
+
+- Update module github.com/envoyproxy/go-control-plane/envoy to v1.40.0
+- Update dependency golangci-lint to v2.15.0
+- Update dependency external-secrets/external-secrets to v2.13.0
+- Move Go to 1.27.2, required by external-secrets v2.13.0
+- Move Go to 1.27.3 to clear GO-2026-6809
+- Update k8s.io/utils digest to ca04ba5
+- Update go-patch
+- Update module github.com/cert-manager/cert-manager to v1.21.3
+
+### CI
+
+- Key the govulncheck and goimports binary caches by Go version
+
+### Documentation
+
+- Say a range widening can raise the Go version kure needs
+- Qualify the umbrella child-check opt-out by Wait and placement
+- State what an umbrella still waits for under the child-check opt-out
+- Re-wrap the child-check opt-out godoc
+- Qualify umbrella readiness by the child-check opt-out
+- Name every case a child name is checked without a health check
+- Getting-started builds every map and pointer per field
+- Say the bootstrap source-access options apply in both modes
+- Name the FluxInstance sync setters in the library usage guide
+- Name the OCIRepository in the source-access field example
+- Drop the walker caveat from the Generate godoc
+- Say the Flux workflow skips a nil Generate entry
+
+### Fixed
+
+- Bundle.Generate writes bundle metadata into new maps and skips nil entries
+- Generated Kustomizations and bundle copies own their metadata maps
+- Skip a Generate entry that holds a nil object
+
+### Maintenance
+
+- Update go-kure/.github digest to 79d9027
+- Update go-kure/.github digest to be495e5
+
+### Testing
+
+- Store the bootstrap output of both modes
+
 ## [0.2.0-beta.17] - 2026-10-18
 
 ### Added
