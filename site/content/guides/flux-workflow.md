@@ -919,8 +919,9 @@ Kustomizations it placed or kept, on each later integration too: one without
 `wait` that health-checks any other object waits for the Kustomization that
 applies it, whatever its expression says, when that writer is certain, and a
 cycle through them is refused. A tree whose other Kustomizations use patches or
-components gets no such wait, and an object a controller also creates is
-outside what the check models. Without the setting, what a Kustomization an
+components gets no such wait. An object a controller, or a Kustomization
+outside the tree, also writes is outside what the check models, and a tree
+Flux would converge can then be refused. Without the setting, what a Kustomization an
 application emits waits for is its author's; under it, this check follows it as
 the rules above do
 ([reconcile order](/api-reference/flux-engine/#one-kustomization-per-directory)).
