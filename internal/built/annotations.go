@@ -11,18 +11,34 @@ import (
 // object that is its metadata.annotations map as it is: decoded from YAML, it
 // may hold a boolean, a number or null, and then Unstructured.GetAnnotations
 // returns none at all, so that setting annotations from it drops every one.
-// For a typed object it is GetAnnotations. The map returned is a copy.
+// For a typed object it is GetAnnotations. The map returned is a copy. Text
+// reads its values as a kustomize build does.
 func Annotations(obj client.Object) map[string]any {
+	return writtenMetadataMap(obj, "annotations", obj.GetAnnotations)
+}
+
+// Labels returns obj's labels as written, as Annotations returns its
+// annotations: for an unstructured object its metadata.labels map as it is,
+// for which Unstructured.GetLabels returns none at all once it holds a value
+// that is no string, and for a typed object GetLabels. The map returned is a
+// copy. Text reads its values as a kustomize build does.
+func Labels(obj client.Object) map[string]any {
+	return writtenMetadataMap(obj, "labels", obj.GetLabels)
+}
+
+// writtenMetadataMap returns the map field of obj's metadata as written: of an
+// unstructured obj the map as it is, of a typed one typed's.
+func writtenMetadataMap(obj client.Object, field string, typed func() map[string]string) map[string]any {
 	if meta, ok := unstructuredMetadata(obj); ok {
-		a, _ := meta["annotations"].(map[string]any)
-		return maps.Clone(a)
+		m, _ := meta[field].(map[string]any)
+		return maps.Clone(m)
 	}
-	a := obj.GetAnnotations()
-	if a == nil {
+	m := typed()
+	if m == nil {
 		return nil
 	}
-	out := make(map[string]any, len(a))
-	for k, v := range a {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
 		out[k] = v
 	}
 	return out
