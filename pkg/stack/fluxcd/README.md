@@ -363,10 +363,12 @@ checked object before it evaluates any `spec.healthCheckExprs` entry, whatever t
 says. kure adds that wait only when the object's writer is certain: every copy of it, matched by
 group, kind, namespace and name as written (the version ignored; an empty `apiVersion` is
 `apps/v1`, as Flux reads it), sits in a directory exactly one Kustomization's build holds, the
-same one for all, and that build transforms nothing. A new refusal comes only from such a wait.
-These leave the writer uncertain and add none, so a cycle through them passes:
+same one for all, and that build transforms nothing. A new refusal through a health check on such
+an object comes only from such a wait. These leave the writer uncertain and add none, so a cycle
+through them passes:
 
-- an object, or the check, written with no namespace where the other names one;
+- a check, or a matching object, written with no namespace, a cluster-scoped one included (it may
+  exist before any apply);
 - a `configMapGenerator` entry whose name, or that name and a dash, begins the checked name, as
   kustomize appends a content hash;
 - a writer whose build transforms (`spec.patches`, `spec.components`, `spec.namePrefix`,

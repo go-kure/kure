@@ -507,6 +507,13 @@ func TestMissedCycles_UncertainWriterAddsNoEdge(t *testing.T) {
 				l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: "values.yaml", Content: []byte("k: v\n")})
 			},
 		},
+		// a checks the default Namespace, which b-longer writes: a
+		// cluster-scoped object, written and checked with no namespace, may
+		// exist before any apply (Kubernetes creates default itself).
+		"a cluster-scoped object": {cluster: func() *stack.Cluster {
+			return pairCluster(stack.HealthCheck{APIVersion: "v1", Kind: "Namespace", Name: "default"},
+				[]client.Object{cm("default", "a-cm")}, []client.Object{unstructuredObj("v1", "Namespace", "", "default")})
+		}},
 		// b-longer's patches may rename or remove b-cm.
 		"b patches its build": {cluster: func() *stack.Cluster {
 			c := pairCluster(check("default", "b-cm"), []client.Object{cm("default", "a-cm")}, []client.Object{cm("default", "b-cm")})
