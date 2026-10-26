@@ -96,6 +96,9 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	if err == nil {
 		err = t.otherErr
 	}
+	if err == nil {
+		err = t.keptDroppedErr()
+	}
 	if err != nil {
 		return err
 	}

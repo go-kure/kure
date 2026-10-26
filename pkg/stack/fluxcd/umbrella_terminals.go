@@ -77,13 +77,17 @@ type kustomizationTree struct {
 	// object and droppedDeps its spec.dependsOn as keys. They are no member,
 	// other or writer: only one a build that patches what it holds
 	// (patchesBuild) may keep is read (keptDropped, from mayKeep, built on
-	// first use).
-	dropped     map[*layout.ManifestLayout][]string
-	droppedObjs map[string]client.Object
-	droppedDeps map[string][]string
-	mayKeep     map[string]bool
-	reached     map[string]map[*layout.ManifestLayout]bool
-	fromRoot    map[*layout.ManifestLayout]bool
+	// first use). droppedErrs holds the error of each that cannot be read in
+	// typed form, in droppedErrKeys order: one a build may keep refuses the
+	// tree as otherErr does (keptDroppedErr).
+	dropped        map[*layout.ManifestLayout][]string
+	droppedObjs    map[string]client.Object
+	droppedDeps    map[string][]string
+	droppedErrs    map[string]error
+	droppedErrKeys []string
+	mayKeep        map[string]bool
+	reached        map[string]map[*layout.ManifestLayout]bool
+	fromRoot       map[*layout.ManifestLayout]bool
 }
 
 // memberFilter returns the Flux Kustomizations of l that are members of the
@@ -114,6 +118,7 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 		dropped:     map[*layout.ManifestLayout][]string{},
 		droppedObjs: map[string]client.Object{},
 		droppedDeps: map[string][]string{},
+		droppedErrs: map[string]error{},
 		reached:     map[string]map[*layout.ManifestLayout]bool{},
 		fromRoot:    map[*layout.ManifestLayout]bool{},
 	}
@@ -177,14 +182,20 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 			key := crKey(obj.GetNamespace(), obj.GetName())
 			t.dropped[l] = append(t.dropped[l], key)
 			t.droppedObjs[key] = obj
-			if spec, err := typedKustomization(obj); err == nil {
-				for _, d := range spec.Spec.DependsOn {
-					ns := d.Namespace
-					if ns == "" {
-						ns = obj.GetNamespace()
-					}
-					t.droppedDeps[key] = append(t.droppedDeps[key], crKey(ns, d.Name))
+			spec, err := typedKustomization(obj)
+			if err != nil {
+				if t.droppedErrs[key] == nil {
+					t.droppedErrKeys = append(t.droppedErrKeys, key)
+					t.droppedErrs[key] = err
 				}
+				continue
+			}
+			for _, d := range spec.Spec.DependsOn {
+				ns := d.Namespace
+				if ns == "" {
+					ns = obj.GetNamespace()
+				}
+				t.droppedDeps[key] = append(t.droppedDeps[key], crKey(ns, d.Name))
 			}
 		}
 		for _, child := range l.Children {
@@ -410,6 +421,13 @@ func (t *kustomizationTree) keptDropped(key string) bool {
 	if t.byKey[key] != nil || t.otherObjs[key] != nil {
 		return false
 	}
+	return t.mayBeKept(key)
+}
+
+// mayBeKept reports whether a build that is the tree's and patches what it
+// holds holds the local-config Kustomization with key, whatever else has the
+// key.
+func (t *kustomizationTree) mayBeKept(key string) bool {
 	if t.mayKeep == nil {
 		t.mayKeep = map[string]bool{}
 		for _, o := range t.otherKeys {
@@ -425,6 +443,18 @@ func (t *kustomizationTree) keptDropped(key string) bool {
 		}
 	}
 	return t.mayKeep[key]
+}
+
+// keptDroppedErr returns the error of the first local-config Kustomization a
+// build may keep (mayBeKept) that cannot be read in typed form, so that its
+// dependsOn is never read as empty; nil when there is none.
+func (t *kustomizationTree) keptDroppedErr() error {
+	for _, key := range t.droppedErrKeys {
+		if t.mayBeKept(key) {
+			return t.droppedErrs[key]
+		}
+	}
+	return nil
 }
 
 // terminals returns the terminal leaves of umbrella u: for each Kustomization
@@ -575,6 +605,9 @@ func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, er
 		t, err := indexKustomizationTree(root, nonApplicationMembers(root))
 		if err == nil {
 			err = t.otherErr
+		}
+		if err == nil {
+			err = t.keptDroppedErr()
 		}
 		if err != nil {
 			return nil, errors.Wrapf(ErrUmbrellaTerminals, "tree %d (%q): %s", i, root.FullRepoPath(), err.Error())
