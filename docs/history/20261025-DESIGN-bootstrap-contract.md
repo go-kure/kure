@@ -29,7 +29,7 @@ both. In flux-operator mode kure emits a FluxInstance, and flux-operator renders
 | Directory | The tree's top directory (`layout.TopDirectory`), spelled per mode (`demo`, `./demo`) | Holds |
 | Namespace | The generator's `DefaultNamespace` for the source, the Kustomization and the FluxInstance. The Kustomization's `sourceRef` names no namespace, so it resolves in its own | Holds; the modes test checks that each mode's sourceRef resolves to the emitted source |
 | Source kind, URL | From `BootstrapConfig`, the same in both modes | Holds |
-| Source interval | From the generator's `BootstrapGenerator.DefaultInterval`, not `BootstrapConfig`: the gotk source (`bootstrap_generator.go:572`, `:598`) and the FluxInstance sync (`:707`) | Holds |
+| Source interval | From the generator's `BootstrapGenerator.DefaultInterval`, not `BootstrapConfig`: the gotk source (`bootstrap_generator.go:668`, `:699`) and the FluxInstance sync (`:811`) | Holds |
 | Access | `SourceSecretRef`, `SourceProvider`, `SourceInsecure` (go-kure/kure#1060) | Holds, on main |
 | Names | `SyncName` names the source and the Kustomization in both modes | Holds, on main (go-kure/kure#1089). Unset, gotk still names the source after the root node and the Kustomization `BootstrapName` |
 | Ref selector | Tag, or a semver range, chosen explicitly | Holds: `SourceSemVer` (go-kure/kure#1090); the two modes resolve the same revision (`testdata/bootstrap-modes/oci-semver.txt`) |

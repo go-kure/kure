@@ -285,6 +285,22 @@ func TestBootstrapSourceSemVer_Refused(t *testing.T) {
 			objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config, &stack.Node{Name: "prod"}, accessRules)
 			check(t, objs, err)
 		})
+		// With SyncName set and a source emitted, the refusal names the source
+		// by SyncName, the name gotk gives it, not the root node.
+		t.Run("gotk/"+name+"/sync name", func(t *testing.T) {
+			config := semverConfig(fluxstack.ModeGotk, semverRanges["bounded"])
+			config.SyncName = "fleet"
+			edit(config)
+			objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(config, &stack.Node{Name: "prod"}, accessRules)
+			check(t, objs, err)
+			want := "'fleet'"
+			if config.SourceURL == "" {
+				want = "'prod'"
+			}
+			if err != nil && !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not name the source %s", err, want)
+			}
+		})
 		for entry, generate := range fluxInstanceEntryPoints {
 			t.Run(entry+"/"+name, func(t *testing.T) {
 				config := semverConfig(fluxstack.DefaultFluxMode, semverRanges["bounded"])

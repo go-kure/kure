@@ -143,7 +143,7 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 	if err := validateSourceAccess(config, gotkSourceName(config, rootNode)); err != nil {
 		return nil, err
 	}
-	if err := validateSourceSemVer(config, sourceName(rootNode)); err != nil {
+	if err := validateSourceSemVer(config, gotkSourceName(config, rootNode)); err != nil {
 		return nil, err
 	}
 
