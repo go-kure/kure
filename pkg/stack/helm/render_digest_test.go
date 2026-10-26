@@ -40,7 +40,9 @@ type fakeRegistry struct {
 	// headerDigest, when set, is sent as Docker-Content-Digest instead of the
 	// manifest's real digest.
 	headerDigest string
-	requests     atomic.Int64
+	// omitChildDigestHeader serves the children without Docker-Content-Digest.
+	omitChildDigestHeader bool
+	requests              atomic.Int64
 	// blobGets counts the GET requests for each blob, by digest.
 	blobGetsMu sync.Mutex
 	blobGets   map[string]int
@@ -202,6 +204,9 @@ func (fr *fakeRegistry) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		} else if child, ok := fr.children[ref]; ok {
 			m, digest = child, ref
+			if fr.omitChildDigestHeader {
+				digest = ""
+			}
 		} else {
 			http.NotFound(w, r)
 			return
@@ -210,7 +215,9 @@ func (fr *fakeRegistry) serve(w http.ResponseWriter, r *http.Request) {
 			m.mediaType = imageManifestMediaType
 		}
 		w.Header().Set("Content-Type", m.mediaType)
-		w.Header().Set("Docker-Content-Digest", digest)
+		if digest != "" {
+			w.Header().Set("Docker-Content-Digest", digest)
+		}
 		w.Header().Set("Content-Length", strconv.Itoa(len(m.data)))
 		if r.Method != http.MethodHead {
 			_, _ = w.Write(m.data)
