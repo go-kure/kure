@@ -17,6 +17,6 @@ kustomization.sourceRef           | OCIRepository prod                          
 kustomization.sourceRef.namespace | -                                            | -
 kustomization.path                | demo                                         | ./demo   <- differs
 kustomization.directory           | demo                                         | demo
-kustomization.prune               | false                                        | true   <- differs
+kustomization.prune               | false                                        | false
 kustomization.interval            | 1h0m0s                                       | 10m0s   <- differs
-patches                           | -                                            | -
+patches                           | -                                            | Kustomization/flux-system: - op: add path: /spec/prune value: false   <- differs

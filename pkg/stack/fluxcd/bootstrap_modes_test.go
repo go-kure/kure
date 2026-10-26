@@ -33,7 +33,7 @@ import (
 // FluxInstance's sync (internal/builder/templates.go: source and
 // Kustomization both named sync.name, or the FluxInstance's namespace when
 // that is empty; OCI ref as ref.tag, Git ref as ref.name; Kustomization
-// interval 10m0s and prune true, fixed).
+// interval 10m0s, fixed, and prune true unless a FluxInstance patch sets it).
 type rootView map[string]string
 
 // syncNamed are the fields SyncName decides: with it set, both modes name the
@@ -44,7 +44,9 @@ var syncNamed = map[string]bool{"source": true, "kustomization": true, "kustomiz
 // rootFields is the order the comparison lists the fields in. same marks the
 // fields both modes must agree on: they decide what the cluster pulls and
 // applies. The others are recorded, so a difference is visible and a change
-// in either mode shows up in the stored file.
+// in either mode shows up in the stored file. kustomization.prune must agree
+// when BootstrapConfig.Prune is set; unset keeps each mode's default, false
+// for gotk and true for flux-operator (go-kure/kure#1088).
 var rootFields = []struct {
 	name string
 	same bool
@@ -199,7 +201,14 @@ func operatorRoot(t *testing.T, objs []client.Object) rootView {
 	v[sourceRefTarget] = s.Kind + " " + fi.Namespace + "/" + name
 	v["kustomization.path"] = s.Path
 	v["kustomization.directory"] = path.Clean(s.Path)
+	// The operator renders prune: true; a FluxInstance patch on the sync
+	// Kustomization's spec.prune overrides it.
 	v["kustomization.prune"] = "true"
+	for _, value := range []string{"true", "false"} {
+		if strings.Contains(v["patches"], "Kustomization/"+name+": - op: add path: /spec/prune value: "+value) {
+			v["kustomization.prune"] = value
+		}
+	}
 	v["kustomization.interval"] = "10m0s"
 	return v
 }
@@ -339,7 +348,7 @@ func TestBootstrapModes_RootIdentities(t *testing.T) {
 				mark := ""
 				if g != o {
 					mark = "   <- differs"
-					if (f.same || config.SyncName != "" && syncNamed[f.name]) && config.SourceURL != "" {
+					if (f.same || config.SyncName != "" && syncNamed[f.name] || f.name == "kustomization.prune" && config.Prune != nil) && config.SourceURL != "" {
 						t.Errorf("%s: gotk %q, flux-operator %q; both modes must agree on it", f.name, g, o)
 					}
 				}
