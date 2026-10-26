@@ -943,9 +943,10 @@ func (e existingCR) describeSource() string {
 // keepsLayoutCR reports whether e, already in the tree with the name and
 // spec.path of child's per-layout CR, is kept for it: when it reads the
 // Source this integration would give the CR (layoutSource) on this cluster.
-// When that Source cannot be resolved the CR is kept as before, neither its
-// Source nor its cluster judged; otherwise one that differs is not kept, and add refuses it as
-// a namesake. One on a Source its own apply delivers, which layoutSource
+// When that Source cannot be resolved the CR is kept as before, its Source
+// not judged, unless it sets spec.kubeConfig: what it applies then goes to
+// another cluster. Otherwise one that differs is not kept. A CR not kept is
+// refused by add as a namesake. One on a Source its own apply delivers, which layoutSource
 // passes over, is kept too: checkSourcesAreHostedBeforeUse refuses it, and
 // says why.
 func (p *integratedPlacement) keepsLayoutCR(e existingCR, child *layout.ManifestLayout, scope sourceScope) bool {
@@ -954,7 +955,7 @@ func (p *integratedPlacement) keepsLayoutCR(e existingCR, child *layout.Manifest
 	}
 	ref, err := p.layoutSource(child, scope)
 	if err != nil {
-		return true
+		return !e.remote
 	}
 	return e.keeps(sourceRefKey(ref, p.gen.DefaultNamespace))
 }

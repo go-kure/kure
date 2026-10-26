@@ -1077,7 +1077,7 @@ README.
 Controls where Flux Kustomization resources are placed:
 
 - `FluxSeparate` - Flux resources collected in a separate `flux-system/` directory inside the root layout's own directory (where the root's `kustomization.yaml` references it); children referenced as directories, except those that render bundles, which their own CRs apply. `WriteToDisk` and `WriteToTar` name its files by `LayoutRules.FileNaming`, like the rest of the tree: `flux-system-kustomization-<name>.yaml` by default, `kustomization-<name>.yaml` with `FileNamingKindName` (go-kure/kure#976; before, always the default pattern). Rules passed to `IntegrateWithLayout` that leave `FileNaming` unset take the root layout's. The directory must be free: a root node's bundle or a child node rendered to it (named `flux-system` in whatever case, or a name that resolves to it such as `./flux-system`; `ManifestLayout.SameDirectory` in the layout package) is refused, naming the bundle or node. Rename it (for a bundle, its directory: its `DirName`, or its `Name` without one), or use an integrated placement. Since go-kure/kure#979 the root node's bundle has a directory named after it there; before, such a bundle was written into the root node's directory.
-- `FluxIntegratedPerLayout` - a Flux Kustomization CR for every layout that renders bundles (bundles a `GroupFlat` merge puts in one directory share one CR, named after the first) and for every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle (augmenter-added child layouts included), hosted in its parent layout (the top of the tree `layout.WalkCluster` returns renders no bundle and gets no CR, go-kure/kure#979); the parent's `kustomization.yaml` lists those CR files as its own resources and references no child directory. Not literally every layout: a layout whose CR name another generated CR already uses, such as the application `web` of the bundle `platform` beside a bundle named `platform-web`, is refused instead (see [Non-Bundle Child Layout CRs](#non-bundle-child-layout-crs)). A Kustomization already in the tree with that name, in the namespace of the generated CRs, is kept in place of a generated one when it sits in the layout that would host it and has the same `spec.path` and Source, without `spec.kubeConfig`, and is refused otherwise. Finest granularity.
+- `FluxIntegratedPerLayout` - a Flux Kustomization CR for every layout that renders bundles (bundles a `GroupFlat` merge puts in one directory share one CR, named after the first) and for every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle (augmenter-added child layouts included), hosted in its parent layout (the top of the tree `layout.WalkCluster` returns renders no bundle and gets no CR, go-kure/kure#979); the parent's `kustomization.yaml` lists those CR files as its own resources and references no child directory. Not literally every layout: a layout whose CR name another generated CR already uses, such as the application `web` of the bundle `platform` beside a bundle named `platform-web`, is refused instead (see [Non-Bundle Child Layout CRs](#non-bundle-child-layout-crs)). A Kustomization already in the tree with that name, in the namespace of the generated CRs, is kept in place of a generated one when it sits in the layout that would host it and has the same `spec.path` and Source, without `spec.kubeConfig`, and is refused otherwise; where the layout's Source cannot be resolved, the Source is not compared, but one with `spec.kubeConfig` is still not kept. Finest granularity.
 - `FluxIntegratedPerBundle` - Flux Kustomization CRs at **bundle boundaries only**, each hosted in its parent layout; a bundle's interior (application and augmenter-added child layouts) is a single kustomize build, with those children referenced as directories. A child that renders bundles is not referenced: its own CR applies it. Coarser: Flux reconciles per bundle, kustomize handles the interior.
 
 External augmenters may add child layouts that are not represented in the bundle model; integrated placement discovers those layouts and emits the required Flux resources.
@@ -1314,7 +1314,9 @@ reads the Source of the Kustomization whose apply writes it (its `spec.sourceRef
 namespace its own; the Source's identity, so another Source of the same repository, at another
 ref, is another Source) and sets no `spec.kubeConfig`. One the Flux bootstrap writes, one on
 another Source, and one applying to another cluster build no directory of this tree: they add no
-wait, and are never refused for one. One that transforms its build (`spec.patches`,
+wait, and are never refused for one. Their `dependsOn` and health checks are still judged: such a
+Kustomization that depends on, or health-checks, one that cannot be Ready before it is refused
+as any other. One that transforms its build (`spec.patches`,
 `spec.components`, `spec.namePrefix`, `spec.nameSuffix` or `spec.targetNamespace`) keeps the
 wait on all the directory holds: the transform is not modelled, and a renamed or moved
 Kustomization still depends on what it did before. A health check on another cluster
@@ -1336,6 +1338,11 @@ apply, even where another Kustomization of the tree writes it as well and would 
 (go-kure/kure#1094). A tree refused for one of them integrates
 once the dependency or health check that closes the reported chain is dropped, or names another
 Kustomization.
+
+Two cycles are known to pass these checks unrefused (go-kure/kure#1133): one through a health
+check on an object that is not a Flux Kustomization, which is not read, and one closed on a
+later integration by a `dependsOn` the integration did not rewrite there, since only rewritten
+dependencies are checked.
 
 The rules apply to the Kustomizations the call generates. One kept from an earlier integration
 is not rewritten; it is refused when it breaks R1 (with `ErrUmbrellaWait`, for `wait` or any

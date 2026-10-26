@@ -2,6 +2,7 @@ package fluxcd_test
 
 import (
 	"errors"
+	"fmt"
 	"path"
 	"strings"
 	"testing"
@@ -413,6 +414,52 @@ func TestReconcileContext_KeptUnstructuredKubeConfig(t *testing.T) {
 			}
 			if err == nil || !strings.Contains(err.Error(), `already has Flux Kustomization "platform"`) || !strings.Contains(err.Error(), c.want) {
 				t.Fatalf("got %v, want platform refused as a namesake %s", err, c.want)
+			}
+		})
+	}
+}
+
+// A per-layout Kustomization kept where the Source the integration would
+// give it cannot be resolved is kept unjudged on its Source, but not when it
+// sets spec.kubeConfig: what it applies goes to another cluster, so it does
+// not stand in for the slot, and the integration refuses the tree as it
+// refuses that tree without it. On this cluster it is kept.
+//
+// The slot is the root node's layout of a tree whose every bundle names the
+// generated Source shared: that Source is delivered inside what the layout
+// applies, so the layout has no Source to resolve. The kept copy reads the
+// bootstrap's Source.
+func TestReconcileContext_KeptUnresolvedSourceOnAnotherCluster(t *testing.T) {
+	const rootDir = "prod/platform"
+	build := urlAndPlainTree(nil)
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	rules.ClusterName = "prod"
+	rootCR := rootLayoutCRName(t, build, rules, rootDir)
+	bootstrap := kustv1.CrossNamespaceSourceReference{Kind: "GitRepository", Name: "flux-system", Namespace: "flux-system"}
+	keptOnShared := func(t *testing.T, form string, change func(k *kustv1.Kustomization)) (*layout.ManifestLayout, *stack.Cluster) {
+		ml, c := keptIn(t, build, rules, rootCR, form, change, nil)
+		c.Node.Children[0].Bundle.SourceRef = &stack.SourceRef{Kind: "GitRepository", Name: "shared"}
+		return ml, c
+	}
+	for _, form := range keptForms {
+		t.Run(form+"/another cluster", func(t *testing.T) {
+			ml, c := keptOnShared(t, form, func(k *kustv1.Kustomization) {
+				k.Spec.SourceRef = bootstrap
+				k.Spec.KubeConfig = remoteCluster()
+			})
+			err := integrate(ml, c, rules)
+			want := fmt.Sprintf("Flux Kustomization %q (spec.path %q) %s GitRepository %q", rootCR, rootDir, ownSourceRefusal, "shared")
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("got %v, want the tree refused: %s", err, want)
+			}
+		})
+		t.Run(form+"/this cluster", func(t *testing.T) {
+			ml, c := keptOnShared(t, form, func(k *kustv1.Kustomization) {
+				k.Spec.SourceRef = bootstrap
+			})
+			if err := integrate(ml, c, rules); err != nil {
+				t.Fatalf("got %v, want the Kustomization kept", err)
 			}
 		})
 	}
