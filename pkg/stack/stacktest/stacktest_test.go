@@ -2,6 +2,7 @@ package stacktest_test
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -58,11 +59,12 @@ type customSpec struct {
 type custom struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	Spec   *customSpec
-	Count  *int32
-	Marker *struct{}
-	notes  map[string]string
-	hook   func()
+	Spec    *customSpec
+	Count   *int32
+	Marker  *struct{}
+	Weights map[float64]*int32
+	notes   map[string]string
+	hook    func()
 }
 
 func (c *custom) DeepCopyObject() runtime.Object {
@@ -265,6 +267,76 @@ func TestCheckGeneration_SharingConfigFails(t *testing.T) {
 				{Kind: "pointer", First: "[0].(*stacktest_test.custom).Spec", Second: "[0].(*stacktest_test.custom).Count"},
 				{Kind: "map", First: "[0].(*stacktest_test.custom).Spec.Labels", Second: "[0].(*stacktest_test.custom).Spec.Labels"},
 			},
+		},
+		{
+			name: "wider view of storage already recorded",
+			cfg: func() genFunc {
+				groups := []int64{1000, 2000}
+				return calls(func(call int) []*client.Object {
+					if call == 1 {
+						// Same start and length; only the second view's
+						// capacity reaches groups[1].
+						narrow := &corev1.Pod{Spec: corev1.PodSpec{SecurityContext: &corev1.PodSecurityContext{SupplementalGroups: groups[:1:1]}}}
+						wide := &corev1.Pod{Spec: corev1.PodSpec{SecurityContext: &corev1.PodSecurityContext{SupplementalGroups: groups[:1:2]}}}
+						return objs(narrow, wide)
+					}
+					return objs(&corev1.Pod{Spec: corev1.PodSpec{SecurityContext: &corev1.PodSecurityContext{RunAsUser: &groups[1]}}})
+				})
+			},
+			wantShared: []stacktest.Sharing{{
+				Kind:   "slice",
+				First:  "[1].(*v1.Pod).Spec.SecurityContext.SupplementalGroups",
+				Second: "[0].(*v1.Pod).Spec.SecurityContext.RunAsUser",
+			}},
+			wantInternal: []stacktest.Sharing{{
+				Kind:   "slice",
+				First:  "[0].(*v1.Pod).Spec.SecurityContext.SupplementalGroups",
+				Second: "[1].(*v1.Pod).Spec.SecurityContext.SupplementalGroups",
+			}},
+		},
+		{
+			name: "two pointers into one shared slice",
+			cfg: func() genFunc {
+				ids := []int64{1000, 2000}
+				return calls(func(call int) []*client.Object {
+					sc := &corev1.PodSecurityContext{}
+					if call == 1 {
+						sc.SupplementalGroups = ids
+					} else {
+						sc.RunAsUser, sc.RunAsGroup = &ids[0], &ids[1]
+					}
+					return objs(&corev1.Pod{Spec: corev1.PodSpec{SecurityContext: sc}})
+				})
+			},
+			wantShared: []stacktest.Sharing{
+				{Kind: "slice", First: "[0].(*v1.Pod).Spec.SecurityContext.SupplementalGroups", Second: "[0].(*v1.Pod).Spec.SecurityContext.RunAsGroup"},
+				{Kind: "slice", First: "[0].(*v1.Pod).Spec.SecurityContext.SupplementalGroups", Second: "[0].(*v1.Pod).Spec.SecurityContext.RunAsUser"},
+			},
+		},
+		{
+			name: "map key that reads like a path",
+			cfg: func() genFunc {
+				a, b := map[string]any{"a": "1"}, map[string]any{"b": "2"}
+				return calls(func(int) []*client.Object {
+					// The second key renders as a path inside the first
+					// value; the two values are unrelated.
+					return objs(&unstructured.Unstructured{Object: map[string]any{"a": a, "a].(map[string]interface {})[b": b}})
+				})
+			},
+			wantShared: []stacktest.Sharing{
+				{Kind: "map", First: "[0].(*unstructured.Unstructured).Object[a].(map[string]interface {})", Second: "[0].(*unstructured.Unstructured).Object[a].(map[string]interface {})"},
+				{Kind: "map", First: "[0].(*unstructured.Unstructured).Object[a].(map[string]interface {})[b].(map[string]interface {})", Second: "[0].(*unstructured.Unstructured).Object[a].(map[string]interface {})[b].(map[string]interface {})"},
+			},
+		},
+		{
+			name: "value under a NaN map key",
+			cfg: func() genFunc {
+				weight := int32(1)
+				return calls(func(int) []*client.Object {
+					return objs(&custom{Weights: map[float64]*int32{math.NaN(): &weight}})
+				})
+			},
+			wantShared: []stacktest.Sharing{{Kind: "pointer", First: "[0].(*stacktest_test.custom).Weights[NaN]", Second: "[0].(*stacktest_test.custom).Weights[NaN]"}},
 		},
 	}
 	for _, tc := range cases {

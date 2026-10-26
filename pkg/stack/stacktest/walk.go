@@ -18,6 +18,33 @@ var (
 	objectType = reflect.TypeFor[client.Object]()
 )
 
+// path is a walk path as its segments ("[0]", ".Spec", ".(*v1.Pod)"), so
+// whether one path lies inside another does not depend on what a map key
+// spells.
+type path []string
+
+// child returns p with seg appended, never sharing p's storage.
+func (p path) child(seg string) path {
+	out := make(path, len(p), len(p)+1)
+	copy(out, p)
+	return append(out, seg)
+}
+
+func (p path) String() string { return strings.Join(p, "") }
+
+// extends reports whether p is q or lies inside the value at q.
+func (p path) extends(q path) bool {
+	if len(p) < len(q) {
+		return false
+	}
+	for i := range q {
+		if p[i] != q[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // record is one encounter of storage during a walk: a pointer's pointee or a
 // slice's backing array as the half-open range [start, end), or a map by
 // identity (start is the map's pointer, end is unused).
@@ -25,17 +52,20 @@ type record struct {
 	start, end uintptr
 	isMap      bool
 	kind       string
-	path       string
+	path       path
 	// first is false for a second encounter of the same storage, which is
 	// not walked again.
 	first bool
 }
 
+// visitKey identifies a value for traversal. A slice view adds its length
+// and capacity: a longer view must still be walked, and a wider one still
+// recorded as a first encounter.
 type visitKey struct {
-	kind reflect.Kind
-	addr uintptr
-	typ  reflect.Type
-	len  int
+	kind     reflect.Kind
+	addr     uintptr
+	typ      reflect.Type
+	len, cap int
 }
 
 // walk collects the records of one result in walk order, which is depth
@@ -54,13 +84,13 @@ type walk struct {
 
 func walkResult(objs []*client.Object) (*walk, error) {
 	w := &walk{result: objs, visited: map[visitKey]bool{}, active: map[visitKey]bool{}}
-	if err := w.value(reflect.ValueOf(objs), ""); err != nil {
+	if err := w.value(reflect.ValueOf(objs), path{}); err != nil {
 		return nil, err
 	}
 	return w, nil
 }
 
-func (w *walk) value(v reflect.Value, path string) error {
+func (w *walk) value(v reflect.Value, p path) error {
 	switch v.Kind() {
 	case reflect.Pointer:
 		if v.IsNil() {
@@ -69,19 +99,19 @@ func (w *walk) value(v reflect.Value, path string) error {
 		start := v.Pointer()
 		elem := v.Type().Elem()
 		key := visitKey{kind: reflect.Pointer, addr: start, typ: elem}
-		return w.storage(key, record{start: start, end: start + elem.Size(), kind: pointerKind(v.Type()), path: path}, func() error {
-			return w.value(v.Elem(), path)
+		return w.storage(key, record{start: start, end: start + elem.Size(), kind: pointerKind(v.Type()), path: p}, func() error {
+			return w.value(v.Elem(), p)
 		})
 	case reflect.Slice:
 		if v.IsNil() || v.Cap() == 0 {
 			return nil
 		}
 		start := v.Pointer()
-		key := visitKey{kind: reflect.Slice, addr: start, typ: v.Type(), len: v.Len()}
+		key := visitKey{kind: reflect.Slice, addr: start, typ: v.Type(), len: v.Len(), cap: v.Cap()}
 		end := start + uintptr(v.Cap())*v.Type().Elem().Size()
-		return w.storage(key, record{start: start, end: end, kind: "slice", path: path}, func() error {
+		return w.storage(key, record{start: start, end: end, kind: "slice", path: p}, func() error {
 			for i := 0; i < v.Len(); i++ {
-				if err := w.value(v.Index(i), path+"["+strconv.Itoa(i)+"]"); err != nil {
+				if err := w.value(v.Index(i), p.child("["+strconv.Itoa(i)+"]")); err != nil {
 					return err
 				}
 			}
@@ -93,13 +123,13 @@ func (w *walk) value(v reflect.Value, path string) error {
 		}
 		start := v.Pointer()
 		key := visitKey{kind: reflect.Map, addr: start, typ: v.Type()}
-		return w.storage(key, record{start: start, isMap: true, kind: "map", path: path}, func() error {
-			for _, k := range sortedKeys(v) {
-				p := path + "[" + fmt.Sprint(k) + "]"
-				if err := w.value(k, p); err != nil {
+		return w.storage(key, record{start: start, isMap: true, kind: "map", path: p}, func() error {
+			for _, e := range sortedEntries(v) {
+				kp := p.child("[" + fmt.Sprint(e.key) + "]")
+				if err := w.value(e.key, kp); err != nil {
 					return err
 				}
-				if err := w.value(v.MapIndex(k), p); err != nil {
+				if err := w.value(e.value, kp); err != nil {
 					return err
 				}
 			}
@@ -107,7 +137,7 @@ func (w *walk) value(v reflect.Value, path string) error {
 		})
 	case reflect.Array:
 		for i := 0; i < v.Len(); i++ {
-			if err := w.value(v.Index(i), path+"["+strconv.Itoa(i)+"]"); err != nil {
+			if err := w.value(v.Index(i), p.child("["+strconv.Itoa(i)+"]")); err != nil {
 				return err
 			}
 		}
@@ -116,7 +146,7 @@ func (w *walk) value(v reflect.Value, path string) error {
 			return nil
 		}
 		for i := 0; i < v.NumField(); i++ {
-			if err := w.value(v.Field(i), path+"."+v.Type().Field(i).Name); err != nil {
+			if err := w.value(v.Field(i), p.child("."+v.Type().Field(i).Name)); err != nil {
 				return err
 			}
 		}
@@ -125,10 +155,10 @@ func (w *walk) value(v reflect.Value, path string) error {
 			return nil
 		}
 		elem := v.Elem()
-		return w.value(elem, path+".("+elem.Type().String()+")")
+		return w.value(elem, p.child(".("+elem.Type().String()+")"))
 	case reflect.Func, reflect.Chan, reflect.UnsafePointer:
 		if !v.IsNil() {
-			return errors.Errorf("unsupported %s value at %q", v.Kind(), path)
+			return errors.Errorf("unsupported %s value at %q", v.Kind(), p.String())
 		}
 	default:
 		// Strings, numbers and bools: nothing a write could reach through.
@@ -165,10 +195,17 @@ func pointerKind(t reflect.Type) string {
 	return "pointer"
 }
 
-// sortedKeys orders map keys by value for string, integer and bool kinds and
-// by formatted value otherwise, so the path kept for a value is stable.
-func sortedKeys(v reflect.Value) []reflect.Value {
-	keys := v.MapKeys()
+type entry struct{ key, value reflect.Value }
+
+// sortedEntries returns a map's entries ordered by key: by value for string,
+// integer and bool kinds and by formatted value otherwise, so the path kept
+// for a value is stable. Entries are read with MapRange, which also returns
+// those under a NaN key that MapIndex cannot look up.
+func sortedEntries(v reflect.Value) []entry {
+	var entries []entry
+	for it := v.MapRange(); it.Next(); {
+		entries = append(entries, entry{it.Key(), it.Value()})
+	}
 	var less func(a, b reflect.Value) bool
 	switch v.Type().Key().Kind() {
 	case reflect.String:
@@ -182,8 +219,8 @@ func sortedKeys(v reflect.Value) []reflect.Value {
 	default:
 		less = func(a, b reflect.Value) bool { return fmt.Sprint(a) < fmt.Sprint(b) }
 	}
-	sort.SliceStable(keys, func(i, j int) bool { return less(keys[i], keys[j]) })
-	return keys
+	sort.SliceStable(entries, func(i, j int) bool { return less(entries[i].key, entries[j].key) })
+	return entries
 }
 
 // overlaps reports whether a and b are the same map, or two storage ranges
@@ -246,30 +283,23 @@ func matches(a, b []record) []match {
 	return out
 }
 
-// extends reports whether path p is q or lies inside the value at q.
-func extends(p, q string) bool {
-	if !strings.HasPrefix(p, q) {
-		return false
-	}
-	rest := p[len(q):]
-	return rest == "" || rest[0] == '.' || rest[0] == '['
-}
-
 // report turns matches into Sharings, in walk order of the first side so a
 // value is considered before anything inside it. A match whose two paths
 // both extend the two paths of a reported one is inside that one and is
-// skipped, and each record of the first side is reported at most once.
-func report(a, b []record, ms []match) []Sharing {
+// skipped. With oncePerSecond, a record of the second side is reported at
+// most once, against the first record it overlaps.
+func report(a, b []record, ms []match, oncePerSecond bool) []Sharing {
 	var out []Sharing
+	var done []match
 	reported := map[int]bool{}
 	for _, m := range ms {
-		if reported[m.i] {
+		if oncePerSecond && reported[m.j] {
 			continue
 		}
 		first, second := a[m.i].path, b[m.j].path
 		inside := false
-		for _, s := range out {
-			if extends(first, s.First) && extends(second, s.Second) {
+		for _, d := range done {
+			if first.extends(a[d.i].path) && second.extends(b[d.j].path) {
 				inside = true
 				break
 			}
@@ -277,8 +307,9 @@ func report(a, b []record, ms []match) []Sharing {
 		if inside {
 			continue
 		}
-		reported[m.i] = true
-		out = append(out, Sharing{Kind: a[m.i].kind, First: first, Second: second})
+		reported[m.j] = true
+		done = append(done, m)
+		out = append(out, Sharing{Kind: a[m.i].kind, First: first.String(), Second: second.String()})
 	}
 	return out
 }
@@ -296,7 +327,7 @@ func sortSharings(s []Sharing) {
 // encounter of each value on each side.
 func shared(a, b *walk) []Sharing {
 	fa, fb := firsts(a.records), firsts(b.records)
-	out := report(fa, fb, matches(fa, fb))
+	out := report(fa, fb, matches(fa, fb), false)
 	sortSharings(out)
 	return out
 }
@@ -311,8 +342,9 @@ func firsts(rs []record) []record {
 	return out
 }
 
-// internal reports the storage each result reaches at two paths, listing a
-// value found in both results once.
+// internal reports the storage each result reaches at two paths, each later
+// path against the earliest it overlaps, listing a value found in both
+// results once.
 func internal(walks ...*walk) []Sharing {
 	var out []Sharing
 	seen := map[Sharing]bool{}
@@ -323,7 +355,7 @@ func internal(walks ...*walk) []Sharing {
 				ms = append(ms, m)
 			}
 		}
-		for _, s := range report(w.records, w.records, ms) {
+		for _, s := range report(w.records, w.records, ms, true) {
 			if !seen[s] {
 				seen[s] = true
 				out = append(out, s)
