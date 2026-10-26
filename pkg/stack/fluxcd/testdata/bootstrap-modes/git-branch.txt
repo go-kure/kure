@@ -1,20 +1,21 @@
-field                    | gotk                                         | flux-operator
-documents                | 1 source, 1 Kustomization                    | FluxInstance with sync: 1 source, 1 Kustomization   <- differs
-source                   | GitRepository flux-system/prod               | GitRepository flux-system/flux-system   <- differs
-source.kind              | GitRepository                                | GitRepository
-source.namespace         | flux-system                                  | flux-system
-source.url               | https://git.example.com/fleet.git            | https://git.example.com/fleet.git
-source.ref               | branch: main                                 | name: refs/heads/main   <- differs
-source.revision          | refs/heads/main                              | refs/heads/main
-source.interval          | 1h0m0s                                       | 1h0m0s
-source.secretRef         | -                                            | -
-source.provider          | -                                            | -
-source.insecure          | -                                            | -
-kustomization            | Kustomization flux-system/flux-system        | Kustomization flux-system/flux-system
-kustomization.namespace  | flux-system                                  | flux-system
-kustomization.sourceRef  | GitRepository prod                           | GitRepository flux-system   <- differs
-kustomization.path       | demo                                         | ./demo   <- differs
-kustomization.directory  | demo                                         | demo
-kustomization.prune      | false                                        | true   <- differs
-kustomization.interval   | 1h0m0s                                       | 10m0s   <- differs
-patches                  | -                                            | -
+field                             | gotk                                         | flux-operator
+documents                         | 1 source, 1 Kustomization                    | FluxInstance with sync: 1 source, 1 Kustomization   <- differs
+source                            | GitRepository flux-system/prod               | GitRepository flux-system/flux-system   <- differs
+source.kind                       | GitRepository                                | GitRepository
+source.namespace                  | flux-system                                  | flux-system
+source.url                        | https://git.example.com/fleet.git            | https://git.example.com/fleet.git
+source.ref                        | branch: main                                 | name: refs/heads/main   <- differs
+source.revision                   | refs/heads/main                              | refs/heads/main
+source.interval                   | 1h0m0s                                       | 1h0m0s
+source.secretRef                  | -                                            | -
+source.provider                   | -                                            | -
+source.insecure                   | -                                            | -
+kustomization                     | Kustomization flux-system/flux-system        | Kustomization flux-system/flux-system
+kustomization.namespace           | flux-system                                  | flux-system
+kustomization.sourceRef           | GitRepository prod                           | GitRepository flux-system   <- differs
+kustomization.sourceRef.namespace | -                                            | -
+kustomization.path                | demo                                         | ./demo   <- differs
+kustomization.directory           | demo                                         | demo
+kustomization.prune               | false                                        | true   <- differs
+kustomization.interval            | 1h0m0s                                       | 10m0s   <- differs
+patches                           | -                                            | -

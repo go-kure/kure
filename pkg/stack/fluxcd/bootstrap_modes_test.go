@@ -54,6 +54,7 @@ var rootFields = []struct {
 	{"kustomization", false},
 	{"kustomization.namespace", true},
 	{"kustomization.sourceRef", false},
+	{"kustomization.sourceRef.namespace", true},
 	{"kustomization.path", false},
 	{"kustomization.directory", true},
 	{"kustomization.prune", false},
@@ -95,6 +96,8 @@ func gotkRoot(t *testing.T, objs []client.Object) rootView {
 			v["kustomization"] = "Kustomization " + o.Namespace + "/" + o.Name
 			v["kustomization.namespace"] = o.Namespace
 			v["kustomization.sourceRef"] = o.Spec.SourceRef.Kind + " " + o.Spec.SourceRef.Name
+			v["kustomization.sourceRef.namespace"] = o.Spec.SourceRef.Namespace
+			v[sourceRefTarget] = o.Spec.SourceRef.Kind + " " + orDefault(o.Spec.SourceRef.Namespace, o.Namespace) + "/" + o.Spec.SourceRef.Name
 			v["kustomization.path"] = o.Spec.Path
 			v["kustomization.directory"] = path.Clean(o.Spec.Path)
 			v["kustomization.prune"] = fmt.Sprint(o.Spec.Prune)
@@ -163,6 +166,10 @@ func operatorRoot(t *testing.T, objs []client.Object) rootView {
 	v["kustomization"] = "Kustomization " + fi.Namespace + "/" + name
 	v["kustomization.namespace"] = fi.Namespace
 	v["kustomization.sourceRef"] = s.Kind + " " + name
+	// The operator's sync Kustomization names no sourceRef namespace
+	// (templates.go: kind and name only), so it resolves in its own.
+	v["kustomization.sourceRef.namespace"] = ""
+	v[sourceRefTarget] = s.Kind + " " + fi.Namespace + "/" + name
 	v["kustomization.path"] = s.Path
 	v["kustomization.directory"] = path.Clean(s.Path)
 	v["kustomization.prune"] = "true"
@@ -207,8 +214,9 @@ func bootstrapModeConfigs() map[string]*stack.BootstrapConfig {
 // TestBootstrapModes_RootIdentities renders every config of the matrix in
 // both modes and holds them to one root each: at most one source and exactly
 // one Kustomization in gotk mode, one FluxInstance in flux-operator mode,
-// whose sync is one source and one Kustomization. The fields that decide what
-// the cluster pulls and applies must agree; the comparison, differences
+// whose sync is one source and one Kustomization. With a source, the
+// Kustomization's sourceRef must resolve to it in each mode. The fields that
+// decide what the cluster pulls and applies must agree; the comparison, differences
 // included, is stored under testdata/bootstrap-modes.
 func TestBootstrapModes_RootIdentities(t *testing.T) {
 	for name, config := range bootstrapModeConfigs() {
@@ -223,8 +231,15 @@ func TestBootstrapModes_RootIdentities(t *testing.T) {
 				return objs
 			}
 			gotk, operator := gotkRoot(t, render(fluxstack.ModeGotk)), operatorRoot(t, render(fluxstack.DefaultFluxMode))
+			if config.SourceURL != "" {
+				for mode, v := range map[string]rootView{"gotk": gotk, "flux-operator": operator} {
+					if v[sourceRefTarget] != v["source"] {
+						t.Errorf("%s: the Kustomization's sourceRef resolves to %s, the source is %s", mode, v[sourceRefTarget], v["source"])
+					}
+				}
+			}
 			var out bytes.Buffer
-			fmt.Fprintf(&out, "%-24s | %-44s | %s\n", "field", "gotk", "flux-operator")
+			fmt.Fprintf(&out, "%-33s | %-44s | %s\n", "field", "gotk", "flux-operator")
 			for _, f := range rootFields {
 				g, o := gotk[f.name], operator[f.name]
 				mark := ""
@@ -234,11 +249,23 @@ func TestBootstrapModes_RootIdentities(t *testing.T) {
 						t.Errorf("%s: gotk %q, flux-operator %q; both modes must agree on it", f.name, g, o)
 					}
 				}
-				fmt.Fprintf(&out, "%-24s | %-44s | %s%s\n", f.name, orNone(g), orNone(o), mark)
+				fmt.Fprintf(&out, "%-33s | %-44s | %s%s\n", f.name, orNone(g), orNone(o), mark)
 			}
 			compareWithStored(t, filepath.Join("testdata", "bootstrap-modes", name+".txt"), out.Bytes())
 		})
 	}
+}
+
+// sourceRefTarget is the object the root Kustomization's sourceRef resolves
+// to, "Kind namespace/name", an unset namespace being the Kustomization's own.
+// It is checked against the emitted source, not stored.
+const sourceRefTarget = "kustomization.sourceRef.target"
+
+func orDefault(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
 }
 
 func orNone(s string) string {
