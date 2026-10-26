@@ -270,8 +270,7 @@ func (t *kustomizationTree) orderPath(from, to string) ([]string, error) {
 		out = append(out, "apply "+key)
 		k := t.byKey[key]
 		obj := t.otherObjs[key]
-		if obj == nil {
-			// One a patched build keeps (patchesBuild).
+		if t.keptDropped(key) {
 			obj = t.droppedObjs[key]
 		}
 		if k == nil && obj != nil {
