@@ -500,22 +500,45 @@ func validateSourceAccess(config *stack.BootstrapConfig, name string) error {
 	return nil
 }
 
+// syncObjectName is the name flux-operator gives the source and the
+// Kustomization it generates for the sync: sync.name, or the FluxInstance's
+// namespace when sync.name is empty.
+func (bg *BootstrapGenerator) syncObjectName(config *stack.BootstrapConfig) string {
+	if config.SyncName != "" {
+		return config.SyncName
+	}
+	return bg.DefaultNamespace
+}
+
 // syncInsecurePatch returns the FluxInstance kustomize patch that sets
 // spec.insecure on the OCIRepository flux-operator generates for the sync. The
-// sync has no field for it. The operator names that source after sync.name, or
-// after the FluxInstance's namespace when sync.name is empty, and applies
-// spec.kustomize patches to every object it builds, the sync source included.
+// sync has no field for it. The operator applies spec.kustomize patches to
+// every object it builds, the sync source included.
 func (bg *BootstrapGenerator) syncInsecurePatch(config *stack.BootstrapConfig) kustomize.Patch {
-	name := config.SyncName
-	if name == "" {
-		name = bg.DefaultNamespace
-	}
 	return kustomize.Patch{
 		Patch: "- op: add\n  path: /spec/insecure\n  value: true\n",
 		Target: &kustomize.Selector{
 			Group: sourcev1.GroupVersion.Group,
 			Kind:  sourcev1.OCIRepositoryKind,
-			Name:  name,
+			Name:  bg.syncObjectName(config),
+		},
+	}
+}
+
+// syncPrunePatch returns the FluxInstance kustomize patch that sets
+// spec.prune on the Kustomization flux-operator generates for the sync to
+// prune. The sync has no field for it, and the operator renders that
+// Kustomization with prune: true whatever the FluxInstance says (flux-operator
+// v0.58.1 internal/builder/templates.go:463). The patch is emitted only for an
+// explicit BootstrapConfig.Prune: unset keeps the operator's prune: true
+// (go-kure/kure#1088).
+func (bg *BootstrapGenerator) syncPrunePatch(config *stack.BootstrapConfig, prune bool) kustomize.Patch {
+	return kustomize.Patch{
+		Patch: fmt.Sprintf("- op: add\n  path: /spec/prune\n  value: %t\n", prune),
+		Target: &kustomize.Selector{
+			Group: kustv1.GroupVersion.Group,
+			Kind:  kustv1.KustomizationKind,
+			Name:  bg.syncObjectName(config),
 		},
 	}
 }
@@ -708,8 +731,15 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 		}
 		spec.Sync.PullSecret = config.SourceSecretRef
 		spec.Sync.Provider = config.SourceProvider
+		var patches []kustomize.Patch
 		if config.SourceInsecure {
-			spec.Kustomize = &fluxv1.Kustomize{Patches: []kustomize.Patch{bg.syncInsecurePatch(config)}}
+			patches = append(patches, bg.syncInsecurePatch(config))
+		}
+		if config.Prune != nil {
+			patches = append(patches, bg.syncPrunePatch(config, *config.Prune))
+		}
+		if len(patches) > 0 {
+			spec.Kustomize = &fluxv1.Kustomize{Patches: patches}
 		}
 	}
 

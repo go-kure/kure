@@ -1,6 +1,7 @@
 package fluxcd_test
 
 import (
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -181,13 +182,37 @@ func TestBootstrapSourceAccess_InsecurePatch(t *testing.T) {
 			if applied == "" {
 				applied = fi.GetNamespace()
 			}
-			patches, err := sigsyaml.Marshal(fi.Spec.Kustomize.Patches)
-			if err != nil {
-				t.Fatalf("marshalling the patches: %v", err)
+			insecure := map[string]any{}
+			for id, spec := range buildOperatorSync(t, fi, applied) {
+				if v, found := spec["insecure"]; found {
+					insecure[id] = v
+				}
 			}
-			// The two sync objects as flux-operator's sync template writes
-			// them, and a second OCIRepository the patch must not reach.
-			sync := strings.NewReplacer("NAME", applied, "NS", fi.GetNamespace()).Replace(`apiVersion: source.toolkit.fluxcd.io/v1
+			want := map[string]any{"OCIRepository/" + applied: true}
+			if !reflect.DeepEqual(insecure, want) {
+				t.Errorf("spec.insecure after the build = %v, want %v", insecure, want)
+			}
+		})
+	}
+}
+
+// buildOperatorSync builds fi's kustomize patches over the sync objects
+// flux-operator generates, named applied, the way the operator does: the
+// patches are marshalled into the kustomization's patches list and kustomize
+// builds it. It returns each built object's spec by "Kind/name".
+func buildOperatorSync(t *testing.T, fi *fluxv1.FluxInstance, applied string) map[string]map[string]any {
+	t.Helper()
+	var patches []byte
+	if fi.Spec.Kustomize != nil {
+		var err error
+		if patches, err = sigsyaml.Marshal(fi.Spec.Kustomize.Patches); err != nil {
+			t.Fatalf("marshalling the patches: %v", err)
+		}
+	}
+	// The two sync objects as flux-operator's sync template writes them
+	// (internal/builder/templates.go, v0.58.1), and a second OCIRepository a
+	// patch must not reach.
+	sync := strings.NewReplacer("NAME", applied, "NS", fi.GetNamespace()).Replace(`apiVersion: source.toolkit.fluxcd.io/v1
 kind: OCIRepository
 metadata:
   name: NAME
@@ -220,34 +245,107 @@ spec:
   interval: 1h0m0s
   url: oci://registry.example.com/other
 `)
-			fs := filesys.MakeFsInMemory()
-			dir := "/sync"
-			for file, data := range map[string]string{
-				"sync.yaml":          sync,
-				"kustomization.yaml": "resources:\n  - sync.yaml\npatches:\n" + string(patches),
-			} {
-				if err := fs.WriteFile(filepath.Join(dir, file), []byte(data)); err != nil {
-					t.Fatalf("writing %s: %v", file, err)
+	kustomization := "resources:\n  - sync.yaml\n"
+	if len(patches) > 0 {
+		kustomization += "patches:\n" + string(patches)
+	}
+	fs := filesys.MakeFsInMemory()
+	dir := "/sync"
+	for file, data := range map[string]string{"sync.yaml": sync, "kustomization.yaml": kustomization} {
+		if err := fs.WriteFile(filepath.Join(dir, file), []byte(data)); err != nil {
+			t.Fatalf("writing %s: %v", file, err)
+		}
+	}
+	res, err := krusty.MakeKustomizer(krusty.MakeDefaultOptions()).Run(fs, dir)
+	if err != nil {
+		t.Fatalf("kustomize build: %v", err)
+	}
+	specs := map[string]map[string]any{}
+	for _, r := range res.Resources() {
+		m, err := r.Map()
+		if err != nil {
+			t.Fatalf("reading %s: %v", r.CurId(), err)
+		}
+		spec, _ := m["spec"].(map[string]any)
+		specs[r.GetKind()+"/"+r.GetName()] = spec
+	}
+	return specs
+}
+
+// TestBootstrapPrune_FluxOperator: an explicit Prune reaches the sync
+// Kustomization flux-operator generates, through a FluxInstance patch built
+// the way the operator builds it, for an explicit and the default sync name,
+// alone and next to the insecure patch, through both entry points. Unset
+// emits no patch and keeps the operator's prune: true; nothing else in the
+// sync changes (go-kure/kure#1088).
+func TestBootstrapPrune_FluxOperator(t *testing.T) {
+	off, on := false, true
+	for entry, generate := range fluxInstanceEntryPoints {
+		for _, syncName := range []string{"fleet", ""} {
+			for _, insecure := range []bool{false, true} {
+				for name, tc := range map[string]struct {
+					prune *bool
+					want  bool
+				}{"unset": {nil, true}, "false": {&off, false}, "true": {&on, true}} {
+					t.Run(fmt.Sprintf("%s/sync %q/insecure %t/prune %s", entry, syncName, insecure, name), func(t *testing.T) {
+						config := accessConfig(fluxstack.DefaultFluxMode, sourceAccess{insecure: insecure})
+						config.SyncName, config.Prune = syncName, tc.prune
+						fi, err := generate(config)
+						if err != nil {
+							t.Fatalf("generate: %v", err)
+						}
+						applied := syncName
+						if applied == "" {
+							applied = fi.GetNamespace()
+						}
+						wantPatches := 0
+						if insecure {
+							wantPatches++
+						}
+						if tc.prune != nil {
+							wantPatches++
+						}
+						if got := 0; fi.Spec.Kustomize != nil {
+							if got = len(fi.Spec.Kustomize.Patches); got != wantPatches {
+								t.Errorf("%d patches, want %d", got, wantPatches)
+							}
+						} else if wantPatches != 0 {
+							t.Errorf("no spec.kustomize, want %d patches", wantPatches)
+						}
+						specs := buildOperatorSync(t, fi, applied)
+						kust := specs["Kustomization/"+applied]
+						if kust["prune"] != tc.want {
+							t.Errorf("sync Kustomization spec.prune after the build = %v, want %v", kust["prune"], tc.want)
+						}
+						for id, spec := range specs {
+							if _, found := spec["prune"]; found && id != "Kustomization/"+applied {
+								t.Errorf("%s has spec.prune; the patch must reach the sync Kustomization only", id)
+							}
+						}
+						if v, found := specs["OCIRepository/"+applied]["insecure"]; found != insecure || found && v != true {
+							t.Errorf("sync OCIRepository spec.insecure = %v (set %t), want set %t", v, found, insecure)
+						}
+					})
 				}
 			}
-			res, err := krusty.MakeKustomizer(krusty.MakeDefaultOptions()).Run(fs, dir)
+		}
+	}
+}
+
+// TestBootstrapPrune_NoSync: without a SourceURL the FluxInstance has no sync,
+// and an explicit Prune adds no patch, through both entry points.
+func TestBootstrapPrune_NoSync(t *testing.T) {
+	off := false
+	for entry, generate := range fluxInstanceEntryPoints {
+		t.Run(entry, func(t *testing.T) {
+			config := accessConfig(fluxstack.DefaultFluxMode, sourceAccess{})
+			config.SourceURL, config.Prune = "", &off
+			fi, err := generate(config)
 			if err != nil {
-				t.Fatalf("kustomize build: %v", err)
+				t.Fatalf("generate: %v", err)
 			}
-			insecure := map[string]any{}
-			for _, r := range res.Resources() {
-				m, err := r.Map()
-				if err != nil {
-					t.Fatalf("reading %s: %v", r.CurId(), err)
-				}
-				spec, _ := m["spec"].(map[string]any)
-				if v, found := spec["insecure"]; found {
-					insecure[r.GetKind()+"/"+r.GetName()] = v
-				}
-			}
-			want := map[string]any{"OCIRepository/" + applied: true}
-			if !reflect.DeepEqual(insecure, want) {
-				t.Errorf("spec.insecure after the build = %v, want %v", insecure, want)
+			if fi.Spec.Sync != nil || fi.Spec.Kustomize != nil {
+				t.Errorf("sync %#v, kustomize %#v; want neither without a SourceURL", fi.Spec.Sync, fi.Spec.Kustomize)
 			}
 		})
 	}

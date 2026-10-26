@@ -519,10 +519,10 @@ full reference.
 
 `Bundle.Prune` and `Bundle.Wait` are `*bool` and are passed through untouched.
 `BootstrapConfig.Prune` does the same for the gotk bootstrap Kustomization. In flux-operator
-mode it reaches nothing: flux-operator renders its sync Kustomization with `prune: true`, whatever
-the config says (go-kure/kure#1088). `ResourceGenerator.Prune` is passed through untouched for a
-Kustomization generated from a `layout.ManifestLayout` where neither the layout nor the bundle that
-holds its application sets one. A layout carries both
+mode a set `Prune` becomes a patch on the operator's sync Kustomization, and unset keeps the
+operator's `prune: true` (see [Prune](#prune), go-kure/kure#1088). `ResourceGenerator.Prune` is
+passed through untouched for a Kustomization generated from a `layout.ManifestLayout` where
+neither the layout nor the bundle that holds its application sets one. A layout carries both
 settings, `ManifestLayout.Prune` and `ManifestLayout.Wait`, unset meaning that bundle's (see
 [Per-layout settings](#per-layout-settings)).
 
@@ -922,7 +922,7 @@ fmt.Println(fi.Name, fi.Spec.Sync.Name, fi.Spec.Sync.Ref)
 ```
 <!-- doc-example:end -->
 
-- flux-operator mode only: gotk mode ignores it, as flux-operator mode ignores `Prune`.
+- flux-operator mode only: gotk mode ignores it.
 - It needs `SourceURL`: without one no sync block is emitted, so there is nothing to name.
 - kure passes it through unvalidated. The CRD caps it at 63 characters and makes it immutable
   once set, so renaming the sync of a live cluster means recreating the `FluxInstance`.
@@ -954,6 +954,22 @@ Both `GenerateBootstrap` and `GenerateFluxInstance` refuse, with nothing returne
 - any of the three without `SourceURL`, where no source is generated for it to apply to;
 - any of the three with a `GitRepository` source, which they are not defined for;
 - a `SourceProvider` an `OCIRepository` does not take, `github` included.
+
+### Prune
+
+`BootstrapConfig.Prune` sets garbage collection on the bootstrap Kustomization in both modes
+(go-kure/kure#1088). Unset keeps each mode's default.
+
+| `Prune` | gotk Kustomization | flux-operator sync Kustomization |
+|---|---|---|
+| unset | `prune: false` | `prune: true`, the operator's |
+| `false` | `prune: false` | `prune: false`, by patch |
+| `true` | `prune: true` | `prune: true`, by patch |
+
+The operator writes `prune: true` into the sync Kustomization it generates, and a `FluxInstance`
+sync has no prune field. So in flux-operator mode a set `Prune` adds one `spec.kustomize` patch
+that sets `spec.prune` on that Kustomization, matched by group, kind and name, the name chosen as
+for the `SourceInsecure` patch. Without `SourceURL` no sync is generated and `Prune` adds nothing.
 
 ### Root node name
 

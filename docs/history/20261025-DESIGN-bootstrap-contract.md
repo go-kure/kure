@@ -29,11 +29,11 @@ both. In flux-operator mode kure emits a FluxInstance, and flux-operator renders
 | Directory | The tree's top directory (`layout.TopDirectory`), spelled per mode (`demo`, `./demo`) | Holds |
 | Namespace | The generator's `DefaultNamespace` for the source, the Kustomization and the FluxInstance. The Kustomization's `sourceRef` names no namespace, so it resolves in its own | Holds; the modes test checks that each mode's sourceRef resolves to the emitted source |
 | Source kind, URL | From `BootstrapConfig`, the same in both modes | Holds |
-| Source interval | From the generator's `BootstrapGenerator.DefaultInterval`, not `BootstrapConfig`: the gotk source (`bootstrap_generator.go:572`, `:598`) and the FluxInstance sync (`:707`) | Holds |
+| Source interval | From the generator's `BootstrapGenerator.DefaultInterval`, not `BootstrapConfig`: the gotk source (`bootstrap_generator.go:595`, `:621`) and the FluxInstance sync (`:730`) | Holds |
 | Access | `SourceSecretRef`, `SourceProvider`, `SourceInsecure` (go-kure/kure#1060) | Holds, on main |
 | Names | `SyncName` names the source and the Kustomization in both modes | flux-operator only. gotk names the source after the root node and the Kustomization `BootstrapName` |
 | Ref selector | Tag, or a semver range, chosen explicitly | Tag only |
-| Prune | An explicit `Prune` reaches the root Kustomization in both modes | gotk only. flux-operator always prunes |
+| Prune | An explicit `Prune` reaches the root Kustomization in both modes | Holds since go-kure/kure#1088, by a patch in flux-operator mode. Unset keeps each mode's default (Prune compatibility) |
 | Verification | OCI signature verification, in both modes | Not expressible |
 
 In flux-operator mode, anything `spec.sync` cannot express reaches the rendered objects as a
@@ -64,16 +64,18 @@ The issue's own probe showed that the path and namespace work. The rest is bound
 
 - **The modes name the root differently.** gotk takes the source name from the root node
   (`sourceName`, `:355-360`) and the Kustomization name from the generator's `BootstrapName`
-  (`:58-63`, `:533`). flux-operator names both `SyncName`, or the FluxInstance's namespace when
+  (`:58-63`, `:556`). flux-operator names both `SyncName`, or the FluxInstance's namespace when
   that is empty (flux-operator v0.58.1 `internal/controller/fluxinstance_controller.go:394-398`).
   A consumer that needs one identity across modes cannot state it.
-- **Tag only.** gotk sets `OCIRepositoryRef{Tag}` (`:599`). flux-operator renders an OCI sync ref
+- **Tag only.** gotk sets `OCIRepositoryRef{Tag}` (`:622`). flux-operator renders an OCI sync ref
   as `ref.tag` (`internal/builder/templates.go:437-438`). `SemVer` exists upstream in both
   `OCIRepositoryRef` and `GitRepositoryRef`.
-- **Prune diverges.** `BootstrapConfig.Prune` reaches only the gotk Kustomization (`:539`).
-  Its godoc promises that unset means `prune: false`. flux-operator renders `prune: true` and
+- **Prune diverges.** `BootstrapConfig.Prune` reached only the gotk Kustomization (`:562`).
+  Its godoc promised that unset means `prune: false`. flux-operator renders `prune: true` and
   `interval: 10m0s` regardless (`templates.go:461-463`). So the same unset config garbage-collects
   in one mode and not in the other (`testdata/bootstrap-modes/prune-unset.txt`).
+  go-kure/kure#1088 patches an explicit `Prune` onto the flux-operator sync Kustomization. Unset
+  still differs, by the rule under Prune compatibility.
 - **No verification.** `OCIRepositorySpec.Verify` exists upstream. kure sets it nowhere, and
   `fluxv1.Sync` has no field for it.
 
@@ -90,7 +92,7 @@ The recorded differences today:
 - the Kustomization name, with `SyncName` set;
 - the path spelling;
 - the ref spelling for Git (`branch: main` against `name: refs/heads/main`, the same revision);
-- prune;
+- prune, when `Prune` is unset;
 - the Kustomization interval;
 - the plain-HTTP patch;
 - without a source URL, gotk still emits the Kustomization, while flux-operator emits no sync.
