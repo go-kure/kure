@@ -569,7 +569,9 @@ func validateSourceVerify(v *stack.SourceVerification, name string) error {
 		return nil
 	}
 	if v.Provider != "" && !slices.Contains(ociVerifyProviders, v.Provider) {
-		return errors.NewValidationError("sourceVerify.provider", v.Provider, "BootstrapConfig", ociVerifyProviders)
+		return errors.ResourceValidationError("BootstrapConfig", name, "sourceVerify.provider",
+			fmt.Sprintf("%q is not a provider an OCIRepository verifies with: use one of %s",
+				v.Provider, strings.Join(ociVerifyProviders, ", ")), nil)
 	}
 	for i, m := range v.MatchOIDCIdentity {
 		for _, p := range []struct{ field, pattern string }{{"issuer", m.Issuer}, {"subject", m.Subject}} {
