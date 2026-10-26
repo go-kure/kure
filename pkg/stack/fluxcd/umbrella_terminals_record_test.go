@@ -84,6 +84,42 @@ func TestUmbrellaTerminals_CallerKustomizationIsLeaf(t *testing.T) {
 	}
 }
 
+// A record is read as kure reads identities: an omitted namespace is
+// "default", an omitted Source namespace the Kustomization's own, and a path
+// is cleaned. A caller's record of its own Kustomization in another form of
+// the same values makes it an umbrella all the same.
+func TestUmbrellaTerminals_RecordReadsAsIdentities(t *testing.T) {
+	forms := map[string]struct {
+		objNamespace, objSourceNamespace string
+		recNamespace, recSourceNamespace string
+		recPath                          func(string) string
+	}{
+		"object omits, record states": {"", "default", "default", "", func(p string) string { return "./" + p + "/" }},
+		"object states, record omits": {"default", "", "", "default", func(p string) string { return p + "/." }},
+	}
+	for name, f := range forms {
+		t.Run(name, func(t *testing.T) {
+			root := &layout.ManifestLayout{Name: "demo", Namespace: "clusters"}
+			apps := &layout.ManifestLayout{Name: "apps", Namespace: root.FullRepoPath()}
+			root.Children = []*layout.ManifestLayout{apps}
+			a := handWritten("a")
+			a.Namespace = f.objNamespace
+			a.Spec.Path = apps.FullRepoPath()
+			a.Spec.SourceRef.Namespace = f.objSourceNamespace
+			root.Resources = []client.Object{a}
+			apps.Resources = []client.Object{handWritten("b"), handWritten("c")}
+			root.SetFluxKustomizations([]layout.FluxKustomizationRecord{{
+				Namespace: f.recNamespace, Name: "a", Path: f.recPath(apps.FullRepoPath()),
+				SourceKind: "GitRepository", SourceNamespace: f.recSourceNamespace, SourceName: "flux-system",
+			}})
+			want := map[string][]string{"default/a": {"flux-system/b", "flux-system/c"}}
+			if got := umbrellaTerminals(t, root); !reflect.DeepEqual(got, want) {
+				t.Errorf("UmbrellaTerminals = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
 // twoUmbrellas is demo -> {apps (umbrella platform: a, b), web (umbrella
 // web: c, d)}. Neither umbrella is in the other's build.
 func twoUmbrellas() *stack.Cluster {
