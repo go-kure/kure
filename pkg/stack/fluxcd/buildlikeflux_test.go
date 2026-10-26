@@ -46,18 +46,27 @@ func TestMain(m *testing.M) {
 	// as the testing package's does.
 	var timeout time.Duration
 	if f := flag.Lookup("test.timeout"); f != nil {
-		timeout, _ = f.Value.(flag.Getter).Get().(time.Duration)
+		if g, ok := f.Value.(flag.Getter); ok {
+			timeout, _ = g.Get().(time.Duration)
+		}
 	}
 	var alarm *time.Timer
 	if timeout > 0 {
-		alarm = time.AfterFunc(timeout-time.Since(start), func() {
+		timedOut := func() {
 			debug.SetTraceback("all")
 			panic(fmt.Sprintf("test timed out after %v in buildsAsFlux, TestMain's replay of every build through SecureBuild", timeout))
-		})
+		}
+		left := timeout - time.Since(start)
+		if left <= 0 {
+			timedOut()
+		}
+		alarm = time.AfterFunc(left, timedOut)
 	}
 	ok := buildsAsFlux()
-	if alarm != nil {
-		alarm.Stop()
+	// Stop cannot halt an alarm that has already started, so a replay that
+	// ends then still times out: wait for the alarm's panic.
+	if alarm != nil && !alarm.Stop() {
+		select {}
 	}
 	if !ok && code == 0 {
 		code = 1
