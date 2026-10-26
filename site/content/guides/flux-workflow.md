@@ -914,6 +914,12 @@ place as a directory of the tree only when it reads the Source of the
 Kustomization that applies it, on this cluster; a health check on another cluster (`spec.kubeConfig`) waits for no
 readiness here, and a `spec.healthCheckExprs` predicate on Flux Kustomizations
 is read as a readiness wait, whatever it says.
+With or without the setting, every integration also judges the order of the
+whole tree: a Kustomization without `wait` that health-checks any other object
+waits for the Kustomization that applies it, whatever its expression says, and
+a cycle through a Kustomization the integration placed or kept is refused, on
+every entry point and on each later integration
+([reconcile order](/api-reference/flux-engine/#one-kustomization-per-directory)).
 `fluxcd.UmbrellaTerminals` returns each umbrella's terminal leaves, for a
 dependency written from outside the tree, for trees as an integration returned
 them: only a Kustomization the integration recorded, still on the recorded

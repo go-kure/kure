@@ -240,8 +240,9 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 // orderPath returns a chain from node from to node to, both included, in the
 // graph checkReconcileOrder judges ("ready K" and "apply K" for each
 // Kustomization K), here over every Kustomization of the tree, or nil when
-// there is none. "ready K" needs "apply K", and what K's wait or its
-// Kustomization health checks wait for (awaitedKustomizations); "apply K"
+// there is none (orderGraph). "ready K" needs "apply K", what K's wait or its
+// Kustomization health checks wait for (awaitedKustomizations), and the apply
+// of the member writing each other object K health-checks; "apply K"
 // needs every Kustomization K depends on Ready, and the member whose apply
 // writes K applied (writer), also when another Kustomization's build writes K
 // as well: that one is no alternate creator. A Kustomization
@@ -249,50 +250,7 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 // wait waits for what its build writes only when that build is the tree's
 // (readsLocalBuild), and for nothing the tree holds otherwise.
 func (t *kustomizationTree) orderPath(from, to string) ([]string, error) {
-	writers := map[string]string{}
-	writer := func(key string) string {
-		w, ok := writers[key]
-		if !ok {
-			w = t.writer(key)
-			writers[key] = w
-		}
-		return w
-	}
-	next := func(n string) ([]string, error) {
-		kind, key, _ := strings.Cut(n, " ")
-		var out []string
-		if kind == "apply" {
-			for _, d := range t.deps(key) {
-				out = append(out, "ready "+d)
-			}
-			if w := writer(key); w != "" {
-				out = append(out, "apply "+w)
-			}
-			return out, nil
-		}
-		out = append(out, "apply "+key)
-		k := t.byKey[key]
-		obj := t.otherObjs[key]
-		if base, ok := strings.CutSuffix(key, keptCopy); ok {
-			obj = t.droppedObjs[base]
-		} else if t.keptDropped(key) {
-			obj = t.droppedObjs[key]
-		}
-		if k == nil && obj != nil {
-			spec, err := typedKustomization(obj)
-			if err != nil {
-				return nil, err
-			}
-			k = spec
-		}
-		if k == nil {
-			return out, nil
-		}
-		for _, x := range awaitedKustomizations(k, func() []string { return t.written(key) }) {
-			out = append(out, "ready "+x)
-		}
-		return out, nil
-	}
+	g := t.newOrderGraph()
 	seen := map[string]bool{}
 	var walk func(n string) ([]string, error)
 	walk = func(n string) ([]string, error) {
@@ -303,7 +261,7 @@ func (t *kustomizationTree) orderPath(from, to string) ([]string, error) {
 			return nil, nil
 		}
 		seen[n] = true
-		succ, err := next(n)
+		succ, err := g.next(n)
 		if err != nil {
 			return nil, err
 		}
@@ -326,14 +284,20 @@ func (t *kustomizationTree) orderPath(from, to string) ([]string, error) {
 // AppFileSingle application's file holds counts: "" when the Flux bootstrap
 // applies it or no member does. The innermost wins.
 func (t *kustomizationTree) writer(key string) string {
-	host := t.hostOf[key]
+	return t.hostWriter(t.hostOf[key], key)
+}
+
+// hostWriter names the innermost member whose apply writes what layout host
+// holds, other than self (the Kustomization asked about; "" for none): "" when
+// the Flux bootstrap applies host or no member does.
+func (t *kustomizationTree) hostWriter(host *layout.ManifestLayout, self string) string {
 	if host == nil || slices.Contains(buildScope(t.root), host) {
 		return ""
 	}
 	best, bestLen := "", -1
 	for _, k := range t.kusts {
 		other := crKey(k.Namespace, k.Name)
-		if other == key {
+		if other == self {
 			continue
 		}
 		if l := t.layoutAt[path.Clean(k.Spec.Path)]; l != nil && len(k.Spec.Path) > bestLen && slices.Contains(buildScope(l), host) {

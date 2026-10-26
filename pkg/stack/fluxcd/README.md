@@ -336,7 +336,8 @@ the root directory reaches is created by the Flux bootstrap. Identities are name
 health check on another cluster (`spec.kubeConfig`) is no wait. A `spec.healthCheckExprs` entry
 for Flux Kustomizations is read as a wait for readiness, whatever its expression says. A
 cycle among these waits is refused, naming the chain. Kustomizations an application emits itself,
-and objects in other namespaces, are outside this check. A merge can close one (a health
+and objects in other namespaces, are outside this check; the integrator's whole-tree check below
+reads them. A merge can close one (a health
 check or dependency on a bundle merged into a unit that waits for it), and so can a parent node's
 bundle depending on a child node's bundle whose CR only the parent's directory holds (both
 integrated placements). The root node's bundle cannot close that one any more: the CRs of the
@@ -352,6 +353,22 @@ cycles through a wait are gone; the check runs on the rewritten specs. ArgoCD
 Applications get the unit rule but not this check: only a `DependsOn` cycle between units is
 refused there. Give bundles directories of their own (`NodeGrouping` or
 `BundleGrouping` `GroupByName`) when they need different settings.
+
+Every integrator entry point, in every placement, then judges the order of the whole tree
+(go-kure/kure#1133): every Flux Kustomization it holds, those the integration placed or kept and
+those an application emits, with each `dependsOn` as written, each `wait` and each health check.
+A health check on an object that is no Flux Kustomization, on a Kustomization without `wait` or
+`spec.kubeConfig`, waits for that object to exist, so for the apply of the Kustomization whose
+directory references reach its file (one the root directory reaches is the Flux bootstrap's, and
+adds no wait). Flux fetches a checked object before it evaluates any
+`spec.healthCheckExprs` entry, so this holds whatever the expression says. The object is matched
+by group, kind and name, the version ignored; an empty `apiVersion` is `apps/v1`, as Flux reads
+it; a check with no namespace takes its Kustomization's, an object written with no namespace
+matches any, and a `configMapGenerator` entry matches its name with any suffix kustomize appends.
+A cycle through a Kustomization the integration placed or kept is refused, naming the chain; a
+cycle made only of Kustomizations it did not place is their author's, and is admitted. A later
+integration rechecks every edge, so a kept Kustomization's `dependsOn` that closes a cycle there
+is refused as well.
 
 #### Patches in a shared directory
 
@@ -1384,11 +1401,8 @@ apply, even where another Kustomization of the tree writes it as well and would 
 once the dependency or health check that closes the reported chain is dropped, or names another
 Kustomization.
 
-Three cycles are known to pass these checks unrefused (go-kure/kure#1133): one through a health
-check on an object that is not a Flux Kustomization, which is not read; one closed on a
-later integration by a `dependsOn` the integration did not rewrite there, since only rewritten
-dependencies are checked; and one through a local-config copy a patched build may keep. Such a
-copy is read as written in its directory: the keeping build's transforms (name prefix,
+One cycle is known to pass these checks unrefused (go-kure/kure#1133): one through a local-config
+copy a patched build may keep. Such a copy is read as written in its directory: the keeping build's transforms (name prefix,
 `targetNamespace`, patches beyond the annotation) are not applied to it, so a cycle that depends
 on them can pass; its own `wait` is not followed; and a name it shares with a live Kustomization
 reads only the live one, or, with another such copy in a separate build, both as one entry.
