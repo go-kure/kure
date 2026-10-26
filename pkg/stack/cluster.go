@@ -91,6 +91,17 @@ type BootstrapConfig struct {
 	SourceURL  string `yaml:"sourceURL,omitempty"`  // OCI/Git repository URL
 	SourceRef  string `yaml:"sourceRef,omitempty"`  // Tag/branch/ref
 
+	// SourceSemVer selects the OCI tag by a semver range, such as ">=1.0.0
+	// <2.0.0", instead of the fixed tag SourceRef names: ref.semver on the gotk
+	// OCIRepository. A FluxInstance sync takes only a tag, so in flux-operator
+	// mode it is a spec.kustomize patch replacing spec.ref on the OCIRepository
+	// the operator generates for the sync. It applies to an OCIRepository
+	// source only, and only with SourceURL set; it is an error with a
+	// GitRepository source, without SourceURL, with a SourceRef (the range and
+	// an explicit tag cannot both choose the revision) and when it does not
+	// parse as a range. Empty leaves the ref to SourceRef as before.
+	SourceSemVer string `yaml:"sourceSemVer,omitempty"`
+
 	// Source access. The three options apply to an OCIRepository source only,
 	// and only with SourceURL set; any of them with a GitRepository source or
 	// without SourceURL is an error. Unset, the source is generated as before.
