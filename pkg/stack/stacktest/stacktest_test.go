@@ -339,39 +339,6 @@ func TestCheckGeneration_SharingConfigFails(t *testing.T) {
 			wantShared: []stacktest.Sharing{{Kind: "pointer", First: "[0].(*stacktest_test.custom).Weights[NaN]", Second: "[0].(*stacktest_test.custom).Weights[NaN]"}},
 		},
 		{
-			name: "values under two NaN map keys",
-			cfg: func() genFunc {
-				a, b := int32(1), int32(2)
-				return calls(func(int) []*client.Object {
-					// Two entries that print alike are still two values.
-					weights := map[float64]*int32{}
-					weights[math.NaN()] = &a
-					weights[math.NaN()] = &b
-					return objs(&custom{Weights: weights})
-				})
-			},
-			wantShared: []stacktest.Sharing{
-				{Kind: "pointer", First: "[0].(*stacktest_test.custom).Weights[NaN]", Second: "[0].(*stacktest_test.custom).Weights[NaN]"},
-				{Kind: "pointer", First: "[0].(*stacktest_test.custom).Weights[NaN]", Second: "[0].(*stacktest_test.custom).Weights[NaN]"},
-			},
-		},
-		{
-			name: "one value under two NaN map keys and a field",
-			cfg: func() genFunc {
-				return calls(func(int) []*client.Object {
-					count := int32(1)
-					weights := map[float64]*int32{}
-					weights[math.NaN()] = &count
-					weights[math.NaN()] = &count
-					return objs(&custom{Count: &count, Weights: weights})
-				})
-			},
-			wantInternal: []stacktest.Sharing{
-				{Kind: "pointer", First: "[0].(*stacktest_test.custom).Count", Second: "[0].(*stacktest_test.custom).Weights[NaN]"},
-				{Kind: "pointer", First: "[0].(*stacktest_test.custom).Count", Second: "[0].(*stacktest_test.custom).Weights[NaN]"},
-			},
-		},
-		{
 			name: "later path covered by its earliest overlap",
 			cfg: func() genFunc {
 				return calls(func(int) []*client.Object {
@@ -503,6 +470,16 @@ func TestCheckGeneration_Errors(t *testing.T) {
 		{"func value", app(genFunc(func() ([]*client.Object, error) {
 			return objs(&custom{hook: func() {}}), nil
 		})), `unsupported func value at "[0].(*stacktest_test.custom).hook"`},
+		{"two NaN map keys", app(genFunc(func() ([]*client.Object, error) {
+			x := int32(1)
+			weights := map[float64]*int32{}
+			weights[math.NaN()] = &x
+			weights[math.NaN()] = &x
+			return objs(&custom{Weights: weights}), nil
+		})), `unsupported map at "[0].(*stacktest_test.custom).Weights": two keys print as [NaN]`},
+		{"keys 1 and \"1\"", app(genFunc(func() ([]*client.Object, error) {
+			return objs(&unstructured.Unstructured{Object: map[string]any{"m": map[any]any{1: "int", "1": "string"}}}), nil
+		})), `unsupported map at "[0].(*unstructured.Unstructured).Object[m].(map[interface {}]interface {})": two keys print as [1]`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

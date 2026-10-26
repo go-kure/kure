@@ -103,8 +103,9 @@ type Report struct {
 // once and is not reported.
 //
 // An error from either call is returned wrapped with the call number, with no
-// report. So is a func, channel or unsafe pointer value in a result, which a
-// Kubernetes object never holds.
+// report. So is a func, channel or unsafe pointer value in a result, or a map
+// with two keys that print alike (two NaN keys), which a Kubernetes object
+// never holds.
 func CheckGeneration(app *stack.Application) (*Report, error) {
 	if app == nil {
 		return nil, errors.New("check generation: nil application")
