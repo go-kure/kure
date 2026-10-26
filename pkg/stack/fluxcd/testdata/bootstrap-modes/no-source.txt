@@ -1,20 +1,21 @@
-field                    | gotk                                         | flux-operator
-documents                | 0 source, 1 Kustomization                    | FluxInstance without sync   <- differs
-source                   | -                                            | -
-source.kind              | -                                            | -
-source.namespace         | -                                            | -
-source.url               | -                                            | -
-source.ref               | -                                            | -
-source.revision          | -                                            | -
-source.interval          | -                                            | -
-source.secretRef         | -                                            | -
-source.provider          | -                                            | -
-source.insecure          | -                                            | -
-kustomization            | Kustomization flux-system/flux-system        | -   <- differs
-kustomization.namespace  | flux-system                                  | -   <- differs
-kustomization.sourceRef  | OCIRepository prod                           | -   <- differs
-kustomization.path       | demo                                         | -   <- differs
-kustomization.directory  | demo                                         | -   <- differs
-kustomization.prune      | false                                        | -   <- differs
-kustomization.interval   | 1h0m0s                                       | -   <- differs
-patches                  | -                                            | -
+field                             | gotk                                         | flux-operator
+documents                         | 0 source, 1 Kustomization                    | FluxInstance without sync   <- differs
+source                            | -                                            | -
+source.kind                       | -                                            | -
+source.namespace                  | -                                            | -
+source.url                        | -                                            | -
+source.ref                        | -                                            | -
+source.revision                   | -                                            | -
+source.interval                   | -                                            | -
+source.secretRef                  | -                                            | -
+source.provider                   | -                                            | -
+source.insecure                   | -                                            | -
+kustomization                     | Kustomization flux-system/flux-system        | -   <- differs
+kustomization.namespace           | flux-system                                  | -   <- differs
+kustomization.sourceRef           | OCIRepository prod                           | -   <- differs
+kustomization.sourceRef.namespace | -                                            | -
+kustomization.path                | demo                                         | -   <- differs
+kustomization.directory           | demo                                         | -   <- differs
+kustomization.prune               | false                                        | -   <- differs
+kustomization.interval            | 1h0m0s                                       | -   <- differs
+patches                           | -                                            | -

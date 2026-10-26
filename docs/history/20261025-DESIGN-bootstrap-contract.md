@@ -27,7 +27,7 @@ both. In flux-operator mode kure emits a FluxInstance, and flux-operator renders
 |---|---|---|
 | Documents | With `SourceURL` set, one source and one Kustomization per bootstrap, in both modes | Holds; the modes test enforces it. Without `SourceURL` the modes differ: gotk emits the Kustomization alone, flux-operator no sync (`testdata/bootstrap-modes/no-source.txt`). That case is outside the contract |
 | Directory | The tree's top directory (`layout.TopDirectory`), spelled per mode (`demo`, `./demo`) | Holds |
-| Namespace | The generator's `DefaultNamespace` for the source, the Kustomization and the FluxInstance. The Kustomization's `sourceRef` names no namespace, so it resolves in its own | Holds |
+| Namespace | The generator's `DefaultNamespace` for the source, the Kustomization and the FluxInstance. The Kustomization's `sourceRef` names no namespace, so it resolves in its own | Holds; the modes test checks that each mode's sourceRef resolves to the emitted source |
 | Source kind, URL | From `BootstrapConfig`, the same in both modes | Holds |
 | Source interval | From the generator's `BootstrapGenerator.DefaultInterval`, not `BootstrapConfig`: the gotk source (`bootstrap_generator.go:572`, `:598`) and the FluxInstance sync (`:707`) | Holds |
 | Access | `SourceSecretRef`, `SourceProvider`, `SourceInsecure` (go-kure/kure#1060) | Holds, on main |
