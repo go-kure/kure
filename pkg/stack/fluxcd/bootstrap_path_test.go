@@ -82,6 +82,7 @@ func fluxInstanceSyncPath(t *testing.T, root *stack.Node, rules layout.LayoutRul
 // the root node's name, "cluster" for an unnamed root node and the root of the
 // source when there is no root node.
 func TestBootstrapModesNameTheSameDirectory(t *testing.T) {
+	t.Parallel()
 	named, unnamed := &stack.Node{Name: "prod"}, &stack.Node{}
 	for name, tc := range map[string]struct {
 		root        *stack.Node
@@ -109,6 +110,7 @@ func TestBootstrapModesNameTheSameDirectory(t *testing.T) {
 		"rooted ClusterName": {named, "/fleet", "fleet", "./fleet"},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			gotk, sync := bootstrapPaths(t, tc.root, layout.LayoutRules{ClusterName: tc.clusterName})
 			if gotk != tc.wantGotk {
 				t.Errorf("gotk spec.path = %q, want %q", gotk, tc.wantGotk)
@@ -279,6 +281,7 @@ func unrootedPath(ml *layout.ManifestLayout) string {
 // directory from the root node and the ClusterName and from nothing else of
 // the rules.
 func TestBootstrapPathIsTheTopOfTheWrittenTree(t *testing.T) {
+	t.Parallel()
 	clusterNames := bootstrapClusterNames
 	shapes := make([]string, 0, len(sourceHostShapes))
 	for s := range sourceHostShapes {
@@ -361,6 +364,7 @@ func TestBootstrapPathIsTheTopOfTheWrittenTree(t *testing.T) {
 // is computed from; see the matrix for why the gotk bootstrap is not built
 // once per combination there.
 func TestGotkBootstrapPathIsTheTopOfTheWrittenTree(t *testing.T) {
+	t.Parallel()
 	// One shape per distinct root node name, the first in name order.
 	shapes := make([]string, 0, len(sourceHostShapes))
 	for s := range sourceHostShapes {
@@ -384,6 +388,7 @@ func TestGotkBootstrapPathIsTheTopOfTheWrittenTree(t *testing.T) {
 		for _, rootName := range rootNames {
 			shape := rootShapes[rootName]
 			t.Run(fmt.Sprintf("ClusterName=%q/root=%q/%s", clusterName, rootName, shape), func(t *testing.T) {
+				t.Parallel()
 				rules := propertyGroupings["nodeOnly"]
 				rules.FluxPlacement = layout.FluxSeparate
 				rules.ClusterName = clusterName

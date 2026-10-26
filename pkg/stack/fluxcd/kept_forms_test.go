@@ -238,6 +238,7 @@ func TestKeptKustomization_ReconcileOrder(t *testing.T) {
 // (go-kure/kure#979). The root bundle's builds the bundle's own directory,
 // which holds no Source, in every placement.
 func TestKeptKustomization_RootBuildChangesHostedSource(t *testing.T) {
+	t.Parallel()
 	plain := func(_, _ *stack.Bundle) {}
 	wrapped := propertyGroupings["nodeOnly"]
 	wrapped.FluxPlacement = layout.FluxIntegratedPerLayout
@@ -266,6 +267,7 @@ func TestKeptKustomization_RootBuildChangesHostedSource(t *testing.T) {
 		rootCR := rootLayoutCRName(t, tc.build, wrapped, rootDir)
 		for _, form := range keptForms {
 			t.Run(tc.name+"/root node's layout/"+form, func(t *testing.T) {
+				t.Parallel()
 				checkKeptTreeWrites(t, tc.build, wrapped, rootCR, form)
 
 				ml, c := keptIn(t, tc.build, wrapped, rootCR, form, tc.change, nil)

@@ -2,12 +2,18 @@ package fluxcd_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	fluxkustomize "github.com/fluxcd/pkg/kustomize"
@@ -215,6 +221,7 @@ func TestRecursive_EmptyTargetRefused(t *testing.T) {
 // kustomization.yaml, then Flux's own build — applies the same objects as the
 // same build of the Explicit output.
 func TestRecursive_BuildsLikeExplicit(t *testing.T) {
+	t.Parallel()
 	type testCase struct {
 		grouping  string
 		placement layout.FluxPlacement
@@ -240,6 +247,7 @@ func TestRecursive_BuildsLikeExplicit(t *testing.T) {
 		} {
 			grouping, placement := tc.grouping, tc.placement
 			t.Run(grouping+"/"+string(placement)+"/"+name, func(t *testing.T) {
+				t.Parallel()
 				rules := recursiveRules(grouping, placement)
 				explicit := integrated(t, cluster(), rules)
 				recursive := integrated(t, cluster(), rules)
@@ -299,11 +307,58 @@ func fluxBuilds(t *testing.T, w writtenTree, ml *layout.ManifestLayout) map[stri
 	return out
 }
 
+// fluxBuilt holds every Flux build fluxBuild made, by fluxBuildKey. A build is
+// a function of its input alone, and the writers mostly write the same bytes,
+// so a tree they write alike is built once (go-kure/kure#1122).
+var fluxBuilt sync.Map
+
+// fluxBuildKey identifies a Flux build by everything it reads: every
+// directory and file below root with its bytes, the directory built, and the
+// Kustomization.
+func fluxBuildKey(t *testing.T, root, dir string, kust unstructured.Unstructured) string {
+	t.Helper()
+	h := sha256.New()
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			fmt.Fprintf(h, "dir %q\n", rel)
+			return nil
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(h, "file %q %d\n", rel, len(data))
+		h.Write(data)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, err := json.Marshal(kust.Object)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintf(h, "build %q\nkustomization %s\n", dir, spec)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 // fluxBuild builds dir of a copy of root as kustomize-controller does, and
 // returns each object's YAML by its id. The copy keeps the generated
-// kustomization.yaml out of the other builds.
+// kustomization.yaml out of the other builds. A build of the same input is
+// taken from fluxBuilt.
 func fluxBuild(t *testing.T, root, dir string, kust unstructured.Unstructured) map[string]string {
 	t.Helper()
+	key := fluxBuildKey(t, root, dir, kust)
+	if out, ok := fluxBuilt.Load(key); ok {
+		return maps.Clone(out.(map[string]string))
+	}
 	tree := filepath.Join(t.TempDir(), "repo")
 	if err := os.CopyFS(tree, os.DirFS(root)); err != nil {
 		t.Fatal(err)
@@ -312,7 +367,7 @@ func fluxBuild(t *testing.T, root, dir string, kust unstructured.Unstructured) m
 	if _, err := fluxkustomize.NewGenerator(tree, kust).WriteFile(path); err != nil {
 		t.Fatalf("Flux generator on %q: %v", dir, err)
 	}
-	rm, err := fluxkustomize.SecureBuild(tree, path, false)
+	rm, err := buildLikeFlux(t, tree, path)
 	if err != nil {
 		t.Fatalf("Flux build of %q: %v", dir, err)
 	}
@@ -324,6 +379,7 @@ func fluxBuild(t *testing.T, root, dir string, kust unstructured.Unstructured) m
 		}
 		out[r.CurId().String()] = string(y)
 	}
+	fluxBuilt.Store(key, maps.Clone(out))
 	return out
 }
 

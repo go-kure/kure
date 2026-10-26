@@ -96,6 +96,7 @@ var generatedConfigMapShapes = map[string]func(target stack.PatchSelector) *stac
 // FluxIntegratedPerLayout (it keeps only the objects held in Resources), so
 // it has to learn to before such a tree is accepted.
 func TestPerLayoutPatchScope_GeneratedConfigMapStaysOutOfTheUnitsBuild(t *testing.T) {
+	t.Parallel()
 	targets := map[string]stack.PatchSelector{
 		"by name":       {Kind: "ConfigMap", Name: "hook-values"},
 		"by annotation": {Kind: "ConfigMap", AnnotationSelector: "tier=backend"},
@@ -106,6 +107,7 @@ func TestPerLayoutPatchScope_GeneratedConfigMapStaysOutOfTheUnitsBuild(t *testin
 				for _, flatten := range []bool{false, true} {
 					name := fmt.Sprintf("%s/%s/ClusterName=%q/FlattenSingleTier=%t", shape, targetName, clusterName, flatten)
 					t.Run(name, func(t *testing.T) {
+						t.Parallel()
 						rules := allFlat
 						rules.ClusterName = clusterName
 						rules.FlattenSingleTier = flatten

@@ -45,7 +45,7 @@ func patchedBuild(t *testing.T, root string, k *kustv1.Kustomization) (map[strin
 	if _, err := fluxkustomize.NewGenerator(tree, unstructured.Unstructured{Object: obj}).WriteFile(path); err != nil {
 		t.Fatalf("Flux generator on %q: %v", k.Spec.Path, err)
 	}
-	built, err := fluxkustomize.SecureBuild(tree, path, false)
+	built, err := buildLikeFlux(t, tree, path)
 	if err != nil {
 		return nil, err
 	}
@@ -266,6 +266,7 @@ func TestLayoutPatches_AfterAnEntryThatIsNotPlain(t *testing.T) {
 // on the bundle's own Kustomization, where it patches the renamed object, and
 // is written on the layout's too, whose own ConfigMap it names.
 func TestLayoutPatches_ARenameThenAPatchBuildsAsBefore(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		rename      stack.Patch
 		to, patched string
@@ -281,6 +282,7 @@ func TestLayoutPatches_ARenameThenAPatchBuildsAsBefore(t *testing.T) {
 		"by an identity it had, renamed to the name an object of a layout":     {rename: renamePrevious("web-cm", "pre"), to: "pre", patched: "pre", layoutToo: "shop-00-pre"},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			patches := []stack.Patch{tc.rename, untargeted(cmDoc(tc.patched))}
 			ml := integrated(t, oneBundleCluster(patchShop(nil, patches...)), perLayoutRules())
 
@@ -353,6 +355,7 @@ func TestLayoutPatches_ABuildAnnotationThatDoesNotAgree(t *testing.T) {
 // an object of a layout, and an untargeted entry with a build annotation for
 // an object only a layout builds. Each has a remedy that builds.
 func TestLayoutPatches_ARenameInALayoutsBuild(t *testing.T) {
+	t.Parallel()
 	const noMatch = "no resource matches strategic merge patch"
 	ownFails := func(t *testing.T, ml *layout.ManifestLayout) map[string]map[string]map[string]string {
 		t.Helper()

@@ -119,6 +119,7 @@ func checkApplied(t *testing.T, where string, applied []unstructured.Unstructure
 // configMapGenerator — is applied with the matching annotation, in every
 // placement and grouping and from every writer's output; no other object is.
 func TestDeliveryIntent_AnnotatesTheApplicationsObjects(t *testing.T) {
+	t.Parallel()
 	intents := map[string]stack.DeliveryIntent{
 		"prune": {PruneProtection: true},
 		"force": {ForceReplace: true},
@@ -128,6 +129,7 @@ func TestDeliveryIntent_AnnotatesTheApplicationsObjects(t *testing.T) {
 		for _, placement := range placements {
 			for grouping := range propertyGroupings {
 				t.Run(iname+"/"+string(placement)+"/"+grouping, func(t *testing.T) {
+					t.Parallel()
 					ml := integrated(t, deliveryCluster(intent), recursiveRules(grouping, placement))
 					for writer, w := range writeAll(t, ml) {
 						applied := appliedObjects(t, w, ml)
@@ -581,8 +583,10 @@ func TestDeliveryIntent_KeepsOtherAnnotations(t *testing.T) {
 // items annotated, a List inside the List included; kustomize builds the
 // items, not the envelopes.
 func TestDeliveryIntent_ListItems(t *testing.T) {
+	t.Parallel()
 	for _, placement := range placements {
 		t.Run(string(placement), func(t *testing.T) {
+			t.Parallel()
 			a, _ := (*cmObj("item-a")).(*unstructured.Unstructured)
 			b, _ := (*cmObj("item-b")).(*unstructured.Unstructured)
 			c1, _ := (*cmObj("item-c")).(*unstructured.Unstructured)
@@ -634,8 +638,10 @@ func TestDeliveryIntent_NestedListConflictRefused(t *testing.T) {
 // top-level items array is one object and carries the annotation itself; what
 // its items hold is its own data and stays as it is.
 func TestDeliveryIntent_ResourceWithItemsField(t *testing.T) {
+	t.Parallel()
 	for _, placement := range placements {
 		t.Run(string(placement), func(t *testing.T) {
+			t.Parallel()
 			inv := &unstructured.Unstructured{Object: map[string]any{
 				"apiVersion": "example.com/v1",
 				"kind":       "Inventory",
@@ -815,6 +821,7 @@ func TestDeliveryIntent_UnreachableListItemsRefused(t *testing.T) {
 // ending in "List" without items, and another kind with items, are each one
 // object and carry the annotation themselves.
 func TestDeliveryIntent_ListIsDecidedByKind(t *testing.T) {
+	t.Parallel()
 	want := map[string]string{pruneKey: "disabled"}
 	typedCM := func(name string) corev1.ConfigMap {
 		return corev1.ConfigMap{
@@ -867,6 +874,7 @@ func TestDeliveryIntent_ListIsDecidedByKind(t *testing.T) {
 	for name, tc := range cases {
 		for _, placement := range placements {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				t.Parallel()
 				obj := tc.obj.DeepCopyObject().(client.Object)
 				app := stack.NewApplication("listed", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
 				app.Delivery = stack.DeliveryIntent{PruneProtection: true}
@@ -979,9 +987,11 @@ func TestDeliveryIntent_IntegratingAgainChangesNothing(t *testing.T) {
 // is the object the intent is checked on. An object held beside the raw JSON
 // is not written: it refuses nothing, whatever it carries, and stays as it is.
 func TestDeliveryIntent_RawItemReadAsWritten(t *testing.T) {
+	t.Parallel()
 	raw := []byte(`{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"raw-cm","namespace":"default","annotations":{"` + pruneKey + `":"disabled"}}}`)
 	for _, placement := range placements {
 		t.Run(string(placement), func(t *testing.T) {
+			t.Parallel()
 			unwritten := *annotatedCM("raw-cm", pruneKey, "enabled")
 			var obj client.Object = rawListOf(runtime.RawExtension{Raw: raw, Object: unwritten})
 			app := stack.NewApplication("listed", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
@@ -1004,6 +1014,7 @@ func TestDeliveryIntent_RawItemReadAsWritten(t *testing.T) {
 // the derived copy carries the same annotations, so every copy that is applied
 // is the same object, and integrating again changes nothing.
 func TestDeliveryIntent_SourceAlsoDerivedFromSourceRef(t *testing.T) {
+	t.Parallel()
 	webRef := &stack.SourceRef{Kind: "GitRepository", Name: "web-git", Namespace: "flux-system", URL: "https://example.com/web.git", Branch: "main"}
 	want := map[string]string{pruneKey: "disabled", forceKey: "enabled"}
 	emitted := func(t *testing.T, form string) client.Object {
@@ -1040,6 +1051,7 @@ func TestDeliveryIntent_SourceAlsoDerivedFromSourceRef(t *testing.T) {
 	for _, form := range []string{"typed", "in a List", "raw JSON in a typed List"} {
 		for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
 			t.Run(form+"/"+string(placement), func(t *testing.T) {
+				t.Parallel()
 				obj := emitted(t, form)
 				sources := stack.NewApplication("sources", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
 				sources.Delivery = stack.DeliveryIntent{PruneProtection: true, ForceReplace: true}

@@ -116,6 +116,7 @@ func optOutObjects(app, pre, main, deep *layout.ManifestLayout) {
 }
 
 func TestLayoutPostBuild_ThroughTheParentsBuild(t *testing.T) {
+	t.Parallel()
 	t.Run("nothing the parent substitutes: written as before", func(t *testing.T) {
 		ml, err := postBuildTree(&stack.PostBuild{Substitute: map[string]string{"REGION": "eu"}}, "plain", nil)
 		if err != nil {
