@@ -915,10 +915,12 @@ Kustomization that applies it, on this cluster; a health check on another cluste
 readiness here, and a `spec.healthCheckExprs` predicate on Flux Kustomizations
 is read as a readiness wait, whatever it says.
 With or without the setting, every integration also judges the order of the
-whole tree: a Kustomization without `wait` that health-checks any other object
-waits for the Kustomization that applies it, whatever its expression says, and
-a cycle through a Kustomization the integration placed or kept is refused, on
-every entry point and on each later integration
+Kustomizations it placed or kept, on each later integration too: one without
+`wait` that health-checks any other object waits for the Kustomization that
+applies it, whatever its expression says, when that writer is certain, and a
+cycle through them is refused. Without the setting, what a Kustomization an
+application emits waits for is its author's; under it, this check follows it as
+the rules above do
 ([reconcile order](/api-reference/flux-engine/#one-kustomization-per-directory)).
 `fluxcd.UmbrellaTerminals` returns each umbrella's terminal leaves, for a
 dependency written from outside the tree, for trees as an integration returned

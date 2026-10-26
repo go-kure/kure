@@ -336,8 +336,8 @@ the root directory reaches is created by the Flux bootstrap. Identities are name
 health check on another cluster (`spec.kubeConfig`) is no wait. A `spec.healthCheckExprs` entry
 for Flux Kustomizations is read as a wait for readiness, whatever its expression says. A
 cycle among these waits is refused, naming the chain. Kustomizations an application emits itself,
-and objects in other namespaces, are outside this check; the integrator's whole-tree check below
-reads them. A merge can close one (a health
+and objects in other namespaces, are outside this check; the integrator's check below reads
+health checks on objects. A merge can close one (a health
 check or dependency on a bundle merged into a unit that waits for it), and so can a parent node's
 bundle depending on a child node's bundle whose CR only the parent's directory holds (both
 integrated placements). The root node's bundle cannot close that one any more: the CRs of the
@@ -354,21 +354,34 @@ Applications get the unit rule but not this check: only a `DependsOn` cycle betw
 refused there. Give bundles directories of their own (`NodeGrouping` or
 `BundleGrouping` `GroupByName`) when they need different settings.
 
-Every integrator entry point, in every placement, then judges the order of the whole tree
-(go-kure/kure#1133): every Flux Kustomization it holds, those the integration placed or kept and
-those an application emits, with each `dependsOn` as written, each `wait` and each health check.
-A health check on an object that is no Flux Kustomization, on a Kustomization without `wait` or
-`spec.kubeConfig`, waits for that object to exist, so for the apply of the Kustomization whose
-directory references reach its file (one the root directory reaches is the Flux bootstrap's, and
-adds no wait). Flux fetches a checked object before it evaluates any
-`spec.healthCheckExprs` entry, so this holds whatever the expression says. The object is matched
-by group, kind and name, the version ignored; an empty `apiVersion` is `apps/v1`, as Flux reads
-it; a check with no namespace takes its Kustomization's, an object written with no namespace
-matches any, and a `configMapGenerator` entry matches its name with any suffix kustomize appends.
-A cycle through a Kustomization the integration placed or kept is refused, naming the chain; a
-cycle made only of Kustomizations it did not place is their author's, and is admitted. A later
-integration rechecks every edge, so a kept Kustomization's `dependsOn` that closes a cycle there
-is refused as well.
+Every integrator entry point, in every placement, then judges the order of the Kustomizations the
+integration placed or kept again (go-kure/kure#1133), each `dependsOn` as written (a kept
+Kustomization's `dependsOn` that closes a cycle on a later integration is refused too), each
+`wait` and each health check. A health check on an object that is no Flux Kustomization, on a
+Kustomization without `wait` or `spec.kubeConfig`, waits for that object to exist: Flux fetches a
+checked object before it evaluates any `spec.healthCheckExprs` entry, whatever the expression
+says. kure adds that wait only when the object's writer is certain: every copy of it, matched by
+group, kind, namespace and name as written (the version ignored; an empty `apiVersion` is
+`apps/v1`, as Flux reads it), sits in a directory exactly one Kustomization's build holds, the
+same one for all, and that build transforms nothing. A new refusal comes only from such a wait.
+These leave the writer uncertain and add none, so a cycle through them passes:
+
+- an object, or the check, written with no namespace where the other names one;
+- a `configMapGenerator` entry whose name, or that name and a dash, begins the checked name, as
+  kustomize appends a content hash;
+- a writer whose build transforms (`spec.patches`, `spec.components`, `spec.namePrefix`,
+  `spec.nameSuffix`, `spec.targetNamespace`);
+- a directory the Flux bootstrap applies, or that another Kustomization's build also holds, or a
+  Kustomization of the tree that cannot be read before substitution, whose `spec.path` is unknown.
+
+A `spec.healthCheckExprs` entry adds that existence wait only, never readiness. Without
+`UmbrellasDoNotWait` a Kustomization an application emits waits for nothing here: its
+`dependsOn`, `readyExpr`, `wait` and health checks are its author's, and a cycle through them
+passes. Under the setting this check follows them as the umbrella rules do (see [With
+UmbrellasDoNotWait](#with-umbrellasdonotwait)), so a tree can be refused for a cycle through one,
+or for a Flux feature those rules do not model. A cycle made only of Kustomizations the
+integration did not place is their author's, and is admitted. go-kure/kure#1094 tracks reading
+these cases from a built model of each build.
 
 #### Patches in a shared directory
 

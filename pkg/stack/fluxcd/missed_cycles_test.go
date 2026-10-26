@@ -138,14 +138,6 @@ func TestMissedCycles_HealthCheckOnObjectIsACycle(t *testing.T) {
 			cm(k)
 			k.Spec.HealthCheckExprs = []kustomize.CustomHealthCheck{currentExpr("v1", "ConfigMap")}
 		}},
-		"a generated ConfigMap by its hashed name": {
-			check: checks("v1", "ConfigMap", "default", "web-values-5h7k8m2c9t"),
-			walked: func(t *testing.T, ml *layout.ManifestLayout) {
-				l := layoutHolding(t, ml, "web-app-cm")
-				l.ConfigMapGenerators = append(l.ConfigMapGenerators, layout.ConfigMapGeneratorSpec{Name: "web-values", Files: []string{"values.yaml"}})
-				l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: "values.yaml", Content: []byte("k: v\n")})
-			},
-		},
 		"a Deployment with no apiVersion": {
 			check:   checks("", "Deployment", "default", "web-deploy"),
 			webApps: []*stack.Application{objApp("web-app", unstructuredObj("apps/v1", "Deployment", "default", "web-deploy"))},
@@ -153,10 +145,6 @@ func TestMissedCycles_HealthCheckOnObjectIsACycle(t *testing.T) {
 		"a List item": {
 			check:   checks("v1", "ConfigMap", "default", "web-list-cm"),
 			webApps: []*stack.Application{objApp("web-app", listOf(unstructuredObj("v1", "ConfigMap", "default", "web-list-cm")))},
-		},
-		"an object with no namespace": {
-			check:   checks("v1", "ConfigMap", "default", "web-bare-cm"),
-			webApps: []*stack.Application{objApp("web-app", unstructuredObj("v1", "ConfigMap", "", "web-bare-cm"))},
 		},
 		"an application written as one file": {
 			check: cm,
@@ -192,6 +180,18 @@ func TestMissedCycles_HealthCheckWithoutAWriter(t *testing.T) {
 			walked: func(t *testing.T, ml *layout.ManifestLayout) {
 				ml.Resources = append(ml.Resources, unstructuredObj("v1", "ConfigMap", "default", "root-cm"))
 			},
+		},
+		"a generated ConfigMap, whose hashed name is not known": {
+			check: checks("v1", "ConfigMap", "default", "web-values-5h7k8m2c9t"),
+			walked: func(t *testing.T, ml *layout.ManifestLayout) {
+				l := layoutHolding(t, ml, "web-app-cm")
+				l.ConfigMapGenerators = append(l.ConfigMapGenerators, layout.ConfigMapGeneratorSpec{Name: "web-values", Files: []string{"values.yaml"}})
+				l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: "values.yaml", Content: []byte("k: v\n")})
+			},
+		},
+		"an object written with no namespace": {
+			check:   checks("v1", "ConfigMap", "default", "web-bare-cm"),
+			webApps: []*stack.Application{objApp("web-app", unstructuredObj("v1", "ConfigMap", "", "web-bare-cm"))},
 		},
 		"on another cluster": {check: func(k *kustv1.Kustomization) {
 			cm(k)
@@ -322,29 +322,12 @@ func TestMissedCycles_ReintegrationRechecksEveryEdge(t *testing.T) {
 	}
 }
 
-// F2 without the setting: platform waits for what its build applies,
-// hand-written among it, which waits for web's directory, and web depends on
-// platform. Refused in every integrated placement.
-func TestMissedCycles_NonMemberWaitIsACycleWithoutTheSetting(t *testing.T) {
-	for _, placement := range integratedPlacements {
-		t.Run(string(placement), func(t *testing.T) {
-			dir := webDirectory(t, placement)
-			k := handWritten("hand-written")
-			k.Spec.Wait, k.Spec.Path = true, dir
-			platform := srBundle("platform", objApp("platform-app", k))
-			platform.Wait = boolPtr(true)
-			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(platform, true), withPlacement(nodeOnly, placement))
-			if err == nil || !strings.Contains(err.Error(), "can never all become Ready") || !strings.Contains(err.Error(), "ready flux-system/hand-written -> ready flux-system/") {
-				t.Fatalf("got %v, want the cycle through hand-written's wait refused", err)
-			}
-		})
-	}
-}
-
 // A cycle among Kustomizations the integration did not place is their
-// author's: platform waits for x and y, which depend on each other, and web
-// depends on platform. No Kustomization the integration placed is on the
-// cycle, so the tree is accepted.
+// author's: platform's application emits x and y, which depend on each
+// other. Without the setting platform waits for both and web depends on
+// platform; under it, which follows those Kustomizations, web health-checks
+// x. No Kustomization the integration placed is on the cycle, so the tree is
+// accepted.
 func TestMissedCycles_NonMemberCycleIsTheAuthors(t *testing.T) {
 	for _, placement := range integratedPlacements {
 		t.Run(string(placement), func(t *testing.T) {
@@ -354,5 +337,252 @@ func TestMissedCycles_NonMemberCycleIsTheAuthors(t *testing.T) {
 				t.Fatalf("CreateLayoutWithResources: %v", err)
 			}
 		})
+		t.Run("UmbrellasDoNotWait/"+string(placement), func(t *testing.T) {
+			c := noWaitCluster(srBundle("platform", objApp("platform-app", handWritten("x", "y"), handWritten("y", "x"), handWritten("z"))), false)
+			web := c.Node.Children[1].Bundle
+			web.Wait = boolPtr(false)
+			web.HealthChecks = []stack.HealthCheck{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Namespace: "flux-system", Name: "x"}}
+			if _, err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).CreateLayoutWithResources(c, withPlacement(nodeOnly, placement)); err != nil {
+				t.Fatalf("CreateLayoutWithResources: %v", err)
+			}
+		})
+	}
+}
+
+// pairCluster is demo -> {a, b-longer}: a's application writes aObjs and a
+// health-checks check; b-longer, whose application writes bObjs, depends on
+// a. Its name is longer than a's, so its spec.path is too.
+func pairCluster(check stack.HealthCheck, aObjs, bObjs []client.Object) *stack.Cluster {
+	a := srBundle("a", objApp("a-app", aObjs...))
+	a.HealthChecks = []stack.HealthCheck{check}
+	b := srBundle("b-longer", objApp("b-app", bObjs...))
+	b.DependsOn = []*stack.Bundle{a}
+	an := &stack.Node{Name: "a", Bundle: a}
+	bn := &stack.Node{Name: "b-longer", Bundle: b}
+	root := &stack.Node{Name: "demo", Children: []*stack.Node{an, bn}}
+	an.SetParent(root)
+	bn.SetParent(root)
+	return &stack.Cluster{Name: "demo", Node: root}
+}
+
+// integrateWalked walks c, edits the walked layout with walked, and
+// integrates it without the setting.
+func integrateWalked(t *testing.T, c *stack.Cluster, placement layout.FluxPlacement, walked func(ml *layout.ManifestLayout)) error {
+	t.Helper()
+	rules := withPlacement(nodeOnly, placement)
+	ml, err := layout.WalkCluster(c, rules)
+	if err != nil {
+		t.Fatalf("WalkCluster: %v", err)
+	}
+	if walked != nil {
+		walked(ml)
+	}
+	return fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+}
+
+// findLayout returns the layout of ml whose resources hold an object named
+// name, or nil.
+func findLayout(ml *layout.ManifestLayout, name string) *layout.ManifestLayout {
+	for _, r := range ml.Resources {
+		if r != nil && r.GetName() == name {
+			return ml
+		}
+	}
+	for _, c := range ml.Children {
+		if c != nil {
+			if l := findLayout(c, name); l != nil {
+				return l
+			}
+		}
+	}
+	return nil
+}
+
+// A health check adds an edge only onto the apply of the one member certain
+// to write the checked object; a match that is not certain adds none, and a
+// tree that converges is not refused for it. In each case a health-checks
+// an object, b-longer depends on a, and b-longer's build holds a match:
+// with the edge, a would wait for b-longer's apply, and b-longer for a's
+// readiness.
+func TestMissedCycles_UncertainWriterAddsNoEdge(t *testing.T) {
+	cm := func(ns, name string) client.Object { return unstructuredObj("v1", "ConfigMap", ns, name) }
+	check := func(ns, name string) stack.HealthCheck {
+		return stack.HealthCheck{APIVersion: "v1", Kind: "ConfigMap", Namespace: ns, Name: name}
+	}
+	cases := map[string]struct {
+		cluster func() *stack.Cluster
+		walked  func(t *testing.T, ml *layout.ManifestLayout)
+	}{
+		// a checks its own red/ready; b-longer writes a ConfigMap ready with
+		// no namespace, which its build may apply into another namespace.
+		"b's match is written with no namespace": {cluster: func() *stack.Cluster {
+			return pairCluster(check("red", "ready"), []client.Object{cm("red", "ready")}, []client.Object{cm("", "ready")})
+		}},
+		// a checks its own settings-extra; b-longer generates settings,
+		// applied as settings plus a content hash, not settings-extra.
+		"b generates a ConfigMap whose name the check's starts with": {
+			cluster: func() *stack.Cluster {
+				return pairCluster(check("default", "settings-extra"), []client.Object{cm("default", "settings-extra")}, []client.Object{cm("default", "b-cm")})
+			},
+			walked: func(t *testing.T, ml *layout.ManifestLayout) {
+				l := findLayout(ml, "b-cm")
+				if l == nil {
+					t.Fatal("no layout holds b-cm")
+				}
+				l.ConfigMapGenerators = append(l.ConfigMapGenerators, layout.ConfigMapGeneratorSpec{Name: "settings", Files: []string{"values.yaml"}})
+				l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: "values.yaml", Content: []byte("k: v\n")})
+			},
+		},
+		// The Flux bootstrap applies shared from the root directory before
+		// any of the tree's Kustomizations.
+		"the bootstrap writes a copy": {
+			cluster: func() *stack.Cluster {
+				return pairCluster(check("default", "shared"), nil, []client.Object{cm("default", "shared")})
+			},
+			walked: func(_ *testing.T, ml *layout.ManifestLayout) {
+				ml.Resources = append(ml.Resources, cm("default", "shared"))
+			},
+		},
+		// a's application emits h, whose build is b-longer's directory: h
+		// may create the object before b-longer applies.
+		"another Kustomization's build holds it too": {
+			cluster: func() *stack.Cluster {
+				return pairCluster(check("default", "b-cm"), []client.Object{cm("default", "a-cm")}, []client.Object{cm("default", "b-cm")})
+			},
+			walked: func(t *testing.T, ml *layout.ManifestLayout) {
+				l, a := findLayout(ml, "b-cm"), findLayout(ml, "a-cm")
+				if l == nil || a == nil {
+					t.Fatal("no layout holds b-cm or a-cm")
+				}
+				h := handWritten("h")
+				h.Spec.Path = "./" + l.FullRepoPath()
+				a.Resources = append(a.Resources, h)
+			},
+		},
+		// As above, but h cannot be read in typed form, so where its build
+		// is, and what it creates, is not known.
+		"a Kustomization that cannot be read may hold it": {
+			cluster: func() *stack.Cluster {
+				return pairCluster(check("default", "b-cm"), []client.Object{cm("default", "a-cm")}, []client.Object{cm("default", "b-cm")})
+			},
+			walked: func(t *testing.T, ml *layout.ManifestLayout) {
+				l, a := findLayout(ml, "b-cm"), findLayout(ml, "a-cm")
+				if l == nil || a == nil {
+					t.Fatal("no layout holds b-cm or a-cm")
+				}
+				h := unstructuredObj(kustv1.GroupVersion.String(), "Kustomization", "flux-system", "h")
+				for _, f := range []struct {
+					value any
+					path  []string
+				}{
+					{"${INTERVAL}", []string{"spec", "interval"}},
+					{"./" + l.FullRepoPath(), []string{"spec", "path"}},
+					{true, []string{"spec", "prune"}},
+					{map[string]any{"kind": "GitRepository", "name": "flux-system"}, []string{"spec", "sourceRef"}},
+				} {
+					if err := unstructured.SetNestedField(h.Object, f.value, f.path...); err != nil {
+						t.Fatalf("SetNestedField: %v", err)
+					}
+				}
+				a.Resources = append(a.Resources, h)
+			},
+		},
+		// b-longer writes red/ready, and a's own build may write it too: a
+		// ConfigMap ready with no namespace, which a's apply may put in red.
+		"a's match is written with no namespace": {cluster: func() *stack.Cluster {
+			return pairCluster(check("red", "ready"), []client.Object{cm("", "ready")}, []client.Object{cm("red", "ready")})
+		}},
+		// b-longer writes settings-abc, and a's own build may write it too:
+		// its generator settings, applied as settings plus a content hash.
+		"a generates a ConfigMap whose name the check's starts with": {
+			cluster: func() *stack.Cluster {
+				return pairCluster(check("default", "settings-abc"), []client.Object{cm("default", "a-cm")}, []client.Object{cm("default", "settings-abc")})
+			},
+			walked: func(t *testing.T, ml *layout.ManifestLayout) {
+				l := findLayout(ml, "a-cm")
+				if l == nil {
+					t.Fatal("no layout holds a-cm")
+				}
+				l.ConfigMapGenerators = append(l.ConfigMapGenerators, layout.ConfigMapGeneratorSpec{Name: "settings", Files: []string{"values.yaml"}})
+				l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: "values.yaml", Content: []byte("k: v\n")})
+			},
+		},
+		// b-longer's patches may rename or remove b-cm.
+		"b patches its build": {cluster: func() *stack.Cluster {
+			c := pairCluster(check("default", "b-cm"), []client.Object{cm("default", "a-cm")}, []client.Object{cm("default", "b-cm")})
+			c.Node.Children[1].Bundle.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "b-cm"}}}
+			return c
+		}},
+	}
+	for name, c := range cases {
+		for _, placement := range append(slices.Clone(integratedPlacements), layout.FluxSeparate) {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				var walked func(ml *layout.ManifestLayout)
+				if c.walked != nil {
+					walked = func(ml *layout.ManifestLayout) { c.walked(t, ml) }
+				}
+				if err := integrateWalked(t, c.cluster(), placement, walked); err != nil {
+					t.Fatalf("got %v, want the tree admitted", err)
+				}
+			})
+		}
+	}
+}
+
+// Without UmbrellasDoNotWait a Kustomization the integration did not place
+// waits for nothing in the reconcile-order check: platform waits for h,
+// which its application emits, and h's own dependsOn, health checks and
+// spec are its author's. Each tree integrated on main and still does.
+func TestMissedCycles_NonMemberEdgesAreTheAuthorsWithoutTheSetting(t *testing.T) {
+	cases := map[string]func(t *testing.T, placement layout.FluxPlacement) client.Object{
+		// h depends on platform with a readyExpr, which replaces the
+		// readiness check unless a controller feature gate makes it additive.
+		"h depends on platform with a readyExpr": func(*testing.T, layout.FluxPlacement) client.Object {
+			h := handWritten("h")
+			h.Spec.DependsOn = []kustv1.DependencyReference{{Name: "platform", ReadyExpr: "true"}}
+			return h
+		},
+		// h's spec.interval is substituted by a postBuild before Flux
+		// applies it, so it cannot be read in typed form here.
+		"h cannot be read before substitution": func(t *testing.T, _ layout.FluxPlacement) client.Object {
+			u := unstructuredObj(kustv1.GroupVersion.String(), "Kustomization", "flux-system", "h")
+			for _, f := range []struct {
+				value any
+				path  []string
+			}{
+				{"${INTERVAL}", []string{"spec", "interval"}},
+				{"./elsewhere", []string{"spec", "path"}},
+				{true, []string{"spec", "prune"}},
+				{map[string]any{"kind": "GitRepository", "name": "flux-system"}, []string{"spec", "sourceRef"}},
+			} {
+				if err := unstructured.SetNestedField(u.Object, f.value, f.path...); err != nil {
+					t.Fatalf("SetNestedField: %v", err)
+				}
+			}
+			return u
+		},
+		// h builds web's directory and health-checks web's ConfigMap: h's
+		// own apply creates it.
+		"h health-checks what its own build writes": func(t *testing.T, placement layout.FluxPlacement) client.Object {
+			off, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(srBundle("platform", cmApp("platform-app")), true), withPlacement(nodeOnly, placement))
+			if err != nil {
+				t.Fatalf("without h: %v", err)
+			}
+			h := handWritten("h")
+			h.Spec.Path = findKept(off, "web").Spec.Path
+			checks("v1", "ConfigMap", "default", "web-app-cm")(h)
+			return h
+		},
+	}
+	for name, h := range cases {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				platform := srBundle("platform", objApp("platform-app", h(t, placement)))
+				platform.Wait = boolPtr(true)
+				if _, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(platform, true), withPlacement(nodeOnly, placement)); err != nil {
+					t.Fatalf("got %v, want the tree admitted", err)
+				}
+			})
+		}
 	}
 }

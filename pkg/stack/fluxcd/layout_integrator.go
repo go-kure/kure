@@ -538,7 +538,7 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	if err := p.umbrellasDoNotWait(ml); err != nil {
 		return nil, err
 	}
-	if err := checkPlacedReconcileOrder(ml, p.generated); err != nil {
+	if err := checkPlacedReconcileOrder(ml, p.generated, p.gen.UmbrellasDoNotWait); err != nil {
 		return nil, err
 	}
 	return p.generated, markFluxBuilds(ml, p.generated)
@@ -602,11 +602,11 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) erro
 // member's apply: whether the other applies first depends on controller
 // settings the tree does not carry, so it is no alternate creator. Under
 // separate placement every CR sits in flux-system, which the root lists.
-// checkTreeOrder then judges every Flux Kustomization of the tree, each
-// dependsOn as written and health checks on objects that are no Flux
-// Kustomization; checkReconcileOrder runs first so its refusals keep their
-// chains.
-func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string]bool) error {
+// checkTreeOrder then judges the members' edges again, each dependsOn as
+// written and each health check whose object has a certain writer, and with
+// others (UmbrellasDoNotWait) the other Kustomizations of the tree too;
+// checkReconcileOrder runs first so its refusals keep their chains.
+func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string]bool, others bool) error {
 	t, err := indexKustomizationTree(root, generatedMembers(generated))
 	if err != nil {
 		return err
@@ -614,7 +614,7 @@ func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string
 	if err := checkReconcileOrder(t.kusts, t.creator, t.applied); err != nil {
 		return err
 	}
-	return t.checkTreeOrder()
+	return t.checkTreeOrder(others)
 }
 
 // buildDirectories returns, in pre-order, the layouts whose directories a
@@ -2380,7 +2380,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		// above leaves out with the child).
 		if fluxDir.Namespace == ml.FullRepoPath() && len(fluxDir.Children) == 0 &&
 			reflect.DeepEqual(fluxDir.Resources, fluxResources) {
-			if err := checkPlacedReconcileOrder(ml, generated); err != nil {
+			if err := checkPlacedReconcileOrder(ml, generated, false); err != nil {
 				return nil, err
 			}
 			return generated, markFluxBuilds(ml, generated)
@@ -2421,7 +2421,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	// placement adds what a wait on the root's Kustomization covers: the
 	// root's kustomization.yaml lists flux-system, so it applies every CR.
 	// A refused placement is taken back, so the tree is as the caller gave it.
-	if err := checkPlacedReconcileOrder(ml, generated); err != nil {
+	if err := checkPlacedReconcileOrder(ml, generated, false); err != nil {
 		ml.Children = ml.Children[:len(ml.Children)-1]
 		return nil, err
 	}
