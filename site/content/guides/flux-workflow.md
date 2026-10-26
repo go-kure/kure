@@ -1268,11 +1268,15 @@ regardless of where they run.
 
 ### Sync name
 
-In `"flux-operator"` mode the `FluxInstance` sync makes the operator create a source and a
-Kustomization of its own. `BootstrapConfig.SyncName` names both; it becomes `spec.sync.name`.
-Left empty, the operator names them after the `FluxInstance`'s namespace — `flux-system` unless
-you moved it as above. Set `SyncName` when the Kustomizations you generate reference the sync
-source under another name, or their `sourceRef` points at a source nothing creates:
+`BootstrapConfig.SyncName` names the bootstrap source and Kustomization in both modes. In
+`"flux-operator"` mode the `FluxInstance` sync makes the operator create a source and a
+Kustomization of its own, and `SyncName` becomes `spec.sync.name`. In `"gotk"` mode it names the
+source and Kustomization Kure emits, and the Kustomization's `sourceRef` follows. It needs a
+`SourceURL`, without which neither mode emits a source. Left empty, each mode keeps its own
+names: the operator names both after the `FluxInstance`'s namespace — `flux-system` unless you
+moved it as above — and `"gotk"` names the source after the root node and the Kustomization
+`flux-system` (`BootstrapGenerator.BootstrapName`). Set `SyncName` when the Kustomizations you
+generate reference the sync source under a name of your choosing:
 
 <!-- doc-example: pkg/stack/fluxcd ExampleBootstrapGenerator_GenerateFluxInstance -->
 ```go
@@ -1296,13 +1300,13 @@ fmt.Println(fi.Name, fi.Spec.Sync.Name, fi.Spec.Sync.Ref)
 ```
 <!-- doc-example:end -->
 
-It only takes effect with `SourceURL` set, since no sync block is emitted without one, and
-`"gotk"` mode ignores it: there kure creates and names the root source itself. kure does not
-validate the value. The CRD caps it at 63 characters and makes it immutable once set, so renaming
+It only takes effect with `SourceURL` set, since neither mode emits a source without one. kure does
+not validate the value. The CRD caps it at 63 characters and makes it immutable once set, so renaming
 the sync of a running cluster means recreating the `FluxInstance`. It is distinct from the
 `FluxInstance`'s own `metadata.name`, which is always `flux` (`fluxcd.FluxInstanceName`): the
 flux-operator CRD rejects any other name at admission. The generator's
-`BootstrapName` names the bootstrap Kustomization only and never reaches the `FluxInstance`.
+`BootstrapName` names only the `"gotk"` bootstrap Kustomization, and only while `SyncName` is
+unset; it never reaches the `FluxInstance`.
 
 ### Source access
 

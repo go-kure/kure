@@ -57,10 +57,10 @@ offline; any other value downloads manifests — the named release for `vX.Y.Z`,
 release otherwise; in `flux-operator` mode it is required, as is `Registry`, and an empty value
 is an error) and components, and the sync
 source — `SourceKind`, `SourceURL`,
-`SourceRef` and, in `flux-operator` mode, `SyncName`, the name the operator gives the sync source
-and Kustomization it creates (empty leaves it to the operator, which uses the `FluxInstance`
-namespace). For an `OCIRepository` source, `SourceSecretRef`, `SourceProvider` and
-`SourceInsecure` give the registry credentials, OIDC provider and plain-HTTP access in both
+`SourceRef` and `SyncName`, the name of the bootstrap source and Kustomization in both modes
+(empty keeps each mode's names: the operator uses the `FluxInstance` namespace, `gotk` the root
+node's name for the source and the generator's `BootstrapName` for the Kustomization). For an
+`OCIRepository` source, `SourceSecretRef`, `SourceProvider` and `SourceInsecure` give the registry credentials, OIDC provider and plain-HTTP access in both
 modes. `ImagePullSecret` names the Secret the Flux controller images are pulled with, in both
 modes: the gotk install option, or the `FluxInstance` distribution's `imagePullSecret`. It is not
 a credential for the sync source. In `flux-operator` mode neither `Registry` nor

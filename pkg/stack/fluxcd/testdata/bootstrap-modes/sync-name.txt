@@ -1,6 +1,6 @@
 field                             | gotk                                         | flux-operator
 documents                         | 1 source, 1 Kustomization                    | FluxInstance with sync: 1 source, 1 Kustomization   <- differs
-source                            | OCIRepository flux-system/prod               | OCIRepository flux-system/fleet   <- differs
+source                            | OCIRepository flux-system/fleet              | OCIRepository flux-system/fleet
 source.kind                       | OCIRepository                                | OCIRepository
 source.namespace                  | flux-system                                  | flux-system
 source.url                        | oci://registry.example.com/fleet             | oci://registry.example.com/fleet
@@ -10,9 +10,9 @@ source.interval                   | 1h0m0s                                      
 source.secretRef                  | -                                            | -
 source.provider                   | -                                            | -
 source.insecure                   | false                                        | false
-kustomization                     | Kustomization flux-system/flux-system        | Kustomization flux-system/fleet   <- differs
+kustomization                     | Kustomization flux-system/fleet              | Kustomization flux-system/fleet
 kustomization.namespace           | flux-system                                  | flux-system
-kustomization.sourceRef           | OCIRepository prod                           | OCIRepository fleet   <- differs
+kustomization.sourceRef           | OCIRepository fleet                          | OCIRepository fleet
 kustomization.sourceRef.namespace | -                                            | -
 kustomization.path                | demo                                         | ./demo   <- differs
 kustomization.directory           | demo                                         | demo

@@ -409,9 +409,9 @@ for the identifier to find every place its value can reach emitted YAML.
 | `DefaultInterval` | `60m` | the caller names no interval (a non-empty `Bundle.Interval` that does not parse is a validation error, not a fallback; see [Durations](#durations) for the values Flux does not take) | assigning `.DefaultInterval` on either generator |
 | `DefaultNamespace` | `flux-system` | generated resources need a namespace | assigning `.DefaultNamespace` on either generator |
 | `DefaultMode` | `layout.KustomizationExplicit` | informational: the listing mode the layout writers use for a layout with no `Mode` of its own | setting `ManifestLayout.Mode` (or `Config.KustomizationMode` for `WriteManifest`) |
-| `DefaultBootstrapName` | `flux-system` | naming the bootstrap Kustomization | assigning `BootstrapGenerator.BootstrapName` |
+| `DefaultBootstrapName` | `flux-system` | naming the `gotk` bootstrap Kustomization without `SyncName` | assigning `BootstrapGenerator.BootstrapName`, or setting `BootstrapConfig.SyncName` with a `SourceURL` |
 | `FluxInstanceName` | `flux` | naming the `FluxInstance` in `flux-operator` mode | not overrideable; the CRD admits no other name (see below) |
-| `DefaultSourceName` | `flux-system` | the root node has no name | naming the root `stack.Node` |
+| `DefaultSourceName` | `flux-system` | the root node has no name and `SyncName` is unset | naming the root `stack.Node`, or setting `BootstrapConfig.SyncName` |
 | `DefaultFluxMode` | `flux-operator` | `BootstrapConfig.FluxMode` is empty | setting `BootstrapConfig.FluxMode` |
 | `DefaultSourceKind` | `OCIRepository` | `BootstrapConfig.SourceKind` does not name `GitRepository`, the empty string included | setting `BootstrapConfig.SourceKind` |
 | `DefaultFluxDirName` | `flux-system` | a separate Flux layout needs a directory | not overrideable |
@@ -893,12 +893,20 @@ which lists the Kustomization, so it is accepted (see
 
 ### Sync name
 
-`BootstrapConfig.SyncName` becomes the `FluxInstance`'s `spec.sync.name`: the name flux-operator
-gives the source and Kustomization it creates for the sync. When it is empty the operator names
-both after the `FluxInstance`'s namespace (`DefaultNamespace`). That fallback is the operator's,
-not kure's, which is why the defaults table above has no row for it. Set `SyncName` when the
-Kustomizations you generate reference the sync source by another name; otherwise their
-`sourceRef` points at a source nothing creates.
+`BootstrapConfig.SyncName` names the bootstrap source and Kustomization in both modes, so one
+config gives the root one identity whichever mode renders it. In `flux-operator` mode it becomes
+the `FluxInstance`'s `spec.sync.name`: the name flux-operator gives the source and Kustomization
+it creates for the sync. In `gotk` mode it names the `OCIRepository` or `GitRepository` and the
+bootstrap Kustomization kure emits, and the Kustomization's `sourceRef` follows; it takes
+precedence over the root node's name and `BootstrapGenerator.BootstrapName`. It has no effect
+without `SourceURL`, in either mode, because no source is emitted then.
+
+When it is empty each mode keeps its own names. The operator names both after the
+`FluxInstance`'s namespace (`DefaultNamespace`); that fallback is the operator's, not kure's,
+which is why the defaults table above has no row for it. `gotk` names the source after the root
+node (`DefaultSourceName` without one) and the Kustomization `BootstrapName`. Set `SyncName` when
+the Kustomizations you generate reference the sync source by a name of your choosing; otherwise
+their `sourceRef` has to follow whichever name the mode picks.
 
 <!-- doc-example: pkg/stack/fluxcd ExampleBootstrapGenerator_GenerateFluxInstance -->
 ```go
@@ -922,13 +930,14 @@ fmt.Println(fi.Name, fi.Spec.Sync.Name, fi.Spec.Sync.Ref)
 ```
 <!-- doc-example:end -->
 
-- flux-operator mode only: gotk mode ignores it, as flux-operator mode ignores `Prune`.
-- It needs `SourceURL`: without one no sync block is emitted, so there is nothing to name.
+- It needs `SourceURL`: without one neither mode emits a source, so there is nothing to name.
 - kure passes it through unvalidated. The CRD caps it at 63 characters and makes it immutable
-  once set, so renaming the sync of a live cluster means recreating the `FluxInstance`.
+  once set, so renaming the sync of a live cluster means recreating the `FluxInstance`. In `gotk`
+  mode a new name means new objects: the source and Kustomization under the old name are not
+  renamed.
 - It is not the `FluxInstance`'s own `metadata.name`, which is always `FluxInstanceName` (`flux`):
-  the CRD accepts no other. `BootstrapGenerator.BootstrapName` names the bootstrap Kustomization
-  only.
+  the CRD accepts no other. `BootstrapGenerator.BootstrapName` names only the `gotk` bootstrap
+  Kustomization, and only while `SyncName` is unset.
 
 ### Source access
 
