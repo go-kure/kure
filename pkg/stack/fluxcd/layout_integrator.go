@@ -601,14 +601,20 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) erro
 // build of another Kustomization of the tree also writes still waits for that
 // member's apply: whether the other applies first depends on controller
 // settings the tree does not carry, so it is no alternate creator. Under
-// separate placement every CR sits in flux-system, which the root lists, so
-// GenerateFromLayout's own check is the whole story.
+// separate placement every CR sits in flux-system, which the root lists.
+// checkTreeOrder then judges every Flux Kustomization of the tree, each
+// dependsOn as written and health checks on objects that are no Flux
+// Kustomization; checkReconcileOrder runs first so its refusals keep their
+// chains.
 func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string]bool) error {
 	t, err := indexKustomizationTree(root, generatedMembers(generated))
 	if err != nil {
 		return err
 	}
-	return checkReconcileOrder(t.kusts, t.creator, t.applied)
+	if err := checkReconcileOrder(t.kusts, t.creator, t.applied); err != nil {
+		return err
+	}
+	return t.checkTreeOrder()
 }
 
 // buildDirectories returns, in pre-order, the layouts whose directories a
