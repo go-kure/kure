@@ -1212,7 +1212,8 @@ bootstrap does not check the name as a directory name; the walk still does, as a
 is the directory `<ClusterName>/<root>` of the written tree. In `"gotk"` mode a named root also names the generated source and
 the bootstrap Kustomization's `sourceRef`, so there it must be a DNS-1123 subdomain as well:
 `Prod` and `prod_root` are refused. With `SyncName` and `SourceURL` both set, `SyncName` names
-those objects instead and the root name is checked only as a directory name.
+those objects instead: `SyncName` must then be a valid Flux Kustomization name (a DNS-1123
+subdomain of at most 63 characters), and the root name is checked only as a directory name.
 
 ### Bootstrap namespace
 
