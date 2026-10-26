@@ -284,6 +284,20 @@ always its exact expansion: the float64 2^62 is written `4611686018427388000`, n
 Any other finite number, the float64 -2^63 among them, passes through a float64 and is written
 with that precision.
 
+### Strings
+
+Every YAML writer of the package keeps every string as it is: `EncodeObjectsToYAML` and
+`PrintObjectsAsYAML` in both field orders, `EncodeObjectsTo` with YAML output, `Marshal`,
+`Buffer.Marshal` and `SaveFile`. A string holding NEL (U+0085), DEL (U+007F), another C1 control
+(U+0080 to U+009F), U+FFFE or U+FFFF is written double-quoted, with the character as an escape
+(`"a\Nb"`, `"a\x7Fb"`, `"a\uFFFEb"`), in a value and in a key alike. kure, kubectl and kustomize
+read it back unchanged. Before, every writer but the Kubernetes field order changed NEL into a
+space and refused the others (go-kure/kure#1129).
+
+`Marshal`, `Buffer.Marshal` and `EncodeObjectsTo` also write a string that an object's own JSON
+spells with an escape YAML 1.1 lacks, such as `\/` or a UTF-16 surrogate pair. They refused it
+before. Every other string is written as before, byte for byte.
+
 ### Deterministic Field Ordering
 
 <!-- doc-example: pkg/io ExampleEncodeObjectsToYAMLWithOptions -->

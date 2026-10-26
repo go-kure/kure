@@ -179,7 +179,8 @@ Beyond FluxCD, the [Kubernetes Builders](/api-reference/kubernetes-builders) pac
 ## Generating YAML
 
 Use the `io` package to serialize resources. `io.Marshal` and `io.PrintObjectsAsYAML` write to
-the `io.Writer` you pass; `io.SaveFile` writes one object to a path:
+the `io.Writer` you pass; `io.SaveFile` writes one object to a path. Every string reads back as
+it was, a control character such as NEL or DEL included, which is written as a YAML escape:
 
 <!-- doc-example:excerpt the import block alone, which the examples in this section use -->
 ```go
