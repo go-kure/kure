@@ -129,9 +129,10 @@ func WithDigestVersion() RenderOption {
 // loaded, with or without WithDigest or WithDigestVersion: one naming several
 // manifests, one holding a nested index, and one holding a chart manifest
 // beside a manifest that is no chart. A root manifest naming a subject, index
-// or not, a root naming a manifest as its config or a layer, and an index
-// listing its single image manifest without a digest, are refused the same
-// way. The single child of an index naming one
+// or not, a root naming a manifest as its config or a layer, a root holding
+// both an image manifest's config, layers or media type and an index's
+// manifests list, and an index listing its single image manifest without a
+// digest, are refused the same way. The single child of an index naming one
 // image manifest is pulled on its own, by the digest the index lists, and
 // rendered from that pull, after the checks a child WithDigest selects
 // passes: one more pull of a child the tag's pull has already fetched.
@@ -247,8 +248,9 @@ const (
 // is not fixed, so such a root may render a different chart on each pull,
 // even pinned to its digest. Refused are a root naming a subject, whatever
 // its kind, a root naming a manifest as its config or a layer, whatever its
-// JSON also holds, and an OCI image index naming anything but a single image
-// manifest with a digest.
+// JSON also holds, a root holding both an image manifest's config, layers or
+// media type and an index's manifests list, and an OCI image index naming
+// anything but a single image manifest with a digest.
 // An index is recognized by its mediaType or, as that field is optional, by
 // its manifests list. The index lists its children without their content, so
 // a child that is no chart counts too, and a nested index is refused whatever
@@ -270,6 +272,9 @@ func checkPullRoot(root []byte) (child string, err error) {
 	if d, ok := manifestEdge(doc); ok {
 		return "", manifestEdgeError("the reference's root manifest", d,
 			"reference a chart pushed as a single manifest whose config and layers are blobs")
+	}
+	if doc.isHybrid() {
+		return "", hybridError()
 	}
 	if !doc.isIndex() {
 		return "", nil
@@ -297,7 +302,8 @@ func checkPullRoot(root []byte) (child string, err error) {
 // it pulls that child on its own, by digest, and returns it. The chart Helm
 // kept from the root's pull is never used: that pull copies every child and
 // keeps the last chart layer it meets, in no fixed order. A root naming a
-// subject, a digest the index does not list or lists as anything but an image
+// subject, a root also holding an image manifest's config, layers or media
+// type, a digest the index does not list or lists as anything but an image
 // manifest, and a child that is itself an index, names a subject or names a
 // manifest as its config or a layer, are refused. A root that is no index
 // gives the digest mismatch error.
@@ -312,6 +318,9 @@ func pullIndexChild(client *registry.Client, chartURL, version string, root *reg
 	}
 	if doc.Subject != nil {
 		return nil, errors.Wrapf(subjectError("the reference's root manifest", doc), "chart %s:%s", chartURL, version)
+	}
+	if doc.isHybrid() {
+		return nil, errors.Wrapf(hybridError(), "chart %s:%s", chartURL, version)
 	}
 	manifests := doc.manifests()
 	i := slices.IndexFunc(manifests, func(m ociDescriptor) bool { return m.Digest == digest })
@@ -448,6 +457,22 @@ func readManifest(data []byte) (manifestDoc, error) {
 // field is optional, by its manifests list.
 func (d manifestDoc) isIndex() bool {
 	return d.MediaType == imageIndexMediaType || d.Manifests != nil
+}
+
+// isHybrid reports a manifest whose JSON holds both an index's manifests
+// list and an image manifest's config, layers or mediaType. Helm's registry
+// client reads it as the media type the registry serves it under, so the
+// chart it keeps and the child the list names may differ.
+func (d manifestDoc) isHybrid() bool {
+	return d.Manifests != nil &&
+		(d.MediaType == imageManifestMediaType || d.Config != (ociDescriptor{}) || len(d.Layers) > 0)
+}
+
+// hybridError refuses a root manifest isHybrid reports.
+func hybridError() error {
+	return errors.New("the reference's root manifest holds both an image manifest's config, layers or media type " +
+		"and an index's manifests list, so the chart Helm's registry client kept may not be the one its list names: " +
+		"reference a chart pushed as a single manifest or as an index, not as both")
 }
 
 func (d manifestDoc) manifests() []ociDescriptor {

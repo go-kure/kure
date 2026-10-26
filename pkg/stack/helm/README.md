@@ -299,6 +299,9 @@ func SplitByHookWeight(objects []client.Object) []HookGroup
   - an index holding one chart manifest beside a manifest that is no chart;
   - a root manifest naming a `subject`, whether it is an index or a chart manifest;
   - a root manifest naming a manifest as its config or a layer, whatever else its JSON holds;
+  - a root manifest holding both an image manifest's config, layers or `mediaType` and an index's
+    `manifests` list: Helm's registry client reads it as the media type the registry serves it
+    under, so the chart it keeps may not be the child the list names;
   - an index listing its single image manifest without a digest.
 
   The rule is conservative on purpose. Helm's registry client pulls every manifest under the root,
@@ -322,8 +325,9 @@ func SplitByHookWeight(objects []client.Object) []HookGroup
   by digest, so the chart Helm kept from the tag's pull is never the one rendered. The selection is
   refused, naming `chartURL:version`, for a digest the index does not list, one it lists as
   anything but an image manifest (a nested index, for one), a selected child whose content is
-  itself an index, names a `subject` or names a manifest as its config or a layer, and an index
-  root naming a `subject`. The tag's pull still copies every child under the index, so an index
+  itself an index, names a `subject` or names a manifest as its config or a layer, an index
+  root naming a `subject`, and a root that also holds an image manifest's config, layers or
+  `mediaType`. The tag's pull still copies every child under the index, so an index
   whose other children cannot be pulled fails before the selection.
 - With `WithDigestVersion`, a semver tag must equal the selected child's chart version, build
   metadata aside, so a child of another version is selected through a tag that is not semver.

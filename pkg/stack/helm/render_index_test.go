@@ -74,6 +74,13 @@ func withEmptyManifestsEntry(t *testing.T, m fakeManifest) fakeManifest {
 	})
 }
 
+// withManifestsEntry returns m with a manifests list naming child, as an
+// index would list it.
+func withManifestsEntry(t *testing.T, m, child fakeManifest) fakeManifest {
+	t.Helper()
+	return editManifest(t, m, func(doc map[string]any) { doc["manifests"] = []any{descriptorOf(child)} })
+}
+
 // withoutMediaType returns m without the optional mediaType field in its
 // JSON; the registry still serves it under its media type.
 func withoutMediaType(t *testing.T, m fakeManifest) fakeManifest {
@@ -152,7 +159,14 @@ func TestRenderChart_OCI_IndexRoot(t *testing.T) {
 		}, "config or a layer"},
 		"a chart manifest with a manifests list entry without a digest": {func(t *testing.T) *fakeRegistry {
 			return newFakeRootRegistry(t, withEmptyManifestsEntry(t, chart()))
-		}, "without a digest"},
+		}, "holds both"},
+		// Helm's pull keeps a's chart; the list names b, which a child pull
+		// would render.
+		"a chart manifest with a manifests list naming another chart": {func(t *testing.T) *fakeRegistry {
+			a, _ := identityChild(t, "testchart", "0.1.0")
+			b, _ := identityChild(t, "otherchart", "0.2.0")
+			return newFakeRootRegistry(t, withManifestsEntry(t, a, b), b)
+		}, "holds both"},
 		"a one-chart index whose child names a subject": {func(t *testing.T) *fakeRegistry {
 			a, b := chart(), other()
 			b.unlisted = true
@@ -387,7 +401,8 @@ func TestRenderChart_OCI_IndexChild_Refused(t *testing.T) {
 	nested := b
 	nested.unlisted = true
 	nestedIndex := indexOf(t, nested)
-	indexShaped := editManifest(t, b, func(doc map[string]any) { doc["manifests"] = []any{descriptorOf(a)} })
+	indexShaped := withManifestsEntry(t, b, a)
+	hybridRoot := withManifestsEntry(t, a, b)
 	subjectChild := withSubject(t, b, a)
 	layerManifest := withManifestLayer(t, b, a)
 	configManifest := withManifestConfig(t, b, a)
@@ -431,6 +446,10 @@ func TestRenderChart_OCI_IndexChild_Refused(t *testing.T) {
 			},
 			sha256Digest(b.data), []string{"subject"},
 		},
+		"a chart manifest root listing the pinned chart": {
+			func(t *testing.T) *fakeRegistry { return newFakeRootRegistry(t, hybridRoot, b) },
+			sha256Digest(b.data), []string{"holds both"},
+		},
 	}
 	for name, r := range refused {
 		t.Run(name, func(t *testing.T) {
@@ -446,6 +465,31 @@ func TestRenderChart_OCI_IndexChild_Refused(t *testing.T) {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("error %q does not name %q", err, want)
 				}
+			}
+		})
+	}
+}
+
+// TestCheckPullRoot_Hybrid pins each way a root's JSON holds both an image
+// manifest's fields and an index's manifests list, and the refusal of an
+// index listing its single image manifest without a digest. Helm's pull
+// fails before RenderChart reaches the latter when the registry serves the
+// root as an index, so it is checked here directly.
+func TestCheckPullRoot_Hybrid(t *testing.T) {
+	child := `[{"mediaType":"` + imageManifestMediaType + `","digest":"sha256:` + strings.Repeat("a", 64) + `"}]`
+	blob := `{"mediaType":"application/vnd.cncf.helm.chart.content.v1.tar+gzip","digest":"sha256:` +
+		strings.Repeat("b", 64) + `"}`
+	for name, tc := range map[string]struct{ root, want string }{
+		"a config":                     {`{"schemaVersion":2,"config":` + blob + `,"manifests":` + child + `}`, "holds both"},
+		"a layer":                      {`{"schemaVersion":2,"layers":[` + blob + `],"manifests":` + child + `}`, "holds both"},
+		"the image manifest mediaType": {`{"schemaVersion":2,"mediaType":"` + imageManifestMediaType + `","manifests":` + child + `}`, "holds both"},
+		"an index child without a digest": {`{"schemaVersion":2,"mediaType":"` + imageIndexMediaType +
+			`","manifests":[{"mediaType":"` + imageManifestMediaType + `","digest":""}]}`, "without a digest"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := checkPullRoot([]byte(tc.root))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("checkPullRoot = %q, %v; want an error naming %q", got, err, tc.want)
 			}
 		})
 	}
