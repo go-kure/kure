@@ -531,10 +531,10 @@ full reference. A `SourceSemVer` range takes the tag's place in both modes, as
 
 `Bundle.Prune` and `Bundle.Wait` are `*bool` and are passed through untouched.
 `BootstrapConfig.Prune` does the same for the gotk bootstrap Kustomization. In flux-operator
-mode it reaches nothing: flux-operator renders its sync Kustomization with `prune: true`, whatever
-the config says (go-kure/kure#1088). `ResourceGenerator.Prune` is passed through untouched for a
-Kustomization generated from a `layout.ManifestLayout` where neither the layout nor the bundle that
-holds its application sets one. A layout carries both
+mode a set `Prune` becomes a patch on the operator's sync Kustomization, and unset keeps the
+operator's `prune: true` (see [Prune](#prune), go-kure/kure#1088). `ResourceGenerator.Prune` is
+passed through untouched for a Kustomization generated from a `layout.ManifestLayout` where
+neither the layout nor the bundle that holds its application sets one. A layout carries both
 settings, `ManifestLayout.Prune` and `ManifestLayout.Wait`, unset meaning that bundle's (see
 [Per-layout settings](#per-layout-settings)).
 
@@ -1042,6 +1042,22 @@ Both `GenerateBootstrap` and `GenerateFluxInstance` refuse, with nothing returne
   choose the revision;
 - a `SourceSemVer` that does not parse as a range, checked with the library source-controller
   parses it with, so it is refused at generation rather than at reconcile.
+
+### Prune
+
+`BootstrapConfig.Prune` sets garbage collection on the bootstrap Kustomization in both modes
+(go-kure/kure#1088). Unset keeps each mode's default.
+
+| `Prune` | gotk Kustomization | flux-operator sync Kustomization |
+|---|---|---|
+| unset | `prune: false` | `prune: true`, the operator's |
+| `false` | `prune: false` | `prune: false`, by patch |
+| `true` | `prune: true` | `prune: true`, by patch |
+
+The operator writes `prune: true` into the sync Kustomization it generates, and a `FluxInstance`
+sync has no prune field. So in flux-operator mode a set `Prune` adds one `spec.kustomize` patch
+that sets `spec.prune` on that Kustomization, matched by group, kind and name, the name chosen as
+for the `SourceInsecure` patch. Without `SourceURL` no sync is generated and `Prune` adds nothing.
 
 ### Root node name
 
