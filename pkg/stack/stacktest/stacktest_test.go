@@ -339,6 +339,26 @@ func TestCheckGeneration_SharingConfigFails(t *testing.T) {
 			wantShared: []stacktest.Sharing{{Kind: "pointer", First: "[0].(*stacktest_test.custom).Weights[NaN]", Second: "[0].(*stacktest_test.custom).Weights[NaN]"}},
 		},
 		{
+			name: "two values whose paths print alike",
+			cfg: func() genFunc {
+				return calls(func(int) []*client.Object {
+					// The second pair's keys spell the first pair's paths:
+					// two values reached twice, printing as one Sharing.
+					m, n := map[string]any{}, map[string]any{}
+					spec := map[string]any{
+						"a":                              map[string]any{"x": m, "y": m},
+						"a].(map[string]interface {})[x": n,
+						"a].(map[string]interface {})[y": n,
+					}
+					return objs(&unstructured.Unstructured{Object: map[string]any{"spec": spec}})
+				})
+			},
+			wantInternal: []stacktest.Sharing{
+				{Kind: "map", First: "[0].(*unstructured.Unstructured).Object[spec].(map[string]interface {})[a].(map[string]interface {})[x].(map[string]interface {})", Second: "[0].(*unstructured.Unstructured).Object[spec].(map[string]interface {})[a].(map[string]interface {})[y].(map[string]interface {})"},
+				{Kind: "map", First: "[0].(*unstructured.Unstructured).Object[spec].(map[string]interface {})[a].(map[string]interface {})[x].(map[string]interface {})", Second: "[0].(*unstructured.Unstructured).Object[spec].(map[string]interface {})[a].(map[string]interface {})[y].(map[string]interface {})"},
+			},
+		},
+		{
 			name: "later path covered by its earliest overlap",
 			cfg: func() genFunc {
 				return calls(func(int) []*client.Object {

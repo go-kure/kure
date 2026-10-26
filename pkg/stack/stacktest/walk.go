@@ -351,8 +351,11 @@ func matches(a, b []record) []match {
 // skipped. With oncePerSecond, a record of the second side is considered
 // once, against the first record it overlaps: if that match is inside a
 // reported one, the record is covered and not reported against another.
-func report(a, b []record, ms []match, oncePerSecond bool) []Sharing {
+// Each Sharing is returned with its identity: two can print alike (a map
+// key may spell path syntax) and still be two values.
+func report(a, b []record, ms []match, oncePerSecond bool) ([]Sharing, []string) {
 	var out []Sharing
+	var ids []string
 	var done []match
 	considered := map[int]bool{}
 	for _, m := range ms {
@@ -375,8 +378,9 @@ func report(a, b []record, ms []match, oncePerSecond bool) []Sharing {
 		}
 		done = append(done, m)
 		out = append(out, Sharing{Kind: a[m.i].kind, First: first.String(), Second: second.String()})
+		ids = append(ids, fmt.Sprintf("%s %q %q", a[m.i].kind, []string(first), []string(second)))
 	}
-	return out
+	return out, ids
 }
 
 func sortSharings(s []Sharing) {
@@ -392,7 +396,7 @@ func sortSharings(s []Sharing) {
 // encounter of each value on each side.
 func shared(a, b *walk) []Sharing {
 	fa, fb := firsts(a.records), firsts(b.records)
-	out := report(fa, fb, matches(fa, fb), false)
+	out, _ := report(fa, fb, matches(fa, fb), false)
 	sortSharings(out)
 	return out
 }
@@ -409,10 +413,10 @@ func firsts(rs []record) []record {
 
 // internal reports the storage each result reaches at two paths, each later
 // path against the earliest it overlaps, listing a value found in both
-// results once.
+// results once: once by its path segments, not by how they print.
 func internal(walks ...*walk) []Sharing {
 	var out []Sharing
-	seen := map[Sharing]bool{}
+	seen := map[string]bool{}
 	for _, w := range walks {
 		var ms []match
 		for _, m := range matches(w.records, w.records) {
@@ -420,9 +424,10 @@ func internal(walks ...*walk) []Sharing {
 				ms = append(ms, m)
 			}
 		}
-		for _, s := range report(w.records, w.records, ms, true) {
-			if !seen[s] {
-				seen[s] = true
+		found, ids := report(w.records, w.records, ms, true)
+		for k, s := range found {
+			if !seen[ids[k]] {
+				seen[ids[k]] = true
 				out = append(out, s)
 			}
 		}

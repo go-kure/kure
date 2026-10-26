@@ -100,7 +100,9 @@ type Report struct {
 // of its paths is not listed again. A time.Time (so a metav1.Time) is not
 // walked: time.Now gives every value the same package-level location. Strings
 // are immutable and are not checked. A value that contains itself is walked
-// once and is not reported.
+// once and is not reported. A slice's elements are walked up to its length: a
+// value held only between its length and capacity, which reslicing reaches,
+// is not checked.
 //
 // An error from either call is returned wrapped with the call number, with no
 // report. So is a func, channel or unsafe pointer value in a result, a map

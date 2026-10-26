@@ -83,6 +83,9 @@ prints `[stack.Validator]`.
   package-level location, and a deep copy shares it too. Strings are immutable and are not
   checked.
 - A value that contains itself is walked once and is not reported.
+- A slice's elements are walked up to its length. A value held only between its length and
+  capacity (`items[:0]` over an array holding a cached map) is not checked, though reslicing
+  reaches it.
 - A func, channel or unsafe pointer in a result is returned as an error. So is a map with a key
   that is not a string, bool, integer or float (directly or held in an interface), and a map with
   two keys that print alike (two NaN keys, or `1` and `"1"` in a `map[any]any`), whose entries
