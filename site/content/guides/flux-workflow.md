@@ -1350,9 +1350,10 @@ for keyless cosign, the issuer and subject patterns the signing certificate must
 a `spec.kustomize` patch adding `spec.verify` to the operator's sync source, as for plain HTTP. It
 takes the same `OCIRepository` source with `SourceURL`. An unknown provider, keyless cosign (no
 public-key Secret) without an identity match, which would accept every signer, or an identity
-pattern that is empty, is not a Go regular expression, or holds DEL or a C1 control such as NEL
-literally (write `\x{85}` instead: the YAML carrying the pattern would fold or refuse it), is
-refused.
+pattern that is empty, is not a Go regular expression, or holds DEL, a C1 control such as NEL or
+the noncharacter U+FFFE or U+FFFF literally, is refused. kure writes such a pattern as given, but
+Flux's build, which writes every object with kustomize's `AsYaml`, folds NEL into a space and
+fails on the others; write `\x{85}` instead.
 
 To follow a release line instead of a fixed tag, set `SourceSemVer` to a semver range and leave
 `SourceRef` empty:
