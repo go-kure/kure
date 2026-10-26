@@ -8,10 +8,12 @@ import (
 	"os"
 	"strconv"
 
+	yamlv2 "go.yaml.in/yaml/v2"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
@@ -21,10 +23,12 @@ type Buffer struct {
 	bytes.Buffer
 }
 
-// Marshal writes the YAML representation of obj to the buffer.
+// Marshal writes the YAML representation of obj to the buffer. obj is read
+// through its JSON form, as [Marshal] reads it, and every string reads back
+// unchanged.
 func (b *Buffer) Marshal(obj any) error {
 	b.Reset()
-	data, err := yaml.Marshal(obj)
+	data, err := marshalYAML(obj)
 	if err != nil {
 		return err
 	}
@@ -37,9 +41,12 @@ func (b *Buffer) Unmarshal(obj any) error {
 	return yaml.Unmarshal(b.Bytes(), obj)
 }
 
-// Marshal writes the YAML representation of obj to w.
+// Marshal writes the YAML representation of obj to w. obj is read through its
+// JSON form, so json struct tags and MarshalJSON apply. Every string reads back
+// unchanged: one holding NEL, DEL, a C1 control, U+FFFE or U+FFFF is written
+// double-quoted with escapes.
 func Marshal(w io.Writer, obj any) error {
-	data, err := yaml.Marshal(obj)
+	data, err := marshalYAML(obj)
 	if err != nil {
 		return err
 	}
@@ -84,16 +91,32 @@ func LoadFile(path string, obj any) (retErr error) {
 	return Unmarshal(f, obj)
 }
 
+// EncodeObjectsTo encodes objects as JSON, or as YAML when yamlOutput is true,
+// each followed by a "---" separator line. The objects are written as they
+// are, without the cleanup [EncodeObjectsToYAML] does. In YAML every string
+// reads back unchanged, as in [Marshal].
 func EncodeObjectsTo(objects []*client.Object, yamlOutput bool) ([]byte, error) {
 	serializer := kjson.NewSerializerWithOptions(
 		kjson.DefaultMetaFactory, kubernetes.Scheme, kubernetes.Scheme,
-		kjson.SerializerOptions{Yaml: yamlOutput, Pretty: false, Strict: false},
+		kjson.SerializerOptions{Yaml: false, Pretty: false, Strict: false},
 	)
 
 	var buf bytes.Buffer
 	for _, obj := range objects {
-		if err := serializer.Encode(*obj, &buf); err != nil {
-			return nil, err
+		if !yamlOutput {
+			if err := serializer.Encode(*obj, &buf); err != nil {
+				return nil, err
+			}
+		} else {
+			var j bytes.Buffer
+			if err := serializer.Encode(*obj, &j); err != nil {
+				return nil, err
+			}
+			data, err := jsonToYAML(j.Bytes())
+			if err != nil {
+				return nil, err
+			}
+			buf.Write(data)
 		}
 		// Add YAML document separator
 		buf.WriteString("---\n")
@@ -103,6 +126,8 @@ func EncodeObjectsTo(objects []*client.Object, yamlOutput bool) ([]byte, error) 
 
 // EncodeObjectsToYAML encodes Kubernetes objects to clean YAML, stripping
 // all known server-managed metadata fields by default (see [StripServerFieldsFull]).
+// Every string reads back unchanged: one holding NEL, DEL, a C1 control,
+// U+FFFE or U+FFFF is written double-quoted with escapes.
 func EncodeObjectsToYAML(objects []*client.Object) ([]byte, error) {
 	return EncodeObjectsToYAMLWithOptions(objects, EncodeOptions{})
 }
@@ -111,6 +136,8 @@ func EncodeObjectsToYAML(objects []*client.Object) ([]byte, error) {
 // configurable output options. When opts.KubernetesFieldOrder is true,
 // top-level fields are emitted in the conventional order used by kubectl,
 // Helm, and Kustomize (apiVersion, kind, metadata, spec, ..., status last).
+// In either field order every string reads back unchanged, as in
+// [EncodeObjectsToYAML].
 func EncodeObjectsToYAMLWithOptions(objects []*client.Object, opts EncodeOptions) ([]byte, error) {
 	var buf bytes.Buffer
 	for i, obj := range objects {
@@ -155,11 +182,54 @@ func marshalCleanResource(obj client.Object, opts EncodeOptions) ([]byte, error)
 		return marshalOrderedYAML(raw)
 	}
 
-	out, err := yaml.Marshal(raw)
+	// Through JSON again, as sigs.k8s.io/yaml.Marshal did: a float64 holding
+	// an integer is then written as that integer, and a nil map as null.
+	out, err := marshalYAML(raw)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal cleaned resource to YAML: %w", err)
 	}
 
+	return out, nil
+}
+
+// marshalYAML writes obj as YAML through its JSON form, as
+// sigs.k8s.io/yaml.Marshal does, without that package's JSON-to-YAML step.
+// That step reads the JSON back with a YAML 1.1 parser, which folds NEL and
+// refuses DEL, the other C1 controls, U+FFFE and U+FFFF; the emitter it then
+// calls writes them as escapes when given the value directly.
+func marshalYAML(obj any) ([]byte, error) {
+	j, err := json.Marshal(obj)
+	if err != nil {
+		return nil, errors.Wrap(err, "marshal to JSON")
+	}
+	return jsonToYAML(j)
+}
+
+// jsonToYAML writes the JSON value j as YAML. Numbers are kept as
+// decodeResourceMap keeps them, and one no float64 holds as its text (see
+// yamlNumber).
+func jsonToYAML(j []byte) ([]byte, error) {
+	dec := json.NewDecoder(bytes.NewReader(j))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return nil, errors.Wrap(err, "read JSON for YAML output")
+	}
+	v, err := convertNumbers(v, yamlNumber)
+	if err != nil {
+		return nil, errors.Wrap(err, "read JSON number for YAML output")
+	}
+	return emitYAML(v)
+}
+
+// emitYAML writes v, a value decoded from JSON, as YAML with the emitter
+// sigs.k8s.io/yaml.Marshal ends in, so the output is the same as that
+// function's for every value it writes unchanged.
+func emitYAML(v any) ([]byte, error) {
+	out, err := yamlv2.Marshal(v)
+	if err != nil {
+		return nil, errors.Wrap(err, "write YAML")
+	}
 	return out, nil
 }
 
@@ -174,21 +244,21 @@ func decodeResourceMap(data []byte) (map[string]any, error) {
 	if err := dec.Decode(&raw); err != nil {
 		return nil, err
 	}
-	if _, err := convertNumbers(raw); err != nil {
+	if _, err := convertNumbers(raw, convertNumber); err != nil {
 		return nil, err
 	}
 	return raw, nil
 }
 
-// convertNumbers replaces every json.Number in v, at any depth, by the Go
-// number convertNumber gives for it, and returns the value to store for v.
-func convertNumbers(v any) (any, error) {
+// convertNumbers replaces every json.Number in v, at any depth, by the value
+// convert gives for it, and returns the value to store for v.
+func convertNumbers(v any, convert func(json.Number) (any, error)) (any, error) {
 	switch val := v.(type) {
 	case json.Number:
-		return convertNumber(val)
+		return convert(val)
 	case map[string]any:
 		for k, item := range val {
-			converted, err := convertNumbers(item)
+			converted, err := convertNumbers(item, convert)
 			if err != nil {
 				return nil, err
 			}
@@ -196,7 +266,7 @@ func convertNumbers(v any) (any, error) {
 		}
 	case []any:
 		for i, item := range val {
-			converted, err := convertNumbers(item)
+			converted, err := convertNumbers(item, convert)
 			if err != nil {
 				return nil, err
 			}
@@ -204,6 +274,17 @@ func convertNumbers(v any) (any, error) {
 		}
 	}
 	return v, nil
+}
+
+// yamlNumber is convertNumber for YAML output, except that a number no
+// float64 holds, such as 1e309, is kept as its JSON text.
+// sigs.k8s.io/yaml.JSONToYAML read such a number as a string and wrote it
+// unquoted, and the emitter writes that text unquoted too.
+func yamlNumber(n json.Number) (any, error) {
+	if v, err := convertNumber(n); err == nil {
+		return v, nil
+	}
+	return n.String(), nil
 }
 
 // convertNumber returns n as an int64, else as a uint64, else as a float64.
