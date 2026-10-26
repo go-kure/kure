@@ -421,7 +421,11 @@ What changed, and what to do:
   (and one ArgoCD Application), named after the first of them; they must agree on the settings a
   Kustomization holds once, and dependency cycles are refused. A patch is refused there when its
   target would also select another merged bundle's objects: Flux patches everything the shared
-  Kustomization builds, so the merge would widen the patch.
+  Kustomization builds, so the merge would widen the patch. A target's `LabelSelector` and
+  `AnnotationSelector` are matched as kustomize reads the written file, each value as its text:
+  a label `tier: true` decoded from YAML as a boolean matches the selector `tier=true`. A
+  generated ConfigMap is matched with the annotations its generator entry sets
+  (go-kure/kure#1100).
 - **One owner per directory.** A directory that renders bundles is applied only by its own
   Kustomization: no parent `kustomization.yaml` lists it, in any placement. Under
   `FluxIntegratedPerBundle` a bundle's CR now sits in the parent directory (as under PerLayout),
