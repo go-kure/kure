@@ -483,6 +483,77 @@ func TestReconcileContext_KeptCopyBesideLiveNamesakeWaits(t *testing.T) {
 	}
 }
 
+// A local-config Kustomization a patched build may keep, that cannot be read
+// in typed form (here spec.dependsOn is a string), refuses the tree as an
+// unreadable other Kustomization does, instead of being read as depending on
+// nothing. Where no build patches what it holds it is not there, and the tree
+// is not refused.
+func TestReconcileContext_KeptCopyUnreadableIsRefused(t *testing.T) {
+	patch := "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: inner\n  namespace: flux-system\n  annotations:\n    " + localConfigAnnotation + `: "false"` + "\n"
+	build := func(seed string, patched bool) *stack.Cluster {
+		k := handWritten("hand-written")
+		if seed != "" {
+			k.Spec.Path = seed
+		}
+		if patched {
+			k.Spec.Patches = []kustomize.Patch{{Patch: patch}}
+		}
+		var hw client.Object = k
+		dropped := "true"
+		var inner client.Object = annotateLocalConfig(handWritten("inner"), &dropped)
+		return noWaitCluster(srBundle("platform",
+			stack.NewApplication("platform-app", "default", &fakeAppConfig{objs: []*client.Object{&hw}}),
+			stack.NewApplication("seed-app", "default", &fakeAppConfig{objs: []*client.Object{&inner}}),
+		), true)
+	}
+	for _, placement := range integratedPlacements {
+		first, err := integrateNoWait(build("", false), nodeOnly, placement)
+		if err != nil {
+			t.Fatalf("%s: first integration: %v", placement, err)
+		}
+		seed := hostDirectory(t, first, "inner")
+		for name, patched := range map[string]bool{"patch": true, "no patch": false} {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				ml, err := integrateNoWait(build(seed, patched), nodeOnly, placement)
+				if err != nil {
+					t.Fatalf("got %v, want the integration accepted", err)
+				}
+				var inner client.Object
+				var walk func(l *layout.ManifestLayout)
+				walk = func(l *layout.ManifestLayout) {
+					for _, r := range l.Resources {
+						if r.GetName() == "inner" && droppedByBuild(r) {
+							inner = r
+						}
+					}
+					for _, c := range l.Children {
+						walk(c)
+					}
+				}
+				walk(ml)
+				if inner == nil {
+					t.Fatal("no layout holds the local-config inner")
+				}
+				replaceUnstructured(t, ml, inner, func(u *unstructured.Unstructured) {
+					if err := unstructured.SetNestedField(u.Object, "web", "spec", "dependsOn"); err != nil {
+						t.Fatal(err)
+					}
+				})
+				_, err = fluxstack.UmbrellaTerminals(ml)
+				if !patched {
+					if err != nil {
+						t.Fatalf("got %v, want the tree accepted: no build may keep inner", err)
+					}
+					return
+				}
+				if !errors.Is(err, fluxstack.ErrUmbrellaTerminals) || !strings.Contains(err.Error(), `read Flux Kustomization "flux-system/inner" in typed form`) {
+					t.Fatalf("got %v, want ErrUmbrellaTerminals naming the unreadable inner", err)
+				}
+			})
+		}
+	}
+}
+
 // A Kustomization the tree holds as local config is read only where a build
 // that patches what it holds may keep it. Without one it is not there: a live
 // namesake keeps its own dependsOn, none here, so platform's terminal leaves
