@@ -21,16 +21,33 @@ var (
 // path is a walk path as its segments ("[0]", ".Spec", ".(*v1.Pod)"), so
 // whether one path lies inside another does not depend on what a map key
 // spells.
-type path []string
+type path []segment
 
-// child returns p with seg appended, never sharing p's storage.
-func (p path) child(seg string) path {
-	out := make(path, len(p), len(p)+1)
-	copy(out, p)
-	return append(out, seg)
+// segment is one step of a path. Map entries whose keys format alike (two
+// NaNs, or 1 and "1" in a map[any]any) differ in nth, so neither is taken
+// as inside the other.
+type segment struct {
+	text string
+	// nth is 0, or the entry's position among those formatting as text.
+	nth int
 }
 
-func (p path) String() string { return strings.Join(p, "") }
+// child returns p with the segment appended, never sharing p's storage.
+func (p path) child(text string) path { return p.childN(text, 0) }
+
+func (p path) childN(text string, nth int) path {
+	out := make(path, len(p), len(p)+1)
+	copy(out, p)
+	return append(out, segment{text: text, nth: nth})
+}
+
+func (p path) String() string {
+	var b strings.Builder
+	for _, s := range p {
+		b.WriteString(s.text)
+	}
+	return b.String()
+}
 
 // extends reports whether p is q or lies inside the value at q.
 func (p path) extends(q path) bool {
@@ -124,8 +141,11 @@ func (w *walk) value(v reflect.Value, p path) error {
 		start := v.Pointer()
 		key := visitKey{kind: reflect.Map, addr: start, typ: v.Type()}
 		return w.storage(key, record{start: start, isMap: true, kind: "map", path: p}, func() error {
+			seen := map[string]int{}
 			for _, e := range sortedEntries(v) {
-				kp := p.child("[" + fmt.Sprint(e.key) + "]")
+				text := "[" + fmt.Sprint(e.key) + "]"
+				kp := p.childN(text, seen[text])
+				seen[text]++
 				if err := w.value(e.key, kp); err != nil {
 					return err
 				}
@@ -286,15 +306,19 @@ func matches(a, b []record) []match {
 // report turns matches into Sharings, in walk order of the first side so a
 // value is considered before anything inside it. A match whose two paths
 // both extend the two paths of a reported one is inside that one and is
-// skipped. With oncePerSecond, a record of the second side is reported at
-// most once, against the first record it overlaps.
+// skipped. With oncePerSecond, a record of the second side is considered
+// once, against the first record it overlaps: if that match is inside a
+// reported one, the record is covered and not reported against another.
 func report(a, b []record, ms []match, oncePerSecond bool) []Sharing {
 	var out []Sharing
 	var done []match
-	reported := map[int]bool{}
+	considered := map[int]bool{}
 	for _, m := range ms {
-		if oncePerSecond && reported[m.j] {
-			continue
+		if oncePerSecond {
+			if considered[m.j] {
+				continue
+			}
+			considered[m.j] = true
 		}
 		first, second := a[m.i].path, b[m.j].path
 		inside := false
@@ -307,7 +331,6 @@ func report(a, b []record, ms []match, oncePerSecond bool) []Sharing {
 		if inside {
 			continue
 		}
-		reported[m.j] = true
 		done = append(done, m)
 		out = append(out, Sharing{Kind: a[m.i].kind, First: first.String(), Second: second.String()})
 	}
@@ -344,10 +367,11 @@ func firsts(rs []record) []record {
 
 // internal reports the storage each result reaches at two paths, each later
 // path against the earliest it overlaps, listing a value found in both
-// results once.
+// results once. Two entries can read alike (keys that format alike), so a
+// Sharing is listed as often as the result with more of it has it.
 func internal(walks ...*walk) []Sharing {
 	var out []Sharing
-	seen := map[Sharing]bool{}
+	listed := map[Sharing]int{}
 	for _, w := range walks {
 		var ms []match
 		for _, m := range matches(w.records, w.records) {
@@ -355,9 +379,10 @@ func internal(walks ...*walk) []Sharing {
 				ms = append(ms, m)
 			}
 		}
+		here := map[Sharing]int{}
 		for _, s := range report(w.records, w.records, ms, true) {
-			if !seen[s] {
-				seen[s] = true
+			if here[s]++; here[s] > listed[s] {
+				listed[s] = here[s]
 				out = append(out, s)
 			}
 		}

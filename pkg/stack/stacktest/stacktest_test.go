@@ -338,6 +338,55 @@ func TestCheckGeneration_SharingConfigFails(t *testing.T) {
 			},
 			wantShared: []stacktest.Sharing{{Kind: "pointer", First: "[0].(*stacktest_test.custom).Weights[NaN]", Second: "[0].(*stacktest_test.custom).Weights[NaN]"}},
 		},
+		{
+			name: "values under two NaN map keys",
+			cfg: func() genFunc {
+				a, b := int32(1), int32(2)
+				return calls(func(int) []*client.Object {
+					// Two entries that print alike are still two values.
+					weights := map[float64]*int32{}
+					weights[math.NaN()] = &a
+					weights[math.NaN()] = &b
+					return objs(&custom{Weights: weights})
+				})
+			},
+			wantShared: []stacktest.Sharing{
+				{Kind: "pointer", First: "[0].(*stacktest_test.custom).Weights[NaN]", Second: "[0].(*stacktest_test.custom).Weights[NaN]"},
+				{Kind: "pointer", First: "[0].(*stacktest_test.custom).Weights[NaN]", Second: "[0].(*stacktest_test.custom).Weights[NaN]"},
+			},
+		},
+		{
+			name: "one value under two NaN map keys and a field",
+			cfg: func() genFunc {
+				return calls(func(int) []*client.Object {
+					count := int32(1)
+					weights := map[float64]*int32{}
+					weights[math.NaN()] = &count
+					weights[math.NaN()] = &count
+					return objs(&custom{Count: &count, Weights: weights})
+				})
+			},
+			wantInternal: []stacktest.Sharing{
+				{Kind: "pointer", First: "[0].(*stacktest_test.custom).Count", Second: "[0].(*stacktest_test.custom).Weights[NaN]"},
+				{Kind: "pointer", First: "[0].(*stacktest_test.custom).Count", Second: "[0].(*stacktest_test.custom).Weights[NaN]"},
+			},
+		},
+		{
+			name: "later path covered by its earliest overlap",
+			cfg: func() genFunc {
+				return calls(func(int) []*client.Object {
+					m := map[string]any{}
+					items := []any{m, nil}
+					// c[0] first overlaps a[0], inside the reported a and c
+					// slices, so it is not reported again against b.
+					return objs(&unstructured.Unstructured{Object: map[string]any{"a": items[:1:1], "b": m, "c": items[:1:2]}})
+				})
+			},
+			wantInternal: []stacktest.Sharing{
+				{Kind: "slice", First: "[0].(*unstructured.Unstructured).Object[a].([]interface {})", Second: "[0].(*unstructured.Unstructured).Object[c].([]interface {})"},
+				{Kind: "map", First: "[0].(*unstructured.Unstructured).Object[a].([]interface {})[0].(map[string]interface {})", Second: "[0].(*unstructured.Unstructured).Object[b].(map[string]interface {})"},
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

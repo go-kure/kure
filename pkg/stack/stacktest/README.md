@@ -83,6 +83,8 @@ prints `[stack.Validator]`.
   package-level location, and a deep copy shares it too. Strings are immutable and are not
   checked.
 - A value that contains itself is walked once and is not reported.
+- A path shows a map key as `fmt` prints it, so entries whose keys print alike (two NaN keys)
+  show the same path; each is still checked and reported on its own.
 - A func, channel or unsafe pointer in a result is returned as an error; Kubernetes objects hold
   none.
 - Concurrency safety and what an augmenter adds to the layout are not checked.
