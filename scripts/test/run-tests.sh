@@ -37,7 +37,7 @@ for case_file in "$TEST_DIR"/cases/*.sh; do
     # here rather than hard-assigning in lib.sh keeps `with_stub_go`/
     # `with_stub_net` and case 9's own SYNC_VERSIONS_PROBE_TIMEOUT override
     # working unchanged, since those all run after new_fixture.
-    if out=$(env -u STUB_GO_MODE -u STUB_NET_MODE \
+    if out=$(env -u STUB_GO_MODE -u STUB_NET_MODE -u STUB_GO_HANG_LOG \
                  -u SYNC_VERSIONS_REPO_ROOT -u SYNC_VERSIONS_PROBE_TIMEOUT \
                  -u SYNC_VERSIONS_TIMEOUT_CMD \
                  -u SYNC_FLUX_OPERATOR_PIN_REPO_ROOT \
