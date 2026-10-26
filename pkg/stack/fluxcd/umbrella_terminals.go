@@ -343,10 +343,10 @@ func (t *kustomizationTree) written(key string) []string {
 			if other == key {
 				continue
 			}
-			if t.byKey[other] != nil || t.otherObjs[other] != nil {
-				other += keptCopy
-			}
 			out = append(out, other)
+			if t.byKey[other] != nil || t.otherObjs[other] != nil {
+				out = append(out, other+keptCopy)
+			}
 		}
 	}
 	return out
@@ -354,10 +354,10 @@ func (t *kustomizationTree) written(key string) []string {
 
 // keptCopy marks, in what written returns, a Flux Kustomization the tree
 // holds as local config where a member or other Kustomization of the tree has
-// the same key: what a patched build waits for is then that copy, read on
-// its own (deps, orderPath), not the namesake, which keeps its own spec. A
-// name a dependsOn or health check gives reads the namesake only
-// (go-kure/kure#1133).
+// the same key: a patched build then waits for the namesake, under its key,
+// and for that copy, read on its own (deps, orderPath), which may be what it
+// applies. A name a dependsOn or health check gives reads the namesake only,
+// and the copy's own wait reaches nothing (go-kure/kure#1133).
 const keptCopy = " (local config)"
 
 // patchesBuild reports whether k, a Flux Kustomization that is no member,

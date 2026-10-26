@@ -417,6 +417,72 @@ func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 	}
 }
 
+// A patched build that keeps a local-config inner, renamed by a prefix, while
+// a sibling bundle's directory holds a live inner, waits for both: the
+// kept copy, read on its own, and the live one, whose spec the kept copy may
+// share. Here both wait for web's directory, so hand-written's wait waits for
+// web, which depends on hand-written once rewritten. The kept copy's own wait
+// is not followed (go-kure/kure#1133); the live one's closes the cycle.
+func TestReconcileContext_KeptCopyBesideLiveNamesakeWaits(t *testing.T) {
+	patch := "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: inner\n  namespace: flux-system\n  annotations:\n    " + localConfigAnnotation + `: "false"` + "\n"
+	build := func(seed, web string) *stack.Cluster {
+		k := handWritten("hand-written")
+		k.Spec.Wait = true
+		if seed != "" {
+			k.Spec.Path = seed
+			k.Spec.Patches = []kustomize.Patch{{Patch: patch}}
+			k.Spec.NamePrefix = "x-"
+		}
+		var hw client.Object = k
+		dropped := "true"
+		kept, live := handWritten("inner"), handWritten("inner")
+		if web != "" {
+			kept.Spec.Wait, kept.Spec.Path = true, web
+			live.Spec.Wait, live.Spec.Path = true, web
+		}
+		var inner client.Object = annotateLocalConfig(kept, &dropped)
+		var namesake client.Object = live
+		c := noWaitCluster(srBundle("platform",
+			stack.NewApplication("platform-app", "default", &fakeAppConfig{objs: []*client.Object{&hw}}),
+			stack.NewApplication("seed-app", "default", &fakeAppConfig{objs: []*client.Object{&inner}}),
+		), true)
+		// The live inner sits in a sibling bundle, outside platform: only
+		// hand-written's wait reaches it.
+		other := &stack.Node{Name: "other", Bundle: srBundle("other", stack.NewApplication("live-app", "default", &fakeAppConfig{objs: []*client.Object{&namesake}}))}
+		other.SetParent(c.Node)
+		c.Node.Children = append(c.Node.Children, other)
+		return c
+	}
+	for _, placement := range integratedPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			first, err := integrateNoWait(build("", ""), nodeOnly, placement)
+			if err != nil {
+				t.Fatalf("first integration: %v", err)
+			}
+			var seed string
+			var walk func(l *layout.ManifestLayout)
+			walk = func(l *layout.ManifestLayout) {
+				for _, r := range l.Resources {
+					if r.GetName() == "inner" && droppedByBuild(r) {
+						seed = l.FullRepoPath()
+					}
+				}
+				for _, c := range l.Children {
+					walk(c)
+				}
+			}
+			walk(first)
+			if seed == "" {
+				t.Fatal("no layout holds the local-config inner")
+			}
+			_, err = integrateNoWait(build(seed, hostDirectory(t, first, "web")), nodeOnly, placement)
+			if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "ready flux-system/inner -> ready flux-system/web -> apply flux-system/web") {
+				t.Fatalf("got %v, want ErrUmbrellaDependency naming the chain through the live inner's wait", err)
+			}
+		})
+	}
+}
+
 // A Kustomization the tree holds as local config is read only where a build
 // that patches what it holds may keep it. Without one it is not there: a live
 // namesake keeps its own dependsOn, none here, so platform's terminal leaves
