@@ -3,15 +3,18 @@ package fluxcd_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	fluxkustomize "github.com/fluxcd/pkg/kustomize"
 	securefs "github.com/fluxcd/pkg/kustomize/filesys"
@@ -36,8 +39,27 @@ import (
 // that gave something else.
 
 func TestMain(m *testing.M) {
+	start := time.Now()
 	code := m.Run()
-	if !buildsAsFlux() && code == 0 {
+	// m.Run stops the -timeout alarm before it returns, so the replay keeps
+	// to what is left of the timeout under an alarm of its own, which fails
+	// as the testing package's does.
+	var timeout time.Duration
+	if f := flag.Lookup("test.timeout"); f != nil {
+		timeout, _ = f.Value.(flag.Getter).Get().(time.Duration)
+	}
+	var alarm *time.Timer
+	if timeout > 0 {
+		alarm = time.AfterFunc(timeout-time.Since(start), func() {
+			debug.SetTraceback("all")
+			panic(fmt.Sprintf("test timed out after %v in buildsAsFlux, TestMain's replay of every build through SecureBuild", timeout))
+		})
+	}
+	ok := buildsAsFlux()
+	if alarm != nil {
+		alarm.Stop()
+	}
+	if !ok && code == 0 {
 		code = 1
 	}
 	os.Exit(code)
