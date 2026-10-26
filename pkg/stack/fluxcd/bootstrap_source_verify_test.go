@@ -1,15 +1,21 @@
 package fluxcd_test
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
+	"github.com/fluxcd/pkg/apis/kustomize"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
@@ -183,8 +189,8 @@ func TestBootstrapSourceVerify_FluxOperator(t *testing.T) {
 }
 
 // TestBootstrapSourceVerify_Patch builds the FluxInstance's patches over the
-// sync objects flux-operator generates, as TestBootstrapSourceAccess_InsecurePatch
-// does: the sync OCIRepository gains spec.verify and the sync Kustomization and
+// sync objects flux-operator generates, as its builder does (operatorBuild):
+// the sync OCIRepository gains spec.verify and the sync Kustomization and
 // another OCIRepository do not, for an explicit and the default sync name, with
 // and without the insecure patch beside it.
 func TestBootstrapSourceVerify_Patch(t *testing.T) {
@@ -206,10 +212,6 @@ func TestBootstrapSourceVerify_Patch(t *testing.T) {
 				applied := syncName
 				if applied == "" {
 					applied = fi.GetNamespace()
-				}
-				patches, err := sigsyaml.Marshal(fi.Spec.Kustomize.Patches)
-				if err != nil {
-					t.Fatalf("marshalling the patches: %v", err)
 				}
 				// The two sync objects as flux-operator's sync template writes
 				// them, and a second OCIRepository the patch must not reach.
@@ -246,28 +248,14 @@ spec:
   interval: 1h0m0s
   url: oci://registry.example.com/other
 `)
-				fs := filesys.MakeFsInMemory()
-				dir := "/sync"
-				for file, data := range map[string]string{
-					"sync.yaml":          sync,
-					"kustomization.yaml": "resources:\n  - sync.yaml\npatches:\n" + string(patches),
-				} {
-					if err := fs.WriteFile(filepath.Join(dir, file), []byte(data)); err != nil {
-						t.Fatalf("writing %s: %v", file, err)
-					}
-				}
-				res, err := krusty.MakeKustomizer(krusty.MakeDefaultOptions()).Run(fs, dir)
+				objects, err := operatorBuild(t, fi.Spec.Kustomize.Patches, sync)
 				if err != nil {
-					t.Fatalf("kustomize build: %v", err)
+					t.Fatalf("writing the built objects: %v", err)
 				}
 				verifies, insecures := map[string]any{}, map[string]any{}
-				for _, r := range res.Resources() {
-					m, err := r.Map()
-					if err != nil {
-						t.Fatalf("reading %s: %v", r.CurId(), err)
-					}
-					spec, _ := m["spec"].(map[string]any)
-					key := r.GetKind() + "/" + r.GetName()
+				for _, obj := range objects {
+					spec, _ := obj.Object["spec"].(map[string]any)
+					key := obj.GetKind() + "/" + obj.GetName()
 					if v, found := spec["verify"]; found {
 						verifies[key] = v
 					}
@@ -288,6 +276,112 @@ spec:
 				}
 			})
 		}
+	}
+}
+
+// operatorBuild builds patches over sync as flux-operator's builder does: the
+// patches written with sigs.k8s.io/yaml into kustomization.yaml, a kustomize
+// build, the result written with AsYaml and read back with the YAML-or-JSON
+// decoder its object reader uses. It returns AsYaml's error, the step a string
+// that YAML 1.1 lacks a form for fails at.
+func operatorBuild(t *testing.T, patches []kustomize.Patch, sync string) ([]*unstructured.Unstructured, error) {
+	t.Helper()
+	written, err := sigsyaml.Marshal(patches)
+	if err != nil {
+		t.Fatalf("marshalling the patches: %v", err)
+	}
+	fs := filesys.MakeFsInMemory()
+	dir := "/sync"
+	for file, data := range map[string]string{
+		"sync.yaml":          sync,
+		"kustomization.yaml": "resources:\n  - sync.yaml\npatches:\n" + string(written),
+	} {
+		if err := fs.WriteFile(filepath.Join(dir, file), []byte(data)); err != nil {
+			t.Fatalf("writing %s: %v", file, err)
+		}
+	}
+	res, err := krusty.MakeKustomizer(krusty.MakeDefaultOptions()).Run(fs, dir)
+	if err != nil {
+		t.Fatalf("kustomize build: %v", err)
+	}
+	built, err := res.AsYaml()
+	if err != nil {
+		return nil, err
+	}
+	var objects []*unstructured.Unstructured
+	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(built), 2048)
+	for {
+		obj := &unstructured.Unstructured{}
+		if err := decoder.Decode(obj); err != nil {
+			if errors.Is(err, io.EOF) {
+				return objects, nil
+			}
+			t.Fatalf("reading the built objects: %v", err)
+		}
+		objects = append(objects, obj)
+	}
+}
+
+// TestBootstrapSourceVerify_OperatorBuildRefuses pins why validateSourceVerify
+// refuses DEL, the C1 controls, U+FFFE and U+FFFF in an identity pattern. kure
+// writes the verify patch with the character kept, but flux-operator's build
+// writes every object with kustomize's AsYaml, which reads the object's JSON
+// back as YAML 1.1: NEL comes out as a space and the others fail the build. If
+// this fails because the build keeps the character, the refusal can be relaxed
+// for the operator release that does.
+func TestBootstrapSourceVerify_OperatorBuildRefuses(t *testing.T) {
+	for name, tc := range map[string]struct{ char, built, err string }{
+		"NEL":    {char: "\u0085", built: "^a b$"},
+		"U+0086": {char: "\u0086", err: "control characters are not allowed"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			subject := "^a" + tc.char + "b$"
+			in := stack.SourceVerification{MatchOIDCIdentity: []stack.OIDCIdentityMatch{{Issuer: "^https://issuer.example$", Subject: subject}}}
+			bg := fluxstack.NewBootstrapGenerator()
+			patch, err := fluxstack.SyncVerifyPatch(bg, verifyConfig(fluxstack.DefaultFluxMode, &in, false))
+			if err != nil {
+				t.Fatalf("writing the verify patch: %v", err)
+			}
+			var body []struct {
+				Value sourcev1.OCIRepositoryVerification `json:"value"`
+			}
+			if err := sigsyaml.Unmarshal([]byte(patch.Patch), &body); err != nil {
+				t.Fatalf("reading the verify patch: %v", err)
+			}
+			if len(body) != 1 || len(body[0].Value.MatchOIDCIdentity) != 1 || body[0].Value.MatchOIDCIdentity[0].Subject != subject {
+				t.Fatalf("verify patch reads back as %+v, want the subject %q", body, subject)
+			}
+
+			sync := strings.NewReplacer("NAME", bg.DefaultNamespace).Replace(`apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: NAME
+  namespace: NAME
+spec:
+  interval: 1h0m0s
+  url: oci://registry.example.com/fleet
+`)
+			objects, err := operatorBuild(t, []kustomize.Patch{patch}, sync)
+			if tc.err != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.err) {
+					t.Fatalf("operator build error = %v, want one containing %q", err, tc.err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("operator build: %v", err)
+			}
+			if len(objects) != 1 {
+				t.Fatalf("operator build gave %d objects, want 1", len(objects))
+			}
+			ids, _, _ := unstructured.NestedSlice(objects[0].Object, "spec", "verify", "matchOIDCIdentity")
+			if len(ids) != 1 {
+				t.Fatalf("spec.verify.matchOIDCIdentity after the build = %v, want one", ids)
+			}
+			if got, _ := ids[0].(map[string]any)["subject"].(string); got != tc.built {
+				t.Errorf("subject after the operator build = %q, want %q", got, tc.built)
+			}
+		})
 	}
 }
 

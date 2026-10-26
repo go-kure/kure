@@ -1009,9 +1009,11 @@ Both `GenerateBootstrap` and `GenerateFluxInstance` refuse, with nothing returne
 - an identity match whose issuer or subject is empty, which would match any signer, or is not a
   Go regular expression, which source-controller would reject only at reconcile;
 - an issuer or subject holding DEL, a C1 control (U+0080 to U+009F, NEL among them) or the
-  noncharacter U+FFFE or U+FFFF. The YAML round trip that carries the pattern, in kure's default
-  YAML encoding in both modes and in the operator's patch build, would fold NEL into a space and
-  refuse the others; the pattern can match one with a regular-expression escape, such as `\x{85}`.
+  noncharacter U+FFFE or U+FFFF. kure writes such a pattern as given, but Flux's build does not
+  keep it: flux-operator's build, which applies the verify patch, and kustomize-controller's,
+  which applies the gotk sync source where it is written into the tree the bootstrap applies,
+  write every object with kustomize's `AsYaml`, which folds NEL into a space and fails on the
+  others. The pattern can match one with a regular-expression escape, such as `\x{85}`.
 
 Apart from keyless cosign needing an identity match, the verification's cross-field rules (which
 provider takes which fields) are source-controller's and are not checked here, and the Secrets it
