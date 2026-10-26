@@ -115,15 +115,19 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 		return err
 	}
 
+	var generated map[string]bool
 	if rules.FluxPlacement == layout.FluxSeparate {
-		err = li.addSeparateFluxToLayout(ml, c, rules.FileNaming)
+		generated, err = li.addSeparateFluxToLayout(ml, c, rules.FileNaming)
 	} else {
 		// Both inline placements put Flux CRs in the tree. They differ only
 		// in granularity: PerLayout emits a CR for every layout node (incl.
 		// augmenter-added child layouts); PerBundle stops at bundle
 		// boundaries and lets kustomize include a bundle's application
 		// directories.
-		err = li.addIntegratedFluxToLayout(ml, c, rules.FluxPlacement == layout.FluxIntegratedPerLayout, deliverySources)
+		generated, err = li.addIntegratedFluxToLayout(ml, c, rules.FluxPlacement == layout.FluxIntegratedPerLayout, deliverySources)
+	}
+	if err == nil {
+		err = recordFluxKustomizations(ml, generated)
 	}
 	if err != nil {
 		undoDelivery()
@@ -136,7 +140,9 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 // below it — placement, application file mode, resources, children and the
 // Flux build marker — and
 // returns a function that puts it back, so a refused call leaves the tree as
-// the caller gave it.
+// the caller gave it. The Flux Kustomization record needs no saving: it is
+// written last, by recordFluxKustomizations, only when everything else
+// succeeded, and all or nothing.
 func saveLayouts(l *layout.ManifestLayout) func() {
 	type state struct {
 		placement layout.FluxPlacement
@@ -163,6 +169,64 @@ func saveLayouts(l *layout.ManifestLayout) func() {
 			l.Resources, l.Children = st.resources, st.children
 			l.SetFluxBuild(st.fluxBuild)
 		}
+	}
+}
+
+// recordFluxKustomizations records, with SetFluxKustomizations on every layout
+// of the tree under root, the Flux Kustomizations of that layout this
+// integration placed or kept (generated: their namespace/name keys; a kept
+// one in whatever form it has, generatedKustomizations) as they now read:
+// identity, cleaned spec.path, the Source their spec.sourceRef names (an
+// omitted namespace their own) and whether they set spec.kubeConfig. A layout
+// with none gets an empty record, so no earlier record outlives the
+// integration. Every record is built before any is set: a Kustomization that
+// cannot be read sets none. UmbrellaTerminals reads them (recordedMembers).
+func recordFluxKustomizations(root *layout.ManifestLayout, generated map[string]bool) error {
+	recs := map[*layout.ManifestLayout][]layout.FluxKustomizationRecord{}
+	var walk func(l *layout.ManifestLayout) error
+	walk = func(l *layout.ManifestLayout) error {
+		kusts, err := generatedKustomizations(l, generated)
+		if err != nil {
+			return err
+		}
+		own := []layout.FluxKustomizationRecord{}
+		for _, k := range kusts {
+			own = append(own, fluxKustomizationRecord(k))
+		}
+		recs[l] = own
+		for _, c := range l.Children {
+			if c == nil {
+				continue
+			}
+			if err := walk(c); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := walk(root); err != nil {
+		return err
+	}
+	for l, own := range recs {
+		l.SetFluxKustomizations(own)
+	}
+	return nil
+}
+
+// fluxKustomizationRecord is what recordFluxKustomizations records for k.
+func fluxKustomizationRecord(k *kustv1.Kustomization) layout.FluxKustomizationRecord {
+	ns := k.Spec.SourceRef.Namespace
+	if ns == "" {
+		ns = k.Namespace
+	}
+	return layout.FluxKustomizationRecord{
+		Namespace:       k.Namespace,
+		Name:            k.Name,
+		Path:            path.Clean(k.Spec.Path),
+		SourceKind:      k.Spec.SourceRef.Kind,
+		SourceNamespace: ns,
+		SourceName:      k.Spec.SourceRef.Name,
+		KubeConfig:      k.Spec.KubeConfig != nil,
 	}
 }
 
@@ -407,10 +471,10 @@ type claimant struct {
 //
 // delivery is what applyDeliveryIntents recorded for the Sources of
 // applications with a delivery intent.
-func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster, perLayout bool, delivery map[string]map[string]string) error {
+func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster, perLayout bool, delivery map[string]map[string]string) (map[string]bool, error) {
 	ix, err := layout.IndexOrigins(ml, c)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	p := &integratedPlacement{
 		gen:         li.Generator,
@@ -430,54 +494,54 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	}
 	existing, err := indexExistingKustomizations(ml, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	p.existing = existing
 	if err := p.nodes.checkFields(perLayout); err != nil {
-		return err
+		return nil, err
 	}
 	noneHere := ""
 	if !perLayout {
 		noneHere = fmt.Sprintf("FluxPlacement %q gives a Kustomization to bundles alone", string(layout.FluxIntegratedPerBundle))
 	}
 	if err := checkLayoutFields(ml, noneHere); err != nil {
-		return err
+		return nil, err
 	}
 	sources, err := indexExistingSources(ml, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	p.sources = sources
 	if err := p.place(ml, sourceScope{top: ml}); err != nil {
-		return err
+		return nil, err
 	}
 	if err := p.hostSourcesOncePerBuild(ml); err != nil {
-		return err
+		return nil, err
 	}
 	if err := p.checkSourcesAreHostedBeforeUse(ml); err != nil {
-		return err
+		return nil, err
 	}
 	// Every Kustomization and Source sits where it stays: a bundle's patches
 	// go on the Kustomizations whose build they belong to, before the checks
 	// that read a Kustomization's patches.
 	if err := p.placeBundlePatches(); err != nil {
-		return err
+		return nil, err
 	}
 	if err := p.keepEmbeddedPostBuild(ml); err != nil {
-		return err
+		return nil, err
 	}
 	if err := p.checkRootBuildKeepsHostedSources(ml); err != nil {
-		return err
+		return nil, err
 	}
 	// Under UmbrellasDoNotWait an umbrella stops waiting and a dependsOn on
 	// it names its terminal leaves; the reconcile-order check judges that.
 	if err := p.umbrellasDoNotWait(ml); err != nil {
-		return err
+		return nil, err
 	}
 	if err := checkPlacedReconcileOrder(ml, p.generated); err != nil {
-		return err
+		return nil, err
 	}
-	return markFluxBuilds(ml, p.generated)
+	return p.generated, markFluxBuilds(ml, p.generated)
 }
 
 // markFluxBuilds marks, with SetFluxBuild, the directory each Kustomization
@@ -2210,15 +2274,15 @@ func effectiveNamespace(obj client.Object) string {
 // earlier integration is kept when it holds the same resources and is an
 // error when it does not. A directory this call creates names its files by
 // fileNaming, the rules'; left unset, by ml's own.
-func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster, fileNaming layout.FileNamingMode) error {
+func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster, fileNaming layout.FileNamingMode) (map[string]bool, error) {
 	fluxResources, ix, err := li.Generator.generateFromLayout(ml, c)
 	if err != nil {
-		return errors.ResourceValidationError("Cluster", c.Name, "flux-resources",
+		return nil, errors.ResourceValidationError("Cluster", c.Name, "flux-resources",
 			"failed to generate Flux resources", err)
 	}
 
 	if len(fluxResources) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	var fluxDir *layout.ManifestLayout
@@ -2244,10 +2308,10 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		// A node's directory is named after the node, whatever it renders.
 		switch {
 		case len(child.OriginNodes()) > 0:
-			return errors.Errorf("node %q is rendered to %q, the directory the Flux resources are written to under FluxSeparate: rename the node, or use an integrated placement",
+			return nil, errors.Errorf("node %q is rendered to %q, the directory the Flux resources are written to under FluxSeparate: rename the node, or use an integrated placement",
 				child.OriginNodes()[0].Name, child.FullRepoPath())
 		case len(child.OriginBundles()) > 0:
-			return errors.Errorf("bundle %q is rendered to %q, the directory the Flux resources are written to under FluxSeparate: give the bundle's directory another name (its DirName, or its Name without one), or use an integrated placement",
+			return nil, errors.Errorf("bundle %q is rendered to %q, the directory the Flux resources are written to under FluxSeparate: give the bundle's directory another name (its DirName, or its Name without one), or use an integrated placement",
 				child.OriginBundles()[0].Name, child.FullRepoPath())
 		}
 	}
@@ -2260,7 +2324,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	// (generateForUnit).
 	existing, err := indexExistingKustomizations(ml, fluxDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	owners := map[string]string{}
 	for _, unit := range ix.Units() {
@@ -2275,7 +2339,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		key := crKey(obj.GetNamespace(), obj.GetName())
 		if e, dup := existing[key]; dup {
 			owner := owners[obj.GetName()]
-			return errors.Errorf("layout %q already has Flux Kustomization %q (spec.path %q)%s; the one generated for %s (spec.path %q) would register the same id in the kustomize build: %s",
+			return nil, errors.Errorf("layout %q already has Flux Kustomization %q (spec.path %q)%s; the one generated for %s (spec.path %q) would register the same id in the kustomize build: %s",
 				e.host.FullRepoPath(), obj.GetName(), e.path, heldBy(ix, key, e.host), owner, path, nameApart(bundleNameField, owner))
 		}
 	}
@@ -2285,7 +2349,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	// the same id, and a different one a competing definition.
 	sources, err := indexExistingSources(ml, fluxDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, obj := range fluxResources {
 		key, ok := sourceKey(obj)
@@ -2294,7 +2358,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		}
 		if existing := sources[key]; len(existing) > 0 {
 			s := existing[0]
-			return errors.Errorf("layout %q already has %s %q (%s); the one generated in %s would define the same Source a second time in the kustomize build", s.host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), s.obj.GetObjectKind().GroupVersionKind().GroupVersion(), DefaultFluxDirName)
+			return nil, errors.Errorf("layout %q already has %s %q (%s); the one generated in %s would define the same Source a second time in the kustomize build", s.host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), s.obj.GetObjectKind().GroupVersionKind().GroupVersion(), DefaultFluxDirName)
 		}
 	}
 	generated := map[string]bool{}
@@ -2311,11 +2375,11 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		if fluxDir.Namespace == ml.FullRepoPath() && len(fluxDir.Children) == 0 &&
 			reflect.DeepEqual(fluxDir.Resources, fluxResources) {
 			if err := checkPlacedReconcileOrder(ml, generated); err != nil {
-				return err
+				return nil, err
 			}
-			return markFluxBuilds(ml, generated)
+			return generated, markFluxBuilds(ml, generated)
 		}
-		return errors.Errorf("layout %q already has a %s child with other Flux resources; integrate a freshly walked layout", ml.FullRepoPath(), DefaultFluxDirName)
+		return nil, errors.Errorf("layout %q already has a %s child with other Flux resources; integrate a freshly walked layout", ml.FullRepoPath(), DefaultFluxDirName)
 	}
 
 	// Create a separate Flux layout. The directory name is
@@ -2353,13 +2417,13 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	// A refused placement is taken back, so the tree is as the caller gave it.
 	if err := checkPlacedReconcileOrder(ml, generated); err != nil {
 		ml.Children = ml.Children[:len(ml.Children)-1]
-		return err
+		return nil, err
 	}
 	if err := markFluxBuilds(ml, generated); err != nil {
 		ml.Children = ml.Children[:len(ml.Children)-1]
-		return err
+		return nil, err
 	}
-	return nil
+	return generated, nil
 }
 
 // normalizeRulesPlacement returns a copy of rules with FluxPlacement filled in

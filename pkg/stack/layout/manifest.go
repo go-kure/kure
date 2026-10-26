@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -145,6 +146,39 @@ type ManifestLayout struct {
 	origin origin
 	// fluxBuild is set through SetFluxBuild.
 	fluxBuild bool
+	// fluxKustomizations is set through SetFluxKustomizations.
+	fluxKustomizations []FluxKustomizationRecord
+}
+
+// FluxKustomizationRecord is what a Flux Kustomization kure placed or kept in a
+// layout read when the integration ended: its identity, its spec.path, the
+// Source its spec.sourceRef names (an omitted namespace the Kustomization's
+// own) and whether it sets spec.kubeConfig.
+type FluxKustomizationRecord struct {
+	Namespace, Name string
+	Path            string
+	SourceKind      string
+	SourceNamespace string
+	SourceName      string
+	KubeConfig      bool
+}
+
+// SetFluxKustomizations records the Flux Kustomizations kure placed or kept in
+// this layout, replacing any earlier record; in memory only, never
+// serialised. Only fluxcd's LayoutIntegrator sets it, on every layout of a
+// tree it integrates, as the last step of an integration that succeeds (a
+// refused one leaves every record as it was); a caller that places Flux
+// Kustomizations itself records them here to have fluxcd.UmbrellaTerminals
+// read them as the integration's.
+// The slice is copied.
+func (ml *ManifestLayout) SetFluxKustomizations(recs []FluxKustomizationRecord) {
+	ml.fluxKustomizations = slices.Clone(recs)
+}
+
+// FluxKustomizations returns a copy of what SetFluxKustomizations last
+// recorded: nil when nothing was.
+func (ml *ManifestLayout) FluxKustomizations() []FluxKustomizationRecord {
+	return slices.Clone(ml.fluxKustomizations)
 }
 
 // SetFluxBuild records whether a Flux Kustomization kure generated builds this

@@ -1391,9 +1391,15 @@ rewritten specs.
 
 `UmbrellaTerminals(roots ...)` returns the terminal leaves of each umbrella in one or more
 integrated trees, keyed `namespace/name`, so that a caller can point a dependency from outside a
-tree (a `NamedDependsOn` entry) at the leaves instead of the umbrella. Kustomizations an
-application emits, directly or as `List` items, are leaves there. A Kustomization that two trees both hold is refused with
-`ErrUmbrellaTerminals`.
+tree (a `NamedDependsOn` entry) at the leaves instead of the umbrella. Only a Kustomization the
+integration placed or kept can be an umbrella there: each integration records, per layout
+(`layout.ManifestLayout.FluxKustomizations`), the Kustomizations it placed or kept, and one counts while
+its `spec.path`, `spec.sourceRef` and presence of `spec.kubeConfig` are still the recorded ones, in
+any form (typed, unstructured, a `List` item). Every other Kustomization is a leaf: one an
+application emits and the integration did not keep, one a caller added, one whose Source, cluster or
+path changed after the integration, and every one of a tree built by hand or read back from disk. A
+caller that places its own records them with `SetFluxKustomizations`. A Kustomization that two trees
+both hold, and a tree whose objects cannot be read, are refused with `ErrUmbrellaTerminals`.
 
 ### With `OmitUmbrellaChildHealthChecks`
 
