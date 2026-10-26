@@ -1398,7 +1398,9 @@ its `spec.path`, `spec.sourceRef` and presence of `spec.kubeConfig` are still th
 any form (typed, unstructured, a `List` item). Every other Kustomization is a leaf: one an
 application emits and the integration did not keep, one a caller added, one whose Source, cluster or
 path changed after the integration, and every one of a tree built by hand or read back from disk. A
-caller that places its own records them with `SetFluxKustomizations`. A Kustomization that two trees
+caller that places its own records them with `SetFluxKustomizations`, each `Path` cleaned with
+`path.Clean` as the integration records it (a record must equal the Kustomization's current one to
+count). A Kustomization that two trees
 both hold, and a tree whose objects cannot be read, are refused with `ErrUmbrellaTerminals`.
 
 ### With `OmitUmbrellaChildHealthChecks`

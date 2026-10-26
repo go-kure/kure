@@ -481,8 +481,10 @@ files by name. An augmenter that needs the old names sets `FileNamingDefault` on
   applies. Nothing else marks: a caller placing Flux Kustomizations from `GenerateFromLayout` or its
   own code calls `SetFluxBuild` on the root and on their `spec.path` layouts to get these checks.
   The integrator also records, on every layout, the Flux Kustomizations it placed or kept there
-  (`SetFluxKustomizations`, read back with `FluxKustomizations`): each one's identity, `spec.path`,
-  Source and whether it sets `spec.kubeConfig`, as `FluxKustomizationRecord` values. It is
+  (`SetFluxKustomizations`, read back with `FluxKustomizations`): each one's identity, `spec.path`
+  as `path.Clean` leaves it, Source and whether it sets `spec.kubeConfig`, as
+  `FluxKustomizationRecord` values; a caller's own record cleans its `Path` the same way, since a
+  record is compared as a whole. It is
   written only by an integration that succeeds, as its last step: a refused one leaves every
   record as it was. Like the build marker the record is in memory only; `fluxcd.UmbrellaTerminals` reads it, and a caller that
   places Flux Kustomizations itself records them there to have them read.
