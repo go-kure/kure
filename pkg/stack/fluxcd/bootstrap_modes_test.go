@@ -12,6 +12,8 @@ import (
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/kustomize/api/krusty"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
 	sigsyaml "sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/pkg/stack"
@@ -155,15 +157,18 @@ func operatorRoot(t *testing.T, objs []client.Object) rootView {
 	v["source.url"] = s.URL
 	switch s.Kind {
 	case "OCIRepository":
-		v["source.ref"], v["source.revision"] = "tag: "+s.Ref, "tag "+s.Ref
-		if r := patchedSemVer(t, fi, name); r != "" {
+		// The revision and insecure are read from the source the patches
+		// produce, so a patch that does not apply does not count.
+		spec := appliedSyncSource(t, fi, name)
+		ref, _ := spec["ref"].(map[string]any)
+		tag, _ := ref["tag"].(string)
+		v["source.ref"], v["source.revision"] = "tag: "+s.Ref, "tag "+tag
+		// source-controller takes ref.semver over ref.tag.
+		if r, _ := ref["semver"].(string); r != "" {
 			v["source.ref"] = "tag: " + s.Ref + ", patched to semver: " + r
 			v["source.revision"] = "semver " + r
 		}
-		v["source.insecure"] = "false"
-		if strings.Contains(v["patches"], "OCIRepository/"+name+": - op: add path: /spec/insecure value: true") {
-			v["source.insecure"] = "true"
-		}
+		v["source.insecure"] = fmt.Sprint(spec["insecure"] == true)
 	case "GitRepository":
 		v["source.ref"], v["source.revision"] = "name: "+s.Ref, s.Ref
 	}
@@ -186,35 +191,49 @@ func operatorRoot(t *testing.T, objs []client.Object) rootView {
 	return v
 }
 
-// patchedSemVer is the semver range a FluxInstance kustomize patch puts in
-// place of spec.ref on the sync's OCIRepository, named name, or "" when no
-// patch replaces it. The patch is read as JSON patch operations, so its
-// formatting does not matter.
-func patchedSemVer(t *testing.T, fi *fluxv1.FluxInstance, name string) string {
+// appliedSyncSource is the spec of the OCIRepository, named name, that
+// flux-operator creates for fi's sync: the source its sync template writes
+// (templates.go: ref.tag from sync.ref, url) with fi's kustomize patches
+// applied by a kustomize build, as the operator applies them to every object
+// it builds. A patch whose target misses the source leaves it as written.
+func appliedSyncSource(t *testing.T, fi *fluxv1.FluxInstance, name string) map[string]any {
 	t.Helper()
-	if fi.Spec.Kustomize == nil {
-		return ""
+	source, err := sigsyaml.Marshal(map[string]any{
+		"apiVersion": sourcev1.GroupVersion.String(),
+		"kind":       sourcev1.OCIRepositoryKind,
+		"metadata":   map[string]any{"name": name, "namespace": fi.Namespace},
+		"spec":       map[string]any{"ref": map[string]any{"tag": fi.Spec.Sync.Ref}, "url": fi.Spec.Sync.URL},
+	})
+	if err != nil {
+		t.Fatalf("marshalling the sync source: %v", err)
 	}
-	var rng string
-	for _, p := range fi.Spec.Kustomize.Patches {
-		if p.Target == nil || p.Target.Kind != "OCIRepository" || p.Target.Name != name {
-			continue
+	kustomization := "resources:\n  - source.yaml\n"
+	if fi.Spec.Kustomize != nil && len(fi.Spec.Kustomize.Patches) > 0 {
+		patches, err := sigsyaml.Marshal(fi.Spec.Kustomize.Patches)
+		if err != nil {
+			t.Fatalf("marshalling the patches: %v", err)
 		}
-		var ops []struct {
-			Op    string         `json:"op"`
-			Path  string         `json:"path"`
-			Value map[string]any `json:"value"`
-		}
-		if err := sigsyaml.Unmarshal([]byte(p.Patch), &ops); err != nil {
-			continue // not a JSON patch on spec.ref: the insecure patch's value is a bool
-		}
-		for _, op := range ops {
-			if op.Op == "replace" && op.Path == "/spec/ref" {
-				rng, _ = op.Value["semver"].(string)
-			}
+		kustomization += "patches:\n" + string(patches)
+	}
+	fs := filesys.MakeFsInMemory()
+	for file, data := range map[string]string{"source.yaml": string(source), "kustomization.yaml": kustomization} {
+		if err := fs.WriteFile(filepath.Join("/sync", file), []byte(data)); err != nil {
+			t.Fatalf("writing %s: %v", file, err)
 		}
 	}
-	return rng
+	res, err := krusty.MakeKustomizer(krusty.MakeDefaultOptions()).Run(fs, "/sync")
+	if err != nil {
+		t.Fatalf("kustomize build of the sync source: %v", err)
+	}
+	if n := len(res.Resources()); n != 1 {
+		t.Fatalf("kustomize build of the sync source gave %d objects, want 1", n)
+	}
+	m, err := res.Resources()[0].Map()
+	if err != nil {
+		t.Fatalf("reading the built sync source: %v", err)
+	}
+	spec, _ := m["spec"].(map[string]any)
+	return spec
 }
 
 // bootstrapModeConfigs is the shared matrix: each config is rendered in both

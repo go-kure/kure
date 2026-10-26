@@ -1323,6 +1323,7 @@ They apply to an `OCIRepository` source with `SourceURL` set. Anything else is r
 To follow a release line instead of a fixed tag, set `SourceSemVer` to a semver range and leave
 `SourceRef` empty:
 
+<!-- doc-example:excerpt setting the field on a config; the behaviour is pinned by pkg/stack/fluxcd/bootstrap_source_semver_test.go -->
 ```go
 config.SourceSemVer = ">=1.0.0 <2.0.0"
 ```
