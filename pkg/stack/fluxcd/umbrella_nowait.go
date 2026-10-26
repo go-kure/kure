@@ -270,7 +270,9 @@ func (t *kustomizationTree) orderPath(from, to string) ([]string, error) {
 		out = append(out, "apply "+key)
 		k := t.byKey[key]
 		obj := t.otherObjs[key]
-		if t.keptDropped(key) {
+		if base, ok := strings.CutSuffix(key, keptCopy); ok {
+			obj = t.droppedObjs[base]
+		} else if t.keptDropped(key) {
 			obj = t.droppedObjs[key]
 		}
 		if k == nil && obj != nil {
