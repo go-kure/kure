@@ -40,12 +40,13 @@ A contract on the interfaces that exist, with executable tests, and no new API:
   `Application.Generate` and `Bundle.Generate` never augment. A new walk augments a new layout
   again: for an unchanged config the augmenter adds the same things.
 - **Optional interfaces are found on the config value itself.** `Validator`
-  (`application.go:98`), `LayoutAugmenter` (`walker.go:716`, `:757`) and `LayoutIntentAugmenter`
-  (`walker.go:745`) are type assertions on `app.Config`. A wrapper that embeds the
+  (`application.go:98`), `LayoutAugmenter` (`walker.go:718`, `:759`) and `LayoutIntentAugmenter`
+  (`walker.go:747`) are type assertions on `app.Config` (`walker.go` lines here are at
+  `e932b15d`). A wrapper that embeds the
   `ApplicationConfig` interface has `Generate` alone in its method set and hides all three.
   The loss is silent: no validation, no augmentation and, because kure no longer sees a
   `LayoutAugmenter`, no layout of its own under flat application grouping: its resources merge
-  into the bundle's directory (`walker.go:668-671`), even where the wrapped config wants its
+  into the bundle's directory (`walker.go:670-673`), even where the wrapped config wants its
   own. A wrapper embeds the concrete type or forwards each interface it wants kure to see.
   Forwarding `AugmentLayout` without `WantsOwnLayout` is presence-only placement: the wrapper
   gets a layout of its own under flat grouping whatever the wrapped config answers.
