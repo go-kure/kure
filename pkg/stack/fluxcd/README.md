@@ -368,7 +368,15 @@ that instead of generating it:
   kustomize's own: `Group`, `Version`, `Kind`, `Name` and `Namespace` are anchored regular
   expressions (an empty one matches anything; `Namespace` is matched against the object's
   effective namespace, `default` for a namespaced object that names none), `LabelSelector` and
-  `AnnotationSelector` are Kubernetes selector expressions. Only objects the shared Kustomization
+  `AnnotationSelector` are Kubernetes selector expressions. A written object's labels and
+  annotations are matched as kustomize reads them from the written file, every value as its
+  text: an object decoded from YAML may hold a boolean, a number or null there, which reads as
+  `true`, `3`, `1.5` (a whole number as an integer, `2`) or `null`, and its other labels or
+  annotations are still matched (go-kure/kure#1100). An annotation the writer leaves out of the
+  file (`kubectl.kubernetes.io/last-applied-configuration`) is not matched. A generated
+  ConfigMap is not written: its entry's annotations are matched as they are, that one included,
+  as kustomize puts them on the ConfigMap. The same matching decides whether a patch with a
+  `Target` selects a hosted Source. Only objects the shared Kustomization
   builds count: under `FluxIntegratedPerLayout` a per-app directory is applied by its own CR, so
   its objects are outside the patch's reach. A bundle `b1` with `Target: {Kind: ConfigMap}` merged with a
   bundle that renders a ConfigMap is refused; `Target: {Kind: ConfigMap, Name: one-cm}`, naming

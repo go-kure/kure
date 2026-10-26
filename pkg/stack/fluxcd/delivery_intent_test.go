@@ -500,6 +500,17 @@ func TestDeliveryIntent_PatchScopeSeesGeneratedConfigMaps(t *testing.T) {
 			target:  stack.PatchSelector{Name: "hook-values", AnnotationSelector: "tier=backend"},
 			reaches: "hook-values",
 		},
+		// kustomize builds the ConfigMap from the entry, so it keeps an
+		// annotation the writers drop from a written object
+		// (go-kure/kure#1100).
+		"annotation the writers drop, set by the generator": {
+			app: hook(stack.DeliveryIntent{}, &annotatedGenerator{
+				hookAugmenter: hookAugmenter{app: "hook"},
+				annotations:   map[string]string{"kubectl.kubernetes.io/last-applied-configuration": "{}"},
+			}),
+			target:  stack.PatchSelector{Name: "hook-values", AnnotationSelector: "kubectl.kubernetes.io/last-applied-configuration"},
+			reaches: "hook-values",
+		},
 		"child layout's generator, by name": {
 			app:     hook(stack.DeliveryIntent{}, child()),
 			target:  stack.PatchSelector{Kind: "ConfigMap", Name: "hook-child-values"},

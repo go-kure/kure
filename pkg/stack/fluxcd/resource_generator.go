@@ -18,6 +18,7 @@ import (
 	kusttypes "sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/resid"
 
+	"github.com/go-kure/kure/internal/built"
 	"github.com/go-kure/kure/pkg/errors"
 	pubfluxcd "github.com/go-kure/kure/pkg/kubernetes/fluxcd"
 	"github.com/go-kure/kure/pkg/stack"
@@ -553,7 +554,7 @@ func checkPatchScope(l *layout.ManifestLayout, b *stack.Bundle, t *stack.PatchSe
 	// CR, not built by this unit: only the objects in l's own directory are,
 	// and those of an AppFileSingle application child, whose one file l's
 	// kustomization.yaml lists.
-	built := func(client.Object) bool { return true }
+	inBuild := func(client.Object) bool { return true }
 	if l.FluxPlacement == layout.FluxIntegratedPerLayout {
 		own := map[client.Object]bool{}
 		for _, o := range l.Resources {
@@ -566,14 +567,37 @@ func checkPatchScope(l *layout.ManifestLayout, b *stack.Bundle, t *stack.PatchSe
 				}
 			}
 		}
-		built = func(o client.Object) bool { return own[o] }
+		inBuild = func(o client.Object) bool { return own[o] }
 	}
+	// An object the layouts below l do not hold as a resource is a generated
+	// ConfigMap's stand-in, which the writers do not write.
+	written := map[client.Object]bool{}
+	var collect func(*layout.ManifestLayout)
+	collect = func(m *layout.ManifestLayout) {
+		if m == nil {
+			return
+		}
+		for _, o := range m.Resources {
+			written[o] = true
+		}
+		for _, child := range m.Children {
+			collect(child)
+		}
+	}
+	collect(l)
 	for _, other := range l.OriginBundles() {
 		if other == b {
 			continue
 		}
 		for _, o := range l.OriginBundleObjects(other) {
-			if !built(o) || !selects(o) {
+			if !inBuild(o) {
+				continue
+			}
+			selected, err := selects(o, written[o])
+			if err != nil {
+				return errors.Wrapf(err, "bundle %q", b.Name)
+			}
+			if !selected {
 				continue
 			}
 			return errors.ResourceValidationError("Bundle", b.Name, "patches",
@@ -589,9 +613,16 @@ func checkPatchScope(l *layout.ManifestLayout, b *stack.Bundle, t *stack.PatchSe
 // kind, name and namespace as anchored regular expressions (an empty one
 // matches anything) against the object's effective namespace — "default" for
 // a namespaced object that names none — and label and annotation selectors as
-// Kubernetes selector expressions. An object without a kind cannot be matched
-// and is never selected.
-func patchTargetMatcher(t *stack.PatchSelector) (func(client.Object) bool, error) {
+// Kubernetes selector expressions. The selectors match the labels and
+// annotations of a written object as kustomize reads them from what the
+// writers write (built.Text), so that a map holding a boolean or a number is
+// matched as kustomize matches it and not as no map at all
+// (go-kure/kure#1100). An object that is not written is the stand-in for a
+// ConfigMap a configMapGenerator builds (layout's OriginBundleObjects):
+// kustomize gives that ConfigMap its entry's annotations, strings it writes
+// as they are, so they are matched as they are. An object without a kind
+// cannot be matched and is never selected.
+func patchTargetMatcher(t *stack.PatchSelector) (func(o client.Object, written bool) (bool, error), error) {
 	sel := kusttypes.Selector{
 		ResId: resid.ResId{
 			Gvk:       resid.Gvk{Group: t.Group, Version: t.Version, Kind: t.Kind},
@@ -613,13 +644,25 @@ func patchTargetMatcher(t *stack.PatchSelector) (func(client.Object) bool, error
 	if err != nil {
 		return nil, errors.Wrap(err, "patch target annotation selector")
 	}
-	return func(o client.Object) bool {
+	return func(o client.Object, written bool) (bool, error) {
 		gvk := o.GetObjectKind().GroupVersionKind()
 		id := resid.NewResIdWithNamespace(resid.Gvk{Group: gvk.Group, Version: gvk.Version, Kind: gvk.Kind}, o.GetName(), o.GetNamespace())
-		return gvk.Kind != "" && sr.MatchGvk(id.Gvk) &&
-			sr.MatchName(o.GetName()) && sr.MatchNamespace(id.EffectiveNamespace()) &&
-			labelSel.Matches(labels.Set(o.GetLabels())) &&
-			annotationSel.Matches(labels.Set(o.GetAnnotations()))
+		if gvk.Kind == "" || !sr.MatchGvk(id.Gvk) ||
+			!sr.MatchName(o.GetName()) || !sr.MatchNamespace(id.EffectiveNamespace()) {
+			return false, nil
+		}
+		if labelSel.Empty() && annotationSel.Empty() {
+			return true, nil
+		}
+		objLabels, objAnnotations := o.GetLabels(), o.GetAnnotations()
+		if written {
+			var err error
+			objLabels, objAnnotations, err = built.Text(o)
+			if err != nil {
+				return false, errors.Wrapf(err, "%s %q", gvk.Kind, objectName(o))
+			}
+		}
+		return labelSel.Matches(labels.Set(objLabels)) && annotationSel.Matches(labels.Set(objAnnotations)), nil
 	}, nil
 }
 

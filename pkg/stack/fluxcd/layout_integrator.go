@@ -775,7 +775,11 @@ func (p *integratedPlacement) checkRootBuildKeepsHostedSources(top *layout.Manif
 					return errors.Wrapf(err, "Flux Kustomization %q: patch %d", k.Name, i)
 				}
 				for _, s := range hosted {
-					if selects(s) {
+					selected, err := selects(s, true)
+					if err != nil {
+						return errors.Wrapf(err, "Flux Kustomization %q: patch %d", k.Name, i)
+					}
+					if selected {
 						return refuse(s, fmt.Sprintf("patch %d (target %s) selects it", i, describeTarget(t)), movePatch)
 					}
 				}
