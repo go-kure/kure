@@ -163,6 +163,8 @@ type BootstrapConfig struct {
 // cosign, the default when empty, or notation. SecretRef and
 // TrustedRootSecretRef name Secrets in the source's namespace, holding the
 // trusted public keys and a Sigstore trusted_root.json; empty sets neither.
+// Cosign without SecretRef is keyless and needs at least one
+// MatchOIDCIdentity: with none it would accept every signer.
 type SourceVerification struct {
 	Provider             string              `yaml:"provider,omitempty"`
 	SecretRef            string              `yaml:"secretRef,omitempty"`

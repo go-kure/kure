@@ -999,6 +999,8 @@ Both `GenerateBootstrap` and `GenerateFluxInstance` refuse, with nothing returne
 - any of the four with a `GitRepository` source, which they are not defined for;
 - a `SourceProvider` an `OCIRepository` does not take, `github` included;
 - a `SourceVerify` provider other than `cosign` and `notation`;
+- keyless cosign (`cosign` or no provider, without `SecretRef`) with no identity match, a
+  `TrustedRootSecretRef` or not: cosign then checks no identity and accepts every signer;
 - an identity match whose issuer or subject is empty, which would match any signer, or is not a
   Go regular expression, which source-controller would reject only at reconcile;
 - an issuer or subject holding DEL, a C1 control (U+0080 to U+009F, NEL among them) or the
@@ -1006,8 +1008,9 @@ Both `GenerateBootstrap` and `GenerateFluxInstance` refuse, with nothing returne
   YAML encoding in both modes and in the operator's patch build, would fold NEL into a space and
   refuse the others; the pattern can match one with a regular-expression escape, such as `\x{85}`.
 
-The verification's cross-field rules (which provider takes which fields) are source-controller's
-and are not checked here, and the Secrets it names are the caller's to create.
+Apart from keyless cosign needing an identity match, the verification's cross-field rules (which
+provider takes which fields) are source-controller's and are not checked here, and the Secrets it
+names are the caller's to create.
 
 ### Semver source ref
 

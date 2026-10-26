@@ -322,6 +322,18 @@ func TestBootstrapSourceAccess_Refused(t *testing.T) {
 			edit:  func(c *stack.BootstrapConfig) { c.SourceVerify = &stack.SourceVerification{Provider: "sigstore"} },
 			names: "sourceVerify.provider",
 		},
+		// Keyless cosign with no identity match accepts every signer, the
+		// default provider and a self-hosted Sigstore root included.
+		"keyless cosign without an identity": {
+			edit:  func(c *stack.BootstrapConfig) { c.SourceVerify = &stack.SourceVerification{} },
+			names: "sourceVerify.matchOIDCIdentity",
+		},
+		"keyless cosign on a trusted root without an identity": {
+			edit: func(c *stack.BootstrapConfig) {
+				c.SourceVerify = &stack.SourceVerification{Provider: "cosign", TrustedRootSecretRef: "sigstore-root"}
+			},
+			names: "sourceVerify.matchOIDCIdentity",
+		},
 		"identity with an empty issuer": {
 			edit: func(c *stack.BootstrapConfig) {
 				c.SourceVerify = &stack.SourceVerification{MatchOIDCIdentity: []stack.OIDCIdentityMatch{{Subject: "^ci$"}}}
@@ -404,6 +416,7 @@ func TestBootstrapSourceAccess_Refused(t *testing.T) {
 func TestBootstrapSourceVerify_RefusalNamesSource(t *testing.T) {
 	refused := map[string]stack.SourceVerification{
 		"unknown provider": {Provider: "sigstore"},
+		"no identity":      {},
 		"empty issuer":     {MatchOIDCIdentity: []stack.OIDCIdentityMatch{{Subject: "^ci$"}}},
 		"bad subject":      {MatchOIDCIdentity: []stack.OIDCIdentityMatch{{Issuer: "^https://issuer$", Subject: "("}}},
 		"NEL in a subject": {MatchOIDCIdentity: []stack.OIDCIdentityMatch{{Issuer: "^https://issuer$", Subject: "^[^\u0085]+$"}}},

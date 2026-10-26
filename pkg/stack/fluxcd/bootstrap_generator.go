@@ -556,14 +556,18 @@ func validateSourceAccess(config *stack.BootstrapConfig, name string) error {
 var ociVerifyProviders = []string{"cosign", "notation"}
 
 // validateSourceVerify refuses a SourceVerify the source would not admit or
-// could not use: a provider outside ociVerifyProviders, and an identity match
-// whose issuer or subject is empty or not a Go regular expression. The CRD
-// requires both without a minimum length, so an empty pattern, which matches
-// every identity, would pass admission; kure refuses it, as it would verify
-// nothing about the signer. A bad pattern would fail only once the source is
-// reconciled. A pattern holding a character yamlUnsafe reports is refused as
-// well: written literally it would not reach the source as written. No rule
-// across fields is checked. nil is no verification.
+// could not use: a provider outside ociVerifyProviders, keyless cosign with no
+// identity match, and an identity match whose issuer or subject is empty or not
+// a Go regular expression. Keyless cosign is cosign without a SecretRef;
+// source-controller hands its identity matches to cosign as they are, and
+// cosign checks the signer's identity only when there is at least one, so
+// without one any signer passes. The CRD requires issuer and subject without a
+// minimum length, so an empty pattern, which matches every identity, would pass
+// admission. kure refuses both, as either would verify nothing about the
+// signer. A bad pattern would fail only once the source is reconciled. A
+// pattern holding a character yamlUnsafe reports is refused as well: written
+// literally it would not reach the source as written. No other rule across
+// fields is checked. nil is no verification.
 func validateSourceVerify(v *stack.SourceVerification, name string) error {
 	if v == nil {
 		return nil
@@ -572,6 +576,10 @@ func validateSourceVerify(v *stack.SourceVerification, name string) error {
 		return errors.ResourceValidationError("BootstrapConfig", name, "sourceVerify.provider",
 			fmt.Sprintf("%q is not a provider an OCIRepository verifies with: use one of %s",
 				v.Provider, strings.Join(ociVerifyProviders, ", ")), nil)
+	}
+	if (v.Provider == "" || v.Provider == "cosign") && v.SecretRef == "" && len(v.MatchOIDCIdentity) == 0 {
+		return errors.ResourceValidationError("BootstrapConfig", name, "sourceVerify.matchOIDCIdentity",
+			"keyless cosign verification needs an identity match: without one, or a secretRef with the trusted keys, it accepts every signer", nil)
 	}
 	for i, m := range v.MatchOIDCIdentity {
 		for _, p := range []struct{ field, pattern string }{{"issuer", m.Issuer}, {"subject", m.Subject}} {
