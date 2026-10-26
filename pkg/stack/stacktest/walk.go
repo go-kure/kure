@@ -124,6 +124,11 @@ func (w *walk) value(v reflect.Value, p path) error {
 		start := v.Pointer()
 		key := visitKey{kind: reflect.Map, addr: start, typ: v.Type()}
 		return w.storage(key, record{start: start, isMap: true, kind: "map", path: p}, func() error {
+			// Keys are checked before any is printed: printing a pointer
+			// key prints what it points to, in whatever order that holds.
+			if err := checkKeys(v, p); err != nil {
+				return err
+			}
 			// Two keys that print alike (two NaNs, or 1 and "1" in a
 			// map[any]any) would give two values one path, and which is
 			// walked first is up to MapRange: refused, like a func, and
@@ -201,6 +206,48 @@ func (w *walk) storage(key visitKey, r record, inside func() error) error {
 	w.active[key] = true
 	defer delete(w.active, key)
 	return inside()
+}
+
+// checkKeys refuses a map whose keys are not all strings, bools or numbers,
+// directly or in an interface: those are the keys Kubernetes JSON holds,
+// and the ones that print without reaching into other values. Of several
+// refused key types the error names the first by name, whatever the order
+// MapRange returns them in.
+func checkKeys(v reflect.Value, p path) error {
+	kt := v.Type().Key()
+	if scalarKey(kt.Kind()) {
+		return nil
+	}
+	var refused []string
+	if kt.Kind() != reflect.Interface {
+		refused = append(refused, kt.String())
+	} else {
+		for it := v.MapRange(); it.Next(); {
+			switch k := it.Key().Elem(); {
+			case !k.IsValid():
+				refused = append(refused, "nil")
+			case !scalarKey(k.Kind()):
+				refused = append(refused, k.Type().String())
+			}
+		}
+	}
+	if len(refused) == 0 {
+		return nil
+	}
+	sort.Strings(refused)
+	return errors.Errorf("unsupported map at %q: a %s key is not a string, bool or number", p.String(), refused[0])
+}
+
+func scalarKey(k reflect.Kind) bool {
+	switch k {
+	case reflect.String, reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return true
+	default:
+		return false
+	}
 }
 
 func pointerKind(t reflect.Type) string {

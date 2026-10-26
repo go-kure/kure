@@ -480,6 +480,16 @@ func TestCheckGeneration_Errors(t *testing.T) {
 		{"keys 1 and \"1\"", app(genFunc(func() ([]*client.Object, error) {
 			return objs(&unstructured.Unstructured{Object: map[string]any{"m": map[any]any{1: "int", "1": "string"}}}), nil
 		})), `unsupported map at "[0].(*unstructured.Unstructured).Object[m].(map[interface {}]interface {})": two keys print as [1]`},
+		// A pointer key prints what it points to: refused before then.
+		{"pointer map key", app(genFunc(func() ([]*client.Object, error) {
+			bad := map[float64]int{}
+			bad[math.NaN()] = 1
+			bad[math.NaN()] = 2
+			return objs(&unstructured.Unstructured{Object: map[string]any{"m": map[*map[float64]int]int{&bad: 0}}}), nil
+		})), `unsupported map at "[0].(*unstructured.Unstructured).Object[m].(map[*map[float64]int]int)": a *map[float64]int key is not a string, bool or number`},
+		{"array key in an interface", app(genFunc(func() ([]*client.Object, error) {
+			return objs(&unstructured.Unstructured{Object: map[string]any{"m": map[any]any{"a": 0, [2]int{1, 2}: 1, nil: 2}}}), nil
+		})), `unsupported map at "[0].(*unstructured.Unstructured).Object[m].(map[interface {}]interface {})": a [2]int key is not a string, bool or number`},
 		// Whichever entry MapRange returns first, the alike keys are
 		// refused before the func value is reached.
 		{"alike keys beside a func", app(genFunc(func() ([]*client.Object, error) {
