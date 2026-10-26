@@ -2,6 +2,7 @@ package stack
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -795,6 +796,31 @@ func TestNewBundle_Constructor(t *testing.T) {
 	}
 	if b.Labels["env"] != "prod" {
 		t.Error("Labels not set")
+	}
+}
+
+// TestNewBundle_CopiesLabels: the bundle keeps its own copy of the labels map,
+// so a caller editing the argument after the call (a map reused for several
+// bundles, or a template for later calls) leaves the bundle as it was built,
+// and a nil map stays nil.
+func TestNewBundle_CopiesLabels(t *testing.T) {
+	labels := map[string]string{"env": "prod"}
+	b, err := NewBundle("my-bundle", []*Application{{Name: "app"}}, labels)
+	if err != nil {
+		t.Fatalf("NewBundle: %v", err)
+	}
+	labels["env"] = "dev"
+	labels["team"] = "platform"
+	if want := map[string]string{"env": "prod"}; !reflect.DeepEqual(b.Labels, want) {
+		t.Errorf("Labels after editing the argument = %v, want %v", b.Labels, want)
+	}
+
+	b, err = NewBundle("no-labels", []*Application{{Name: "app"}}, nil)
+	if err != nil {
+		t.Fatalf("NewBundle: %v", err)
+	}
+	if b.Labels != nil {
+		t.Errorf("Labels = %#v, want nil", b.Labels)
 	}
 }
 
