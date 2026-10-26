@@ -21,33 +21,16 @@ var (
 // path is a walk path as its segments ("[0]", ".Spec", ".(*v1.Pod)"), so
 // whether one path lies inside another does not depend on what a map key
 // spells.
-type path []segment
+type path []string
 
-// segment is one step of a path. Map entries whose keys format alike (two
-// NaNs, or 1 and "1" in a map[any]any) differ in nth, so neither is taken
-// as inside the other.
-type segment struct {
-	text string
-	// nth is 0, or the entry's position among those formatting as text.
-	nth int
-}
-
-// child returns p with the segment appended, never sharing p's storage.
-func (p path) child(text string) path { return p.childN(text, 0) }
-
-func (p path) childN(text string, nth int) path {
+// child returns p with seg appended, never sharing p's storage.
+func (p path) child(seg string) path {
 	out := make(path, len(p), len(p)+1)
 	copy(out, p)
-	return append(out, segment{text: text, nth: nth})
+	return append(out, seg)
 }
 
-func (p path) String() string {
-	var b strings.Builder
-	for _, s := range p {
-		b.WriteString(s.text)
-	}
-	return b.String()
-}
+func (p path) String() string { return strings.Join(p, "") }
 
 // extends reports whether p is q or lies inside the value at q.
 func (p path) extends(q path) bool {
@@ -141,11 +124,17 @@ func (w *walk) value(v reflect.Value, p path) error {
 		start := v.Pointer()
 		key := visitKey{kind: reflect.Map, addr: start, typ: v.Type()}
 		return w.storage(key, record{start: start, isMap: true, kind: "map", path: p}, func() error {
-			seen := map[string]int{}
+			// Two keys that print alike (two NaNs, or 1 and "1" in a
+			// map[any]any) would give two values one path, and which is
+			// walked first is up to MapRange: refused, like a func.
+			seen := map[string]bool{}
 			for _, e := range sortedEntries(v) {
 				text := "[" + fmt.Sprint(e.key) + "]"
-				kp := p.childN(text, seen[text])
-				seen[text]++
+				if seen[text] {
+					return errors.Errorf("unsupported map at %q: two keys print as %s", p.String(), text)
+				}
+				seen[text] = true
+				kp := p.child(text)
 				if err := w.value(e.key, kp); err != nil {
 					return err
 				}
@@ -367,11 +356,10 @@ func firsts(rs []record) []record {
 
 // internal reports the storage each result reaches at two paths, each later
 // path against the earliest it overlaps, listing a value found in both
-// results once. Two entries can read alike (keys that format alike), so a
-// Sharing is listed as often as the result with more of it has it.
+// results once.
 func internal(walks ...*walk) []Sharing {
 	var out []Sharing
-	listed := map[Sharing]int{}
+	seen := map[Sharing]bool{}
 	for _, w := range walks {
 		var ms []match
 		for _, m := range matches(w.records, w.records) {
@@ -379,10 +367,9 @@ func internal(walks ...*walk) []Sharing {
 				ms = append(ms, m)
 			}
 		}
-		here := map[Sharing]int{}
 		for _, s := range report(w.records, w.records, ms, true) {
-			if here[s]++; here[s] > listed[s] {
-				listed[s] = here[s]
+			if !seen[s] {
+				seen[s] = true
 				out = append(out, s)
 			}
 		}
