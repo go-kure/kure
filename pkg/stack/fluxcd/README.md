@@ -1349,8 +1349,9 @@ later integration by a `dependsOn` the integration did not rewrite there, since 
 dependencies are checked; and one through a local-config copy a patched build may keep, through
 that copy's own `wait`, which is not followed, or, where the tree also holds a live Kustomization
 with its name, through a `dependsOn` or health check naming it, which reads only the live one.
-Two such copies with one name in separate builds are read as one, the last indexed, and a copy
-named as the build that keeps it, kept under a prefix, is not read at all.
+Two such copies with one name in separate builds are read as one, with their `dependsOn` merged
+and the rest from the last indexed, so an earlier one's `wait` or health checks are not read; and
+a copy named as the build that keeps it, kept under a prefix, is not read at all.
 
 The rules apply to the Kustomizations the call generates. One kept from an earlier integration
 is not rewritten; it is refused when it breaks R1 (with `ErrUmbrellaWait`, for `wait` or any
