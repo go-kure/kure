@@ -932,7 +932,9 @@ fmt.Println(fi.Name, fi.Spec.Sync.Name, fi.Spec.Sync.Ref)
 <!-- doc-example:end -->
 
 - It needs `SourceURL`: without one neither mode emits a source, so there is nothing to name.
-- kure passes it through unvalidated. The CRD caps it at 63 characters and makes it immutable
+- In `gotk` mode it must be a valid Flux Kustomization name (`stack.ValidateKustomizationName`:
+  a DNS-1123 subdomain of at most 63 characters), else generation is refused. In `flux-operator`
+  mode kure passes it through unvalidated. The CRD caps it at 63 characters and makes it immutable
   once set, so renaming the sync of a live cluster means recreating the `FluxInstance`. In `gotk`
   mode a new name means new objects: the source and Kustomization under the old name are not
   renamed.
