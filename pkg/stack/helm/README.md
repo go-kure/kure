@@ -111,6 +111,39 @@ fmt.Print(string(manifests))
 ```
 <!-- doc-example:end -->
 
+**Digest version (OCI only, optional):**
+
+Flux's helm-controller installs an OCI chart from an `OCIRepository` source at a version that
+carries the source's digest: the chart's semver version with its build metadata replaced by the
+first 12 hex characters of the manifest digest (`1.16.5` becomes `1.16.5+3f1c5a9e0b7d`).
+`WithDigestVersion` renders at that same version, computed from the digest of the manifest the
+pull received, so every template that prints `.Chart.Version`, such as the conventional
+`helm.sh/chart` label, matches the release helm-controller makes. Combined with `WithDigest`, the
+digest is checked first. As helm-controller refuses to install them, a chart version that is not
+semver, a semver tag (with `_` read as `+`, the OCI tag form) naming another version than the
+chart's, build metadata aside, and a chart that is not a Helm v2 API chart (`apiVersion: v1` or
+`v2`) are refused; a tag that is not semver is not compared. HTTP repositories have no manifest
+digest, so `RenderChart` refuses `WithDigestVersion` for them. The version is computed for the
+chart `RenderChart` loaded: when the reference is an image index holding several charts, which
+chart Helm's pull loads is not fixed and may not be the one helm-controller selects.
+
+<!-- doc-example: pkg/stack/helm ExampleWithDigestVersion -->
+```go
+manifests, err := helm.RenderChart(
+    "oci://registry.example.com/charts/cilium",
+    "1.16.5",
+    nil,
+    // .Chart.Version renders as 1.16.5+<first 12 hex of the pulled digest>,
+    // the version Flux's helm-controller installs the chart at
+    helm.WithDigestVersion(),
+)
+if err != nil {
+    panic(err)
+}
+fmt.Print(string(manifests))
+```
+<!-- doc-example:end -->
+
 ## API
 
 <!-- doc-example:excerpt the declarations from render.go, not calls -->
@@ -127,11 +160,12 @@ fmt.Print(string(manifests))
 // version is the chart version tag (e.g. "1.16.5").
 // values are merged on top of the chart's default values.
 // opts customizes the release identity; see WithReleaseName and WithNamespace.
-// WithDigest pins an OCI chart to a manifest digest.
+// WithDigest pins an OCI chart to a manifest digest; WithDigestVersion renders
+// it at its digest-qualified version.
 func RenderChart(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error)
 
-// RenderOption customizes how a chart is rendered: the release identity, or
-// the digest an OCI chart must match.
+// RenderOption customizes how a chart is rendered: the release identity, the
+// digest an OCI chart must match, or the version an OCI chart renders at.
 type RenderOption func(*renderOptions)
 
 // WithReleaseName sets the release name used during rendering.
@@ -144,6 +178,14 @@ func WithNamespace(namespace string) RenderOption
 // hex). A pulled manifest with another digest is an error; HTTP repositories
 // refuse the option.
 func WithDigest(digest string) RenderOption
+
+// WithDigestVersion renders an OCI chart at the version Flux's helm-controller
+// installs it as: the chart's semver version with its build metadata replaced
+// by the first 12 hex characters of the pulled manifest digest. Non-semver
+// versions, a semver tag naming another version, non-v2 charts and HTTP
+// repositories are refused. The version is computed for the chart loaded,
+// which for an image index holding several charts is not fixed.
+func WithDigestVersion() RenderOption
 ```
 
 ## SplitByHookWeight
@@ -230,5 +272,7 @@ func SplitByHookWeight(objects []client.Object) []HookGroup
   `"default"`; override either with `WithReleaseName`/`WithNamespace`.
 - Without `WithDigest`, an OCI chart is rendered from whatever manifest the tag points to when it
   is pulled.
+- Without `WithDigestVersion`, `.Chart.Version` is the version in the chart's `Chart.yaml`, which
+  differs from the version helm-controller installs an OCI chart at.
 - Comma-separated hook annotations (e.g. `"pre-install,post-install"`) are
   treated as a single opaque phase and placed in the unknown group.

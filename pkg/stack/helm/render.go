@@ -9,10 +9,12 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	chartpkg "helm.sh/helm/v4/pkg/chart"
 	"helm.sh/helm/v4/pkg/chart/common"
 	"helm.sh/helm/v4/pkg/chart/common/util"
 	"helm.sh/helm/v4/pkg/chart/loader"
+	v2chart "helm.sh/helm/v4/pkg/chart/v2"
 	"helm.sh/helm/v4/pkg/engine"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/registry"
@@ -21,20 +23,22 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 )
 
-// renderOptions holds the release identity used to render a chart, and the
-// digest an OCI chart is pinned to. It is kure's own type rather than Helm's
+// renderOptions holds the release identity used to render a chart, the
+// digest an OCI chart is pinned to, and whether an OCI chart renders at its
+// digest-qualified version. It is kure's own type rather than Helm's
 // common.ReleaseOptions so that the public RenderOption signature stays
 // independent of Helm's package layout (the release-options type already
 // moved once, from v3 chartutil to v4 common).
 type renderOptions struct {
-	releaseName string
-	namespace   string
-	digest      string
-	digestSet   bool
+	releaseName   string
+	namespace     string
+	digest        string
+	digestSet     bool
+	digestVersion bool
 }
 
-// RenderOption customizes how a chart is rendered: the release identity, or
-// the digest an OCI chart must match.
+// RenderOption customizes how a chart is rendered: the release identity, the
+// digest an OCI chart must match, or the version an OCI chart renders at.
 // Without options, rendering uses release "release" in namespace "default" —
 // the defaults renderChart always used prior to this option's introduction.
 type RenderOption func(*renderOptions)
@@ -70,6 +74,24 @@ func WithDigest(digest string) RenderOption {
 	return func(o *renderOptions) { o.digest, o.digestSet = digest, true }
 }
 
+// WithDigestVersion renders an OCI chart at the version Flux's helm-controller
+// installs it as from an OCIRepository source: the chart's semver version with
+// its build metadata replaced by the first 12 hex characters of the pulled
+// manifest's digest, so "0.33.0" renders as "0.33.0+3f1c5a9e0b7d". Templates
+// that print .Chart.Version, such as the conventional helm.sh/chart label,
+// then match the release helm-controller makes. The digest is the one the pull
+// received, checked against WithDigest first when both are given. A chart
+// version that is not semver, a semver tag ("_" read as "+") naming another
+// version than the chart's, or a chart that is not a Helm v2 API chart
+// (apiVersion v1 or v2), is refused, as helm-controller refuses to install
+// them. HTTP repositories have no manifest digest, so RenderChart refuses this
+// option for them. The version is computed for the chart RenderChart loaded:
+// when the reference is an image index holding several charts, which chart
+// Helm's pull loads is not fixed and may not be the one helm-controller selects.
+func WithDigestVersion() RenderOption {
+	return func(o *renderOptions) { o.digestVersion = true }
+}
+
 // RenderChart pulls a Helm chart and renders it client-side (equivalent to `helm template`),
 // returning multi-doc YAML.
 //
@@ -85,7 +107,8 @@ func WithDigest(digest string) RenderOption {
 // values are merged on top of the chart's default values.
 // opts customizes the release identity (name, namespace); see WithReleaseName
 // and WithNamespace. Without opts, rendering uses release "release" in
-// namespace "default". WithDigest pins an OCI chart to a manifest digest.
+// namespace "default". WithDigest pins an OCI chart to a manifest digest;
+// WithDigestVersion renders it at its digest-qualified version.
 func RenderChart(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error) {
 	var ro renderOptions
 	for _, opt := range opts {
@@ -100,6 +123,9 @@ func RenderChart(chartURL, version string, values map[string]any, opts ...Render
 	case strings.HasPrefix(chartURL, "http://"), strings.HasPrefix(chartURL, "https://"):
 		if ro.digestSet {
 			return nil, errors.Errorf("chart digest pinning is not supported for HTTP repository %q: only OCI charts have a manifest digest", chartURL)
+		}
+		if ro.digestVersion {
+			return nil, errors.Errorf("chart digest version is not supported for HTTP repository %q: only OCI charts have a manifest digest", chartURL)
 		}
 		return renderHTTP(chartURL, version, values, opts...)
 	default:
@@ -126,7 +152,44 @@ func renderOCI(chartURL, version string, values map[string]any, ro renderOptions
 	if err != nil {
 		return nil, errors.Wrap(err, "load chart archive")
 	}
+	if ro.digestVersion {
+		if err := setDigestVersion(chrt, version, result.Manifest.Digest); err != nil {
+			return nil, errors.Wrapf(err, "chart %s:%s", chartURL, version)
+		}
+	}
 	return renderChart(chrt, values, opts...)
+}
+
+// setDigestVersion sets the chart's version to its semver version with the
+// build metadata replaced by the first 12 hex characters of digest. This is
+// the computation of helm-controller v1.6.4 mutateChartWithSourceRevision
+// (with parseSemverFromTag and extractDigestSubString), on the same semver
+// library, so the result formats identically. Like helm-controller, it
+// refuses a tag that is a semver version ("_" read as "+", the OCI tag form)
+// other than the chart's, build metadata aside; a tag that is not semver is
+// not compared.
+func setDigestVersion(chrt chartpkg.Charter, tag, digest string) error {
+	c, ok := chrt.(*v2chart.Chart)
+	if !ok || c.Metadata == nil {
+		return errors.New("chart digest version: only Helm v2 API charts (apiVersion v1 or v2) are supported")
+	}
+	ver, err := semver.NewVersion(c.Metadata.Version)
+	if err != nil {
+		return errors.Errorf("chart digest version: chart version %q is not semver", c.Metadata.Version)
+	}
+	if tagVer, err := semver.NewVersion(strings.ReplaceAll(tag, "_", "+")); err == nil && !tagVer.Equal(ver) {
+		return errors.Errorf("chart digest version: tag %q does not match chart version %q", tag, c.Metadata.Version)
+	}
+	_, hexPart, found := strings.Cut(digest, ":")
+	if !found || len(hexPart) < 12 {
+		return errors.Errorf("chart digest version: invalid manifest digest %q", digest)
+	}
+	withDigest, err := ver.SetMetadata(hexPart[:12])
+	if err != nil {
+		return errors.Wrap(err, "chart digest version")
+	}
+	c.Metadata.Version = withDigest.String()
+	return nil
 }
 
 func renderHTTP(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error) {

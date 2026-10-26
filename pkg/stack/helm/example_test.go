@@ -73,6 +73,21 @@ func ExampleWithDigest() {
 	fmt.Print(string(manifests))
 }
 
+func ExampleWithDigestVersion() {
+	manifests, err := helm.RenderChart(
+		"oci://registry.example.com/charts/cilium",
+		"1.16.5",
+		nil,
+		// .Chart.Version renders as 1.16.5+<first 12 hex of the pulled digest>,
+		// the version Flux's helm-controller installs the chart at
+		helm.WithDigestVersion(),
+	)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Print(string(manifests))
+}
+
 func ExampleSplitByHookWeight() {
 	// Multi-doc YAML as RenderChart returns it
 	rendered := []byte(`apiVersion: batch/v1
