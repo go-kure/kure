@@ -595,8 +595,8 @@ func (t *kustomizationTree) within(u, d string) bool {
 // changed after the integration (it may no longer build this tree's
 // directory), and every one of a tree built by hand or read back from disk,
 // which carries no record (go-kure/kure#1077). A caller placing Flux
-// Kustomizations itself records them with SetFluxKustomizations to have them
-// read as umbrellas.
+// Kustomizations itself records them with SetFluxKustomizations, each Path
+// cleaned with path.Clean, to have them read as umbrellas.
 //
 // It returns an error that wraps ErrUmbrellaTerminals, and no map, for a
 // Kustomization identity found in two of the trees, for an umbrella without a
