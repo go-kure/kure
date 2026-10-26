@@ -130,7 +130,9 @@ chart's, build metadata aside, and a chart that is not a Helm v2 API chart (`api
 digest, so `RenderChart` refuses `WithDigestVersion` for them. A root that reaches more than one
 manifest is refused before any chart is loaded (see Notes), so the version is not computed for a
 chart picked among several. A child `WithDigest` selects from an image index is versioned from its
-own digest, and the tag check applies to that child's chart version.
+own digest, and the tag check applies to that child's chart version. The single child of an index
+naming one image manifest, rendered without `WithDigest` selecting it, is versioned from the index
+digest.
 
 <!-- doc-example: pkg/stack/helm ExampleWithDigestVersion -->
 ```go
@@ -168,9 +170,10 @@ fmt.Print(string(manifests))
 // WithDigest pins an OCI chart to a manifest digest; WithDigestVersion renders
 // it at its digest-qualified version.
 // An OCI image index is rendered only when it names exactly one image
-// manifest, or when WithDigest names one of the image manifests it lists,
-// which is pulled and rendered on its own; any other index, and a root naming
-// a subject, is refused (see Notes).
+// manifest, or when WithDigest names one of the image manifests it lists;
+// either child is pulled and rendered on its own. Any other index, a root
+// naming a subject or naming a manifest as its config or a layer, and a child
+// doing either or holding an index, are refused (see Notes).
 func RenderChart(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error)
 
 // RenderOption customizes how a chart is rendered: the release identity, the
@@ -195,7 +198,8 @@ func WithDigest(digest string) RenderOption
 // versions, a semver tag naming another version, non-v2 charts and HTTP
 // repositories are refused. A root that reaches more than one manifest is
 // refused before any chart is loaded; a child WithDigest selects is versioned
-// from its own digest.
+// from its own digest, the single child of a one-manifest index from the
+// index digest.
 func WithDigestVersion() RenderOption
 ```
 
@@ -293,14 +297,26 @@ func SplitByHookWeight(objects []client.Object) []HookGroup
   - an index naming more than one manifest;
   - an index holding a nested index, whatever that one holds;
   - an index holding one chart manifest beside a manifest that is no chart;
-  - a root manifest naming a `subject`, whether it is an index or a chart manifest.
+  - a root manifest naming a `subject`, whether it is an index or a chart manifest;
+  - a root manifest naming a manifest as its config or a layer, whatever else its JSON holds;
+  - an index listing its single image manifest without a digest.
 
   The rule is conservative on purpose. Helm's registry client pulls every manifest under the root,
-  a subject included, and keeps whichever chart it meets last, in no fixed order, so such a root
-  could render a different chart on each pull. The index lists its children by media type only,
-  without their content, so kure cannot tell a chart child from any other. Only the root is
-  inspected: a subject named by the single child of an index is not seen. Reference a chart pushed
-  as a single manifest, not as an index, or select one child with `WithDigest`.
+  a subject included, and every manifest a config or layer descriptor names, and keeps whichever
+  chart it meets last, in no fixed order, so such a root could render a different chart on each
+  pull. The index lists its children by media type only, without their content, so kure cannot
+  tell a chart child from any other. Reference a chart pushed as a single manifest, not as an
+  index, or select one child with `WithDigest`.
+- An image index naming a single image manifest renders that child pulled on its own, by the
+  digest the index lists, so the chart rendered is the one checked: the child is refused, naming
+  `chartURL:version`, when its content is itself an index, names a `subject` or names a manifest as
+  its config or a layer. This costs one more pull: the tag's pull has already fetched the child and
+  its chart archive, and the child's own pull fetches them again. That pull fails for a child
+  listed with a digest other than `sha256` when the registry sends the child with a known length and no
+  `Docker-Content-Digest`: Helm's registry client then computes a `sha256` digest of the child and
+  refuses it against the listed one, so such an index fails with that error instead of rendering.
+  `WithDigestVersion` versions the
+  chart from the index digest the tag resolved to, as the reference pins the index.
 - `WithDigest` with the digest of an image manifest an image index lists renders that child of a
   multi-chart index: the child is chosen from the index's own manifest list and pulled on its own,
   by digest, so the chart Helm kept from the tag's pull is never the one rendered. The selection is

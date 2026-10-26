@@ -1,6 +1,8 @@
 package helm
 
 import (
+	"crypto/sha512"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -51,6 +53,27 @@ func withSubject(t *testing.T, m, subject fakeManifest) fakeManifest {
 	return editManifest(t, m, func(doc map[string]any) { doc["subject"] = descriptorOf(subject) })
 }
 
+// withManifestLayer returns m with layer, a manifest, appended to its layers.
+func withManifestLayer(t *testing.T, m, layer fakeManifest) fakeManifest {
+	t.Helper()
+	return editManifest(t, m, func(doc map[string]any) { doc["layers"] = append(doc["layers"].([]any), descriptorOf(layer)) })
+}
+
+// withManifestConfig returns m with config, a manifest, as its config.
+func withManifestConfig(t *testing.T, m, config fakeManifest) fakeManifest {
+	t.Helper()
+	return editManifest(t, m, func(doc map[string]any) { doc["config"] = descriptorOf(config) })
+}
+
+// withEmptyManifestsEntry returns m with a manifests list holding one image
+// manifest descriptor without a digest, as an index would list its child.
+func withEmptyManifestsEntry(t *testing.T, m fakeManifest) fakeManifest {
+	t.Helper()
+	return editManifest(t, m, func(doc map[string]any) {
+		doc["manifests"] = []any{map[string]any{"mediaType": imageManifestMediaType, "digest": "", "size": 0}}
+	})
+}
+
 // withoutMediaType returns m without the optional mediaType field in its
 // JSON; the registry still serves it under its media type.
 func withoutMediaType(t *testing.T, m fakeManifest) fakeManifest {
@@ -65,8 +88,11 @@ func withoutMediaType(t *testing.T, m fakeManifest) fakeManifest {
 // run (go-kure/kure#1102). Such a root is refused, naming the reference, with
 // or without WithDigest or WithDigestVersion: an image index naming anything
 // but one image manifest, whether or not its JSON carries the optional
-// mediaType, and any root naming a subject. An index naming a single chart
-// manifest renders as that manifest does.
+// mediaType, any root naming a subject, any root naming a manifest as its
+// config or a layer, which Helm's pull also copies, and an index listing its
+// single image manifest without a digest (go-kure/kure#1131). An index naming a single chart manifest renders as
+// that manifest does, and is refused when that child's own content is an
+// index, names a subject or names a manifest as its config or a layer.
 func TestRenderChart_OCI_IndexRoot(t *testing.T) {
 	usePlainHTTPRegistry(t)
 
@@ -110,6 +136,43 @@ func TestRenderChart_OCI_IndexRoot(t *testing.T) {
 			a, b := chart(), other()
 			return newFakeRootRegistry(t, withSubject(t, indexOf(t, a), b), a, b)
 		}, "subject"},
+		"a chart manifest naming a manifest as a layer": {func(t *testing.T) *fakeRegistry {
+			a, b := chart(), other()
+			return newFakeRootRegistry(t, withManifestLayer(t, a, b), b)
+		}, "config or a layer"},
+		"a chart manifest naming a manifest as its config": {func(t *testing.T) *fakeRegistry {
+			a, b := chart(), other()
+			return newFakeRootRegistry(t, withManifestConfig(t, a, b), b)
+		}, "config or a layer"},
+		// Served as an image manifest, these roots are traversed through
+		// their config and layers; the manifests list Helm's pull ignores.
+		"a chart manifest with a manifests list naming a manifest as a layer": {func(t *testing.T) *fakeRegistry {
+			a, b := chart(), other()
+			return newFakeRootRegistry(t, withEmptyManifestsEntry(t, withManifestLayer(t, a, b)), b)
+		}, "config or a layer"},
+		"a chart manifest with a manifests list entry without a digest": {func(t *testing.T) *fakeRegistry {
+			return newFakeRootRegistry(t, withEmptyManifestsEntry(t, chart()))
+		}, "without a digest"},
+		"a one-chart index whose child names a subject": {func(t *testing.T) *fakeRegistry {
+			a, b := chart(), other()
+			b.unlisted = true
+			return newFakeIndexRegistry(t, withSubject(t, a, b), b)
+		}, "subject"},
+		"a one-chart index whose child is an index": {func(t *testing.T) *fakeRegistry {
+			a, b := chart(), other()
+			b.unlisted = true
+			return newFakeIndexRegistry(t, editManifest(t, a, func(doc map[string]any) { doc["manifests"] = []any{descriptorOf(b)} }), b)
+		}, "image index"},
+		"a one-chart index whose child names a manifest as a layer": {func(t *testing.T) *fakeRegistry {
+			a, b := chart(), other()
+			b.unlisted = true
+			return newFakeIndexRegistry(t, withManifestLayer(t, a, b), b)
+		}, "config or a layer"},
+		"a one-chart index whose child names a manifest as its config": {func(t *testing.T) *fakeRegistry {
+			a, b := chart(), other()
+			b.unlisted = true
+			return newFakeIndexRegistry(t, withManifestConfig(t, a, b), b)
+		}, "config or a layer"},
 	}
 	variants := map[string]func(fr *fakeRegistry) []RenderOption{
 		"":                    func(*fakeRegistry) []RenderOption { return nil },
@@ -135,6 +198,88 @@ func TestRenderChart_OCI_IndexRoot(t *testing.T) {
 			})
 		}
 	}
+}
+
+// TestRenderChart_OCI_OneChildIndex pins go-kure/kure#1131: an image index
+// naming one image manifest renders that child pulled on its own, by the
+// digest the index lists, after the same checks as a child WithDigest
+// selects. The tag's pull fetches the chart archive once and the child's own
+// pull fetches it again. WithDigestVersion versions it from the index digest
+// the tag resolved to, which is what the reference pins.
+func TestRenderChart_OCI_OneChildIndex(t *testing.T) {
+	usePlainHTTPRegistry(t)
+	a, aLayer := identityChild(t, "testchart", "0.1.0")
+
+	t.Run("renders the child's own pull", func(t *testing.T) {
+		fr := newFakeIndexRegistry(t, a)
+		out, err := RenderChart(fr.chartURL(), fr.tag, nil)
+		if err != nil {
+			t.Fatalf("RenderChart of a one-chart index: %v", err)
+		}
+		if !strings.Contains(string(out), "helm.sh/chart: testchart-0.1.0\n") {
+			t.Errorf("expected the child's chart testchart-0.1.0, got:\n%s", out)
+		}
+		if n := fr.blobGetCount(aLayer); n != 2 {
+			t.Errorf("chart archive fetched %d times, want 2 (the tag's pull, then the child's own)", n)
+		}
+	})
+	t.Run("WithDigestVersion uses the index digest", func(t *testing.T) {
+		fr := newFakeIndexRegistry(t, a)
+		out, err := RenderChart(fr.chartURL(), fr.tag, nil, WithDigestVersion())
+		if err != nil {
+			t.Fatalf("RenderChart: %v", err)
+		}
+		if want := helmControllerForm("0.1.0", sha256Digest(fr.manifest)); !strings.Contains(string(out), `version: "`+want+`"`) {
+			t.Errorf("expected chart version %q in output, got:\n%s", want, out)
+		}
+	})
+	// The child's own pull resolves chartURL@digest: Helm's registry client
+	// takes the digest from Docker-Content-Digest or, without it, computes a
+	// sha256 one of a response of known length (the fake's), which a sha512
+	// digest cannot match.
+	t.Run("sha512-listed child with Docker-Content-Digest", func(t *testing.T) {
+		fr, _ := sha512IndexRegistry(t, a)
+		out, err := RenderChart(fr.chartURL(), fr.tag, nil)
+		if err != nil {
+			t.Fatalf("RenderChart: %v", err)
+		}
+		if !strings.Contains(string(out), "helm.sh/chart: testchart-0.1.0\n") {
+			t.Errorf("expected the child's chart testchart-0.1.0, got:\n%s", out)
+		}
+	})
+	t.Run("sha512-listed child without Docker-Content-Digest fails closed", func(t *testing.T) {
+		fr, d := sha512IndexRegistry(t, a)
+		fr.omitChildDigestHeader = true
+		out, err := RenderChart(fr.chartURL(), fr.tag, nil)
+		if err == nil {
+			t.Fatalf("expected the child's pull to fail, got output:\n%s", out)
+		}
+		if out != nil {
+			t.Errorf("expected no output on failure, got:\n%s", out)
+		}
+		for _, want := range []string{fr.chartURL() + ":" + fr.tag, d, "digest other than sha256", "known length and no Docker-Content-Digest"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not name %q", err, want)
+			}
+		}
+	})
+}
+
+// sha512IndexRegistry serves an image index listing child under its sha512
+// digest, which it returns, and child by that digest.
+func sha512IndexRegistry(t *testing.T, child fakeManifest) (*fakeRegistry, string) {
+	t.Helper()
+	sum := sha512.Sum512(child.data)
+	d := "sha512:" + hex.EncodeToString(sum[:])
+	data, err := json.Marshal(map[string]any{"schemaVersion": 2, "mediaType": imageIndexMediaType, "manifests": []map[string]any{
+		{"mediaType": child.mediaType, "digest": d, "size": len(child.data)},
+	}})
+	if err != nil {
+		t.Fatalf("marshal index: %v", err)
+	}
+	fr := newFakeRootRegistry(t, fakeManifest{mediaType: imageIndexMediaType, data: data}, child)
+	fr.children[d] = child
+	return fr, d
 }
 
 // identityChild is, as an index child, the manifest of chart name at version
@@ -244,10 +389,8 @@ func TestRenderChart_OCI_IndexChild_Refused(t *testing.T) {
 	nestedIndex := indexOf(t, nested)
 	indexShaped := editManifest(t, b, func(doc map[string]any) { doc["manifests"] = []any{descriptorOf(a)} })
 	subjectChild := withSubject(t, b, a)
-	layerManifest := editManifest(t, b, func(doc map[string]any) {
-		doc["layers"] = append(doc["layers"].([]any), descriptorOf(a))
-	})
-	configManifest := editManifest(t, b, func(doc map[string]any) { doc["config"] = descriptorOf(a) })
+	layerManifest := withManifestLayer(t, b, a)
+	configManifest := withManifestConfig(t, b, a)
 	unlisted := "sha256:" + strings.Repeat("c", 64)
 
 	type refusal struct {
