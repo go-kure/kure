@@ -2,6 +2,7 @@ package helm
 
 import (
 	"bytes"
+	"encoding/json"
 	"maps"
 	"net/url"
 	"path/filepath"
@@ -85,9 +86,9 @@ func WithDigest(digest string) RenderOption {
 // version than the chart's, or a chart that is not a Helm v2 API chart
 // (apiVersion v1 or v2), is refused, as helm-controller refuses to install
 // them. HTTP repositories have no manifest digest, so RenderChart refuses this
-// option for them. The version is computed for the chart RenderChart loaded:
-// when the reference is an image index holding several charts, which chart
-// Helm's pull loads is not fixed and may not be the one helm-controller selects.
+// option for them. A root that reaches more than one manifest is refused
+// before any chart is loaded (see RenderChart), so the version is not computed
+// for a chart picked among several.
 func WithDigestVersion() RenderOption {
 	return func(o *renderOptions) { o.digestVersion = true }
 }
@@ -109,6 +110,16 @@ func WithDigestVersion() RenderOption {
 // and WithNamespace. Without opts, rendering uses release "release" in
 // namespace "default". WithDigest pins an OCI chart to a manifest digest;
 // WithDigestVersion renders it at its digest-qualified version.
+//
+// An OCI reference that resolves to an image index is rendered only when the
+// index names exactly one image manifest, whether or not the index carries
+// its optional mediaType field. Any other index is refused with an error
+// naming the reference, before any chart is loaded, with or without WithDigest
+// or WithDigestVersion: one naming several manifests, one holding a nested
+// index, and one holding a chart manifest beside a manifest that is no chart.
+// A root manifest naming a subject, index or not, is refused the same way.
+// Only the root is inspected. Reference a chart pushed as a single manifest
+// instead.
 func RenderChart(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error) {
 	var ro renderOptions
 	for _, opt := range opts {
@@ -147,6 +158,9 @@ func renderOCI(chartURL, version string, values map[string]any, ro renderOptions
 	if ro.digestSet && result.Manifest.Digest != ro.digest {
 		return nil, errors.Errorf("chart %s:%s: pulled manifest digest %s does not match pinned digest %s",
 			chartURL, version, result.Manifest.Digest, ro.digest)
+	}
+	if err := checkPullRoot(result.Manifest.Data); err != nil {
+		return nil, errors.Wrapf(err, "chart %s:%s", chartURL, version)
 	}
 	chrt, err := loader.LoadArchive(bytes.NewReader(result.Chart.Data))
 	if err != nil {
@@ -190,6 +204,65 @@ func setDigestVersion(chrt chartpkg.Charter, tag, digest string) error {
 	}
 	c.Metadata.Version = withDigest.String()
 	return nil
+}
+
+// The OCI media types of an image index and an image manifest, as the
+// image-spec defines them.
+const (
+	imageIndexMediaType    = "application/vnd.oci.image.index.v1+json"
+	imageManifestMediaType = "application/vnd.oci.image.manifest.v1+json"
+)
+
+// checkPullRoot refuses a pulled root manifest that can reach more than one
+// manifest. Helm's registry client copies every manifest under the root, a
+// subject included, and keeps the last chart layer it meets, in an order that
+// is not fixed, so such a root may render a different chart on each pull,
+// even pinned to its digest. Refused are a root naming a subject, whatever
+// its kind, and an OCI image index naming anything but a single image
+// manifest. An index is recognized by its mediaType or, as that field is
+// optional, by its manifests list. The index lists its children without their
+// content, so a child that is no chart counts too, and a nested index is
+// refused whatever it holds. Any other root is accepted; one that is not
+// JSON, which Helm's pull has already decoded, is an error.
+func checkPullRoot(root []byte) error {
+	var doc struct {
+		MediaType string `json:"mediaType"`
+		Subject   *struct {
+			MediaType string `json:"mediaType"`
+			Digest    string `json:"digest"`
+		} `json:"subject"`
+		Manifests *[]struct {
+			MediaType string `json:"mediaType"`
+		} `json:"manifests"`
+	}
+	if err := json.Unmarshal(root, &doc); err != nil {
+		return errors.Wrap(err, "read pulled root manifest")
+	}
+	if doc.Subject != nil {
+		return errors.Errorf("the reference's root manifest names a subject (%s %s), which Helm's registry client pulls too, "+
+			"so it may render the chart under either: reference a chart pushed as a single manifest without a subject",
+			doc.Subject.MediaType, doc.Subject.Digest)
+	}
+	if doc.MediaType != imageIndexMediaType && doc.Manifests == nil {
+		return nil
+	}
+	var manifests []struct {
+		MediaType string `json:"mediaType"`
+	}
+	if doc.Manifests != nil {
+		manifests = *doc.Manifests
+	}
+	if len(manifests) == 1 && manifests[0].MediaType == imageManifestMediaType {
+		return nil
+	}
+	kinds := make([]string, 0, len(manifests))
+	for _, m := range manifests {
+		kinds = append(kinds, m.MediaType)
+	}
+	return errors.Errorf("the reference resolves to an OCI image index naming %d manifest(s) [%s]; "+
+		"only an index naming exactly one image manifest is rendered, as Helm's registry client may render any chart under it: "+
+		"reference a chart pushed as a single manifest, not as an index",
+		len(manifests), strings.Join(kinds, ", "))
 }
 
 func renderHTTP(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error) {

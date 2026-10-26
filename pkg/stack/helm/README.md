@@ -123,9 +123,9 @@ digest is checked first. As helm-controller refuses to install them, a chart ver
 semver, a semver tag (with `_` read as `+`, the OCI tag form) naming another version than the
 chart's, build metadata aside, and a chart that is not a Helm v2 API chart (`apiVersion: v1` or
 `v2`) are refused; a tag that is not semver is not compared. HTTP repositories have no manifest
-digest, so `RenderChart` refuses `WithDigestVersion` for them. The version is computed for the
-chart `RenderChart` loaded: when the reference is an image index holding several charts, which
-chart Helm's pull loads is not fixed and may not be the one helm-controller selects.
+digest, so `RenderChart` refuses `WithDigestVersion` for them. A root that reaches more than one
+manifest is refused before any chart is loaded (see Notes), so the version is not computed for a
+chart picked among several.
 
 <!-- doc-example: pkg/stack/helm ExampleWithDigestVersion -->
 ```go
@@ -162,6 +162,9 @@ fmt.Print(string(manifests))
 // opts customizes the release identity; see WithReleaseName and WithNamespace.
 // WithDigest pins an OCI chart to a manifest digest; WithDigestVersion renders
 // it at its digest-qualified version.
+// An OCI image index is rendered only when it names exactly one image
+// manifest; any other index, and a root naming a subject, is refused (see
+// Notes).
 func RenderChart(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error)
 
 // RenderOption customizes how a chart is rendered: the release identity, the
@@ -183,8 +186,8 @@ func WithDigest(digest string) RenderOption
 // installs it as: the chart's semver version with its build metadata replaced
 // by the first 12 hex characters of the pulled manifest digest. Non-semver
 // versions, a semver tag naming another version, non-v2 charts and HTTP
-// repositories are refused. The version is computed for the chart loaded,
-// which for an image index holding several charts is not fixed.
+// repositories are refused. A root that reaches more than one manifest is
+// refused before any chart is loaded.
 func WithDigestVersion() RenderOption
 ```
 
@@ -274,5 +277,20 @@ func SplitByHookWeight(objects []client.Object) []HookGroup
   is pulled.
 - Without `WithDigestVersion`, `.Chart.Version` is the version in the chart's `Chart.yaml`, which
   differs from the version helm-controller installs an OCI chart at.
+- An OCI reference that resolves to an image index is rendered only when the index names exactly
+  one image manifest, whether or not the index carries its optional `mediaType` field. A root
+  that can reach more than one manifest is refused with an error naming `chartURL:version`, before
+  any chart is loaded, with or without `WithDigest` or `WithDigestVersion`:
+  - an index naming more than one manifest;
+  - an index holding a nested index, whatever that one holds;
+  - an index holding one chart manifest beside a manifest that is no chart;
+  - a root manifest naming a `subject`, whether it is an index or a chart manifest.
+
+  The rule is conservative on purpose. Helm's registry client pulls every manifest under the root,
+  a subject included, and keeps whichever chart it meets last, in no fixed order, so such a root
+  could render a different chart on each pull. The index lists its children by media type only,
+  without their content, so kure cannot tell a chart child from any other. Only the root is
+  inspected: a subject named by the single child of an index is not seen. Reference a chart pushed
+  as a single manifest, not as an index.
 - Comma-separated hook annotations (e.g. `"pre-install,post-install"`) are
   treated as a single opaque phase and placed in the unknown group.

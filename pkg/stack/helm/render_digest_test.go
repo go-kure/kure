@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -20,13 +21,20 @@ func sha256Digest(b []byte) string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
-// fakeRegistry is an in-process OCI distribution endpoint serving one chart
-// manifest under one tag, over plain HTTP.
+// fakeRegistry is an in-process OCI distribution endpoint serving one root
+// manifest under one tag, over plain HTTP: a chart manifest, or an image
+// index whose child manifests it serves by digest.
 type fakeRegistry struct {
 	srv      *httptest.Server
 	repo     string // e.g. "charts/testchart"
 	tag      string
 	manifest []byte
+	// mediaType is the root manifest's media type; empty means an image
+	// manifest.
+	mediaType string
+	// children are the manifests an index root lists, by digest, each with
+	// its media type.
+	children map[string]fakeManifest
 	blobs    map[string][]byte
 	// headerDigest, when set, is sent as Docker-Content-Digest instead of the
 	// manifest's real digest.
@@ -34,26 +42,29 @@ type fakeRegistry struct {
 	requests     atomic.Int64
 }
 
-// newFakeRegistry serves the chart archive built by buildMinimalChartTar
-// under charts/testchart:0.1.0. annotation goes into the manifest, so two
-// registries built with different annotations serve the same chart under
-// different manifest digests, as a re-pushed tag does.
-func newFakeRegistry(t *testing.T, annotation string) *fakeRegistry {
-	t.Helper()
-	return newFakeRegistryWithChart(t, annotation, "0.1.0", "0.1.0", buildMinimalChartTar(t, "testchart", "0.1.0"))
+// fakeManifest is a manifest the fake registry serves: its media type, its
+// bytes and the blobs it names. An unlisted one is served by digest but left
+// out of the index, as a nested index's own child is.
+type fakeManifest struct {
+	mediaType string
+	data      []byte
+	blobs     map[string][]byte
+	unlisted  bool
 }
 
-// newFakeRegistryWithChart serves chartTar, whose Chart.yaml version is
-// chartVersion, as charts/testchart under tag.
-func newFakeRegistryWithChart(t *testing.T, annotation, tag, chartVersion string, chartTar []byte) *fakeRegistry {
+// chartManifest returns the chart manifest of chartTar, whose Chart.yaml
+// names name at chartVersion, and the blobs it names (config and chart
+// layer). annotation goes into the manifest, so two manifests built with
+// different annotations have different digests.
+func chartManifest(t *testing.T, annotation, name, chartVersion string, chartTar []byte) ([]byte, map[string][]byte) {
 	t.Helper()
-	config, err := json.Marshal(map[string]string{"apiVersion": "v2", "name": "testchart", "version": chartVersion})
+	config, err := json.Marshal(map[string]string{"apiVersion": "v2", "name": name, "version": chartVersion})
 	if err != nil {
 		t.Fatalf("marshal config: %v", err)
 	}
 	manifest, err := json.Marshal(map[string]any{
 		"schemaVersion": 2,
-		"mediaType":     "application/vnd.oci.image.manifest.v1+json",
+		"mediaType":     imageManifestMediaType,
 		"config": map[string]any{
 			"mediaType": registry.ConfigMediaType,
 			"digest":    sha256Digest(config),
@@ -69,14 +80,94 @@ func newFakeRegistryWithChart(t *testing.T, annotation, tag, chartVersion string
 	if err != nil {
 		t.Fatalf("marshal manifest: %v", err)
 	}
+	return manifest, map[string][]byte{sha256Digest(config): config, sha256Digest(chartTar): chartTar}
+}
+
+// newFakeIndexRegistry serves under charts/testchart:0.1.0 an image index
+// listing children, each a manifest it serves by digest. A child is a chart
+// manifest (chartManifest) or any other manifest with its media type.
+func newFakeIndexRegistry(t *testing.T, children ...fakeManifest) *fakeRegistry {
+	t.Helper()
+	var listed []fakeManifest
+	for _, c := range children {
+		if !c.unlisted {
+			listed = append(listed, c)
+		}
+	}
+	return newFakeRootRegistry(t, indexOf(t, listed...), children...)
+}
+
+// newFakeRootRegistry serves root under charts/testchart:0.1.0 with its media
+// type as Content-Type, and each of served by digest, with every blob they
+// name.
+func newFakeRootRegistry(t *testing.T, root fakeManifest, served ...fakeManifest) *fakeRegistry {
+	t.Helper()
+	fr := &fakeRegistry{
+		repo:      "charts/testchart",
+		tag:       "0.1.0",
+		manifest:  root.data,
+		mediaType: root.mediaType,
+		children:  map[string]fakeManifest{},
+		blobs:     maps.Clone(root.blobs),
+	}
+	if fr.blobs == nil {
+		fr.blobs = map[string][]byte{}
+	}
+	for _, c := range served {
+		fr.children[sha256Digest(c.data)] = c
+		maps.Copy(fr.blobs, c.blobs)
+	}
+	fr.srv = httptest.NewServer(http.HandlerFunc(fr.serve))
+	t.Cleanup(fr.srv.Close)
+	return fr
+}
+
+// indexOf returns an image index listing children.
+func indexOf(t *testing.T, children ...fakeManifest) fakeManifest {
+	t.Helper()
+	descs := []map[string]any{}
+	for _, c := range children {
+		descs = append(descs, descriptorOf(c))
+	}
+	data, err := json.Marshal(map[string]any{"schemaVersion": 2, "mediaType": imageIndexMediaType, "manifests": descs})
+	if err != nil {
+		t.Fatalf("marshal index: %v", err)
+	}
+	return fakeManifest{mediaType: imageIndexMediaType, data: data}
+}
+
+// descriptorOf returns the OCI descriptor naming m.
+func descriptorOf(m fakeManifest) map[string]any {
+	return map[string]any{"mediaType": m.mediaType, "digest": sha256Digest(m.data), "size": len(m.data)}
+}
+
+// chartChild is the manifest of a chart built by buildMinimalChartTar as an
+// index child.
+func chartChild(t *testing.T, name, version string) fakeManifest {
+	t.Helper()
+	manifest, blobs := chartManifest(t, "1", name, version, buildMinimalChartTar(t, name, version))
+	return fakeManifest{mediaType: imageManifestMediaType, data: manifest, blobs: blobs}
+}
+
+// newFakeRegistry serves the chart archive built by buildMinimalChartTar
+// under charts/testchart:0.1.0. annotation goes into the manifest, so two
+// registries built with different annotations serve the same chart under
+// different manifest digests, as a re-pushed tag does.
+func newFakeRegistry(t *testing.T, annotation string) *fakeRegistry {
+	t.Helper()
+	return newFakeRegistryWithChart(t, annotation, "0.1.0", "0.1.0", buildMinimalChartTar(t, "testchart", "0.1.0"))
+}
+
+// newFakeRegistryWithChart serves chartTar, whose Chart.yaml version is
+// chartVersion, as charts/testchart under tag.
+func newFakeRegistryWithChart(t *testing.T, annotation, tag, chartVersion string, chartTar []byte) *fakeRegistry {
+	t.Helper()
+	manifest, blobs := chartManifest(t, annotation, "testchart", chartVersion, chartTar)
 	fr := &fakeRegistry{
 		repo:     "charts/testchart",
 		tag:      tag,
 		manifest: manifest,
-		blobs: map[string][]byte{
-			sha256Digest(config):   config,
-			sha256Digest(chartTar): chartTar,
-		},
+		blobs:    blobs,
 	}
 	fr.srv = httptest.NewServer(http.HandlerFunc(fr.serve))
 	t.Cleanup(fr.srv.Close)
@@ -92,19 +183,26 @@ func (fr *fakeRegistry) serve(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	case strings.HasPrefix(r.URL.Path, manifestPrefix):
 		ref := strings.TrimPrefix(r.URL.Path, manifestPrefix)
-		if ref != fr.tag && ref != sha256Digest(fr.manifest) {
+		m := fakeManifest{mediaType: fr.mediaType, data: fr.manifest}
+		digest := sha256Digest(fr.manifest)
+		if ref == fr.tag || ref == digest {
+			if fr.headerDigest != "" {
+				digest = fr.headerDigest
+			}
+		} else if child, ok := fr.children[ref]; ok {
+			m, digest = child, ref
+		} else {
 			http.NotFound(w, r)
 			return
 		}
-		digest := sha256Digest(fr.manifest)
-		if fr.headerDigest != "" {
-			digest = fr.headerDigest
+		if m.mediaType == "" {
+			m.mediaType = imageManifestMediaType
 		}
-		w.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+		w.Header().Set("Content-Type", m.mediaType)
 		w.Header().Set("Docker-Content-Digest", digest)
-		w.Header().Set("Content-Length", strconv.Itoa(len(fr.manifest)))
+		w.Header().Set("Content-Length", strconv.Itoa(len(m.data)))
 		if r.Method != http.MethodHead {
-			_, _ = w.Write(fr.manifest)
+			_, _ = w.Write(m.data)
 		}
 	case strings.HasPrefix(r.URL.Path, blobPrefix):
 		blob, ok := fr.blobs[strings.TrimPrefix(r.URL.Path, blobPrefix)]
