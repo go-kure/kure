@@ -115,11 +115,40 @@ func isFluxKustomizationCheck(apiVersion, kind string) bool {
 }
 
 // treeObject is one object a kustomize build of a layout of the tree holds
-// (builtItems), as written: its group, kind, namespace and name, and the
-// layout that holds it.
+// (builtItems), as written: its group, kind, namespace and name, whether its
+// labels or annotations let the apply leave it uncreated (skipsApply), and
+// the layout that holds it.
 type treeObject struct {
 	group, kind, namespace, name string
+	skipped                      bool
 	host                         *layout.ManifestLayout
+}
+
+// skipsApply reports whether metadata, an object's labels or annotations,
+// lets kustomize-controller leave the object uncreated:
+// kustomize.toolkit.fluxcd.io/ssa IfNotPresent or Ignore, or
+// kustomize.toolkit.fluxcd.io/reconcile disabled, matched on a label or an
+// annotation and without regard to case (fluxcd/pkg/ssa v0.78.0
+// utils/meta.go:61-71).
+func skipsApply(metadata map[string]string) bool {
+	ssa := metadata["kustomize.toolkit.fluxcd.io/ssa"]
+	return strings.EqualFold(ssa, "IfNotPresent") || strings.EqualFold(ssa, "Ignore") ||
+		strings.EqualFold(metadata["kustomize.toolkit.fluxcd.io/reconcile"], "disabled")
+}
+
+// unresolved reports whether s, a field of an object's identity as written,
+// may become another value at apply: postBuild substitution rewrites "$"
+// variables, and SOPS decryption "ENC[" values. Neither is valid in a name.
+func unresolved(s string) bool {
+	return strings.Contains(s, "$") || strings.Contains(s, "ENC[")
+}
+
+// kubernetesCreated reports whether Kubernetes itself creates the object of
+// group, kind and name in every namespace: the ServiceAccount default and the
+// ConfigMap kube-root-ca.crt. A tree may legitimately write either, to add to
+// it, so neither has a certain writer.
+func kubernetesCreated(group, kind, name string) bool {
+	return group == "" && (kind == "ServiceAccount" && name == "default" || kind == "ConfigMap" && name == "kube-root-ca.crt")
 }
 
 // treeGenerator is one configMapGenerator entry of a layout of the tree.
@@ -146,7 +175,10 @@ func (t *kustomizationTree) objectIndex() error {
 			if err != nil {
 				return errors.Wrapf(err, "layout %q: read an object as written", l.FullRepoPath())
 			}
-			t.objects = append(t.objects, treeObject{group: apiGroup(apiVersion), kind: kind, namespace: obj.GetNamespace(), name: obj.GetName(), host: l})
+			t.objects = append(t.objects, treeObject{
+				group: apiGroup(apiVersion), kind: kind, namespace: obj.GetNamespace(), name: obj.GetName(),
+				skipped: skipsApply(obj.GetLabels()) || skipsApply(obj.GetAnnotations()), host: l,
+			})
 		}
 		for _, gen := range l.ConfigMapGenerators {
 			t.generators = append(t.generators, treeGenerator{name: gen.Name, host: l})
@@ -183,12 +215,21 @@ func apiGroup(apiVersion string) string {
 // v1.9.5 internal/inventory/inventory.go:170-173). It is certain when every
 // match sits in a directory exactly one member's build holds (hostWriters),
 // the same member for all, that member's build transforms nothing
-// (transformsBuild), and no other build that transforms may write an object
-// of the same group and kind (transformedProducer). A check that names no namespace, or a match written with
-// none, leaves the writer uncertain: a namespaced object may be applied in
-// another namespace than its file says, and a cluster-scoped one may exist
-// before any apply. So does a configMapGenerator entry whose name the check's
-// starts with, as kustomize appends a content hash.
+// (transformsBuild) and its spec.commonMetadata does not let the apply skip
+// what it writes (skipsApply), and no other apply may write the object under
+// an identity its file does not show (transformedProducer). A check that
+// names no namespace, or a match written with none, leaves the writer
+// uncertain: a namespaced object may be applied in another namespace than its
+// file says, and a cluster-scoped one may exist before any apply. So do a
+// match whose labels or annotations let the apply skip it (skipsApply); an
+// object whose identity as written may change at apply (unresolved) and could
+// become the checked one; a configMapGenerator entry whose name the check's
+// starts with, as kustomize appends a content hash, or that may change at
+// apply; and an object Kubernetes creates itself (kubernetesCreated). An
+// object a controller creates, from a HelmRelease's chart, say, or a build
+// that is no directory of the tree, is not modelled: the check assumes an
+// object the tree writes is created only by the applies of the tree's
+// directories.
 func (t *kustomizationTree) objectWriter(apiVersion, kind, namespace, name string) (string, error) {
 	if err := t.objectIndex(); err != nil {
 		return "", err
@@ -197,8 +238,18 @@ func (t *kustomizationTree) objectWriter(apiVersion, kind, namespace, name strin
 		apiVersion = "apps/v1"
 	}
 	group := apiGroup(apiVersion)
+	if kubernetesCreated(group, kind, name) {
+		return "", nil
+	}
+	mayBe := func(written, checked string) bool { return written == checked || unresolved(written) }
 	var hosts []*layout.ManifestLayout
 	for _, o := range t.objects {
+		if unresolved(o.group) || unresolved(o.kind) || unresolved(o.namespace) || unresolved(o.name) {
+			if mayBe(o.group, group) && mayBe(o.kind, kind) && mayBe(o.name, name) && (o.namespace == "" || mayBe(o.namespace, namespace)) {
+				return "", nil
+			}
+			continue
+		}
 		if o.group != group || o.kind != kind || o.name != name {
 			continue
 		}
@@ -206,12 +257,15 @@ func (t *kustomizationTree) objectWriter(apiVersion, kind, namespace, name strin
 			return "", nil
 		}
 		if o.namespace == namespace {
+			if o.skipped {
+				return "", nil
+			}
 			hosts = append(hosts, o.host)
 		}
 	}
 	if group == "" && kind == "ConfigMap" {
 		for _, gen := range t.generators {
-			if name == gen.name || strings.HasPrefix(name, gen.name+"-") {
+			if name == gen.name || strings.HasPrefix(name, gen.name+"-") || unresolved(gen.name) {
 				return "", nil
 			}
 		}
@@ -224,17 +278,27 @@ func (t *kustomizationTree) objectWriter(apiVersion, kind, namespace, name strin
 		}
 		writer = ws[0]
 	}
-	if writer == "" || transformsBuild(t.byKey[writer]) || t.transformedProducer(group, kind) {
+	w := t.byKey[writer]
+	if writer == "" || transformsBuild(w) || w.Spec.CommonMetadata != nil &&
+		(skipsApply(w.Spec.CommonMetadata.Labels) || skipsApply(w.Spec.CommonMetadata.Annotations)) ||
+		t.transformedProducer(group, kind) {
 		return "", nil
 	}
 	return writer, nil
 }
 
 // transformedProducer reports whether another apply may write an object of
-// group and kind under an identity its file does not show: a Kustomization of
-// the tree on this cluster whose build transforms (transformsBuild) holds an
-// object of that group and kind, or, for a ConfigMap, a configMapGenerator
-// entry; or a Kustomization of the tree cannot be read in typed form.
+// group and kind under an identity its file does not show. That is so when a
+// Kustomization of the tree on this cluster:
+//   - cannot be read in typed form;
+//   - builds a directory of the tree and has spec.components, which may add
+//     any object;
+//   - has spec.patches and its build holds any object or configMapGenerator
+//     entry, local config included: a patch may change a kind, or keep what
+//     the build would drop as local config (patchesBuild);
+//   - otherwise transforms (transformsBuild: a name prefix or suffix, or a
+//     target namespace) and its build holds an object of group and kind, or,
+//     for a ConfigMap, a configMapGenerator entry.
 func (t *kustomizationTree) transformedProducer(group, kind string) bool {
 	ks := slices.Clone(t.kusts)
 	for _, keys := range t.others {
@@ -249,14 +313,22 @@ func (t *kustomizationTree) transformedProducer(group, kind string) bool {
 		}
 	}
 	for _, k := range ks {
-		if !transformsBuild(k) {
+		l := t.layoutAt[path.Clean(k.Spec.Path)]
+		if l == nil || !transformsBuild(k) {
 			continue
 		}
-		l := t.layoutAt[path.Clean(k.Spec.Path)]
-		if l == nil {
-			continue
+		if len(k.Spec.Components) > 0 {
+			return true
 		}
 		scope := buildScope(l)
+		if len(k.Spec.Patches) > 0 {
+			for _, s := range scope {
+				if len(s.Resources) > 0 || len(s.ConfigMapGenerators) > 0 {
+					return true
+				}
+			}
+			continue
+		}
 		for _, o := range t.objects {
 			if o.group == group && o.kind == kind && slices.Contains(scope, o.host) {
 				return true
