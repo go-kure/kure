@@ -53,7 +53,8 @@ scope proposal.
 
 ## The problem
 
-At `289ba622` plus go-kure/kure#1060, the generator already owns most of the root:
+At `289ba622` plus go-kure/kure#1060, the generator already owns most of the root (line numbers in
+this section are `bootstrap_generator.go` at that state):
 
 - path (`bootstrapDir`, `bootstrap_generator.go:323-325`);
 - namespace (`bg.DefaultNamespace`);
@@ -64,13 +65,13 @@ The issue's own probe showed that the path and namespace work. The rest is bound
 
 - **The modes name the root differently.** gotk takes the source name from the root node
   (`sourceName`, `:355-360`) and the Kustomization name from the generator's `BootstrapName`
-  (`:58-63`, `:556`). flux-operator names both `SyncName`, or the FluxInstance's namespace when
+  (`:58-63`, `:533`). flux-operator names both `SyncName`, or the FluxInstance's namespace when
   that is empty (flux-operator v0.58.1 `internal/controller/fluxinstance_controller.go:394-398`).
   A consumer that needs one identity across modes cannot state it.
-- **Tag only.** gotk sets `OCIRepositoryRef{Tag}` (`:622`). flux-operator renders an OCI sync ref
+- **Tag only.** gotk sets `OCIRepositoryRef{Tag}` (`:599`). flux-operator renders an OCI sync ref
   as `ref.tag` (`internal/builder/templates.go:437-438`). `SemVer` exists upstream in both
   `OCIRepositoryRef` and `GitRepositoryRef`.
-- **Prune diverges.** `BootstrapConfig.Prune` reached only the gotk Kustomization (`:562`).
+- **Prune diverges.** `BootstrapConfig.Prune` reached only the gotk Kustomization (`:539`).
   Its godoc promised that unset means `prune: false`. flux-operator renders `prune: true` and
   `interval: 10m0s` regardless (`templates.go:461-463`). So the same unset config garbage-collects
   in one mode and not in the other (`testdata/bootstrap-modes/prune-unset.txt`).
