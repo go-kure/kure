@@ -182,8 +182,9 @@ func apiGroup(apiVersion string) string {
 // it; an empty apiVersion is apps/v1, as Flux reads it (kustomize-controller
 // v1.9.5 internal/inventory/inventory.go:170-173). It is certain when every
 // match sits in a directory exactly one member's build holds (hostWriters),
-// the same member for all, and that member's build transforms nothing
-// (transformsBuild). A check that names no namespace, or a match written with
+// the same member for all, that member's build transforms nothing
+// (transformsBuild), and no other build that transforms may write an object
+// of the same group and kind (transformedProducer). A check that names no namespace, or a match written with
 // none, leaves the writer uncertain: a namespaced object may be applied in
 // another namespace than its file says, and a cluster-scoped one may exist
 // before any apply. So does a configMapGenerator entry whose name the check's
@@ -223,10 +224,53 @@ func (t *kustomizationTree) objectWriter(apiVersion, kind, namespace, name strin
 		}
 		writer = ws[0]
 	}
-	if writer == "" || transformsBuild(t.byKey[writer]) {
+	if writer == "" || transformsBuild(t.byKey[writer]) || t.transformedProducer(group, kind) {
 		return "", nil
 	}
 	return writer, nil
+}
+
+// transformedProducer reports whether another apply may write an object of
+// group and kind under an identity its file does not show: a Kustomization of
+// the tree on this cluster whose build transforms (transformsBuild) holds an
+// object of that group and kind, or, for a ConfigMap, a configMapGenerator
+// entry; or a Kustomization of the tree cannot be read in typed form.
+func (t *kustomizationTree) transformedProducer(group, kind string) bool {
+	ks := slices.Clone(t.kusts)
+	for _, keys := range t.others {
+		for _, key := range keys {
+			k := t.otherSpecs[key]
+			if k == nil {
+				return true
+			}
+			if k.Spec.KubeConfig == nil {
+				ks = append(ks, k)
+			}
+		}
+	}
+	for _, k := range ks {
+		if !transformsBuild(k) {
+			continue
+		}
+		l := t.layoutAt[path.Clean(k.Spec.Path)]
+		if l == nil {
+			continue
+		}
+		scope := buildScope(l)
+		for _, o := range t.objects {
+			if o.group == group && o.kind == kind && slices.Contains(scope, o.host) {
+				return true
+			}
+		}
+		if group == "" && kind == "ConfigMap" {
+			for _, gen := range t.generators {
+				if slices.Contains(scope, gen.host) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // hostWriters lists the Flux Kustomizations of the tree whose build holds

@@ -363,7 +363,8 @@ checked object before it evaluates any `spec.healthCheckExprs` entry, whatever t
 says. kure adds that wait only when the object's writer is certain: every copy of it, matched by
 group, kind, namespace and name as written (the version ignored; an empty `apiVersion` is
 `apps/v1`, as Flux reads it), sits in a directory exactly one Kustomization's build holds, the
-same one for all, and that build transforms nothing. A new refusal through a health check on such
+same one for all, that build transforms nothing, and no other build that transforms holds an object
+of the same group and kind. A new refusal through a health check on such
 an object comes only from such a wait. These leave the writer uncertain and add none, so a cycle
 through them passes:
 
@@ -372,7 +373,9 @@ through them passes:
 - a `configMapGenerator` entry whose name, or that name and a dash, begins the checked name, as
   kustomize appends a content hash;
 - a writer whose build transforms (`spec.patches`, `spec.components`, `spec.namePrefix`,
-  `spec.nameSuffix`, `spec.targetNamespace`);
+  `spec.nameSuffix`, `spec.targetNamespace`), or any other Kustomization of the tree whose build
+  transforms and holds an object of the checked group and kind (for a ConfigMap, also a
+  `configMapGenerator` entry), as it may apply that object under the checked identity;
 - a directory the Flux bootstrap applies, or that another Kustomization's build also holds, or a
   Kustomization of the tree that cannot be read before substitution, whose `spec.path` is unknown.
 
