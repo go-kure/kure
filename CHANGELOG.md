@@ -16,6 +16,54 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-beta.19] - 2026-10-26
+
+### Added
+
+- Render an OCI chart at the version helm-controller installs it as
+- Add stacktest, a generation-contract check for configs
+
+### Documentation
+
+- Say ImagePullSecret and Registry do not reach the flux-operator Deployment
+- Name ImagePullSecret in the domain-model bootstrap summary
+- Define generation-result ownership and augmentation
+- Link the generation-contract follow-ups
+- Correct generation-contract claims and citations
+- Correct three generation-contract claims
+- State the generation contract in the Flux workflow guide
+- Attribute the contract's writes to the right entry points
+- Say the walk does not add bundle labels
+- Reword the shared-map example for Bundle.Generate's new maps
+- Say kure writes to the returned objects, not into their maps
+- Pin the generation-ownership walker citations to a commit
+- Propose the bootstrap root contract and compare the modes
+- Qualify the bootstrap root contract by SourceURL and name the interval's input
+- Record the bootstrap root contract and the Prune rule as decided
+- Say the bootstrap source-access options are on main
+- Cite the FluxInstance sync interval at its line after the image pull secret change
+- Say the bootstrap Prune reaches nothing in flux-operator mode
+
+### Fixed
+
+- Pass ImagePullSecret to the FluxInstance distribution
+- NewBundle copies the labels map it is given
+- Skip a Generate entry holding a typed nil pointer
+- Refuse an OCI image index naming more than one manifest
+- Report every overlap stacktest's walk reaches
+- Keep alike map keys apart and consume covered overlaps
+- Refuse maps whose keys print alike in stacktest
+- Check a map's keys before walking its entries
+- Accept only string, bool and number map keys in stacktest
+- List internal sharings once by path, not by printed text
+- Find each internal sharing without building every pair
+
+### Testing
+
+- Pin entry-point walks and wrapper placement
+- Case 09 times the hung probe, not the whole check
+- Check the bootstrap sourceRef resolves to the emitted source
+
 ## [0.2.0-beta.18] - 2026-10-26
 
 ### Added
