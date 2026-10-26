@@ -75,11 +75,13 @@ type kustomizationTree struct {
 	// dropped lists, per layout, the keys of the Flux Kustomizations it holds
 	// that a build drops as local config (builtItems), droppedObjs each
 	// object and droppedDeps its spec.dependsOn as keys. They are no member,
-	// other or writer: only the wait of a build that patches what it holds
-	// (patchesBuild), which may keep one, reads them.
+	// other or writer: only one a build that patches what it holds
+	// (patchesBuild) may keep is read (keptDropped, from mayKeep, built on
+	// first use).
 	dropped     map[*layout.ManifestLayout][]string
 	droppedObjs map[string]client.Object
 	droppedDeps map[string][]string
+	mayKeep     map[string]bool
 	reached     map[string]map[*layout.ManifestLayout]bool
 	fromRoot    map[*layout.ManifestLayout]bool
 }
@@ -376,10 +378,37 @@ func (t *kustomizationTree) deps(key string) []string {
 		}
 		return out
 	}
-	if d, ok := t.otherDeps[key]; ok {
-		return d
+	if t.keptDropped(key) {
+		return t.droppedDeps[key]
 	}
-	return t.droppedDeps[key]
+	return t.otherDeps[key]
+}
+
+// keptDropped reports whether the Flux Kustomization with key is one the tree
+// holds only as local config (dropped) that a build may still apply: the
+// build of another Kustomization that is the tree's (readsLocalBuild) and
+// patches what it holds (patchesBuild) holds it, so a patch may keep it. A
+// member or other Kustomization with the same key is read instead. One no
+// such build holds is not there, whoever names it.
+func (t *kustomizationTree) keptDropped(key string) bool {
+	if t.byKey[key] != nil || t.otherObjs[key] != nil {
+		return false
+	}
+	if t.mayKeep == nil {
+		t.mayKeep = map[string]bool{}
+		for _, o := range t.otherKeys {
+			k := t.otherSpecs[o]
+			if k == nil || !patchesBuild(k) || t.builds(o) == nil {
+				continue
+			}
+			for _, b := range buildScope(t.layoutAt[path.Clean(k.Spec.Path)]) {
+				for _, d := range t.dropped[b] {
+					t.mayKeep[d] = true
+				}
+			}
+		}
+	}
+	return t.mayKeep[key]
 }
 
 // terminals returns the terminal leaves of umbrella u: for each Kustomization

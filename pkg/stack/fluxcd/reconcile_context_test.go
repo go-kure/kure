@@ -329,19 +329,28 @@ func TestReconcileContext_TransformedBuildIsUnknown(t *testing.T) {
 // local config, depending on web; web depends on hand-written once
 // rewritten. With a patch or a component the check keeps the wait on inner
 // too and refuses the cycle; without one, or with a transform that cannot
-// change an annotation, inner is dropped and the rewrite is accepted.
+// change an annotation, inner is dropped and the rewrite is accepted, even
+// where hand-written depends on it by name. A kept inner that health-checks
+// web, instead of depending on it, closes the same cycle through its own
+// readiness.
 func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 	patch := "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: inner\n  namespace: flux-system\n  annotations:\n    " + localConfigAnnotation + `: "false"` + "\n"
 	cases := map[string]struct {
 		edit    func(k *kustv1.Kustomization)
+		check   bool
 		refused bool
 	}{
-		"patch":       {func(k *kustv1.Kustomization) { k.Spec.Patches = []kustomize.Patch{{Patch: patch}} }, true},
-		"component":   {func(k *kustv1.Kustomization) { k.Spec.Components = []string{"../keep-inner"} }, true},
-		"no patch":    {func(*kustv1.Kustomization) {}, false},
-		"name prefix": {func(k *kustv1.Kustomization) { k.Spec.NamePrefix = "x-" }, false},
+		"patch":                  {func(k *kustv1.Kustomization) { k.Spec.Patches = []kustomize.Patch{{Patch: patch}} }, false, true},
+		"component":              {func(k *kustv1.Kustomization) { k.Spec.Components = []string{"../keep-inner"} }, false, true},
+		"patch, health check":    {func(k *kustv1.Kustomization) { k.Spec.Patches = []kustomize.Patch{{Patch: patch}} }, true, true},
+		"no patch":               {func(*kustv1.Kustomization) {}, false, false},
+		"no patch, health check": {func(*kustv1.Kustomization) {}, true, false},
+		"no patch, dependsOn inner": {func(k *kustv1.Kustomization) {
+			k.Spec.DependsOn = []kustv1.DependencyReference{{Name: "inner"}}
+		}, false, false},
+		"name prefix": {func(k *kustv1.Kustomization) { k.Spec.NamePrefix = "x-" }, false, false},
 	}
-	build := func(edit func(k *kustv1.Kustomization), dir string) *stack.Cluster {
+	build := func(edit func(k *kustv1.Kustomization), dir string, check bool) *stack.Cluster {
 		k := handWritten("hand-written")
 		k.Spec.Wait = true
 		if dir != "" {
@@ -350,7 +359,12 @@ func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 		edit(k)
 		var hw client.Object = k
 		dropped := "true"
-		var inner client.Object = annotateLocalConfig(handWritten("inner", "web"), &dropped)
+		in := handWritten("inner", "web")
+		if check {
+			in = handWritten("inner")
+			in.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "web"}}
+		}
+		var inner client.Object = annotateLocalConfig(in, &dropped)
 		apps := []*stack.Application{
 			stack.NewApplication("platform-app", "default", &fakeAppConfig{objs: []*client.Object{&hw}}),
 			stack.NewApplication("seed-app", "default", &fakeAppConfig{objs: []*client.Object{&inner}}),
@@ -358,14 +372,14 @@ func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 		return noWaitCluster(srBundle("platform", apps...), true)
 	}
 	for _, placement := range integratedPlacements {
-		first, err := integrateNoWait(build(func(*kustv1.Kustomization) {}, ""), nodeOnly, placement)
+		first, err := integrateNoWait(build(func(*kustv1.Kustomization) {}, "", false), nodeOnly, placement)
 		if err != nil {
 			t.Fatalf("%s: first integration: %v", placement, err)
 		}
 		seed := hostDirectory(t, first, "inner")
 		for name, c := range cases {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
-				ml, err := integrateNoWait(build(c.edit, seed), nodeOnly, placement)
+				ml, err := integrateNoWait(build(c.edit, seed, c.check), nodeOnly, placement)
 				if !c.refused {
 					if err != nil {
 						t.Fatalf("got %v, want the rewrite accepted", err)
@@ -373,9 +387,49 @@ func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 					assertDependsOn(t, ml, "web", "hand-written")
 					return
 				}
-				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "ready flux-system/hand-written -> ready flux-system/inner -> apply flux-system/inner -> ready flux-system/web -> apply flux-system/web") {
+				chain := "ready flux-system/hand-written -> ready flux-system/inner -> apply flux-system/inner -> ready flux-system/web -> apply flux-system/web"
+				if c.check {
+					chain = "ready flux-system/hand-written -> ready flux-system/inner -> ready flux-system/web -> apply flux-system/web"
+				}
+				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), chain) {
 					t.Fatalf("got %v, want ErrUmbrellaDependency naming the chain through inner", err)
 				}
+			})
+		}
+	}
+}
+
+// A Kustomization the tree holds as local config is read only where a build
+// that patches what it holds may keep it. Without one it is not there: a live
+// namesake keeps its own dependsOn, none here, so platform's terminal leaves
+// stay a and b, and a dependsOn naming it from outside the tree reads nothing
+// of it, so inner's dependency on web closes no cycle.
+func TestReconcileContext_LocalConfigUnpatchedIsNotRead(t *testing.T) {
+	dropped := "true"
+	cases := map[string]struct {
+		objs func() []client.Object
+		want []string
+	}{
+		"live namesake": {func() []client.Object {
+			return []client.Object{handWritten("a"), handWritten("b"), annotateLocalConfig(handWritten("a", "b"), &dropped)}
+		}, []string{"a", "b"}},
+		"dependsOn from outside the tree": {func() []client.Object {
+			return []client.Object{handWritten("hand-written", "inner"), annotateLocalConfig(handWritten("inner", "web"), &dropped)}
+		}, []string{"hand-written"}},
+	}
+	for name, c := range cases {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				var objs []*client.Object
+				for _, o := range c.objs() {
+					objs = append(objs, &o)
+				}
+				app := stack.NewApplication("platform-app", "default", &fakeAppConfig{objs: objs})
+				ml, err := integrateNoWait(noWaitCluster(srBundle("platform", app), true), nodeOnly, placement)
+				if err != nil {
+					t.Fatalf("got %v, want the rewrite accepted", err)
+				}
+				assertDependsOn(t, ml, "web", c.want...)
 			})
 		}
 	}
