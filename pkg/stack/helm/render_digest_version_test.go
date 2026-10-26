@@ -29,12 +29,20 @@ data:
 // template is labelledChartTemplate.
 func buildLabelledChartTar(t *testing.T, chartVersion string) []byte {
 	t.Helper()
+	return buildNamedLabelledChartTar(t, "testchart", chartVersion)
+}
+
+// buildNamedLabelledChartTar builds an archive of chart name at chartVersion
+// whose one template is labelledChartTemplate, so the output names the chart
+// that rendered it.
+func buildNamedLabelledChartTar(t *testing.T, name, chartVersion string) []byte {
+	t.Helper()
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)
 	files := map[string]string{
-		"testchart/Chart.yaml":        "apiVersion: v2\nname: testchart\nversion: " + chartVersion + "\n",
-		"testchart/templates/cm.yaml": labelledChartTemplate,
+		name + "/Chart.yaml":        "apiVersion: v2\nname: " + name + "\nversion: " + chartVersion + "\n",
+		name + "/templates/cm.yaml": labelledChartTemplate,
 	}
 	for path, content := range files {
 		if err := tw.WriteHeader(&tar.Header{Name: path, Mode: 0o600, Size: int64(len(content))}); err != nil {

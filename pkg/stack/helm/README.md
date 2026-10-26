@@ -88,11 +88,15 @@ fmt.Print(string(manifests))
 
 **Digest pinning (OCI only, optional):**
 
-`WithDigest` pins an OCI chart to a manifest digest. `RenderChart` still pulls `chartURL:version`,
-then compares the digest of the manifest it received with the pinned one, and returns an error
-naming both when they differ, before rendering anything. A tag re-pushed with other content is
-refused instead of rendered. The digest must be `sha256:` followed by 64 lowercase hex characters;
-any other value, the empty string included, is refused before the pull. HTTP repositories have no
+`WithDigest` pins an OCI chart to a manifest digest: `RenderChart` renders the manifest with that
+digest and nothing else. It still pulls `chartURL:version`, then compares the digest of the
+manifest it received with the pinned one. When they differ and the received manifest is an OCI
+image index listing an image manifest with the pinned digest, `RenderChart` pulls that child on its
+own, by digest, and renders it: this is how one chart is rendered out of a multi-chart index. The
+tag then only finds the index; the content is fixed by the digest. Any other difference is an error
+naming both digests, before rendering anything, so a tag re-pushed with other content is refused
+instead of rendered. The digest must be `sha256:` followed by 64 lowercase hex characters; any
+other value, the empty string included, is refused before the pull. HTTP repositories have no
 manifest digest, so `RenderChart` refuses `WithDigest` for them.
 
 <!-- doc-example: pkg/stack/helm ExampleWithDigest -->
@@ -125,7 +129,8 @@ chart's, build metadata aside, and a chart that is not a Helm v2 API chart (`api
 `v2`) are refused; a tag that is not semver is not compared. HTTP repositories have no manifest
 digest, so `RenderChart` refuses `WithDigestVersion` for them. A root that reaches more than one
 manifest is refused before any chart is loaded (see Notes), so the version is not computed for a
-chart picked among several.
+chart picked among several. A child `WithDigest` selects from an image index is versioned from its
+own digest, and the tag check applies to that child's chart version.
 
 <!-- doc-example: pkg/stack/helm ExampleWithDigestVersion -->
 ```go
@@ -163,8 +168,9 @@ fmt.Print(string(manifests))
 // WithDigest pins an OCI chart to a manifest digest; WithDigestVersion renders
 // it at its digest-qualified version.
 // An OCI image index is rendered only when it names exactly one image
-// manifest; any other index, and a root naming a subject, is refused (see
-// Notes).
+// manifest, or when WithDigest names one of the image manifests it lists,
+// which is pulled and rendered on its own; any other index, and a root naming
+// a subject, is refused (see Notes).
 func RenderChart(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error)
 
 // RenderOption customizes how a chart is rendered: the release identity, the
@@ -178,8 +184,9 @@ func WithReleaseName(name string) RenderOption
 func WithNamespace(namespace string) RenderOption
 
 // WithDigest pins an OCI chart to a manifest digest ("sha256:" + 64 lowercase
-// hex). A pulled manifest with another digest is an error; HTTP repositories
-// refuse the option.
+// hex). A pulled image index listing an image manifest with that digest has
+// that child pulled on its own and rendered; any other manifest with another
+// digest is an error; HTTP repositories refuse the option.
 func WithDigest(digest string) RenderOption
 
 // WithDigestVersion renders an OCI chart at the version Flux's helm-controller
@@ -187,7 +194,8 @@ func WithDigest(digest string) RenderOption
 // by the first 12 hex characters of the pulled manifest digest. Non-semver
 // versions, a semver tag naming another version, non-v2 charts and HTTP
 // repositories are refused. A root that reaches more than one manifest is
-// refused before any chart is loaded.
+// refused before any chart is loaded; a child WithDigest selects is versioned
+// from its own digest.
 func WithDigestVersion() RenderOption
 ```
 
@@ -278,9 +286,10 @@ func SplitByHookWeight(objects []client.Object) []HookGroup
 - Without `WithDigestVersion`, `.Chart.Version` is the version in the chart's `Chart.yaml`, which
   differs from the version helm-controller installs an OCI chart at.
 - An OCI reference that resolves to an image index is rendered only when the index names exactly
-  one image manifest, whether or not the index carries its optional `mediaType` field. A root
-  that can reach more than one manifest is refused with an error naming `chartURL:version`, before
-  any chart is loaded, with or without `WithDigest` or `WithDigestVersion`:
+  one image manifest, whether or not the index carries its optional `mediaType` field, or when
+  `WithDigest` selects one of its children (below). Otherwise a root that can reach more than one
+  manifest is refused with an error naming `chartURL:version`, before any chart is loaded, with or
+  without `WithDigestVersion`, and with `WithDigest` pinned to the root's own digest:
   - an index naming more than one manifest;
   - an index holding a nested index, whatever that one holds;
   - an index holding one chart manifest beside a manifest that is no chart;
@@ -291,6 +300,17 @@ func SplitByHookWeight(objects []client.Object) []HookGroup
   could render a different chart on each pull. The index lists its children by media type only,
   without their content, so kure cannot tell a chart child from any other. Only the root is
   inspected: a subject named by the single child of an index is not seen. Reference a chart pushed
-  as a single manifest, not as an index.
+  as a single manifest, not as an index, or select one child with `WithDigest`.
+- `WithDigest` with the digest of an image manifest an image index lists renders that child of a
+  multi-chart index: the child is chosen from the index's own manifest list and pulled on its own,
+  by digest, so the chart Helm kept from the tag's pull is never the one rendered. The selection is
+  refused, naming `chartURL:version`, for a digest the index does not list, one it lists as
+  anything but an image manifest (a nested index, for one), a selected child whose content is
+  itself an index, names a `subject` or names a manifest as its config or a layer, and an index
+  root naming a `subject`. The tag's pull still copies every child under the index, so an index
+  whose other children cannot be pulled fails before the selection.
+- With `WithDigestVersion`, a semver tag must equal the selected child's chart version, build
+  metadata aside, so a child of another version is selected through a tag that is not semver.
+  This follows from the tag check above; it is not a separate rule.
 - Comma-separated hook annotations (e.g. `"pre-install,post-install"`) are
   treated as a single opaque phase and placed in the unknown group.

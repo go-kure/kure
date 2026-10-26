@@ -65,12 +65,18 @@ func WithNamespace(namespace string) RenderOption {
 }
 
 // WithDigest pins an OCI chart to a manifest digest: "sha256:" followed by 64
-// lowercase hex characters. RenderChart still pulls chartURL:version, then
-// compares the digest of the manifest it received with digest and returns an
-// error naming both when they differ, before rendering anything. A malformed
-// digest, the empty string included, is refused before any pull. HTTP
-// repositories have no manifest digest, so RenderChart refuses this option
-// for them.
+// lowercase hex characters. RenderChart renders the manifest with that digest
+// and nothing else. It still pulls chartURL:version. When the manifest it
+// received has another digest and is an OCI image index listing an image
+// manifest with digest, RenderChart pulls that child on its own, by digest,
+// and renders it: this selects one chart out of a multi-chart index. The tag
+// then only finds the index; the content is fixed by digest. Any other
+// difference is an error naming both digests, returned before rendering
+// anything, as is a digest the index lists as anything but an image manifest
+// and a selected child that is itself an index, names a subject or names a
+// manifest as its config or a layer. A malformed digest, the empty string
+// included, is refused before any pull. HTTP repositories have no manifest
+// digest, so RenderChart refuses this option for them.
 func WithDigest(digest string) RenderOption {
 	return func(o *renderOptions) { o.digest, o.digestSet = digest, true }
 }
@@ -88,7 +94,9 @@ func WithDigest(digest string) RenderOption {
 // them. HTTP repositories have no manifest digest, so RenderChart refuses this
 // option for them. A root that reaches more than one manifest is refused
 // before any chart is loaded (see RenderChart), so the version is not computed
-// for a chart picked among several.
+// for a chart picked among several. A child WithDigest selects from an image
+// index is versioned from its own digest, and a semver tag must name that
+// child's chart version.
 func WithDigestVersion() RenderOption {
 	return func(o *renderOptions) { o.digestVersion = true }
 }
@@ -113,13 +121,15 @@ func WithDigestVersion() RenderOption {
 //
 // An OCI reference that resolves to an image index is rendered only when the
 // index names exactly one image manifest, whether or not the index carries
-// its optional mediaType field. Any other index is refused with an error
-// naming the reference, before any chart is loaded, with or without WithDigest
-// or WithDigestVersion: one naming several manifests, one holding a nested
-// index, and one holding a chart manifest beside a manifest that is no chart.
-// A root manifest naming a subject, index or not, is refused the same way.
-// Only the root is inspected. Reference a chart pushed as a single manifest
-// instead.
+// its optional mediaType field, or when WithDigest names one of the image
+// manifests it lists, which is then pulled and rendered on its own. Any other
+// index is refused with an error naming the reference, before any chart is
+// loaded, with or without WithDigest or WithDigestVersion: one naming several
+// manifests, one holding a nested index, and one holding a chart manifest
+// beside a manifest that is no chart. A root manifest naming a subject, index
+// or not, is refused the same way. Only the root, and a child WithDigest
+// selects, is inspected. Reference a chart pushed as a single manifest
+// instead, or pin the child to render with WithDigest.
 func RenderChart(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error) {
 	var ro renderOptions
 	for _, opt := range opts {
@@ -156,10 +166,11 @@ func renderOCI(chartURL, version string, values map[string]any, ro renderOptions
 	// result.Manifest.Digest is the digest of the manifest bytes received:
 	// the registry client verifies the content against it while pulling.
 	if ro.digestSet && result.Manifest.Digest != ro.digest {
-		return nil, errors.Errorf("chart %s:%s: pulled manifest digest %s does not match pinned digest %s",
-			chartURL, version, result.Manifest.Digest, ro.digest)
-	}
-	if err := checkPullRoot(result.Manifest.Data); err != nil {
+		result, err = pullIndexChild(client, chartURL, version, result, ro.digest)
+		if err != nil {
+			return nil, err
+		}
+	} else if err := checkPullRoot(result.Manifest.Data); err != nil {
 		return nil, errors.Wrapf(err, "chart %s:%s", chartURL, version)
 	}
 	chrt, err := loader.LoadArchive(bytes.NewReader(result.Chart.Data))
@@ -225,33 +236,17 @@ const (
 // refused whatever it holds. Any other root is accepted; one that is not
 // JSON, which Helm's pull has already decoded, is an error.
 func checkPullRoot(root []byte) error {
-	var doc struct {
-		MediaType string `json:"mediaType"`
-		Subject   *struct {
-			MediaType string `json:"mediaType"`
-			Digest    string `json:"digest"`
-		} `json:"subject"`
-		Manifests *[]struct {
-			MediaType string `json:"mediaType"`
-		} `json:"manifests"`
-	}
-	if err := json.Unmarshal(root, &doc); err != nil {
+	doc, err := readManifest(root)
+	if err != nil {
 		return errors.Wrap(err, "read pulled root manifest")
 	}
 	if doc.Subject != nil {
-		return errors.Errorf("the reference's root manifest names a subject (%s %s), which Helm's registry client pulls too, "+
-			"so it may render the chart under either: reference a chart pushed as a single manifest without a subject",
-			doc.Subject.MediaType, doc.Subject.Digest)
+		return subjectError("the reference's root manifest", doc)
 	}
-	if doc.MediaType != imageIndexMediaType && doc.Manifests == nil {
+	if !doc.isIndex() {
 		return nil
 	}
-	var manifests []struct {
-		MediaType string `json:"mediaType"`
-	}
-	if doc.Manifests != nil {
-		manifests = *doc.Manifests
-	}
+	manifests := doc.manifests()
 	if len(manifests) == 1 && manifests[0].MediaType == imageManifestMediaType {
 		return nil
 	}
@@ -263,6 +258,139 @@ func checkPullRoot(root []byte) error {
 		"only an index naming exactly one image manifest is rendered, as Helm's registry client may render any chart under it: "+
 		"reference a chart pushed as a single manifest, not as an index",
 		len(manifests), strings.Join(kinds, ", "))
+}
+
+// pullIndexChild renders WithDigest's digest when the pulled root is not it:
+// when root is an OCI image index listing an image manifest with that digest,
+// it pulls that child on its own, by digest, and returns it. The chart Helm
+// kept from the root's pull is never used: that pull copies every child and
+// keeps the last chart layer it meets, in no fixed order. A root naming a
+// subject, a digest the index does not list or lists as anything but an image
+// manifest, and a child that is itself an index, names a subject or names a
+// manifest as its config or a layer, are refused. A root that is no index
+// gives the digest mismatch error.
+func pullIndexChild(client *registry.Client, chartURL, version string, root *registry.PullResult, digest string) (*registry.PullResult, error) {
+	doc, err := readManifest(root.Manifest.Data)
+	if err != nil {
+		return nil, errors.Wrapf(err, "chart %s:%s: read pulled root manifest", chartURL, version)
+	}
+	if !doc.isIndex() {
+		return nil, errors.Errorf("chart %s:%s: pulled manifest digest %s does not match pinned digest %s",
+			chartURL, version, root.Manifest.Digest, digest)
+	}
+	if doc.Subject != nil {
+		return nil, errors.Wrapf(subjectError("the reference's root manifest", doc), "chart %s:%s", chartURL, version)
+	}
+	manifests := doc.manifests()
+	i := slices.IndexFunc(manifests, func(m ociDescriptor) bool { return m.Digest == digest })
+	if i < 0 {
+		listed := make([]string, 0, len(manifests))
+		for _, m := range manifests {
+			listed = append(listed, m.Digest)
+		}
+		return nil, errors.Errorf("chart %s:%s: pulled manifest digest %s does not match pinned digest %s, "+
+			"and that image index lists no manifest with the pinned digest [%s]",
+			chartURL, version, root.Manifest.Digest, digest, strings.Join(listed, ", "))
+	}
+	if mt := manifests[i].MediaType; mt != imageManifestMediaType {
+		return nil, errors.Errorf("chart %s:%s: pinned digest %s names a manifest of media type %s in the image index; "+
+			"only an image manifest child is rendered", chartURL, version, digest, mt)
+	}
+	child, err := client.Pull(chartURL + "@" + digest)
+	if err != nil {
+		return nil, errors.Wrapf(err, "chart %s:%s: pull index child %s", chartURL, version, digest)
+	}
+	if child.Manifest.Digest != digest {
+		return nil, errors.Errorf("chart %s:%s: pulled index child digest %s does not match pinned digest %s",
+			chartURL, version, child.Manifest.Digest, digest)
+	}
+	if err := checkSelectedChild(child.Manifest.Data, digest); err != nil {
+		return nil, errors.Wrapf(err, "chart %s:%s", chartURL, version)
+	}
+	return child, nil
+}
+
+// manifestMediaTypes are the media types oras-go's copy, under Helm's pull,
+// fetches as a manifest and copies on from, wherever a descriptor names one.
+var manifestMediaTypes = []string{
+	imageIndexMediaType,
+	imageManifestMediaType,
+	"application/vnd.oci.artifact.manifest.v1+json",
+	"application/vnd.docker.distribution.manifest.v2+json",
+	"application/vnd.docker.distribution.manifest.list.v2+json",
+}
+
+// checkSelectedChild refuses a selected index child, pulled on its own, that
+// can reach more than one manifest: one whose content is an image index, by
+// its mediaType or a manifests list of any length, one naming a subject, and
+// one whose config or a layer has a manifest media type, which Helm's pull
+// copies on from as another manifest.
+func checkSelectedChild(data []byte, digest string) error {
+	doc, err := readManifest(data)
+	if err != nil {
+		return errors.Wrapf(err, "read selected manifest %s", digest)
+	}
+	if doc.Subject != nil {
+		return subjectError("the selected manifest "+digest, doc)
+	}
+	if doc.isIndex() {
+		return errors.Errorf("the selected manifest %s is itself an image index, which Helm's registry client may render any chart under: "+
+			"pin an image manifest", digest)
+	}
+	for _, d := range append([]ociDescriptor{doc.Config}, doc.Layers...) {
+		if slices.Contains(manifestMediaTypes, d.MediaType) {
+			return errors.Errorf("the selected manifest %s names %s of manifest media type %s as its config or a layer, "+
+				"which Helm's registry client pulls too, so it may render the chart under either: pin a chart manifest whose config and layers are blobs",
+				digest, d.Digest, d.MediaType)
+		}
+	}
+	return nil
+}
+
+// manifestDoc is what RenderChart reads of a pulled manifest: its media type,
+// its subject, for an image manifest its config and layers and, for an image
+// index, the manifests it lists.
+type manifestDoc struct {
+	MediaType string `json:"mediaType"`
+	Subject   *struct {
+		MediaType string `json:"mediaType"`
+		Digest    string `json:"digest"`
+	} `json:"subject"`
+	Config    ociDescriptor    `json:"config"`
+	Layers    []ociDescriptor  `json:"layers"`
+	Manifests *[]ociDescriptor `json:"manifests"`
+}
+
+// ociDescriptor is what RenderChart reads of an OCI descriptor.
+type ociDescriptor struct {
+	MediaType string `json:"mediaType"`
+	Digest    string `json:"digest"`
+}
+
+func readManifest(data []byte) (manifestDoc, error) {
+	var doc manifestDoc
+	err := json.Unmarshal(data, &doc)
+	return doc, err
+}
+
+// isIndex reports an OCI image index, recognized by its mediaType or, as that
+// field is optional, by its manifests list.
+func (d manifestDoc) isIndex() bool {
+	return d.MediaType == imageIndexMediaType || d.Manifests != nil
+}
+
+func (d manifestDoc) manifests() []ociDescriptor {
+	if d.Manifests == nil {
+		return nil
+	}
+	return *d.Manifests
+}
+
+// subjectError refuses what, a manifest naming a subject.
+func subjectError(what string, d manifestDoc) error {
+	return errors.Errorf("%s names a subject (%s %s), which Helm's registry client pulls too, "+
+		"so it may render the chart under either: reference a chart pushed as a single manifest without a subject",
+		what, d.Subject.MediaType, d.Subject.Digest)
 }
 
 func renderHTTP(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error) {

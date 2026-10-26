@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -40,6 +41,16 @@ type fakeRegistry struct {
 	// manifest's real digest.
 	headerDigest string
 	requests     atomic.Int64
+	// blobGets counts the GET requests for each blob, by digest.
+	blobGetsMu sync.Mutex
+	blobGets   map[string]int
+}
+
+// blobGetCount returns how many times the blob with digest d was fetched.
+func (fr *fakeRegistry) blobGetCount(d string) int {
+	fr.blobGetsMu.Lock()
+	defer fr.blobGetsMu.Unlock()
+	return fr.blobGets[d]
 }
 
 // fakeManifest is a manifest the fake registry serves: its media type, its
@@ -205,10 +216,19 @@ func (fr *fakeRegistry) serve(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write(m.data)
 		}
 	case strings.HasPrefix(r.URL.Path, blobPrefix):
-		blob, ok := fr.blobs[strings.TrimPrefix(r.URL.Path, blobPrefix)]
+		d := strings.TrimPrefix(r.URL.Path, blobPrefix)
+		blob, ok := fr.blobs[d]
 		if !ok {
 			http.NotFound(w, r)
 			return
+		}
+		if r.Method == http.MethodGet {
+			fr.blobGetsMu.Lock()
+			if fr.blobGets == nil {
+				fr.blobGets = map[string]int{}
+			}
+			fr.blobGets[d]++
+			fr.blobGetsMu.Unlock()
 		}
 		w.Header().Set("Content-Length", strconv.Itoa(len(blob)))
 		if r.Method != http.MethodHead {
