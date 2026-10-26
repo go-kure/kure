@@ -3,6 +3,7 @@ package fluxcd_test
 import (
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -545,6 +546,82 @@ func TestMissedCycles_UncertainWriterAddsNoEdge(t *testing.T) {
 				a.Resources = append(a.Resources, h)
 			},
 		},
+		// b-longer writes the ConfigMap default/ready; a holds only a Secret
+		// of that name, and a patch may change its kind.
+		"a patch may change a kind": {cluster: func() *stack.Cluster {
+			c := pairCluster(check("default", "ready"), []client.Object{unstructuredObj("v1", "Secret", "default", "ready")}, []client.Object{cm("default", "ready")})
+			c.Node.Children[0].Bundle.Patches = []stack.Patch{{Patch: "- op: replace", Target: &stack.PatchSelector{Kind: "Secret", Name: "ready"}}}
+			return c
+		}},
+		// b-longer writes default/ready; a holds its own copy as local config,
+		// which a patch may keep, and otherwise no ConfigMap.
+		"a patch may keep a local-config object": {cluster: func() *stack.Cluster {
+			local := cm("default", "ready")
+			local.SetAnnotations(map[string]string{"config.kubernetes.io/local-config": "true"})
+			c := pairCluster(check("default", "ready"), []client.Object{unstructuredObj("v1", "Secret", "default", "a-secret"), local}, []client.Object{cm("default", "ready")})
+			c.Node.Children[0].Bundle.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "ready"}}}
+			return c
+		}},
+		// b-longer writes red/ready; a's application emits h, which builds a's
+		// directory, holding no ConfigMap, with a component, which may add any
+		// object.
+		"another Kustomization's component may add it": {
+			cluster: func() *stack.Cluster {
+				return pairCluster(check("red", "ready"), []client.Object{unstructuredObj("v1", "Secret", "default", "a-secret")}, []client.Object{cm("red", "ready")})
+			},
+			walked: func(t *testing.T, ml *layout.ManifestLayout) {
+				a := findLayout(ml, "a-secret")
+				if a == nil {
+					t.Fatal("no layout holds a-secret")
+				}
+				h := handWritten("h")
+				h.Spec.Path = "./" + a.FullRepoPath()
+				h.Spec.Components = []string{"../component"}
+				a.Resources = append(a.Resources, h)
+			},
+		},
+		// b-longer writes red/ready; a writes ready in a namespace postBuild
+		// substitutes, which may be red.
+		"a's match has a substituted namespace": {cluster: func() *stack.Cluster {
+			return pairCluster(check("red", "ready"), []client.Object{cm("${NS}", "ready")}, []client.Object{cm("red", "ready")})
+		}},
+		// As above, with the name SOPS encrypts.
+		"a's match has an encrypted name": {cluster: func() *stack.Cluster {
+			return pairCluster(check("red", "ready"), []client.Object{cm("red", "ENC[AES256_GCM,data:cmVhZHk=,type:str]")}, []client.Object{cm("red", "ready")})
+		}},
+		// b-longer writes b-cm, and a generates a ConfigMap whose name
+		// postBuild substitutes, which may be b-cm.
+		"a generates a ConfigMap with a substituted name": {
+			cluster: func() *stack.Cluster {
+				return pairCluster(check("default", "b-cm"), []client.Object{cm("default", "a-cm")}, []client.Object{cm("default", "b-cm")})
+			},
+			walked: func(t *testing.T, ml *layout.ManifestLayout) {
+				l := findLayout(ml, "a-cm")
+				if l == nil {
+					t.Fatal("no layout holds a-cm")
+				}
+				l.ConfigMapGenerators = append(l.ConfigMapGenerators, layout.ConfigMapGeneratorSpec{Name: "${CM_NAME}", Files: []string{"values.yaml"}})
+				l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: "values.yaml", Content: []byte("k: v\n")})
+			},
+		},
+		// b-longer writes red/ready only if it does not exist yet.
+		"b's copy is applied only if absent": {cluster: func() *stack.Cluster {
+			copyIfAbsent := cm("red", "ready")
+			copyIfAbsent.SetAnnotations(map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "IfNotPresent"})
+			return pairCluster(check("red", "ready"), []client.Object{cm("default", "a-cm")}, []client.Object{copyIfAbsent})
+		}},
+		// b-longer writes red/ready, labelled so its apply skips it.
+		"b's copy is not reconciled": {cluster: func() *stack.Cluster {
+			disabled := cm("red", "ready")
+			disabled.SetLabels(map[string]string{"kustomize.toolkit.fluxcd.io/reconcile": "Disabled"})
+			return pairCluster(check("red", "ready"), []client.Object{cm("default", "a-cm")}, []client.Object{disabled})
+		}},
+		// b-longer adds to red/default, which Kubernetes creates in every
+		// namespace.
+		"Kubernetes creates it": {cluster: func() *stack.Cluster {
+			return pairCluster(stack.HealthCheck{APIVersion: "v1", Kind: "ServiceAccount", Namespace: "red", Name: "default"},
+				[]client.Object{cm("default", "a-cm")}, []client.Object{unstructuredObj("v1", "ServiceAccount", "red", "default")})
+		}},
 	}
 	for name, c := range cases {
 		for _, placement := range append(slices.Clone(integratedPlacements), layout.FluxSeparate) {
@@ -555,6 +632,42 @@ func TestMissedCycles_UncertainWriterAddsNoEdge(t *testing.T) {
 				}
 				if err := integrateWalked(t, c.cluster(), placement, walked); err != nil {
 					t.Fatalf("got %v, want the tree admitted", err)
+				}
+			})
+		}
+	}
+}
+
+// A kept writer whose spec.commonMetadata lets its apply skip what it writes
+// may not create the checked object: a's kept Kustomization health-checks
+// red/ready, which only b-longer's build holds, and b-longer depends on a.
+// Without that metadata the edge is certain and the cycle is refused.
+func TestMissedCycles_KeptWriterThatSkipsItsObjectsAddsNoEdge(t *testing.T) {
+	for _, skip := range []bool{false, true} {
+		for _, placement := range integratedPlacements {
+			t.Run("skip="+strconv.FormatBool(skip)+"/"+string(placement), func(t *testing.T) {
+				c := pairCluster(stack.HealthCheck{}, []client.Object{unstructuredObj("v1", "ConfigMap", "default", "a-cm")}, []client.Object{unstructuredObj("v1", "ConfigMap", "red", "ready")})
+				c.Node.Children[0].Bundle.HealthChecks = nil
+				rules := withPlacement(nodeOnly, placement)
+				ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+				if err != nil {
+					t.Fatalf("CreateLayoutWithResources: %v", err)
+				}
+				byName := kustomizationsByName(ml)
+				a, b := byName["a"], byName["b-longer"]
+				if a == nil || b == nil {
+					t.Fatalf("no a or b-longer in %s", describeKustomizations(ml))
+				}
+				checks("v1", "ConfigMap", "red", "ready")(a)
+				if skip {
+					b.Spec.CommonMetadata = &kustv1.CommonMetadata{Annotations: map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "Ignore"}}
+				}
+				err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+				if skip && err != nil {
+					t.Fatalf("got %v, want the tree admitted", err)
+				}
+				if !skip && (err == nil || !strings.Contains(err.Error(), "can never all become Ready")) {
+					t.Fatalf("got %v, want the cycle through a's health check refused", err)
 				}
 			})
 		}

@@ -363,8 +363,8 @@ checked object before it evaluates any `spec.healthCheckExprs` entry, whatever t
 says. kure adds that wait only when the object's writer is certain: every copy of it, matched by
 group, kind, namespace and name as written (the version ignored; an empty `apiVersion` is
 `apps/v1`, as Flux reads it), sits in a directory exactly one Kustomization's build holds, the
-same one for all, that build transforms nothing, and no other build that transforms holds an object
-of the same group and kind. A new refusal through a health check on such
+same one for all, that build transforms nothing and skips nothing, and no other build may write the
+object under an identity its file does not show. A new refusal through a health check on such
 an object comes only from such a wait. These leave the writer uncertain and add none, so a cycle
 through them passes:
 
@@ -372,12 +372,30 @@ through them passes:
   exist before any apply);
 - a `configMapGenerator` entry whose name, or that name and a dash, begins the checked name, as
   kustomize appends a content hash;
+- an object, or a `configMapGenerator` entry, anywhere in the tree whose group, kind, namespace or
+  name holds `$` (`spec.postBuild` substitution) or `ENC[` (SOPS) and so may become the checked
+  identity at apply;
+- a matching object whose labels or annotations, or its writer's `spec.commonMetadata`, carry
+  `kustomize.toolkit.fluxcd.io/ssa: IfNotPresent` or `Ignore`, or
+  `kustomize.toolkit.fluxcd.io/reconcile: disabled` (any case), as the apply may then skip it;
+- a ServiceAccount `default` or a ConfigMap `kube-root-ca.crt`, which Kubernetes creates in every
+  namespace; this list is closed;
 - a writer whose build transforms (`spec.patches`, `spec.components`, `spec.namePrefix`,
-  `spec.nameSuffix`, `spec.targetNamespace`), or any other Kustomization of the tree whose build
-  transforms and holds an object of the checked group and kind (for a ConfigMap, also a
-  `configMapGenerator` entry), as it may apply that object under the checked identity;
+  `spec.nameSuffix`, `spec.targetNamespace`), or any other Kustomization of the tree that may
+  write the object under another identity: one with `spec.components`, one with `spec.patches`
+  whose build holds any object or `configMapGenerator` entry (a patch may change a kind, or keep
+  an object marked `config.kubernetes.io/local-config`), or one with a name prefix or suffix or a
+  target namespace whose build holds an object of the checked group and kind (for a ConfigMap,
+  also a `configMapGenerator` entry). In practice, a tree whose other Kustomizations use patches
+  or components gets no object-existence edge;
 - a directory the Flux bootstrap applies, or that another Kustomization's build also holds, or a
   Kustomization of the tree that cannot be read before substitution, whose `spec.path` is unknown.
+
+The check assumes that an object the tree writes literally is created only by the applies of the
+tree's own directories. An object a controller creates (a HelmRelease's chart, an operator) or a
+build that is no directory of the tree applies (another source, or a path outside it) is outside
+that model: such a tree has two owners of one object, and the wait kure adds may name the wrong
+one.
 
 A `spec.healthCheckExprs` entry adds that existence wait only, never readiness. Without
 `UmbrellasDoNotWait` a Kustomization an application emits waits for nothing here: its
