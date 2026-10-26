@@ -392,10 +392,10 @@ through them passes:
   Kustomization of the tree that cannot be read before substitution, whose `spec.path` is unknown.
 
 The check assumes that an object the tree writes literally is created only by the applies of the
-tree's own directories. An object a controller creates (a HelmRelease's chart, an operator) or a
-build that is no directory of the tree applies (another source, or a path outside it) is outside
-that model: such a tree has two owners of one object, and the wait kure adds may name the wrong
-one.
+tree's own directories. An object that a controller also creates (a HelmRelease's chart, an
+operator), or that a Kustomization outside the modelled tree also writes (another source, or a
+path that is no directory of the tree), is outside the model: such a tree has two owners of one
+object, and the check can then refuse a tree Flux would converge.
 
 A `spec.healthCheckExprs` entry adds that existence wait only, never readiness. Without
 `UmbrellasDoNotWait` a Kustomization an application emits waits for nothing here: its
