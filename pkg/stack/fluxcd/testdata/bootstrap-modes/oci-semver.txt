@@ -1,0 +1,21 @@
+field                             | gotk                                         | flux-operator
+documents                         | 1 source, 1 Kustomization                    | FluxInstance with sync: 1 source, 1 Kustomization   <- differs
+source                            | OCIRepository flux-system/prod               | OCIRepository flux-system/flux-system   <- differs
+source.kind                       | OCIRepository                                | OCIRepository
+source.namespace                  | flux-system                                  | flux-system
+source.url                        | oci://registry.example.com/fleet             | oci://registry.example.com/fleet
+source.ref                        | semver: >=1.0.0 <2.0.0                       | tag: latest, patched to semver: >=1.0.0 <2.0.0   <- differs
+source.revision                   | semver >=1.0.0 <2.0.0                        | semver >=1.0.0 <2.0.0
+source.interval                   | 1h0m0s                                       | 1h0m0s
+source.secretRef                  | -                                            | -
+source.provider                   | -                                            | -
+source.insecure                   | false                                        | false
+kustomization                     | Kustomization flux-system/flux-system        | Kustomization flux-system/flux-system
+kustomization.namespace           | flux-system                                  | flux-system
+kustomization.sourceRef           | OCIRepository prod                           | OCIRepository flux-system   <- differs
+kustomization.sourceRef.namespace | -                                            | -
+kustomization.path                | demo                                         | ./demo   <- differs
+kustomization.directory           | demo                                         | demo
+kustomization.prune               | false                                        | true   <- differs
+kustomization.interval            | 1h0m0s                                       | 10m0s   <- differs
+patches                           | -                                            | OCIRepository/flux-system: - op: replace path: /spec/ref value: semver: ">=1.0.0 <2.0.0"   <- differs

@@ -12,6 +12,7 @@ import (
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	sigsyaml "sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
@@ -75,6 +76,10 @@ func gotkRoot(t *testing.T, objs []client.Object) rootView {
 			v["source.namespace"] = o.Namespace
 			v["source.url"] = o.Spec.URL
 			v["source.ref"], v["source.revision"] = "tag: "+o.Spec.Reference.Tag, "tag "+o.Spec.Reference.Tag
+			if r := o.Spec.Reference.SemVer; r != "" {
+				// source-controller takes ref.semver over ref.tag.
+				v["source.ref"], v["source.revision"] = "semver: "+r, "semver "+r
+			}
 			v["source.interval"] = o.Spec.Interval.Duration.String()
 			if o.Spec.SecretRef != nil {
 				v["source.secretRef"] = o.Spec.SecretRef.Name
@@ -151,6 +156,10 @@ func operatorRoot(t *testing.T, objs []client.Object) rootView {
 	switch s.Kind {
 	case "OCIRepository":
 		v["source.ref"], v["source.revision"] = "tag: "+s.Ref, "tag "+s.Ref
+		if r := patchedSemVer(t, fi, name); r != "" {
+			v["source.ref"] = "tag: " + s.Ref + ", patched to semver: " + r
+			v["source.revision"] = "semver " + r
+		}
 		v["source.insecure"] = "false"
 		if strings.Contains(v["patches"], "OCIRepository/"+name+": - op: add path: /spec/insecure value: true") {
 			v["source.insecure"] = "true"
@@ -177,6 +186,37 @@ func operatorRoot(t *testing.T, objs []client.Object) rootView {
 	return v
 }
 
+// patchedSemVer is the semver range a FluxInstance kustomize patch puts in
+// place of spec.ref on the sync's OCIRepository, named name, or "" when no
+// patch replaces it. The patch is read as JSON patch operations, so its
+// formatting does not matter.
+func patchedSemVer(t *testing.T, fi *fluxv1.FluxInstance, name string) string {
+	t.Helper()
+	if fi.Spec.Kustomize == nil {
+		return ""
+	}
+	var rng string
+	for _, p := range fi.Spec.Kustomize.Patches {
+		if p.Target == nil || p.Target.Kind != "OCIRepository" || p.Target.Name != name {
+			continue
+		}
+		var ops []struct {
+			Op    string         `json:"op"`
+			Path  string         `json:"path"`
+			Value map[string]any `json:"value"`
+		}
+		if err := sigsyaml.Unmarshal([]byte(p.Patch), &ops); err != nil {
+			continue // not a JSON patch on spec.ref: the insecure patch's value is a bool
+		}
+		for _, op := range ops {
+			if op.Op == "replace" && op.Path == "/spec/ref" {
+				rng, _ = op.Value["semver"].(string)
+			}
+		}
+	}
+	return rng
+}
+
 // bootstrapModeConfigs is the shared matrix: each config is rendered in both
 // modes.
 func bootstrapModeConfigs() map[string]*stack.BootstrapConfig {
@@ -198,6 +238,8 @@ func bootstrapModeConfigs() map[string]*stack.BootstrapConfig {
 	pruneOff.Prune, pruneOn.Prune = &off, &on
 	access := config("OCIRepository", oci, "v1.2.3")
 	access.SourceSecretRef, access.SourceProvider, access.SourceInsecure = "registry-auth", "generic", true
+	semver := config("OCIRepository", oci, "")
+	semver.SourceSemVer = ">=1.0.0 <2.0.0"
 	return map[string]*stack.BootstrapConfig{
 		"oci-tag":         config("OCIRepository", oci, "v1.2.3"),
 		"oci-default-ref": config("", oci, ""),
@@ -207,6 +249,7 @@ func bootstrapModeConfigs() map[string]*stack.BootstrapConfig {
 		"prune-false":     pruneOff,
 		"prune-true":      pruneOn,
 		"source-access":   access,
+		"oci-semver":      semver,
 		"no-source":       config("", "", ""),
 	}
 }
