@@ -102,8 +102,8 @@ type BootstrapConfig struct {
 	// parse as a range. Empty leaves the ref to SourceRef as before.
 	SourceSemVer string `yaml:"sourceSemVer,omitempty"`
 
-	// Source access. The three options apply to an OCIRepository source only,
-	// and only with SourceURL set; any of them with a GitRepository source or
+	// Source access. These options apply to an OCIRepository source only, and
+	// only with SourceURL set; any of them with a GitRepository source or
 	// without SourceURL is an error. Unset, the source is generated as before.
 	//
 	// SourceSecretRef names the Secret, of type kubernetes.io/dockerconfigjson,
@@ -120,6 +120,16 @@ type BootstrapConfig struct {
 	// field, so in flux-operator mode it is a spec.kustomize patch setting
 	// spec.insecure on the OCIRepository the operator generates for the sync.
 	SourceInsecure bool `yaml:"sourceInsecure,omitempty"`
+	// SourceVerify, when set, makes the source verify the OCI artifact's
+	// signature before Flux applies it: spec.verify on the gotk OCIRepository.
+	// A FluxInstance sync has no such field, so in flux-operator mode it is a
+	// spec.kustomize patch adding spec.verify to the OCIRepository the
+	// operator generates for the sync. Its provider must be cosign or
+	// notation, and each identity's issuer and subject non-empty Go regular
+	// expressions holding no DEL, C1 control or noncharacter U+FFFE or U+FFFF
+	// literally (an escape such as \x{85} matches one); anything else is an
+	// error.
+	SourceVerify *SourceVerification `yaml:"sourceVerify,omitempty"`
 
 	// SyncName names the bootstrap source and Kustomization in both modes: in
 	// flux-operator mode the ones the FluxInstance sync creates
@@ -146,6 +156,26 @@ type BootstrapConfig struct {
 	// ArgoCD-specific (mock for now)
 	ArgoCDVersion   string `yaml:"argoCDVersion,omitempty"`
 	ArgoCDNamespace string `yaml:"argoCDNamespace,omitempty"`
+}
+
+// SourceVerification is source-controller's OCIRepositoryVerification in
+// kure's own type, so this package takes no Flux API dependency. Provider is
+// cosign, the default when empty, or notation. SecretRef and
+// TrustedRootSecretRef name Secrets in the source's namespace, holding the
+// trusted public keys and a Sigstore trusted_root.json; empty sets neither.
+type SourceVerification struct {
+	Provider             string              `yaml:"provider,omitempty"`
+	SecretRef            string              `yaml:"secretRef,omitempty"`
+	MatchOIDCIdentity    []OIDCIdentityMatch `yaml:"matchOIDCIdentity,omitempty"`
+	TrustedRootSecretRef string              `yaml:"trustedRootSecretRef,omitempty"`
+}
+
+// OIDCIdentityMatch matches a keyless cosign signature's certificate: Issuer
+// and Subject are Go regular expressions, both required. A signature is
+// verified when any one match in the list holds.
+type OIDCIdentityMatch struct {
+	Issuer  string `yaml:"issuer"`
+	Subject string `yaml:"subject"`
 }
 
 // Node represents a hierarchic structure holding all deployment bundles

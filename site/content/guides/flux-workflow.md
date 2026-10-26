@@ -1337,6 +1337,16 @@ They apply to an `OCIRepository` source with `SourceURL` set. Anything else is r
 `GitRepository` source, no `SourceURL`, or a provider an `OCIRepository` does not take.
 `ImagePullSecret` is a different secret: it is for pulling the Flux controller images.
 
+To make the source verify the artifact's signature before Flux applies it, set `SourceVerify`:
+a provider (`cosign`, the default, or `notation`), the Secret with the trusted public keys, and,
+for keyless cosign, the issuer and subject patterns the signing certificate must match. In
+`"gotk"` mode it is the generated `OCIRepository`'s `spec.verify`. In `"flux-operator"` mode it is
+a `spec.kustomize` patch adding `spec.verify` to the operator's sync source, as for plain HTTP. It
+takes the same `OCIRepository` source with `SourceURL`. An unknown provider, or an identity
+pattern that is empty, is not a Go regular expression, or holds DEL or a C1 control such as NEL
+literally (write `\x{85}` instead: the YAML carrying the pattern would fold or refuse it), is
+refused.
+
 To follow a release line instead of a fixed tag, set `SourceSemVer` to a semver range and leave
 `SourceRef` empty:
 
