@@ -372,9 +372,10 @@ through them passes:
   exist before any apply);
 - a `configMapGenerator` entry whose name, or that name and a dash, begins the checked name, as
   kustomize appends a content hash;
-- an object, or a `configMapGenerator` entry, anywhere in the tree whose group, kind, namespace or
-  name holds `$` (`spec.postBuild` substitution) or `ENC[` (SOPS) and so may become the checked
-  identity at apply;
+- an object whose `apiVersion`, kind, namespace or name holds `$` (`spec.postBuild` substitution)
+  or `ENC[` (SOPS), whatever it names, unless only the writer's own build holds it: another apply
+  may give it the checked identity. For a ConfigMap, so does a `configMapGenerator` entry anywhere
+  in the tree whose name holds either;
 - a matching object whose labels or annotations, or its writer's `spec.commonMetadata`, carry
   `kustomize.toolkit.fluxcd.io/ssa: IfNotPresent` or `Ignore`, or
   `kustomize.toolkit.fluxcd.io/reconcile: disabled` (any case), as the apply may then skip it;

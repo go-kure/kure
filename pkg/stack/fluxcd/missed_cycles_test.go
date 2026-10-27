@@ -589,6 +589,41 @@ func TestMissedCycles_UncertainWriterAddsNoEdge(t *testing.T) {
 		"a's match has an encrypted name": {cluster: func() *stack.Cluster {
 			return pairCluster(check("red", "ready"), []client.Object{cm("red", "ENC[AES256_GCM,data:cmVhZHk=,type:str]")}, []client.Object{cm("red", "ready")})
 		}},
+		// b-longer writes the Deployment red/web; a writes it too, under an
+		// apiVersion postBuild substitutes whole, which may be apps/v1.
+		"a's match has a substituted apiVersion": {cluster: func() *stack.Cluster {
+			return pairCluster(stack.HealthCheck{APIVersion: "apps/v1", Kind: "Deployment", Namespace: "red", Name: "web"},
+				[]client.Object{unstructuredObj("${API_VERSION}", "Deployment", "red", "web")},
+				[]client.Object{unstructuredObj("apps/v1", "Deployment", "red", "web")})
+		}},
+		// b-longer writes red/web-ready; a's application emits h, which builds
+		// a's directory with the name suffix -ready, and a's web sits in a
+		// group postBuild substitutes, so h may apply it as apps red/web-ready.
+		"another Kustomization's build renames a substituted object into it": {
+			cluster: func() *stack.Cluster {
+				return pairCluster(stack.HealthCheck{APIVersion: "apps/v1", Kind: "Deployment", Namespace: "red", Name: "web-ready"},
+					[]client.Object{cm("default", "a-cm"), unstructuredObj("${GROUP}/v1", "Deployment", "red", "web")},
+					[]client.Object{unstructuredObj("apps/v1", "Deployment", "red", "web-ready")})
+			},
+			walked: func(t *testing.T, ml *layout.ManifestLayout) {
+				a := findLayout(ml, "a-cm")
+				if a == nil {
+					t.Fatal("no layout holds a-cm")
+				}
+				h := handWritten("h")
+				h.Spec.Path = "./" + a.FullRepoPath()
+				h.Spec.NameSuffix = "-ready"
+				a.Resources = append(a.Resources, h)
+			},
+		},
+		// b-longer writes red/ready; a writes an object whose kind postBuild
+		// substitutes and whose name and namespace differ from the check's.
+		// Kustomize may still give it the checked identity (a replacement, a
+		// generator option), so any unresolved object outside the writer's
+		// build leaves the writer uncertain, whatever it names.
+		"a writes an unresolved object under another name": {cluster: func() *stack.Cluster {
+			return pairCluster(check("red", "ready"), []client.Object{unstructuredObj("v1", "${KIND}", "blue", "other")}, []client.Object{cm("red", "ready")})
+		}},
 		// b-longer writes b-cm, and a generates a ConfigMap whose name
 		// postBuild substitutes, which may be b-cm.
 		"a generates a ConfigMap with a substituted name": {
@@ -671,6 +706,24 @@ func TestMissedCycles_KeptWriterThatSkipsItsObjectsAddsNoEdge(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// An unresolved object in the writer's own build is that writer's, whatever
+// it becomes: a health-checks red/ready, only b-longer's build holds it and an
+// object whose namespace postBuild substitutes, and b-longer depends on a. The
+// edge stays certain and the cycle is refused.
+func TestMissedCycles_WritersOwnUnresolvedObjectKeepsTheEdge(t *testing.T) {
+	for _, placement := range append(slices.Clone(integratedPlacements), layout.FluxSeparate) {
+		t.Run(string(placement), func(t *testing.T) {
+			c := pairCluster(stack.HealthCheck{APIVersion: "v1", Kind: "ConfigMap", Namespace: "red", Name: "ready"},
+				[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "a-cm")},
+				[]client.Object{unstructuredObj("v1", "ConfigMap", "red", "ready"), unstructuredObj("v1", "ConfigMap", "${NS}", "ready")})
+			err := integrateWalked(t, c, placement, nil)
+			if err == nil || !strings.Contains(err.Error(), "can never all become Ready") {
+				t.Fatalf("got %v, want the cycle through a's health check refused", err)
+			}
+		})
 	}
 }
 
