@@ -115,12 +115,13 @@ func isFluxKustomizationCheck(apiVersion, kind string) bool {
 }
 
 // treeObject is one object a kustomize build of a layout of the tree holds
-// (builtItems), as written: its group, kind, namespace and name, whether its
+// (builtItems), as written: its group, kind, namespace and name, whether any
+// of those, or its apiVersion, may change at apply (unresolved), whether its
 // labels or annotations let the apply leave it uncreated (skipsApply), and
 // the layout that holds it.
 type treeObject struct {
 	group, kind, namespace, name string
-	skipped                      bool
+	unresolved, skipped          bool
 	host                         *layout.ManifestLayout
 }
 
@@ -177,7 +178,8 @@ func (t *kustomizationTree) objectIndex() error {
 			}
 			t.objects = append(t.objects, treeObject{
 				group: apiGroup(apiVersion), kind: kind, namespace: obj.GetNamespace(), name: obj.GetName(),
-				skipped: skipsApply(obj.GetLabels()) || skipsApply(obj.GetAnnotations()), host: l,
+				unresolved: unresolved(apiVersion) || unresolved(kind) || unresolved(obj.GetNamespace()) || unresolved(obj.GetName()),
+				skipped:    skipsApply(obj.GetLabels()) || skipsApply(obj.GetAnnotations()), host: l,
 			})
 		}
 		for _, gen := range l.ConfigMapGenerators {
@@ -222,8 +224,9 @@ func apiGroup(apiVersion string) string {
 // uncertain: a namespaced object may be applied in another namespace than its
 // file says, and a cluster-scoped one may exist before any apply. So do a
 // match whose labels or annotations let the apply skip it (skipsApply); an
-// object whose identity as written may change at apply (unresolved) and could
-// become the checked one; a configMapGenerator entry whose name the check's
+// object whose apiVersion, kind, namespace or name may change at apply
+// (unresolved), whatever it names, unless only the writer's build holds it,
+// as another apply may give it the checked identity; a configMapGenerator entry whose name the check's
 // starts with, as kustomize appends a content hash, or that may change at
 // apply; and an object Kubernetes creates itself (kubernetesCreated). An
 // object a controller creates, from a HelmRelease's chart, say, or a build
@@ -241,16 +244,9 @@ func (t *kustomizationTree) objectWriter(apiVersion, kind, namespace, name strin
 	if kubernetesCreated(group, kind, name) {
 		return "", nil
 	}
-	mayBe := func(written, checked string) bool { return written == checked || unresolved(written) }
 	var hosts []*layout.ManifestLayout
 	for _, o := range t.objects {
-		if unresolved(o.group) || unresolved(o.kind) || unresolved(o.namespace) || unresolved(o.name) {
-			if mayBe(o.group, group) && mayBe(o.kind, kind) && mayBe(o.name, name) && (o.namespace == "" || mayBe(o.namespace, namespace)) {
-				return "", nil
-			}
-			continue
-		}
-		if o.group != group || o.kind != kind || o.name != name {
+		if o.unresolved || o.group != group || o.kind != kind || o.name != name {
 			continue
 		}
 		if o.namespace == "" {
@@ -278,8 +274,18 @@ func (t *kustomizationTree) objectWriter(apiVersion, kind, namespace, name strin
 		}
 		writer = ws[0]
 	}
+	if writer == "" {
+		return "", nil
+	}
+	for _, o := range t.objects {
+		if o.unresolved {
+			if ws, ok := t.hostWriters(o.host); !ok || len(ws) != 1 || ws[0] != writer {
+				return "", nil
+			}
+		}
+	}
 	w := t.byKey[writer]
-	if writer == "" || transformsBuild(w) || w.Spec.CommonMetadata != nil &&
+	if transformsBuild(w) || w.Spec.CommonMetadata != nil &&
 		(skipsApply(w.Spec.CommonMetadata.Labels) || skipsApply(w.Spec.CommonMetadata.Annotations)) ||
 		t.transformedProducer(group, kind) {
 		return "", nil
