@@ -16,6 +16,114 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-beta.20] - 2026-10-27
+
+### Breaking
+
+- Upgrade Flux to v2.10 and flux-operator to v0.62
+
+### Added
+
+- Select the bootstrap OCI source tag by a semver range
+- SyncName names the bootstrap root in gotk mode
+- Render a WithDigest-pinned index child instead of a mismatch
+- Verify the bootstrap OCI source's signature in both modes
+
+### Build
+
+- Update module github.com/controlplaneio-fluxcd/flux-operator to v0.62.1
+
+### Changed
+
+- Write the SourceVerify patch body with pkg/io; the pattern refusal rests on Flux's build
+
+### Documentation
+
+- Say gotk mode checks SyncName and only flux-operator mode passes it through unvalidated
+- State how Bundle.Generate keeps an object's annotations
+- State how Bundle.Generate keeps an object's annotations
+- Describe Bundle.Generate's map handling in one paragraph
+- Say which annotations map an object keeps when nothing is added
+- Say Bundle.Generate gives a new labels map only where the bundle sets labels
+- Say how a shared directory's patch target reads labels and annotations
+- State that the reconcile-order checks are conservative
+- Name two more kept-copy cycles the check misses
+- Say what is read of same-named kept copies
+- State the kept-copy gap as a class, not case by case
+- Keep the bootstrap note's audit line numbers at their commit
+- State that a recorded Path is cleaned with path.Clean
+- Name Flux's build as the reason the flux-workflow guide's pattern refusal stands
+- State that the reconcile-order check can refuse a tree another owner of an object converges
+- State the Flux 2.10 requirement in the library guide and mark the removed setter
+- Record the flux-operator v0.62.1 change and re-pin its citations
+
+### Fixed
+
+- Check the gotk root name as a source name only when it names the source
+- Validate SyncName where it names the gotk bootstrap objects
+- Name the gotk source by SyncName in sourceSemVer refusals
+- Skip objects kustomize drops as local-config when reading the tree
+- Leave local-config Kustomizations out of the tree-wide name check
+- Take no delivery annotations from a dropped Source copy
+- Read local-config values as kustomize does
+- Keep non-string annotations when adding delivery and bundle annotations
+- Read a typed List item's written annotations as written
+- Undo restores a nil Object; metadata that is no map takes nothing
+- Refuse a root or only child naming a manifest as config or layer
+- Refuse a root holding both image manifest fields and a manifests list
+- Match patch target selectors against labels and annotations as kustomize reads them
+- Read Flux Kustomizations in their context in reconcile-order checks
+- Read a null spec.kubeConfig as none on an unstructured Kustomization
+- Refuse no tree for a target another local build also writes
+- The placed reconcile-order check reads alternate writers too
+- An alternate writer counts only when it applies freely
+- A suspended alternate writer never counts; trace writers
+- Count another writer only when its spec cannot change what it applies
+- Keep the creation edge when an apply may skip the written Kustomization
+- Keep the wait of a Kustomization that transforms its build
+- Read a health-check expression on a Kustomization as readiness
+- Remove the alternate-writer admission as unsound
+- Keep no remote per-layout Kustomization whose Source is unresolved
+- Count local-config Kustomizations a patched build may keep
+- Read a local-config Kustomization only where a patched build holds it
+- Follow a patched build's kept copy beside a live namesake
+- Wait for both a kept copy and its live namesake
+- Refuse a kept local-config copy that cannot be read
+- YAML writers keep NEL, DEL, C1 controls, U+FFFE and U+FFFF as escapes, not folded or refused
+- Name the source in a verification provider refusal
+- Refuse keyless cosign verification without an identity match
+- Flux-operator mode honours an explicit Prune, so Prune false stops pruning there
+- Read an umbrella's locality from the integration's record
+- Compare Flux Kustomization records as kure reads identities
+- Read health checks on any kind and judge every edge on integration
+- Add only certain edges, and follow emitted Kustomizations only under the setting
+- Leave a health check's writer uncertain whenever a side has no namespace
+- Leave a health check's writer uncertain when another build may transform an object into it
+- Leave a health check's writer uncertain wherever another apply may produce or skip the object
+- Leave a health check's writer uncertain for any unresolved object outside its build
+- Drop a health check on a Kustomization named as its checker, as Flux does
+
+### Maintenance
+
+- Update go-kure/.github digest to 31dcd8b
+- Update go-kure/.github digest to 87e4304
+- Gate kustomize updates behind dashboard approval
+- Set the needs-human lane label on the kustomize rule
+
+### Testing
+
+- Compare the semver bootstrap source in both modes
+- Read the operator's sync source from the applied patches
+- Cover the annotation helpers in their own package
+- Compare whole objects after undo; cover the fallback paths
+- Pin that a dropped application namesake hides no umbrella member
+- Run the slow tests in parallel, building as Flux without its schema reset
+- Hold a repeated build of a tree to its first build
+- Keep TestMain's replay under the test timeout
+- Settle the replay's timeout before the package exits
+- Read the replay's timeout from the clock
+- Regenerate the flux-operator bootstrap goldens for v0.62.1
+
 ## [0.2.0-beta.19] - 2026-10-26
 
 ### Added
