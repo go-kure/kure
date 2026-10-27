@@ -203,8 +203,9 @@ with_stub_net() {
 # ---------------------------------------------------------------------------
 # sync-flux-operator-pin.sh helpers. A separate fixture from new_fixture: that
 # one builds a versions.yaml/docs tree for sync-versions.sh, this one builds
-# the four files the pin script reads or rewrites, and stubs only `curl`
-# (fixtures/stub-pin/curl) -- the script needs no go or git.
+# the files the pin script reads or rewrites, and stubs `curl` and `go`
+# (fixtures/stub-pin/) -- the script needs no git, and only the `go test
+# -update` that regenerates the stored bootstrap outputs.
 # ---------------------------------------------------------------------------
 SYNC_FLUX_OPERATOR_PIN="$TEST_DIR/../sync-flux-operator-pin.sh"
 PIN_MODULE="github.com/example/flux-operator"
@@ -267,11 +268,23 @@ GO
 The bundle is vendored (`FluxOperatorVersion`, currently **v0.1.0**). See the source.
 MD
     printf '%s' "$PIN_NEW_BUNDLE_BODY" > "$FIXTURE/new-bundle.yaml"
+    # Stored bootstrap outputs: two in flux-operator mode, whose summary line
+    # names the bundle, and one in gotk mode, which a flux-operator re-vendor
+    # must leave alone.
+    local golden name
+    mkdir -p "$FIXTURE/pkg/stack/fluxcd/testdata/bootstrap-output"
+    for name in flux-operator-oci flux-operator-git gotk-oci; do
+        golden="$FIXTURE/pkg/stack/fluxcd/testdata/bootstrap-output/$name.txt"
+        printf '=== install bundle: 3 objects, sha256 %064d ===\n' 0 > "$golden"
+        printf 'CustomResourceDefinition: 1\nDeployment: 1\nNamespace: 1\n=== generated: 1 objects ===\nkind: %s\n' "$name" >> "$golden"
+    done
 
     export SYNC_FLUX_OPERATOR_PIN_REPO_ROOT="$FIXTURE"
     export STUB_PIN_MODE="${STUB_PIN_MODE:-ok}"
     export STUB_PIN_BODY="$FIXTURE/new-bundle.yaml"
     export STUB_PIN_LOG="$FIXTURE/curl.log"
+    export STUB_PIN_GO_MODE="${STUB_PIN_GO_MODE:-digest}"
+    export STUB_PIN_GO_LOG="$FIXTURE/go.log"
     export PATH="$FIXTURES_DIR/stub-pin:$PATH"
 }
 

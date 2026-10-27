@@ -235,9 +235,10 @@ It's part of `mise run verify` and runs in CI as its own step, gated on
 changes (same path filter as `sync-versions.sh check` itself).
 
 The same harness also covers `scripts/sync-flux-operator-pin.sh` (the `flux-operator-pin` cases, using
-`new_pin_fixture`/`run_pin` and the stub `curl` in `scripts/test/fixtures/stub-pin/`):
+`new_pin_fixture`/`run_pin` and the stub `curl` and `go` in `scripts/test/fixtures/stub-pin/`):
 that script is a Renovate `postUpgradeTasks` command with no other coverage, and its
-contract is failure-shaped — leave the tree untouched on any bad input.
+contract is failure-shaped — leave the tree untouched on any bad input, and leave the
+stored bootstrap outputs as they were when it cannot accept their regeneration.
 
 **Adding a case:** every case follows the same shape — see `scripts/test/lib.sh` for the
 full helper reference (`new_fixture`, `yq_set`, `gomod_sub`, `run_check`/`run_generate`,
@@ -420,10 +421,21 @@ also means it does not overwrite a hand-edited bundle that is already at the rig
 version; to force a refresh, follow the manual procedure in the `FluxOperatorVersion`
 doc comment.
 
+A new bundle also changes the stored bootstrap outputs in
+`pkg/stack/fluxcd/testdata/bootstrap-output/`: each `flux-operator-*.txt` file starts with
+`=== install bundle: N objects, sha256 … ===`, a digest of the bundle. So when the bundle
+changed, the script regenerates those files with the tests' `-update` flag and keeps the
+result only when that line, with the same object count, is all that changed — a patch bump
+then arrives green with no hand edits (go-kure/kure#1150). Any wider change means the
+rendered bootstrap changed and needs a person to read it: the script puts every stored
+output back as it was, prints the diff and exits non-zero, so the bot's PR stays red on
+`test`. Review the change, then regenerate by hand with `go test ./pkg/stack/fluxcd/ -update`.
+
 It is wired as a command of the shared `gomod`/`mise` rule's `postUpgradeTasks` in
 `renovate.json`, not as its own rule (`postUpgradeTasks` has no merge semantics, so a
-second matching rule would replace the command list), and the three paths it writes are in
-that rule's `fileFilters` — an unlisted path is dropped from the bot's commit silently.
+second matching rule would replace the command list), and every path it writes, the stored
+`flux-operator-*.txt` outputs included, is in that rule's `fileFilters` — an unlisted path
+is dropped from the bot's commit silently.
 Run it by hand after bumping the module yourself:
 
 ```bash

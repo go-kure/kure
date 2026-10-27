@@ -1,0 +1,58 @@
+#!/bin/bash
+# Stub `go` for scripts/test/'s sync-flux-operator-pin.sh cases. The script
+# runs `go test ./pkg/stack/fluxcd/ -run <tests> -count=1 -update` from the
+# fixture root to regenerate the stored bootstrap outputs. This records the
+# arguments to $STUB_PIN_GO_LOG and, by $STUB_PIN_GO_MODE, rewrites the files
+# under pkg/stack/fluxcd/testdata/bootstrap-output the way a real run would:
+#
+#   digest  (default) the summary line of every flux-operator-*.txt file gets
+#           the sha256 of the vendored bundle, the object count kept
+#   body    as digest, plus one changed line further down a flux-operator file
+#   count   as digest, but with the object count changed in that line
+#   gotk    as digest, plus a changed summary line in a gotk-*.txt file
+#   added   as digest, plus a new flux-operator-*.txt file
+#   fail    as digest, then exits 1, like a test that failed half way
+set -euo pipefail
+
+if [[ -n "${STUB_PIN_GO_LOG:-}" ]]; then
+    printf '%s\n' "$*" >> "$STUB_PIN_GO_LOG"
+fi
+
+mode="${STUB_PIN_GO_MODE:-digest}"
+dir="pkg/stack/fluxcd/testdata/bootstrap-output"
+digest="$(sha256sum pkg/stack/fluxcd/flux_operator_install.yaml | cut -d' ' -f1)"
+
+# set_header FILE COUNT -- replace FILE's first line with the summary line.
+set_header() {
+    local file="$1" count="$2"
+    { printf '=== install bundle: %s objects, sha256 %s ===\n' "$count" "$digest"; tail -n +2 "$file"; } > "$file.tmp"
+    mv "$file.tmp" "$file"
+}
+
+for f in "$dir"/flux-operator-*.txt; do
+    count="$(head -n 1 "$f" | sed -nE 's/^=== install bundle: ([0-9]+) objects.*/\1/p')"
+    if [[ "$mode" == count ]]; then
+        count=$((count + 1))
+    fi
+    set_header "$f" "$count"
+done
+
+case "$mode" in
+    digest | count) ;;
+    body)
+        printf 'kind: FluxInstance changed\n' >> "$dir/flux-operator-oci.txt"
+        ;;
+    gotk)
+        set_header "$dir/gotk-oci.txt" 3
+        ;;
+    added)
+        cp "$dir/flux-operator-oci.txt" "$dir/flux-operator-extra.txt"
+        ;;
+    fail)
+        exit 1
+        ;;
+    *)
+        echo "stub-pin go: unknown STUB_PIN_GO_MODE '$mode'" >&2
+        exit 1
+        ;;
+esac
