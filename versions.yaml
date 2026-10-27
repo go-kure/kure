@@ -199,7 +199,7 @@ infrastructure:
     upstream_repo: "external-secrets/external-secrets"
     upstream_release: "v2.14.0"
     upstream_release_commit: "e932f3a3f6f274e8e269c01aa1f5fb3d1322e3c9"
-    supported_range: "2.9 - 2.13"
+    supported_range: "2.9 - 2.14"
     notes: |
       Module path changed from root to /apis submodule in v1.0 (#5494).
       No semver tags for apis submodule — go.mod pins a pseudo-version, so
@@ -229,6 +229,7 @@ infrastructure:
       targeting a cluster older than v2.11. Kure does not populate it itself.
       v2.12.0 adds three optional Conjur authenticators to ConjurAuth (IAM, Azure and GCP: new pointer fields and their types); nothing in externalsecrets/v1 is removed or retyped. The only other apis change is in generators/v1alpha1, which kure does not import. Build + tests pass unchanged.
       v2.13.0 changes nothing in externalsecrets/v1; the only apis type change is the v1beta1 ExternalSecret validator, which kure does not import. Its apis go.mod raises the go directive from 1.26.6 to 1.27.2, and kure's go.mod inherits that floor, so building kure (and any module that requires it) now needs Go 1.27.2. Build + tests pass unchanged.
+      v2.14.0 changes nothing kure imports: between the v2.13.0 and v2.14.0 pins the apis module differs only in generators/v1alpha1 (not imported) and its go.mod; externalsecrets/v1 and the root package are byte-identical. Its go.mod moves to k8s.io v0.37.1 and controller-runtime v0.25.2, which kure already uses, and lowers its go directive to 1.27.0. It also requires a k8s.io/kube-openapi built on structured-merge-diff v7, while apimachinery v0.37 uses v6, so a replace in kure's go.mod holds kube-openapi at its last v6 commit until the Kubernetes v0.38 bump (docs/dependency-updates.md). A replace does not reach modules that require kure: a consumer building against these versions needs the same replace in its own go.mod, or it fails to compile the same way. Build + tests pass unchanged.
   cnpg:
     go_module: "github.com/cloudnative-pg/cloudnative-pg"
     supported_range: "1.24 - 1.30"
