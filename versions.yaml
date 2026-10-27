@@ -137,7 +137,12 @@ infrastructure:
       CEL rule !has(self.readyExpr) || has(self.ready): a caller-built ResourceSet
       dependency with readyExpr set and ready false (omitted), which v0.58 admitted without
       evaluating the expression, is rejected at apply time; set Ready: true or drop
-      ReadyExpr. The install bundle and FluxOperatorVersion are re-pinned to v0.62.0.
+      ReadyExpr. v0.62.1 (from v0.62.0): no schema change; only the description of
+      FluxInstance spec.spiffe.mtls.componentIDTemplate changes, with the operator's mTLS
+      behaviour: with mTLS enabled, the flux-operator SPIFFE ID is authorized only when the
+      operator has a SPIFFE Workload API source, and as an artifact client only when its
+      embedded Web UI is enabled. The bootstrap output sets no spiffe field, so it is
+      unaffected. The install bundle and FluxOperatorVersion are re-pinned to v0.62.1.
   source-watcher:
     go_module: "github.com/fluxcd/source-watcher/api/v2"
     supported_range: "2.0 - 2.3"

@@ -179,7 +179,7 @@ them.
 directly under the walked root (`addSeparateFluxToLayout` in `layout_integrator.go`).
 
 **Bootstrap, flux-operator mode (the default).**
-- Emits the embedded flux-operator install bundle (`v0.62.0`) and a `FluxInstance` named `flux`.
+- Emits the embedded flux-operator install bundle (`v0.62.1`) and a `FluxInstance` named `flux`.
 - `distribution.registry` and `distribution.version` are written verbatim. `v0.2.0-beta.15` wrote
   an empty value too, as an empty string; since
   [go-kure/kure#975](https://github.com/go-kure/kure/issues/975) an empty value is an error.

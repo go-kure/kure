@@ -29,7 +29,7 @@ import (
 
 // rootView is the root one mode makes Flux create, field by field, as the
 // cluster sees it. In gotk mode that is the objects kure emits; in
-// flux-operator mode it is what flux-operator v0.62.0 renders from the
+// flux-operator mode it is what flux-operator v0.62.1 renders from the
 // FluxInstance's sync (internal/builder/templates.go: source and
 // Kustomization both named sync.name, or the FluxInstance's namespace when
 // that is empty; OCI ref as ref.tag, Git ref as ref.name; Kustomization
