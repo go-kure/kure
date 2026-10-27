@@ -3,7 +3,7 @@
 go = "1.27.3"
 golangci-lint = "2.15.0"
 git-cliff = "2.14.2"
-hugo = "0.168.0"
+hugo = "0.169.0"
 # Required by scripts/sync-versions.sh and its versions:test guard harness,
 # both now on `mise run verify`'s dependency graph -- a clean mise-managed
 # checkout with no system yq once failed `mise run verify` with no
