@@ -712,7 +712,7 @@
       "goType": "FluxInstance",
       "importPath": "github.com/controlplaneio-fluxcd/flux-operator/api/v1",
       "module": "github.com/controlplaneio-fluxcd/flux-operator",
-      "moduleVersion": "v0.62.0",
+      "moduleVersion": "v0.62.1",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -723,7 +723,7 @@
       "goType": "FluxReport",
       "importPath": "github.com/controlplaneio-fluxcd/flux-operator/api/v1",
       "module": "github.com/controlplaneio-fluxcd/flux-operator",
-      "moduleVersion": "v0.62.0",
+      "moduleVersion": "v0.62.1",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -734,7 +734,7 @@
       "goType": "ResourceSet",
       "importPath": "github.com/controlplaneio-fluxcd/flux-operator/api/v1",
       "module": "github.com/controlplaneio-fluxcd/flux-operator",
-      "moduleVersion": "v0.62.0",
+      "moduleVersion": "v0.62.1",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -745,7 +745,7 @@
       "goType": "ResourceSetInputProvider",
       "importPath": "github.com/controlplaneio-fluxcd/flux-operator/api/v1",
       "module": "github.com/controlplaneio-fluxcd/flux-operator",
-      "moduleVersion": "v0.62.0",
+      "moduleVersion": "v0.62.1",
       "namespaced": true,
       "scopeSource": "marker"
     },

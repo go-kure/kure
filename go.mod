@@ -37,7 +37,7 @@ require (
 	github.com/cloudnative-pg/cloudnative-pg v1.30.1
 	github.com/cloudnative-pg/machinery v0.6.1
 	github.com/cloudnative-pg/plugin-barman-cloud v0.15.1
-	github.com/controlplaneio-fluxcd/flux-operator v0.62.0
+	github.com/controlplaneio-fluxcd/flux-operator v0.62.1
 	github.com/envoyproxy/go-control-plane/envoy v1.40.0
 	github.com/external-secrets/external-secrets/apis v0.0.0-20261016092056-a82d14894fbc
 	github.com/fluxcd/flux2/v2 v2.10.0
