@@ -600,7 +600,8 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) erro
 // CR the root directory reaches is created by the Flux bootstrap. A CR the
 // build of another Kustomization of the tree also writes still waits for that
 // member's apply: whether the other applies first depends on controller
-// settings the tree does not carry, so it is no alternate creator. Under
+// settings the tree does not carry, so it is no alternate creator. A member's
+// wait leaves out the members its apply skips (unskipped). Under
 // separate placement every CR sits in flux-system, which the root lists.
 // checkTreeOrder then judges the members' edges again, each dependsOn as
 // written and each health check whose object has a certain writer, and with
@@ -611,7 +612,8 @@ func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string
 	if err != nil {
 		return err
 	}
-	if err := checkReconcileOrder(t.kusts, t.creator, t.applied); err != nil {
+	applied := func(key string) []string { return t.unskipped(t.byKey[key], t.applied(key)) }
+	if err := checkReconcileOrder(t.kusts, t.creator, applied); err != nil {
 		return err
 	}
 	return t.checkTreeOrder(others)
@@ -1080,6 +1082,9 @@ func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string)
 	set := set(kusts)
 	edges := map[string][]string{}
 	for _, k := range kusts {
+		if err := selfCheckWithoutNamespace(k); err != nil {
+			return err
+		}
 		key := crKey(k.Namespace, k.Name)
 		ready, apply := "ready "+key, "apply "+key
 		edges[ready] = append(edges[ready], apply)
@@ -1137,6 +1142,26 @@ func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string)
 			if err := visit(n); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// selfCheckWithoutNamespace refuses k when, without wait and on this cluster,
+// it health-checks itself by name with no namespace. Flux drops a check on
+// the checker itself only when the namespace is written
+// (checkedKustomizations); it does not default this one's, and its poller
+// rejects a namespaced check with none (fluxcd/cli-utils v1.4.0
+// pkg/kstatus/polling/engine/engine.go:85-101), so k never becomes Ready.
+func selfCheckWithoutNamespace(k *kustv1.Kustomization) error {
+	if k.Spec.Wait || k.Spec.KubeConfig != nil {
+		return nil
+	}
+	for _, hc := range k.Spec.HealthChecks {
+		if hc.Kind == "Kustomization" && strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") &&
+			hc.Namespace == "" && hc.Name == k.Name {
+			return errors.Errorf("Flux Kustomization %q can never become Ready: it health-checks itself with no namespace, which Flux neither defaults nor drops as a self-check, and a namespaced health check with no namespace never passes; remove the check, or give it namespace %q, which Flux drops as a self-check",
+				k.Name, k.Namespace)
 		}
 	}
 	return nil

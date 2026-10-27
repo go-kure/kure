@@ -1,6 +1,7 @@
 package fluxcd
 
 import (
+	"maps"
 	"path"
 	"slices"
 	"strings"
@@ -33,7 +34,8 @@ func (t *kustomizationTree) newOrderGraph(others bool) *orderGraph {
 // next returns what node n waits for. "apply K" needs every Kustomization K
 // depends on Ready, and the member whose apply writes K applied (writer).
 // "ready K" needs "apply K"; what K's wait or its Kustomization health checks
-// wait for (awaitedKustomizations); and, for each health check on an object
+// wait for (awaitedKustomizations; the wait leaves out what K's apply skips,
+// unskipped); and, for each health check on an object
 // that is no Flux Kustomization, the apply of the member whose build writes it
 // (objectWriter): Flux fetches a checked object before it evaluates any
 // healthCheckExprs entry, so an expression, whatever it says, still waits for
@@ -77,7 +79,7 @@ func (g *orderGraph) next(n string) ([]string, error) {
 		k = spec
 	}
 	if k != nil {
-		for _, x := range awaitedKustomizations(k, func() []string { return t.written(key) }) {
+		for _, x := range awaitedKustomizations(k, func() []string { return t.unskipped(k, t.written(key)) }) {
 			out = append(out, "ready "+x)
 		}
 		if !k.Spec.Wait && k.Spec.KubeConfig == nil {
@@ -141,6 +143,64 @@ func skipsApply(metadata map[string]string) bool {
 	ssa := metadata["kustomize.toolkit.fluxcd.io/ssa"]
 	return strings.EqualFold(ssa, "IfNotPresent") || strings.EqualFold(ssa, "Ignore") ||
 		strings.EqualFold(metadata["kustomize.toolkit.fluxcd.io/reconcile"], "disabled")
+}
+
+// excludedFromApply reports whether metadata, an object's labels or
+// annotations, makes kustomize-controller's apply skip the object whatever
+// the cluster holds: kustomize.toolkit.fluxcd.io/ssa Ignore or
+// kustomize.toolkit.fluxcd.io/reconcile disabled, without regard to case
+// (kustomize-controller v1.10.1
+// internal/controller/kustomization_controller.go:916-928; fluxcd/pkg/ssa
+// v0.83.0 utils/meta.go:61-71). Unlike skipsApply it leaves out ssa
+// IfNotPresent, which skips only an object that already exists: on a fresh
+// install the apply creates that one, and its wait waits for it.
+func excludedFromApply(metadata map[string]string) bool {
+	return strings.EqualFold(metadata["kustomize.toolkit.fluxcd.io/ssa"], "Ignore") ||
+		strings.EqualFold(metadata["kustomize.toolkit.fluxcd.io/reconcile"], "disabled")
+}
+
+// unskipped returns keys, Flux Kustomizations the apply of w writes, without
+// those w's apply skips (excludedFromApply): kustomize-controller leaves a
+// skipped object out of what its wait waits for (kustomization_controller.go
+// :1089-1097). The mark is read on the object as the tree holds it, with w's
+// spec.commonMetadata set over it, as Flux sets it before applying
+// (:916-917). A w whose build transforms what it holds (transformsBuild) may
+// set or clear the mark, so nothing is left out for it (go-kure/kure#1094).
+// Only the wait reads this: what w writes (applied, written, children) is
+// unchanged, and so are the creation and existence edges onto a skipped
+// object, which some other apply may still create unmarked (the root
+// Kustomization applies what it reaches without w's commonMetadata).
+func (t *kustomizationTree) unskipped(w *kustv1.Kustomization, keys []string) []string {
+	if transformsBuild(w) {
+		return keys
+	}
+	var out []string
+	for _, key := range keys {
+		var labels, annotations map[string]string
+		if k := t.byKey[key]; k != nil {
+			labels, annotations = k.GetLabels(), k.GetAnnotations()
+		} else if o := t.otherObjs[key]; o != nil {
+			labels, annotations = o.GetLabels(), o.GetAnnotations()
+		}
+		if cm := w.Spec.CommonMetadata; cm != nil {
+			labels, annotations = setOver(labels, cm.Labels), setOver(annotations, cm.Annotations)
+		}
+		if !excludedFromApply(labels) && !excludedFromApply(annotations) {
+			out = append(out, key)
+		}
+	}
+	return out
+}
+
+// setOver returns base with every key of over set over it, as Flux's
+// SetCommonMetadata does (fluxcd/pkg/ssa v0.83.0 utils/meta.go:27-55).
+func setOver(base, over map[string]string) map[string]string {
+	out := maps.Clone(base)
+	if out == nil {
+		out = map[string]string{}
+	}
+	maps.Copy(out, over)
+	return out
 }
 
 // unresolved reports whether s, a field of an object's identity as written,
