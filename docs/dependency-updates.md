@@ -490,6 +490,8 @@ Renovate gates a whole branch when any one member needs approval and the shared 
 group would otherwise hold its other updates. A security update bypasses the dashboard gate,
 since Renovate's repository-wide `vulnerabilityAlerts` settings override it, so the rule also
 turns automerge off: such a PR opens, but lands only when someone merges it in step with Flux.
+It carries the `needs-human` lane label, which the rule sets to replace the shared preset's
+`unattended` label for gomod patches.
 
 ### Vendored `go-kure/.github` Files
 
