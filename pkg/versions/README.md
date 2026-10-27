@@ -92,6 +92,14 @@ that version, so the Go toolchain needed to build kure, and any module that requ
 with the range (external-secrets v2.13.0, `go-kure/kure#1057`). The widening's note in
 `docs/compatibility.md` records such a raise.
 
+A widening can also come with a `replace`. The release kure widens to may require a
+transitive module at a version that does not build with kure's other pins, and kure then holds
+that module back with a `replace` in its `go.mod`. Go applies `replace` directives only in the
+main module, so a module that requires kure and resolves the same versions needs the same line
+in its own `go.mod` (external-secrets v2.14.0 and `k8s.io/kube-openapi`; see
+`docs/dependency-updates.md`). The widening's note in `docs/compatibility.md` records such a
+requirement.
+
 An MVS-floor entry (`FloorModule != ""`) moves on a different trigger: its pin tracks
 whichever version `floor_module` itself currently requires, tag or pseudo-version, whether
 or not that's kure's own dependency bump (see `docs/dependency-updates.md`'s "MVS-floor
