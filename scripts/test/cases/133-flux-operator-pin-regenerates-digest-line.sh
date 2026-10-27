@@ -15,7 +15,7 @@ assert_rc 0
 assert_out_contains 'bootstrap-output/flux-operator-oci.txt -> bundle digest of v0.2.0'
 assert_out_contains 'bootstrap-output/flux-operator-git.txt -> bundle digest of v0.2.0'
 
-if ! grep -qF -- '-run ^(TestBootstrap_OutputUnchanged|TestBootstrapSource(Access|SemVer|Verify)_StoredOutput)$ -count=1 -update' "$FIXTURE/go.log"; then
+if ! grep -qxF -- 'test ./pkg/stack/fluxcd/ -run ^(TestBootstrap_OutputUnchanged|TestBootstrapSource(Access|SemVer|Verify)_StoredOutput)$ -count=1 -update' "$FIXTURE/go.log"; then
     echo "FAIL: go was not asked to update the stored outputs; log:" >&2
     cat "$FIXTURE/go.log" >&2
     exit 1
