@@ -30,9 +30,10 @@ replace (
 
 // Replace directives: build with the kustomize kustomize-controller applies.
 //
-// Why: kure builds every Flux Kustomization it writes with the kustomize
-// library, to prove Flux can build it. That proof holds only when the library
-// is the one kustomize-controller uses. kustomize-controller v1.10.1 pins
+// Why: kure's tests build every tree it writes with the kustomize library, to
+// prove Flux can build it, and kure matches patch targets with that library at
+// runtime. Both hold only when the library is the one kustomize-controller
+// uses. kustomize-controller v1.10.1 pins
 // kustomize v5.8.1 (api/kyaml v0.21.1) with a replace directive, because
 // fluxcd/pkg/kustomize, flux2, flux-operator and helm v4 all require v0.21.2,
 // so minimum-version selection alone cannot select v0.21.1. kure does the same.
