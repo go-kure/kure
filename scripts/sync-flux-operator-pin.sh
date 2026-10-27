@@ -289,7 +289,9 @@ regen_pid=$!
 set +m
 regen_rc=0
 wait "$regen_pid" || regen_rc=$?
-regen_pid=""
+# go has exited, but if it was killed (OOM, a signal of its own) the test
+# binary may still be writing: end what is left of the group either way.
+stop_regen
 if [[ "$regen_rc" -ne 0 ]]; then
     restore_goldens
     echo "sync-flux-operator-pin: regenerating ${golden_rel} failed; stored outputs left as they were" >&2
