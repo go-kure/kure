@@ -284,7 +284,9 @@ echo "sync-flux-operator-pin: regenerating ${golden_rel}"
 # background under job control (set -m) so it gets its own process group for
 # stop_regen: killing go alone would leave the test binary it started writing.
 set -m
-(cd "$REPO_ROOT" && exec go test ./pkg/stack/fluxcd/ -run "$GOLDEN_TESTS" -count=1 -update) &
+# GOWORK=off: the bootstrap tests validate against the module graph go.mod
+# pins, which a parent go.work could replace (DEVELOPMENT.md).
+(cd "$REPO_ROOT" && GOWORK=off exec go test ./pkg/stack/fluxcd/ -run "$GOLDEN_TESTS" -count=1 -update) &
 regen_pid=$!
 set +m
 regen_rc=0
@@ -336,7 +338,7 @@ if [[ ${#wider[@]} -gt 0 ]]; then
             "$golden_snap/stored/$name" "$GOLDEN_DIR/$name" 2>&1 | head -n 40 >&2 || true
     done
     restore_goldens
-    echo "sync-flux-operator-pin: stored outputs left as they were; the rendered bootstrap changed, so review it and regenerate by hand: go test ./pkg/stack/fluxcd/ -update" >&2
+    echo "sync-flux-operator-pin: stored outputs left as they were; the rendered bootstrap changed, so review it and regenerate by hand: GOWORK=off go test ./pkg/stack/fluxcd/ -update" >&2
     exit 1
 fi
 goldens_unvalidated=false

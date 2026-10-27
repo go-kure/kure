@@ -429,7 +429,7 @@ result only when that line, with the same object count, is all that changed — 
 then arrives green with no hand edits (go-kure/kure#1150). Any wider change means the
 rendered bootstrap changed and needs a person to read it: the script puts every stored
 output back as it was, prints the diff and exits non-zero, so the bot's PR stays red on
-`test`. Review the change, then regenerate by hand with `go test ./pkg/stack/fluxcd/ -update`.
+`test`. Review the change, then regenerate by hand with `GOWORK=off go test ./pkg/stack/fluxcd/ -update`.
 
 It is wired as a command of the shared `gomod`/`mise` rule's `postUpgradeTasks` in
 `renovate.json`, not as its own rule (`postUpgradeTasks` has no merge semantics, so a
