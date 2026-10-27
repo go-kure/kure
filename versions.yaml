@@ -303,3 +303,21 @@ infrastructure:
       - "k8s.io/kube-aggregator"
       - "k8s.io/client-go"
       - "k8s.io/cli-runtime"
+  kustomize:
+    go_module: "sigs.k8s.io/kustomize/api"
+    # The kustomize library line (api/kyaml v0.21 = kustomize v5.8), not a cluster version.
+    supported_range: "0.21"
+    notes: |
+      Pinned to v0.21.1 by a replace directive in go.mod, in step with
+      kustomize-controller v1.10.1 (Flux 2.10), which pins kustomize v5.8.1 the same way:
+      fluxcd/pkg/kustomize, flux2, flux-operator and helm v4 require v0.21.2, so
+      minimum-version selection alone would pick v0.21.2. kure builds every Flux
+      Kustomization it writes with this library to prove Flux can build it, and uses its
+      patch-target matching at runtime, so the version must be the one the controller
+      applies with. It moves only when kustomize-controller's own pin moves, as part of a
+      coordinated Flux upgrade (renovate.json dashboard-gates every kustomize update). The
+      range covers only the line kure builds and tests with. A replace directive applies to
+      this module alone: a module that imports kure resolves v0.21.2 unless it carries the
+      same replace directives. See docs/dependency-updates.md, "Kustomize".
+    related_packages:
+      - "sigs.k8s.io/kustomize/kyaml"

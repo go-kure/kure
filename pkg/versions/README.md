@@ -97,6 +97,15 @@ whichever version `floor_module` itself currently requires, tag or pseudo-versio
 or not that's kure's own dependency bump (see `docs/dependency-updates.md`'s "MVS-floor
 dependencies" section for why there is no independent range to gate there).
 
+The `kustomize` entry is not a deployed tool's range either. Kustomize runs inside
+kustomize-controller, so its `SupportedRange` names the kustomize library line kure builds
+and tests the Kustomizations it writes with, in the `sigs.k8s.io/kustomize/api` module's own
+terms (`0.21` is kustomize v5.8). It holds only the line kustomize-controller pins, and moves only
+when that pin moves. kure reaches that version through `replace` directives in its `go.mod`,
+which apply to kure alone: a module that requires kure resolves the version minimum-version
+selection picks unless it carries the same directives (`docs/dependency-updates.md`,
+"Kustomize").
+
 ## Regenerating
 
 Never edit `versions_gen.go` by hand:

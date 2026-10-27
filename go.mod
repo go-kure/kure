@@ -28,6 +28,26 @@ replace (
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.37.1
 )
 
+// Replace directives: build with the kustomize kustomize-controller applies.
+//
+// Why: kure builds every Flux Kustomization it writes with the kustomize
+// library, to prove Flux can build it. That proof holds only when the library
+// is the one kustomize-controller uses. kustomize-controller v1.10.1 pins
+// kustomize v5.8.1 (api/kyaml v0.21.1) with a replace directive, because
+// fluxcd/pkg/kustomize, flux2, flux-operator and helm v4 all require v0.21.2,
+// so minimum-version selection alone cannot select v0.21.1. kure does the same.
+//
+// A replace directive applies only to this module: a module that imports kure
+// still resolves v0.21.2 unless it carries the same directives.
+//
+// Change condition: these move only when kustomize-controller's own pin moves
+// (its go.mod "Pin kustomize" replace block). Remove them when that pin is gone
+// or MVS alone selects the version it names.
+replace (
+	sigs.k8s.io/kustomize/api => sigs.k8s.io/kustomize/api v0.21.1
+	sigs.k8s.io/kustomize/kyaml => sigs.k8s.io/kustomize/kyaml v0.21.1
+)
+
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/backube/volsync v0.16.0

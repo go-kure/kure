@@ -132,4 +132,13 @@ var infrastructure = []Dependency{
 		VersionBasis:   "kubernetes",
 		FloorModule:    "",
 	},
+	{
+		Name:           "kustomize",
+		GoModule:       "sigs.k8s.io/kustomize/api",
+		SupportedRange: "0.21",
+		Min:            "0.21",
+		Max:            "0.21",
+		VersionBasis:   "semver",
+		FloorModule:    "",
+	},
 }

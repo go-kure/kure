@@ -483,9 +483,25 @@ two on the same version, and review a bump against the patch-scope tests
 (`TestGenerateFromLayout_Patch*`) as well as the written-tree builds.
 
 Kustomize also moves only together with the version kustomize-controller pins, so kure builds a
-Kustomization the way the controller applies it (go-kure/kure#1147). `renovate.json`
+Kustomization the way the controller applies it (go-kure/kure#1147). kustomize-controller v1.10.1
+pins kustomize v5.8.1 (api and kyaml v0.21.1) with a `replace` directive, because
+`fluxcd/pkg/kustomize`, `flux2`, `flux-operator` and `helm` v4 all require v0.21.2 and
+minimum-version selection alone would pick that. kure carries the same two `replace` directives
+in `go.mod`, below the `k8s.io/` block, and its `require` lines stay at the version MVS selects
+without them, as in the controller's `go.mod`. The `kustomize` entry in `versions.yaml` records the
+line (`supported_range: "0.21"`), and `sync-versions.sh` reads the build version from the `replace`
+target. To move kustomize, change both `replace` targets to the version the new
+kustomize-controller release pins, then run `go mod tidy` and `./scripts/sync-versions.sh
+generate`. Remove the directives when the controller drops its own pin.
+
+A `replace` directive applies only to the module that declares it. A module that imports kure
+resolves kustomize v0.21.2 unless it carries the same two `replace` directives; a consumer that
+needs its builds to match kustomize-controller copies them.
+
+`renovate.json`
 dashboard-gates every `sigs.k8s.io/kustomize/*` update, patches included: approve one only as
-part of a coordinated Flux upgrade. The rule puts kustomize in its own `kustomize` group, because
+part of a coordinated Flux upgrade. The rule matches by package name, so it gates a proposal for
+a `replace` target as well as one for a `require` line. The rule puts kustomize in its own `kustomize` group, because
 Renovate gates a whole branch when any one member needs approval and the shared `sigs.k8s.io`
 group would otherwise hold its other updates. A security update bypasses the dashboard gate,
 since Renovate's repository-wide `vulnerabilityAlerts` settings override it, so the rule also
