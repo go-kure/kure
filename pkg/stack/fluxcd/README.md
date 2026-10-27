@@ -1438,7 +1438,8 @@ These checks read what Flux's apply and wait do with a Kustomization's spec, as 
   not skipped: the apply creates the object and waits for it. A health check on a skipped object
   still waits for it. A mark in `spec.commonMetadata` is that Kustomization's alone, so another
   apply, the root's included, still creates the object. A mark on the object itself skips it in
-  every apply, so it never exists: a stall, which the checks do not judge.
+  every apply whose `spec.commonMetadata` does not override it. If every apply skips it, the
+  object never exists: a stall, which the checks do not judge.
 - **A health check on the checker itself.** As Flux does, a check that carries the checker's own
   namespace and name is dropped. One with no namespace never passes: it is refused, saying so.
 - **`spec.ignore`.** A Kustomization's `spec.ignore` holds drift rules, which a fresh install does
