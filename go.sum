@@ -65,8 +65,8 @@ github.com/cloudnative-pg/plugin-barman-cloud v0.15.1 h1:Wr1CsdBWzm+TEUPE1Ravh25
 github.com/cloudnative-pg/plugin-barman-cloud v0.15.1/go.mod h1:Aq+H37IWDZiWT3cd9L3OI/qutSkum9Eh8lrc95Y3ukA=
 github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 h1:aBangftG7EVZoUb69Os8IaYg++6uMOdKK83QtkkvJik=
 github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2/go.mod h1:qwXFYgsP6T7XnJtbKlf1HP8AjxZZyzxMmc+Lq5GjlU4=
-github.com/controlplaneio-fluxcd/flux-operator v0.62.0 h1:U1VjyU/GXJRQvW2V2sHjcyLGXubY85c43YntVfetpbQ=
-github.com/controlplaneio-fluxcd/flux-operator v0.62.0/go.mod h1:gT5KjoTiVqDDzrO7sAvJRRlAAogGLQ3RV1E0z8l3AlI=
+github.com/controlplaneio-fluxcd/flux-operator v0.62.1 h1:q+ViTp5xBy397X1oLvGPbmlKcIRvBiFp2O6haScJpe8=
+github.com/controlplaneio-fluxcd/flux-operator v0.62.1/go.mod h1:gT5KjoTiVqDDzrO7sAvJRRlAAogGLQ3RV1E0z8l3AlI=
 github.com/coreos/go-semver v0.3.1 h1:yi21YpKnrx1gt5R+la8n5WgS0kCrsPp33dmEyHReZr4=
 github.com/coreos/go-semver v0.3.1/go.mod h1:irMmmIw/7yzSRPWryHsK7EYSg09caPQL03VsM8rvUec=
 github.com/coreos/go-systemd/v22 v22.7.0 h1:LAEzFkke61DFROc7zNLX/WA2i5J8gYqe0rSj9KI28KA=

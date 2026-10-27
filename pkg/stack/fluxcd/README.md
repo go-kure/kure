@@ -864,7 +864,7 @@ its upstream registry with no pull secret.
 
 The `"flux-operator"` bundle is vendored from the upstream flux-operator release and pinned
 in lockstep with the `github.com/controlplaneio-fluxcd/flux-operator` Go module
-(`FluxOperatorVersion`, currently **v0.62.0**). Renovate re-vendors the bundle and updates
+(`FluxOperatorVersion`, currently **v0.62.1**). Renovate re-vendors the bundle and updates
 the constant and this version when it bumps the module (`scripts/sync-flux-operator-pin.sh`);
 see `flux_operator_install.go` for the manual refresh procedure.
 

@@ -28,7 +28,7 @@ import (
 //     pkg/stack/fluxcd/README.md ("currently **vX.Y.Z**"); no test checks it.
 //  5. Run the tests in this package and confirm the resource inventory in
 //     TestFluxOperatorInstallObjects still matches.
-const FluxOperatorVersion = "v0.62.0"
+const FluxOperatorVersion = "v0.62.1"
 
 //go:embed flux_operator_install.yaml
 var fluxOperatorInstallYAML []byte
