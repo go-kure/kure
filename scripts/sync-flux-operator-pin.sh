@@ -157,9 +157,30 @@ tmp="$(mktemp)"
 # golden_snap holds the stored bootstrap outputs as they were, so step 6 can
 # put them back.
 golden_snap="$(mktemp -d)"
-# The .new files are stage()'s scratch copies; a failure while staging must not
-# leave one behind in the source tree.
-trap 'rm -f "$tmp" "$BUNDLE_FILE.new" "$CONST_FILE.new" "$README_FILE.new"; rm -rf "$golden_snap"' EXIT
+golden_rel="${GOLDEN_DIR#"$REPO_ROOT"/}"
+
+# restore_goldens -- put the stored outputs back exactly as they were, removing
+# any file the update added.
+restore_goldens() {
+    rm -rf "$GOLDEN_DIR"
+    cp -Rp "$golden_snap/stored" "$GOLDEN_DIR"
+    goldens_unvalidated=false
+}
+
+# goldens_unvalidated is true from the moment step 6 may write the stored
+# outputs until they are validated or restored, so any other way out -- an
+# unexpected error, or a SIGTERM while `go test` runs (bash runs the EXIT trap
+# on it too) -- puts them back before the snapshot is deleted. The .new files are stage()'s scratch copies; a
+# failure while staging must not leave one behind in the source tree.
+goldens_unvalidated=false
+cleanup() {
+    if [[ "$goldens_unvalidated" == true ]]; then
+        restore_goldens || echo "sync-flux-operator-pin: could not restore ${golden_rel}" >&2
+    fi
+    rm -f "$tmp" "$BUNDLE_FILE.new" "$CONST_FILE.new" "$README_FILE.new"
+    rm -rf "$golden_snap"
+}
+trap cleanup EXIT
 
 if ! curl -fsSL "${CURL_TIMEOUT_ARGS[@]}" -o "$tmp" "$url"; then
     echo "sync-flux-operator-pin: could not download ${url}" >&2
@@ -235,15 +256,8 @@ fi
 # Step 6. The bundle is already in place by now and stays there: on a failure
 # below, the bot's commit carries the re-vendor with the stored outputs as they
 # were, and `test` names the files that differ.
-golden_rel="${GOLDEN_DIR#"$REPO_ROOT"/}"
 cp -Rp "$GOLDEN_DIR" "$golden_snap/stored"
-
-# restore_goldens -- put the stored outputs back exactly as they were, removing
-# any file the update added.
-restore_goldens() {
-    rm -rf "$GOLDEN_DIR"
-    cp -Rp "$golden_snap/stored" "$GOLDEN_DIR"
-}
+goldens_unvalidated=true
 
 echo "sync-flux-operator-pin: regenerating ${golden_rel}"
 # -count=1: a cached pass would run nothing, so write nothing.
@@ -294,6 +308,7 @@ if [[ ${#wider[@]} -gt 0 ]]; then
     echo "sync-flux-operator-pin: stored outputs left as they were; the rendered bootstrap changed, so review it and regenerate by hand: go test ./pkg/stack/fluxcd/ -update" >&2
     exit 1
 fi
+goldens_unvalidated=false
 
 for name in ${regenerated[@]+"${regenerated[@]}"}; do
     echo "sync-flux-operator-pin: ${golden_rel}/${name} -> bundle digest of ${version}"

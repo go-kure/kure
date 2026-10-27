@@ -12,10 +12,23 @@
 #   gotk    as digest, plus a changed summary line in a gotk-*.txt file
 #   added   as digest, plus a new flux-operator-*.txt file
 #   fail    as digest, then exits 1, like a test that failed half way
+#   term    as digest -- a change the script would accept -- then sends
+#           SIGTERM to the pin script and exits 0, like a Renovate run
+#           cancelled while `go test` ran
+#
+# Any other invocation -- another subcommand or package, no -update, or a
+# working directory that is not the fixture root -- writes nothing and exits 2,
+# so a script that regenerates the wrong thing fails its case.
 set -euo pipefail
 
 if [[ -n "${STUB_PIN_GO_LOG:-}" ]]; then
     printf '%s\n' "$*" >> "$STUB_PIN_GO_LOG"
+fi
+
+if [[ "${1:-}" != test || "${2:-}" != ./pkg/stack/fluxcd/ || " $* " != *" -update "* \
+      || "$PWD" != "${SYNC_FLUX_OPERATOR_PIN_REPO_ROOT:-}" ]]; then
+    echo "stub-pin go: unexpected invocation 'go $*' in $PWD" >&2
+    exit 2
 fi
 
 mode="${STUB_PIN_GO_MODE:-digest}"
@@ -50,6 +63,26 @@ case "$mode" in
         ;;
     fail)
         exit 1
+        ;;
+    term)
+        # The pin script is the outermost ancestor still running it: a
+        # subshell it forks for `cd && go test` shows the same command line.
+        target=""
+        pid="$PPID"
+        while [[ -n "$pid" && "$pid" -gt 1 ]]; do
+            args="$(ps -o args= -p "$pid" 2>/dev/null || true)"
+            if [[ "$args" == *sync-flux-operator-pin.sh* ]]; then
+                target="$pid"
+            elif [[ -n "$target" ]]; then
+                break
+            fi
+            pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
+        done
+        if [[ -z "$target" ]]; then
+            echo "stub-pin go: could not find the pin script to signal" >&2
+            exit 1
+        fi
+        kill -TERM "$target"
         ;;
     *)
         echo "stub-pin go: unknown STUB_PIN_GO_MODE '$mode'" >&2
