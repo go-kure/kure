@@ -668,7 +668,7 @@ func (bg *BootstrapGenerator) syncSourceTarget(config *stack.BootstrapConfig) *k
 // spec.prune on the Kustomization flux-operator generates for the sync to
 // prune. The sync has no field for it, and the operator renders that
 // Kustomization with prune: true whatever the FluxInstance says (flux-operator
-// v0.58.1 internal/builder/templates.go:463). The patch is emitted only for an
+// v0.62.0 internal/builder/templates.go:475). The patch is emitted only for an
 // explicit BootstrapConfig.Prune: unset keeps the operator's prune: true
 // (go-kure/kure#1088).
 func (bg *BootstrapGenerator) syncPrunePatch(config *stack.BootstrapConfig, prune bool) kustomize.Patch {
@@ -839,7 +839,7 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 
 	or := pubfluxcd.CreateOCIRepository(gotkSourceName(config, rootNode), bg.DefaultNamespace)
 	or.Spec.URL = config.SourceURL
-	or.Spec.Interval = metav1.Duration{Duration: bg.DefaultInterval}
+	or.Spec.Interval = &metav1.Duration{Duration: bg.DefaultInterval}
 	pubfluxcd.SetOCIRepositoryReference(or, ref)
 	if config.SourceSecretRef != "" {
 		pubfluxcd.SetOCIRepositorySecretRef(or, &meta.LocalObjectReference{Name: config.SourceSecretRef})

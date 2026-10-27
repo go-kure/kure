@@ -15,11 +15,12 @@ import (
 // used to answer for.
 //
 // A kind registered at two versions counts twice: the metallb.io BGPPeer is 2
-// of the 142, v1beta1 and v1beta2.
+// of the 144 (v1beta1 and v1beta2), and so are notification.toolkit.fluxcd.io
+// Alert and Provider (v1 and v1beta3).
 const (
-	wantKinds      = 142
+	wantKinds      = 144
 	wantCluster    = 42
-	wantNamespaced = 100
+	wantNamespaced = 102
 )
 
 func TestBaselineCounts(t *testing.T) {

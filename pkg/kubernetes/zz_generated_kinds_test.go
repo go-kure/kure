@@ -151,7 +151,7 @@ var generatedKinds = []generatedKind{
 		return externalsecrets.CreateExternalSecret(name, namespace)
 	}},
 	{GVK: schema.GroupVersionKind{Group: "external-secrets.io", Version: "v1", Kind: "SecretStore"}, Namespaced: true, Create: func(name, namespace string) client.Object { return externalsecrets.CreateSecretStore(name, namespace) }},
-	{GVK: schema.GroupVersionKind{Group: "notification.toolkit.fluxcd.io", Version: "v1beta3", Kind: "Alert"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateAlert(name, namespace) }},
+	{GVK: schema.GroupVersionKind{Group: "notification.toolkit.fluxcd.io", Version: "v1", Kind: "Alert"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateAlert(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "source.extensions.fluxcd.io", Version: "v1beta1", Kind: "ArtifactGenerator"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateArtifactGenerator(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "Bucket"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateBucket(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "ExternalArtifact"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateExternalArtifact(name, namespace) }},
@@ -166,7 +166,7 @@ var generatedKinds = []generatedKind{
 	{GVK: schema.GroupVersionKind{Group: "image.toolkit.fluxcd.io", Version: "v1", Kind: "ImageUpdateAutomation"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateImageUpdateAutomation(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "kustomize.toolkit.fluxcd.io", Version: "v1", Kind: "Kustomization"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateKustomization(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "OCIRepository"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateOCIRepository(name, namespace) }},
-	{GVK: schema.GroupVersionKind{Group: "notification.toolkit.fluxcd.io", Version: "v1beta3", Kind: "Provider"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateProvider(name, namespace) }},
+	{GVK: schema.GroupVersionKind{Group: "notification.toolkit.fluxcd.io", Version: "v1", Kind: "Provider"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateProvider(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "notification.toolkit.fluxcd.io", Version: "v1", Kind: "Receiver"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateReceiver(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "fluxcd.controlplane.io", Version: "v1", Kind: "ResourceSet"}, Namespaced: true, Create: func(name, namespace string) client.Object { return fluxcd.CreateResourceSet(name, namespace) }},
 	{GVK: schema.GroupVersionKind{Group: "fluxcd.controlplane.io", Version: "v1", Kind: "ResourceSetInputProvider"}, Namespaced: true, Create: func(name, namespace string) client.Object {

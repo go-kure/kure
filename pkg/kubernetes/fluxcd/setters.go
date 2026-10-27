@@ -9,7 +9,6 @@ import (
 	imagev1 "github.com/fluxcd/image-automation-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
-	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
 	"github.com/fluxcd/pkg/apis/acl"
 	"github.com/fluxcd/pkg/apis/kustomize"
 	"github.com/fluxcd/pkg/apis/meta"
@@ -725,45 +724,40 @@ func CreateWaitStrategy(name helmv2.WaitStrategyName) *helmv2.WaitStrategy {
 
 // Provider setters
 
-// SetProviderInterval configures the interval at which events are sent.
-func SetProviderInterval(provider *notificationv1beta3.Provider, d metav1.Duration) {
-	provider.Spec.Interval = &d
-}
-
 // SetProviderTimeout sets the timeout for sending notifications.
-func SetProviderTimeout(provider *notificationv1beta3.Provider, d metav1.Duration) {
+func SetProviderTimeout(provider *notificationv1.Provider, d metav1.Duration) {
 	provider.Spec.Timeout = &d
 }
 
 // SetProviderSecretRef attaches a Secret reference to the provider.
-func SetProviderSecretRef(provider *notificationv1beta3.Provider, ref *meta.LocalObjectReference) {
+func SetProviderSecretRef(provider *notificationv1.Provider, ref *meta.LocalObjectReference) {
 	provider.Spec.SecretRef = ref
 }
 
 // SetProviderCertSecretRef attaches a certificate Secret reference to the provider.
-func SetProviderCertSecretRef(provider *notificationv1beta3.Provider, ref *meta.LocalObjectReference) {
+func SetProviderCertSecretRef(provider *notificationv1.Provider, ref *meta.LocalObjectReference) {
 	provider.Spec.CertSecretRef = ref
 }
 
 // Alert setters
 
 // AddAlertEventSource appends an event source to the alert specification.
-func AddAlertEventSource(alert *notificationv1beta3.Alert, ref notificationv1.CrossNamespaceObjectReference) {
+func AddAlertEventSource(alert *notificationv1.Alert, ref notificationv1.CrossNamespaceObjectReference) {
 	alert.Spec.EventSources = append(alert.Spec.EventSources, ref)
 }
 
 // AddAlertInclusion adds a regex pattern to the inclusion list.
-func AddAlertInclusion(alert *notificationv1beta3.Alert, regex string) {
+func AddAlertInclusion(alert *notificationv1.Alert, regex string) {
 	alert.Spec.InclusionList = append(alert.Spec.InclusionList, regex)
 }
 
 // AddAlertExclusion adds a regex pattern to the exclusion list.
-func AddAlertExclusion(alert *notificationv1beta3.Alert, regex string) {
+func AddAlertExclusion(alert *notificationv1.Alert, regex string) {
 	alert.Spec.ExclusionList = append(alert.Spec.ExclusionList, regex)
 }
 
 // AddAlertEventMetadata sets a metadata key/value on the alert.
-func AddAlertEventMetadata(alert *notificationv1beta3.Alert, key, value string) {
+func AddAlertEventMetadata(alert *notificationv1.Alert, key, value string) {
 	if alert.Spec.EventMetadata == nil {
 		alert.Spec.EventMetadata = make(map[string]string)
 	}

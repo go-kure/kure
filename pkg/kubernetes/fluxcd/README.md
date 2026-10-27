@@ -57,7 +57,7 @@ Additional setters: `SetGitRepositoryTimeout`, `SetGitRepositoryVerification`,
 oci := fluxcd.CreateOCIRepository("my-manifests", "flux-system")
 oci.Spec.URL = "oci://registry.example.com/manifests"
 fluxcd.SetOCIRepositoryReference(oci, &sourcev1.OCIRepositoryRef{Tag: "latest"})
-oci.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
+oci.Spec.Interval = &metav1.Duration{Duration: 10 * time.Minute}
 fluxcd.SetOCIRepositorySecretRef(oci, &meta.LocalObjectReference{Name: "registry-credentials"})
 fmt.Println(oci.Spec.Reference.Tag, oci.Spec.SecretRef.Name)
 ```
@@ -183,7 +183,7 @@ fluxcd.SetHelmReleaseChart(hr, &helmv2.HelmChartTemplate{
     Spec: helmv2.HelmChartTemplateSpec{
         Chart:   "redis",
         Version: "19.0.0",
-        SourceRef: helmv2.CrossNamespaceObjectReference{
+        SourceRef: &helmv2.CrossNamespaceObjectReference{
             Kind:      "HelmRepository",
             Name:      "bitnami",
             Namespace: "flux-system",
@@ -287,9 +287,66 @@ Upgrade flag setters: `SetHelmReleaseUpgradeTimeout`, `SetHelmReleaseUpgradeCRDs
 
 ## Notification Controllers
 
-> **Note:** Provider and Alert use `notification.toolkit.fluxcd.io/v1beta3`. Receiver is on v1.
-> See [compatibility](/api-reference/compatibility/#notification-controller-provider-and-alert-on-v1beta3)
-> for details and tracking issue [#250](https://github.com/go-kure/kure/issues/250).
+`CreateProvider`, `CreateAlert` and `CreateReceiver` all emit
+`notification.toolkit.fluxcd.io/v1`. For Provider and Alert that requires **Flux 2.10 or
+newer** on the target cluster: older releases serve them only at `v1beta3` and reject a `v1`
+object. The supported Flux range and its per-kind floors are in the
+[compatibility matrix](/api-reference/compatibility/#infrastructure-dependencies).
+
+### Migrating Provider and Alert to v1
+
+Flux 2.10 promoted Provider and Alert to `v1`, the stored version. Kure follows:
+
+1. `CreateProvider` and `CreateAlert` return `*notificationv1.Provider` and
+   `*notificationv1.Alert`, and every Provider and Alert setter takes the `v1` type. A
+   variable declared as the `v1beta3` type no longer compiles. A cluster on Flux older than
+   2.10 needs the `v1beta3` object, which kure still registers (so `v1beta3` manifests keep
+   parsing) but no longer wraps. Build it with the generic constructor:
+   `kubernetes.Create[notificationv1beta3.Provider](name, namespace)`, with
+   `notificationv1beta3` importing `github.com/fluxcd/notification-controller/api/v1beta3`.
+   Then assign its fields directly.
+2. `SetProviderInterval` is removed. The `v1` Provider has no `spec.interval`, and `v1beta3`
+   already ignored it. Drop the call.
+3. `v1` drops fields, and the result is a compile error in one case and a runtime failure in
+   the other:
+   - A Go assignment to `Alert.Spec.Summary` or `Provider.Spec.Proxy` no longer compiles. Use
+     `AddAlertEventMetadata(alert, "summary", …)` and `Provider.Spec.ProxySecretRef`.
+   - Secret content compiles but fails at runtime. notification-controller v1.10 rejects a
+     `proxy` key in the `spec.secretRef` Secret: put the proxy URL under the key `address` in a
+     separate Secret, reference that Secret from `spec.proxySecretRef`, and delete `proxy` from
+     the `spec.secretRef` Secret. A commit-status Provider (`github`, `gitlab`, `gitea`,
+     `bitbucket`, `bitbucketserver`, `azuredevops`) rejects TLS data (`ca.crt`, `tls.crt`,
+     `tls.key`, or the legacy `caFile`, `certFile`, `keyFile`) in the `spec.secretRef` Secret,
+     and every other Provider type ignores it there: move it to a Secret referenced from
+     `spec.certSecretRef`. An Azure Event Hub Provider's static JWT `token` is no longer
+     accepted: remove it and authenticate with `spec.serviceAccountName` (object identity),
+     or another method the upstream Provider documentation lists.
+4. Changed Flux Go types around the source and chart template:
+   - `OCIRepositorySpec.Interval` is now `*metav1.Duration` and
+     `HelmChartTemplateSpec.SourceRef` is now `*helmv2.CrossNamespaceObjectReference`: take the
+     address when assigning.
+   - `HelmChartTemplateSpec` now embeds `sourcev1.OCIRepositorySpec`, which owns `Interval` and
+     `Verify`. A composite literal naming `Interval` or `Verify` directly no longer compiles:
+     nest them as `OCIRepositorySpec: sourcev1.OCIRepositorySpec{Interval: &d, Verify: …}`, or
+     assign the promoted field (`chart.Spec.Interval = &d`) after construction.
+   - `helmv2.HelmChartTemplateVerification` is removed: `Verify` takes
+     `*sourcev1.OCIRepositoryVerification`.
+   - Removed methods and their replacements:
+     - `HelmChartTemplate.GetInterval`: use `HelmRelease.GetTemplateInterval`.
+     - `HelmRelease.GetHelmChartName` and `HelmChartTemplate.GetNamespace`: use the `Name` and
+       `Namespace` of `HelmRelease.GetHelmChartTemplateReference()`. It returns nil when the
+       release sets no `spec.chart`, so check it first. `HelmRelease.GetHelmChartReference`
+       is not a replacement: it reads `spec.chartRef` only.
+     - `HelmReleaseStatus.GetHelmChart`: use `HelmReleaseStatus.GetHelmChartReference`. It
+       returns nil when the status names no chart.
+5. A `fluxv1.Dependency` passed to `AddResourceSetDependency` with `ReadyExpr` set must also set
+   `Ready: true`. flux-operator v0.62's CRD rejects `readyExpr` without `ready`; before, the
+   expression was simply not evaluated. Alternatively, drop `ReadyExpr`.
+6. A `meta.KubeConfigReference` with `ConfigMapRef`, passed to `SetKustomizationKubeConfig` or
+   `SetHelmReleaseKubeConfig`, now authenticates through object identity. Rename the
+   ConfigMap's `audiences` key to `credential.auth.fluxcd.io/audiences`.
+
+### Example
 
 <!-- doc-example: pkg/kubernetes/fluxcd ExampleSetProviderSecretRef -->
 ```go

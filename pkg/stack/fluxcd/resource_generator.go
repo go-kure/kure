@@ -1124,7 +1124,7 @@ func (g *ResourceGenerator) createSource(ref *stack.SourceRef, name string) (cli
 		}
 		or := pubfluxcd.CreateOCIRepository(ref.Name, namespace)
 		or.Spec.URL = ref.URL
-		or.Spec.Interval = metav1.Duration{Duration: g.DefaultInterval}
+		or.Spec.Interval = &metav1.Duration{Duration: g.DefaultInterval}
 		if ref.Tag != "" {
 			pubfluxcd.SetOCIRepositoryReference(or, &sourcev1.OCIRepositoryRef{Tag: ref.Tag})
 		}

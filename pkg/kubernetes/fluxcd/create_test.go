@@ -27,7 +27,7 @@ func TestHelmReleaseSetters(t *testing.T) {
 		Spec: helmv2.HelmChartTemplateSpec{
 			Chart:   "nginx",
 			Version: "1.2.3",
-			SourceRef: helmv2.CrossNamespaceObjectReference{
+			SourceRef: &helmv2.CrossNamespaceObjectReference{
 				Kind: "HelmRepository",
 				Name: "bitnami",
 			},

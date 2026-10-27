@@ -1,4 +1,4 @@
-=== install bundle: 13 objects, sha256 7dc8a08f8d4bc78d81cdb2420d1c1c480b0ed9d1c1ddcc79befd4fce557403f8 ===
+=== install bundle: 13 objects, sha256 4ba77f7674579c8e0d806538b0f378ba057e0d99d52b97bc05279f84cfc21bc3 ===
 ClusterRole: 4
 ClusterRoleBinding: 1
 CustomResourceDefinition: 4
@@ -15,7 +15,7 @@ metadata:
 spec:
   distribution:
     registry: ghcr.io/fluxcd
-    version: v2.9.5
+    version: v2.10.0
   kustomize:
     patches:
       - patch: |

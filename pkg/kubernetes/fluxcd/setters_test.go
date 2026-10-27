@@ -12,7 +12,6 @@ import (
 	imagev1 "github.com/fluxcd/image-automation-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
-	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
 	"github.com/fluxcd/pkg/apis/acl"
 	"github.com/fluxcd/pkg/apis/kustomize"
 	"github.com/fluxcd/pkg/apis/meta"
@@ -1269,7 +1268,7 @@ func TestHelmRelease_FullSpec(t *testing.T) {
 		Spec: helmv2.HelmChartTemplateSpec{
 			Chart:   "redis",
 			Version: "19.0.0",
-			SourceRef: helmv2.CrossNamespaceObjectReference{
+			SourceRef: &helmv2.CrossNamespaceObjectReference{
 				Kind:      "HelmRepository",
 				Name:      "bitnami",
 				Namespace: "flux-system",
@@ -1298,15 +1297,6 @@ func TestHelmRelease_FullSpec(t *testing.T) {
 }
 
 // Provider setters
-
-func TestSetProviderInterval(t *testing.T) {
-	obj := CreateProvider("slack", "ns")
-	d := metav1.Duration{Duration: 5 * time.Minute}
-	SetProviderInterval(obj, d)
-	if obj.Spec.Interval == nil || *obj.Spec.Interval != d {
-		t.Error("Interval not set")
-	}
-}
 
 func TestSetProviderTimeout(t *testing.T) {
 	obj := CreateProvider("slack", "ns")
@@ -1371,7 +1361,7 @@ func TestAddAlertEventMetadata(t *testing.T) {
 }
 
 func TestAddAlertEventMetadata_NilMap(t *testing.T) {
-	obj := &notificationv1beta3.Alert{}
+	obj := &notificationv1.Alert{}
 	AddAlertEventMetadata(obj, "cluster", "prod-eu")
 	if obj.Spec.EventMetadata["cluster"] != "prod-eu" {
 		t.Error("EventMetadata not set after nil init")

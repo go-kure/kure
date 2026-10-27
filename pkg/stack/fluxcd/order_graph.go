@@ -84,7 +84,7 @@ func (g *orderGraph) next(n string) ([]string, error) {
 			for _, hc := range k.Spec.HealthChecks {
 				// Flux drops a check on any Kustomization, whatever its
 				// group, named as the checker itself (kustomize-controller
-				// v1.9.5 internal/controller/kustomization_controller.go:1037-1045).
+				// v1.10.1 internal/controller/kustomization_controller.go:1118-1126).
 				if hc.Kind == kustv1.KustomizationKind && hc.Name == k.Name && hc.Namespace == k.Namespace {
 					continue
 				}
@@ -135,7 +135,7 @@ type treeObject struct {
 // lets kustomize-controller leave the object uncreated:
 // kustomize.toolkit.fluxcd.io/ssa IfNotPresent or Ignore, or
 // kustomize.toolkit.fluxcd.io/reconcile disabled, matched on a label or an
-// annotation and without regard to case (fluxcd/pkg/ssa v0.78.0
+// annotation and without regard to case (fluxcd/pkg/ssa v0.83.0
 // utils/meta.go:61-71).
 func skipsApply(metadata map[string]string) bool {
 	ssa := metadata["kustomize.toolkit.fluxcd.io/ssa"]
@@ -220,7 +220,7 @@ func apiGroup(apiVersion string) string {
 // that may not exist would refuse a tree that converges. It matches by group,
 // kind, namespace and name as written, the version ignored as Flux resolves
 // it; an empty apiVersion is apps/v1, as Flux reads it (kustomize-controller
-// v1.9.5 internal/inventory/inventory.go:170-173). It is certain when every
+// v1.10.1 internal/inventory/inventory.go:166-169). It is certain when every
 // match sits in a directory exactly one member's build holds (hostWriters),
 // the same member for all, that member's build transforms nothing
 // (transformsBuild) and its spec.commonMetadata does not let the apply skip

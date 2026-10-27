@@ -286,11 +286,11 @@ rule").
   it generates. The limit is 63 and not the
   253 of an object name because
   Flux writes the Kustomization's name into a label value on every object it
-  applies. Read in kustomize-controller v1.9.5, the version this module pins:
+  applies. Read in kustomize-controller v1.10.1, the version this module pins:
   the reconciler hands the name to the apply manager as the owner of the
-  objects (`internal/controller/kustomization_controller.go:462`), and the
+  objects (`internal/controller/kustomization_controller.go:489`), and the
   manager sets it as the value of the `kustomize.toolkit.fluxcd.io/name` label
-  (`github.com/fluxcd/pkg/ssa` v0.76.2, `manager.go:66-78`).
+  (`github.com/fluxcd/pkg/ssa` v0.83.0, `manager.go:66-78`).
 - **Directory name** (`ValidateDirectoryName`): one path segment. It is not
   empty, not `.` or `..`, and holds neither `/` nor `\` nor a NUL byte. The
   backslash is refused on every platform, so a name such as `..\outside` cannot

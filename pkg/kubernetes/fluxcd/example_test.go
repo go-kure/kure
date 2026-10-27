@@ -38,7 +38,7 @@ func ExampleSetOCIRepositoryReference() {
 	oci := fluxcd.CreateOCIRepository("my-manifests", "flux-system")
 	oci.Spec.URL = "oci://registry.example.com/manifests"
 	fluxcd.SetOCIRepositoryReference(oci, &sourcev1.OCIRepositoryRef{Tag: "latest"})
-	oci.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
+	oci.Spec.Interval = &metav1.Duration{Duration: 10 * time.Minute}
 	fluxcd.SetOCIRepositorySecretRef(oci, &meta.LocalObjectReference{Name: "registry-credentials"})
 	fmt.Println(oci.Spec.Reference.Tag, oci.Spec.SecretRef.Name)
 	// Output: latest registry-credentials
@@ -115,7 +115,7 @@ func ExampleSetHelmReleaseValuesFromMap() {
 		Spec: helmv2.HelmChartTemplateSpec{
 			Chart:   "redis",
 			Version: "19.0.0",
-			SourceRef: helmv2.CrossNamespaceObjectReference{
+			SourceRef: &helmv2.CrossNamespaceObjectReference{
 				Kind:      "HelmRepository",
 				Name:      "bitnami",
 				Namespace: "flux-system",
