@@ -482,6 +482,15 @@ reach another bundle's objects. A bump can therefore change which patches kure r
 two on the same version, and review a bump against the patch-scope tests
 (`TestGenerateFromLayout_Patch*`) as well as the written-tree builds.
 
+Kustomize also moves only together with the version kustomize-controller pins, so kure builds a
+Kustomization the way the controller applies it (go-kure/kure#1147). `renovate.json`
+dashboard-gates every `sigs.k8s.io/kustomize/*` update, patches included: approve one only as
+part of a coordinated Flux upgrade. The rule puts kustomize in its own `kustomize` group, because
+Renovate gates a whole branch when any one member needs approval and the shared `sigs.k8s.io`
+group would otherwise hold its other updates. A security update bypasses the dashboard gate,
+since Renovate's repository-wide `vulnerabilityAlerts` settings override it, so the rule also
+turns automerge off: such a PR opens, but lands only when someone merges it in step with Flux.
+
 ### Vendored `go-kure/.github` Files
 
 `.github/workflows/ci.yml`'s `forbidden-terms` job byte-compares three vendored copies against

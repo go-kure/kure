@@ -98,6 +98,13 @@
       "dependencyDashboardApproval": true
     },
     {
+      "description": "kustomize moves only together with the version kustomize-controller pins: kure builds Kustomizations with the same library the controller applies them with, and a build that differs can make kure refuse a tree Flux would converge, or miss one it would not (go-kure/kure#1147). So every kustomize update, patches included, is dashboard-gated and approved only as part of a coordinated Flux upgrade. v0.21.3 also needs structured-merge-diff v7, which this repo's k8s.io/* v0.37 libraries do not use. Its own groupName takes kustomize out of the shared preset's sigs.k8s.io group: Renovate gates a whole branch when any one member needs approval, so a shared group would hold the other sigs.k8s.io updates too. automerge is off because a security update bypasses the gate: Renovate force-applies vulnerabilityAlerts, whose dependencyDashboardApproval is false, and that option is repository-wide only. Such a PR still opens, so the fix stays visible, but it never lands by itself. No postUpgradeTasks here: the gomod/mise rule above keeps its command list, because this rule sets none.",
+      "matchPackageNames": ["sigs.k8s.io/kustomize/**"],
+      "groupName": "kustomize",
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
       "description": "Keep docs/github-workflows.md's govulncheck version mentions in sync with the GOVULNCHECK_VERSION pin the customManager above bumps in ci.yml. Scoped to that customManager specifically, not just by depName: golang.org/x/vuln is also a real go.mod dependency, and without matchManagers a gomod-sourced bump of it would match here too — postUpgradeTasks has no merge semantics, so this rule's commands would silently replace the gomod/mise rule's ./scripts/sync-versions.sh generate, reintroducing the compatibility-matrix drift that rule exists to prevent.",
       "matchManagers": ["custom.regex"],
       "matchPackageNames": ["golang.org/x/vuln"],
