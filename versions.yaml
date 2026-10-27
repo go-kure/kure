@@ -197,8 +197,8 @@ infrastructure:
   external-secrets:
     go_module: "github.com/external-secrets/external-secrets/apis"
     upstream_repo: "external-secrets/external-secrets"
-    upstream_release: "v2.13.0"
-    upstream_release_commit: "a82d14894fbca270a5e87610fa1efd907dbae341"
+    upstream_release: "v2.14.0"
+    upstream_release_commit: "e932f3a3f6f274e8e269c01aa1f5fb3d1322e3c9"
     supported_range: "2.9 - 2.13"
     notes: |
       Module path changed from root to /apis submodule in v1.0 (#5494).
