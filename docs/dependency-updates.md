@@ -473,6 +473,18 @@ All `k8s.io/` packages must stay at the same patch release. Kure uses `replace` 
 
 `k8s.io/kube-aggregator` is one of them. Kure requires it for the `APIService` type alone and imports only its API package (`pkg/apis/apiregistration/v1`), so the aggregator's server dependencies stay out of `go.mod`. It is pinned in the same `replace` block and moves with the other `k8s.io/` packages in the `kubernetes` update group.
 
+`k8s.io/kube-openapi` is the exception: it is untagged, so it has its own `replace` line, pinned
+to a pseudo-version rather than the lockstep patch release. Newer kube-openapi commits build on
+`sigs.k8s.io/structured-merge-diff/v7`, while apimachinery v0.37 still uses v6, so once a
+dependency requires one of them (external-secrets v2.14 does) the module no longer compiles.
+The `replace` holds kube-openapi at its last v6 commit. Go applies `replace` directives only in
+the main module, so a module that requires kure and resolves the same versions does not inherit
+it: it needs the same `replace` in its own `go.mod`. A `renovate.json` rule disables updates
+to that line: Renovate reads every commit of an untagged module as a new digest and would
+otherwise move it into the `kubernetes` group's PR, which then fails to build. Remove both, the
+`replace` line and the rule, with the Kubernetes v0.38 GA bump, whose apimachinery moves to v7.
+That bump fails to compile while the pin is still in place, so it cannot be missed.
+
 **When can replace directives be removed?** Only when ALL direct and transitive dependencies converge on the same `k8s.io/` minor version. Check with:
 
 ```bash

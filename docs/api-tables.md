@@ -74,10 +74,10 @@ for the kinds whose scope the API server defines.
 | `cilium.io/v2` | `CiliumNodeConfig` | Namespaced | `marker` | `CiliumNodeConfig` | `github.com/cilium/cilium@v1.20.4` |
 | `coordination.k8s.io/v1` | `Lease` | Namespaced | `builtin` | `Lease` | `k8s.io/api@v0.37.1` |
 | `discovery.k8s.io/v1` | `EndpointSlice` | Namespaced | `builtin` | `EndpointSlice` | `k8s.io/api@v0.37.1` |
-| `external-secrets.io/v1` | `ClusterExternalSecret` | Cluster | `marker` | `ClusterExternalSecret` | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
-| `external-secrets.io/v1` | `ClusterSecretStore` | Cluster | `marker` | `ClusterSecretStore` | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
-| `external-secrets.io/v1` | `ExternalSecret` | Namespaced | `marker` | `ExternalSecret` | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
-| `external-secrets.io/v1` | `SecretStore` | Namespaced | `marker` | `SecretStore` | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
+| `external-secrets.io/v1` | `ClusterExternalSecret` | Cluster | `marker` | `ClusterExternalSecret` | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261023150316-e932f3a3f6f2` |
+| `external-secrets.io/v1` | `ClusterSecretStore` | Cluster | `marker` | `ClusterSecretStore` | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261023150316-e932f3a3f6f2` |
+| `external-secrets.io/v1` | `ExternalSecret` | Namespaced | `marker` | `ExternalSecret` | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261023150316-e932f3a3f6f2` |
+| `external-secrets.io/v1` | `SecretStore` | Namespaced | `marker` | `SecretStore` | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261023150316-e932f3a3f6f2` |
 | `fluxcd.controlplane.io/v1` | `FluxInstance` | Namespaced | `marker` | `FluxInstance` | `github.com/controlplaneio-fluxcd/flux-operator@v0.62.1` |
 | `fluxcd.controlplane.io/v1` | `FluxReport` | Namespaced | `marker` | `FluxReport` | `github.com/controlplaneio-fluxcd/flux-operator@v0.62.1` |
 | `fluxcd.controlplane.io/v1` | `ResourceSet` | Namespaced | `marker` | `ResourceSet` | `github.com/controlplaneio-fluxcd/flux-operator@v0.62.1` |
@@ -181,12 +181,12 @@ by a caller.
 | `api/v1.PoolerMonitoringConfiguration` | `podMonitorMetricRelabelings` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
 | `api/v1.PoolerMonitoringConfiguration` | `podMonitorRelabelings` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
 | `api/v1.Probe` | `terminationGracePeriodSeconds` | beta | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
-| `externalsecrets/v1.ClusterExternalSecretSpec` | `namespaceSelector` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
-| `externalsecrets/v1.ClusterExternalSecretSpec` | `namespaces` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
-| `externalsecrets/v1.PulumiProvider` | `accessToken` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
-| `externalsecrets/v1.StoreSourceRef` | `generatorRef` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
-| `externalsecrets/v1.VaultKubernetesServiceAccountTokenAuth` | `audiences` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
-| `externalsecrets/v1.VaultKubernetesServiceAccountTokenAuth` | `expirationSeconds` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
+| `externalsecrets/v1.ClusterExternalSecretSpec` | `namespaceSelector` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261023150316-e932f3a3f6f2` |
+| `externalsecrets/v1.ClusterExternalSecretSpec` | `namespaces` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261023150316-e932f3a3f6f2` |
+| `externalsecrets/v1.PulumiProvider` | `accessToken` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261023150316-e932f3a3f6f2` |
+| `externalsecrets/v1.StoreSourceRef` | `generatorRef` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261023150316-e932f3a3f6f2` |
+| `externalsecrets/v1.VaultKubernetesServiceAccountTokenAuth` | `audiences` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261023150316-e932f3a3f6f2` |
+| `externalsecrets/v1.VaultKubernetesServiceAccountTokenAuth` | `expirationSeconds` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261023150316-e932f3a3f6f2` |
 | `api/v2.Rollback` | `recreate` | deprecated | — | `github.com/fluxcd/helm-controller/api@v1.7.1` |
 | `api/v1beta3.AlertSpec` | `summary` | deprecated | — | `github.com/fluxcd/notification-controller/api@v1.10.0` |
 | `api/v1beta3.ProviderSpec` | `proxy` | deprecated | — | `github.com/fluxcd/notification-controller/api@v1.10.0` |
