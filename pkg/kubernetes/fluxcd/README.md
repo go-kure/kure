@@ -305,7 +305,7 @@ Flux 2.10 promoted Provider and Alert to `v1`, the stored version. Kure follows:
    `kubernetes.Create[notificationv1beta3.Provider](name, namespace)`, with
    `notificationv1beta3` importing `github.com/fluxcd/notification-controller/api/v1beta3`.
    Then assign its fields directly.
-2. `SetProviderInterval` is removed. The `v1` Provider has no `spec.interval`, and `v1beta3`
+2. `SetProviderInterval` is removed. The `v1` Provider has no `spec.interval`, and `v1beta3` <!-- doc-api-refs:ignore removed setter, named as gone -->
    already ignored it. Drop the call.
 3. `v1` drops fields, and the result is a compile error in one case and a runtime failure in
    the other:

@@ -172,6 +172,12 @@ field: its `kind`, `url`, `ref` and `path`, which the CRD requires, are yours to
 provider and plain-HTTP setting have no helper, since each is a single non-pointer field: assign
 them on the `OCIRepository`, `oci.Spec.Provider = "aws"` and `oci.Spec.Insecure = true`.
 
+`fluxcd.CreateProvider` and `fluxcd.CreateAlert` emit `notification.toolkit.fluxcd.io/v1`, which
+Flux serves from 2.10 only: a cluster on an older Flux rejects them. Code written against the
+`v1beta3` types, or against the Flux 2.9 Go APIs, follows
+[Migrating Provider and Alert to v1](/api-reference/fluxcd-builders/#migrating-provider-and-alert-to-v1),
+which also covers the Secret keys that now fail at runtime and the changed Helm and OCI types.
+
 See the [FluxCD Builders reference](/api-reference/fluxcd-builders) for all available resource types.
 
 Beyond FluxCD, the [Kubernetes Builders](/api-reference/kubernetes-builders) package provides typed constructors for core resources (Deployment, Service, Ingress, CronJob, NetworkPolicy, HTTPRoute), PSA security context helpers, ResourceRequirements builders, and more. The constructors write identity only, so fields the API server requires in context are yours to set: a Job from `kubernetes.CreateJob` needs `Spec.Template.Spec.RestartPolicy` set to `Never` or `OnFailure`, or the server defaults it to `Always` and rejects the Job. The [Prometheus Builders](/api-reference/prometheus-builders) sub-package covers ServiceMonitor, PodMonitor, and PrometheusRule CRDs.
