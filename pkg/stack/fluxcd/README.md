@@ -1751,7 +1751,7 @@ Every duration this package writes into an object it generates is held to the pa
 API holds that field to, `^([0-9]+(\.[0-9]+)?(ms|s|m|h))+$`, where the object is created. The
 pattern is the same on a Kustomization's `spec.interval`, `spec.timeout` and `spec.retryInterval`
 (kustomize-controller v1.10.1), on the `spec.interval` of a `GitRepository` and an `OCIRepository`
-(source-controller v1.10.1) and on a `FluxInstance`'s `spec.sync.interval` (flux-operator v0.62.0):
+(source-controller v1.10.1) and on a `FluxInstance`'s `spec.sync.interval` (flux-operator v0.62.1):
 
 | Generated object | Durations checked |
 |---|---|

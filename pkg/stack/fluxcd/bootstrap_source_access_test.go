@@ -210,7 +210,7 @@ func buildOperatorSync(t *testing.T, fi *fluxv1.FluxInstance, applied string) ma
 		}
 	}
 	// The two sync objects as flux-operator's sync template writes them
-	// (internal/builder/templates.go, v0.62.0), and a second OCIRepository a
+	// (internal/builder/templates.go, v0.62.1), and a second OCIRepository a
 	// patch must not reach.
 	sync := strings.NewReplacer("NAME", applied, "NS", fi.GetNamespace()).Replace(`apiVersion: source.toolkit.fluxcd.io/v1
 kind: OCIRepository
