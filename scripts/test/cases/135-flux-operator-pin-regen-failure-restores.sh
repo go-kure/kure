@@ -36,6 +36,21 @@ if ! diff -r "$FIXTURE/golden-before" "$golden" >/dev/null 2>&1; then
     exit 1
 fi
 
+# go killed on its own while its test binary carries on writing: the script
+# must end what is left of the regeneration before it restores.
+export STUB_PIN_GO_MODE=orphan
+new_pin_fixture v0.2.0
+golden="$FIXTURE/pkg/stack/fluxcd/testdata/bootstrap-output"
+cp -R "$golden" "$FIXTURE/golden-before"
+run_pin
+assert_rc 1
+assert_err_contains 'regenerating pkg/stack/fluxcd/testdata/bootstrap-output failed'
+if ! diff -r "$FIXTURE/golden-before" "$golden" >/dev/null 2>&1; then
+    echo "FAIL: a write after go exited landed on the restored outputs:" >&2
+    diff -r "$FIXTURE/golden-before" "$golden" >&2
+    exit 1
+fi
+
 export STUB_PIN_GO_MODE=digest
 new_pin_fixture v0.2.0
 rm -- "$FIXTURE"/pkg/stack/fluxcd/testdata/bootstrap-output/flux-operator-*.txt

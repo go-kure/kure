@@ -14,8 +14,10 @@
 #   fail    as digest, then exits 1, like a test that failed half way
 #   term    as digest -- a change the script would accept -- then sends
 #           SIGTERM to the pin script, like a Renovate run cancelled while
-#           `go test` ran, and exits 0, leaving a child that a second later
-#           appends a line to a flux-operator file unless stopped by then
+#           `go test` ran, and exits 0, leaving a child that after the cancel
+#           appends to a flux-operator file for 8 s unless stopped
+#   orphan  as digest, then exits 1 leaving that same child, like go killed
+#           on its own while its test binary carries on
 #
 # Any other invocation -- another subcommand or package, no -update, or a
 # working directory that is not the fixture root -- writes nothing and exits 2,
@@ -41,6 +43,19 @@ set_header() {
     local file="$1" count="$2"
     { printf '=== install bundle: %s objects, sha256 %s ===\n' "$count" "$digest"; tail -n +2 "$file"; } > "$file.tmp"
     mv "$file.tmp" "$file"
+}
+
+# late_writer -- a background child that appends to a flux-operator file every
+# 0.2 s for 8 s, unless it is stopped first: longer than the pin script's 5 s
+# grace before SIGKILL, so it still writes after a restore unless the script
+# signals the whole group.
+late_writer() {
+    (
+        for ((i = 0; i < 40; i++)); do
+            sleep 0.2
+            printf 'kind: FluxInstance written late\n' >> "$dir/flux-operator-oci.txt"
+        done
+    ) &
 }
 
 for f in "$dir"/flux-operator-*.txt; do
@@ -83,12 +98,19 @@ case "$mode" in
             echo "stub-pin go: could not find the pin script to signal" >&2
             exit 1
         fi
-        kill -TERM "$target"
         # Like the test binary go starts: a child that outlives this process
         # and is still writing after the cancel. A script that restores
         # without stopping it first -- or that stops only this process --
-        # gets this change written over the restored outputs.
-        (sleep 1; printf 'kind: FluxInstance written late\n' >> "$dir/flux-operator-oci.txt") &
+        # gets this change written over the restored outputs. Started before
+        # the signal, so it exists whatever the script does next.
+        late_writer
+        kill -TERM "$target"
+        ;;
+    orphan)
+        # go killed on its own (OOM, a signal of its own) while its test
+        # binary carries on: exits 1 and leaves the late writer behind.
+        late_writer
+        exit 1
         ;;
     *)
         echo "stub-pin go: unknown STUB_PIN_GO_MODE '$mode'" >&2
