@@ -1,4 +1,4 @@
-=== install bundle: 13 objects, sha256 4ba77f7674579c8e0d806538b0f378ba057e0d99d52b97bc05279f84cfc21bc3 ===
+=== install bundle: 13 objects, sha256 b67e7d29d77d09f7960bfe7872dcdef9c73d12bbb79b1888354151721dc36cdf ===
 ClusterRole: 4
 ClusterRoleBinding: 1
 CustomResourceDefinition: 4
