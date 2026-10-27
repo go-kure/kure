@@ -651,6 +651,13 @@ func TestMissedCycles_UncertainWriterAddsNoEdge(t *testing.T) {
 			disabled.SetLabels(map[string]string{"kustomize.toolkit.fluxcd.io/reconcile": "Disabled"})
 			return pairCluster(check("red", "ready"), []client.Object{cm("default", "a-cm")}, []client.Object{disabled})
 		}},
+		// a health-checks a Kustomization of another group under its own
+		// namespace and name, which b-longer writes: Flux drops a check on any
+		// Kustomization named as the checker itself, so a waits for nothing.
+		"a checks a Kustomization under its own name": {cluster: func() *stack.Cluster {
+			return pairCluster(stack.HealthCheck{APIVersion: "example.io/v1", Kind: "Kustomization", Namespace: "flux-system", Name: "a"},
+				[]client.Object{cm("default", "a-cm")}, []client.Object{unstructuredObj("example.io/v1", "Kustomization", "flux-system", "a")})
+		}},
 		// b-longer adds to red/default, which Kubernetes creates in every
 		// namespace.
 		"Kubernetes creates it": {cluster: func() *stack.Cluster {

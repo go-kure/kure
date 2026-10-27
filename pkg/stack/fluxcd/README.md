@@ -360,7 +360,8 @@ Kustomization's `dependsOn` that closes a cycle on a later integration is refuse
 `wait` and each health check. A health check on an object that is no Flux Kustomization, on a
 Kustomization without `wait` or `spec.kubeConfig`, waits for that object to exist: Flux fetches a
 checked object before it evaluates any `spec.healthCheckExprs` entry, whatever the expression
-says. kure adds that wait only when the object's writer is certain: every copy of it, matched by
+says. As Flux does, a check on a Kustomization of any group that carries the checker's own
+namespace and name is dropped. kure adds that wait only when the object's writer is certain: every copy of it, matched by
 group, kind, namespace and name as written (the version ignored; an empty `apiVersion` is
 `apps/v1`, as Flux reads it), sits in a directory exactly one Kustomization's build holds, the
 same one for all, that build transforms nothing and skips nothing, and no other build may write the
