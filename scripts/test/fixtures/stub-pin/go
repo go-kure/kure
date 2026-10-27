@@ -13,8 +13,9 @@
 #   added   as digest, plus a new flux-operator-*.txt file
 #   fail    as digest, then exits 1, like a test that failed half way
 #   term    as digest -- a change the script would accept -- then sends
-#           SIGTERM to the pin script and exits 0, like a Renovate run
-#           cancelled while `go test` ran
+#           SIGTERM to the pin script, like a Renovate run cancelled while
+#           `go test` ran, and exits 0, leaving a child that a second later
+#           appends a line to a flux-operator file unless stopped by then
 #
 # Any other invocation -- another subcommand or package, no -update, or a
 # working directory that is not the fixture root -- writes nothing and exits 2,
@@ -83,6 +84,11 @@ case "$mode" in
             exit 1
         fi
         kill -TERM "$target"
+        # Like the test binary go starts: a child that outlives this process
+        # and is still writing after the cancel. A script that restores
+        # without stopping it first -- or that stops only this process --
+        # gets this change written over the restored outputs.
+        (sleep 1; printf 'kind: FluxInstance written late\n' >> "$dir/flux-operator-oci.txt") &
         ;;
     *)
         echo "stub-pin go: unknown STUB_PIN_GO_MODE '$mode'" >&2

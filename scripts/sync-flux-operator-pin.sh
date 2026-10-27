@@ -167,13 +167,33 @@ restore_goldens() {
     goldens_unvalidated=false
 }
 
+# regen_pid is the process group running step 6's `go test -update` while it
+# runs. stop_regen ends that whole group -- go and the test binary it started
+# -- and waits until none of it is left, so nothing writes a stored output
+# after it has been restored.
+regen_pid=""
+stop_regen() {
+    local i
+    [[ -n "$regen_pid" ]] || return 0
+    kill -TERM -- "-$regen_pid" 2>/dev/null || true
+    for ((i = 0; i < 50; i++)); do
+        kill -0 -- "-$regen_pid" 2>/dev/null || break
+        sleep 0.1
+    done
+    kill -KILL -- "-$regen_pid" 2>/dev/null || true
+    wait "$regen_pid" 2>/dev/null || true
+    regen_pid=""
+}
+
 # goldens_unvalidated is true from the moment step 6 may write the stored
 # outputs until they are validated or restored, so any other way out -- an
 # unexpected error, or a SIGTERM while `go test` runs (bash runs the EXIT trap
-# on it too) -- puts them back before the snapshot is deleted. The .new files are stage()'s scratch copies; a
+# on it too) -- stops the regeneration and puts them back before the snapshot
+# is deleted. The .new files are stage()'s scratch copies; a
 # failure while staging must not leave one behind in the source tree.
 goldens_unvalidated=false
 cleanup() {
+    stop_regen
     if [[ "$goldens_unvalidated" == true ]]; then
         restore_goldens || echo "sync-flux-operator-pin: could not restore ${golden_rel}" >&2
     fi
@@ -260,8 +280,17 @@ cp -Rp "$GOLDEN_DIR" "$golden_snap/stored"
 goldens_unvalidated=true
 
 echo "sync-flux-operator-pin: regenerating ${golden_rel}"
-# -count=1: a cached pass would run nothing, so write nothing.
-if ! (cd "$REPO_ROOT" && go test ./pkg/stack/fluxcd/ -run "$GOLDEN_TESTS" -count=1 -update); then
+# -count=1: a cached pass would run nothing, so write nothing. Started in the
+# background under job control (set -m) so it gets its own process group for
+# stop_regen: killing go alone would leave the test binary it started writing.
+set -m
+(cd "$REPO_ROOT" && exec go test ./pkg/stack/fluxcd/ -run "$GOLDEN_TESTS" -count=1 -update) &
+regen_pid=$!
+set +m
+regen_rc=0
+wait "$regen_pid" || regen_rc=$?
+regen_pid=""
+if [[ "$regen_rc" -ne 0 ]]; then
     restore_goldens
     echo "sync-flux-operator-pin: regenerating ${golden_rel} failed; stored outputs left as they were" >&2
     exit 1
