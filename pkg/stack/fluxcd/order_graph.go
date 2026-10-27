@@ -82,6 +82,12 @@ func (g *orderGraph) next(n string) ([]string, error) {
 		}
 		if !k.Spec.Wait && k.Spec.KubeConfig == nil {
 			for _, hc := range k.Spec.HealthChecks {
+				// Flux drops a check on any Kustomization, whatever its
+				// group, named as the checker itself (kustomize-controller
+				// v1.9.5 internal/controller/kustomization_controller.go:1037-1045).
+				if hc.Kind == kustv1.KustomizationKind && hc.Name == k.Name && hc.Namespace == k.Namespace {
+					continue
+				}
 				if isFluxKustomizationCheck(hc.APIVersion, hc.Kind) {
 					continue // read by awaitedKustomizations
 				}
