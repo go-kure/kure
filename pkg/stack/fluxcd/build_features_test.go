@@ -156,14 +156,26 @@ func TestBuildFeatures_ExcludedObjectLeavesTheWait(t *testing.T) {
 // placement, keeps it, and re-integrates it after edit.
 func keptPlatform(t *testing.T, placement layout.FluxPlacement, edit func(ml *layout.ManifestLayout)) (*layout.ManifestLayout, error) {
 	t.Helper()
+	return keptPlatformIn(t, fluxstack.DefaultNamespace, placement, edit)
+}
+
+// keptPlatformIn is keptPlatform with the generator writing its Flux
+// resources into namespace, none for "".
+func keptPlatformIn(t *testing.T, namespace string, placement layout.FluxPlacement, edit func(ml *layout.ManifestLayout)) (*layout.ManifestLayout, error) {
+	t.Helper()
 	rules := withPlacement(nodeOnly, placement)
 	cl := noWaitCluster(srBundle("platform", cmApp("platform-app")), true)
-	ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(cl, rules)
+	gen := func() *fluxstack.ResourceGenerator {
+		g := fluxstack.NewResourceGenerator()
+		g.DefaultNamespace = namespace
+		return g
+	}
+	ml, err := fluxstack.NewLayoutIntegrator(gen()).CreateLayoutWithResources(cl, rules)
 	if err != nil {
 		t.Fatalf("first integration: %v", err)
 	}
 	edit(ml)
-	return ml, fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, cl, rules)
+	return ml, fluxstack.NewLayoutIntegrator(gen()).IntegrateWithLayout(ml, cl, rules)
 }
 
 // kustomizationCheck is a health check on the Flux Kustomization
@@ -178,23 +190,31 @@ func kustomizationCheck(namespace, name string) metaapi.NamespacedObjectKindRefe
 // platform without wait checking itself waits for nothing. With no
 // namespace Flux neither defaults it nor drops it, and its poller rejects
 // the check, so platform never becomes Ready: still refused, by name. Two
-// Kustomizations checking each other wait for each other.
+// Kustomizations checking each other wait for each other. Written without
+// a namespace, platform exists on the cluster in "default", where a check
+// naming default/platform is the self-check Flux drops.
 func TestBuildFeatures_SelfHealthCheck(t *testing.T) {
 	cases := map[string]struct {
-		edit func(ml *layout.ManifestLayout)
-		want string
+		namespace string
+		edit      func(ml *layout.ManifestLayout)
+		want      string
 	}{
-		"self, with namespace": {func(ml *layout.ManifestLayout) {
+		"self, with namespace": {fluxstack.DefaultNamespace, func(ml *layout.ManifestLayout) {
 			p := findKept(ml, "platform")
 			p.Spec.Wait = false
 			p.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{kustomizationCheck(p.Namespace, p.Name)}
 		}, ""},
-		"self, no namespace": {func(ml *layout.ManifestLayout) {
+		"self, no namespace": {fluxstack.DefaultNamespace, func(ml *layout.ManifestLayout) {
 			p := findKept(ml, "platform")
 			p.Spec.Wait = false
 			p.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{kustomizationCheck("", p.Name)}
 		}, "health-checks itself with no namespace"},
-		"each other": {func(ml *layout.ManifestLayout) {
+		"self, default namespace on an omitted one": {"", func(ml *layout.ManifestLayout) {
+			p := findKept(ml, "platform")
+			p.Spec.Wait = false
+			p.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{kustomizationCheck("default", p.Name)}
+		}, ""},
+		"each other": {fluxstack.DefaultNamespace, func(ml *layout.ManifestLayout) {
 			p, w := findKept(ml, "platform"), findKept(ml, "web")
 			w.Spec.DependsOn = nil
 			p.Spec.Wait, w.Spec.Wait = false, false
@@ -205,7 +225,7 @@ func TestBuildFeatures_SelfHealthCheck(t *testing.T) {
 	for name, c := range cases {
 		for _, placement := range integratedPlacements {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
-				ml, err := keptPlatform(t, placement, c.edit)
+				ml, err := keptPlatformIn(t, c.namespace, placement, c.edit)
 				if c.want == "" {
 					if err != nil {
 						t.Fatalf("got %v, want the tree admitted (%s)", err, describeKustomizations(ml))

@@ -740,8 +740,9 @@ func awaitedKustomizations(k *kustv1.Kustomization, applied func() []string) []s
 // which Flux ignores them), each waited Ready for (a healthCheckExprs entry
 // for them read as readiness, awaitedKustomizations). With spec.kubeConfig
 // set Flux polls another cluster: a name there is not this tree's
-// Kustomization, and none is returned. A check naming k itself by its
-// namespace and name, as written, is not returned: Flux drops it
+// Kustomization, and none is returned. A check that writes a namespace and
+// names k itself is not returned: Flux drops it, comparing it with k as it
+// exists on the cluster, where an omitted namespace is "default" (crKey)
 // (kustomize-controller v1.10.1
 // internal/controller/kustomization_controller.go:1118-1126). One with no
 // namespace is returned, as k's own key: Flux does not default its namespace
@@ -756,7 +757,7 @@ func checkedKustomizations(k *kustv1.Kustomization) []string {
 		if hc.Kind != "Kustomization" || !strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") {
 			continue
 		}
-		if hc.Namespace != "" && hc.Namespace == k.Namespace && hc.Name == k.Name {
+		if hc.Namespace != "" && crKey(hc.Namespace, hc.Name) == crKey(k.Namespace, k.Name) {
 			continue
 		}
 		ns := hc.Namespace

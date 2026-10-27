@@ -361,7 +361,8 @@ Kustomization's `dependsOn` that closes a cycle on a later integration is refuse
 Kustomization without `wait` or `spec.kubeConfig`, waits for that object to exist: Flux fetches a
 checked object before it evaluates any `spec.healthCheckExprs` entry, whatever the expression
 says. As Flux does, a check on a Kustomization of any group that carries the checker's own
-namespace and name is dropped, a check on a Flux Kustomization included. Flux does not default a
+namespace and name is dropped, a check on a Flux Kustomization included; there the checker's
+namespace is the one it has on the cluster, `default` for a checker written without one. Flux does not default a
 check's namespace, so a check on itself written with no namespace is not dropped: its poller
 rejects it, the checker never becomes Ready, and the integration refuses it, saying so. kure adds that wait only when the object's writer is certain: every copy of it, matched by
 group, kind, namespace and name as written (the version ignored; an empty `apiVersion` is
