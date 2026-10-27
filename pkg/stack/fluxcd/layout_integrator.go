@@ -1153,15 +1153,21 @@ func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string)
 // (checkedKustomizations); it does not default this one's, and its poller
 // rejects a namespaced check with none (fluxcd/cli-utils v1.4.0
 // pkg/kstatus/polling/engine/engine.go:85-101), so k never becomes Ready.
+// The namespace it suggests is k's as it exists on the cluster, "default" for
+// an omitted one (crKey).
 func selfCheckWithoutNamespace(k *kustv1.Kustomization) error {
 	if k.Spec.Wait || k.Spec.KubeConfig != nil {
 		return nil
+	}
+	namespace := k.Namespace
+	if namespace == "" {
+		namespace = "default"
 	}
 	for _, hc := range k.Spec.HealthChecks {
 		if hc.Kind == "Kustomization" && strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") &&
 			hc.Namespace == "" && hc.Name == k.Name {
 			return errors.Errorf("Flux Kustomization %q can never become Ready: it health-checks itself with no namespace, which Flux neither defaults nor drops as a self-check, and a namespaced health check with no namespace never passes; remove the check, or give it namespace %q, which Flux drops as a self-check",
-				k.Name, k.Namespace)
+				k.Name, namespace)
 		}
 	}
 	return nil
