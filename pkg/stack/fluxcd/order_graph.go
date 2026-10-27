@@ -192,8 +192,9 @@ func (t *kustomizationTree) unskipped(w *kustv1.Kustomization, keys []string) []
 	return out
 }
 
-// setOver returns base with every key of over set over it, as Flux's
-// SetCommonMetadata does (fluxcd/pkg/ssa v0.83.0 utils/meta.go:27-55).
+// setOver returns base with every key of over set over it, as Flux sets
+// spec.commonMetadata over an object (fluxcd/pkg/ssa v0.83.0
+// utils/meta.go:27-55).
 func setOver(base, over map[string]string) map[string]string {
 	out := maps.Clone(base)
 	if out == nil {
