@@ -361,7 +361,9 @@ Kustomization's `dependsOn` that closes a cycle on a later integration is refuse
 Kustomization without `wait` or `spec.kubeConfig`, waits for that object to exist: Flux fetches a
 checked object before it evaluates any `spec.healthCheckExprs` entry, whatever the expression
 says. As Flux does, a check on a Kustomization of any group that carries the checker's own
-namespace and name is dropped. kure adds that wait only when the object's writer is certain: every copy of it, matched by
+namespace and name is dropped, a check on a Flux Kustomization included. Flux does not default a
+check's namespace, so a check on itself written with no namespace is not dropped: its poller
+rejects it, the checker never becomes Ready, and the integration refuses it, saying so. kure adds that wait only when the object's writer is certain: every copy of it, matched by
 group, kind, namespace and name as written (the version ignored; an empty `apiVersion` is
 `apps/v1`, as Flux reads it), sits in a directory exactly one Kustomization's build holds, the
 same one for all, that build transforms nothing and skips nothing, and no other build may write the
@@ -1425,21 +1427,42 @@ Kustomizations (`spec.healthCheckExprs`) are read conservatively, as readiness: 
 arbitrary CEL and may itself wait for the `Ready` condition, so the check, and what a `wait`
 polls, waits for the checked Kustomization to be Ready, whatever the expression says.
 
-Where these checks cannot tell what a build writes or waits for, they keep the wait, so they may
-refuse a tree that would converge. They do not model a generated Kustomization's patches
-rewriting a child Kustomization's spec, objects that `kustomize.toolkit.fluxcd.io/ssa: Ignore` or
-`kustomize.toolkit.fluxcd.io/reconcile: disabled` excludes from an apply, `spec.ignore`,
-`spec.postBuild` substitution, `spec.suspend`, a `spec.healthCheckExprs` expression that does
-not wait for readiness, or a build's own transforms (`spec.patches`,
-which may delete what the directory holds, `spec.components`, `spec.namePrefix`,
-`spec.nameSuffix`, `spec.targetNamespace`), or a Kustomization the tree's own build also writes,
-as an alternate creator: a check on what a generated Kustomization's build writes waits for that
-apply, even where another Kustomization of the tree writes it as well and would apply first
-(go-kure/kure#1094). A tree refused for one of them integrates
-once the dependency or health check that closes the reported chain is dropped, or names another
-Kustomization.
+These checks read what Flux's apply and wait do with a Kustomization's spec, as follows
+(go-kure/kure#1094):
 
-One cycle is known to pass these checks unrefused (go-kure/kure#1133): one through a local-config
+- **Objects an apply skips.** A Flux Kustomization that a Kustomization's apply skips is left out
+  of what its `wait` waits for. Skipped means `kustomize.toolkit.fluxcd.io/ssa: Ignore` or
+  `kustomize.toolkit.fluxcd.io/reconcile: disabled`, as a label or annotation in any case, on the
+  object with the Kustomization's `spec.commonMetadata` applied over it. It is read only for a
+  build that transforms nothing, since a patch may set or clear the mark. `ssa: IfNotPresent` is
+  not skipped: the apply creates the object and waits for it. A health check on a skipped object
+  still waits for it. A mark in `spec.commonMetadata` is that Kustomization's alone, so another
+  apply, the root's included, still creates the object. A mark on the object itself skips it in
+  every apply, so it never exists: a stall, which the checks do not judge.
+- **A health check on the checker itself.** As Flux does, a check that carries the checker's own
+  namespace and name is dropped. One with no namespace never passes: it is refused, saying so.
+- **`spec.ignore`.** A Kustomization's `spec.ignore` holds drift rules, which a fresh install does
+  not use. A Source's `spec.ignore` and `.sourceignore` files are not read.
+- **`spec.suspend`.** A cycle through a suspended Kustomization stays refused: a suspended
+  Kustomization never applies on a fresh install, so the tree would not converge either.
+- **`spec.healthCheckExprs` on Flux Kustomizations.** An expression is read as readiness,
+  whatever it says. Flux evaluates it after its own generation guard, and it is arbitrary CEL, so
+  a check written as an expression that waits for nothing more is still refused. Drop the check,
+  or order the two Kustomizations with a `dependsOn` that closes no cycle.
+- **An alternate creator.** A check on what a generated Kustomization's build writes waits for
+  that apply, even where another Kustomization of the tree writes it as well and would apply
+  first. Let one Kustomization write the target.
+
+They do not model a generated Kustomization's patches rewriting a child Kustomization's spec,
+`spec.postBuild` substitution, or a build's own transforms (`spec.patches`, which may delete what
+the directory holds, `spec.components`, `spec.namePrefix`, `spec.nameSuffix`,
+`spec.targetNamespace`). Where the checks cannot tell what such a build writes or waits for, they
+keep the wait, so they may refuse a tree that would converge; and since the transformed spec is
+not read, a cycle that only the transform closes can pass. A tree refused for one of these
+integrates once the dependency or health check that closes the reported chain is dropped, or
+names another Kustomization.
+
+One cycle is known to pass these checks unrefused (go-kure/kure#1094): one through a local-config
 copy a patched build may keep. Such a copy is read as written in its directory: the keeping build's transforms (name prefix,
 `targetNamespace`, patches beyond the annotation) are not applied to it, so a cycle that depends
 on them can pass; its own `wait` is not followed; and a name it shares with a live Kustomization

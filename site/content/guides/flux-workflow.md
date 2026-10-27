@@ -914,6 +914,13 @@ place as a directory of the tree only when it reads the Source of the
 Kustomization that applies it, on this cluster; a health check on another cluster (`spec.kubeConfig`) waits for no
 readiness here, and a `spec.healthCheckExprs` predicate on Flux Kustomizations
 is read as a readiness wait, whatever it says.
+A `wait` does not wait for a Flux Kustomization its apply skips
+(`kustomize.toolkit.fluxcd.io/ssa: Ignore` or
+`kustomize.toolkit.fluxcd.io/reconcile: disabled`, on the object or in the
+waiting Kustomization's `spec.commonMetadata`) when its build transforms
+nothing, and a health check on the checker itself is dropped, as Flux drops it,
+unless it is written with no namespace, which never passes and is refused (see
+the [Flux Engine reference](/api-reference/flux-engine/)).
 With or without the setting, every integration also judges the order of the
 Kustomizations it placed or kept, on each later integration too: one without
 `wait` that health-checks any other object waits for the Kustomization that
