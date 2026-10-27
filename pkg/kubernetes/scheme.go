@@ -17,7 +17,7 @@ import (
 	reflectorv1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
-	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
+	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3" //nolint:staticcheck // SA1019: still registered so v1beta3 manifests parse; constructors build v1
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourceWatcherv1beta1 "github.com/fluxcd/source-watcher/api/v2/v1beta1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"

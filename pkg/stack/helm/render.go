@@ -205,7 +205,7 @@ func renderOCI(chartURL, version string, values map[string]any, ro renderOptions
 
 // setDigestVersion sets the chart's version to its semver version with the
 // build metadata replaced by the first 12 hex characters of digest. This is
-// the computation of helm-controller v1.6.4 mutateChartWithSourceRevision
+// the computation of helm-controller v1.7.1 mutateChartWithSourceRevision
 // (with parseSemverFromTag and extractDigestSubString), on the same semver
 // library, so the result formats identically. Like helm-controller, it
 // refuses a tag that is a semver version ("_" read as "+", the OCI tag form)

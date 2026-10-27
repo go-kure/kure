@@ -77,7 +77,7 @@ generated from the scheme and the scope table in `pkg/kubernetes/internal/kinds`
 are never hand-written. A kind registered in the scheme without a wrapper fails the
 identity test; a wrapper that sets anything beyond identity fails it too.
 
-One case is registered without a wrapper, by name. A wrapper is named after its kind
+A few kinds are registered without a wrapper, by name. A wrapper is named after its kind
 alone, so two versions of one kind in one package would both be `Create<Kind>`, and
 the generator refuses that. The version that goes without is listed, with the reason,
 in `skippedWrappers` (`pkg/kubernetes/internal/kinds/skips.go`). It stays registered:
@@ -89,9 +89,14 @@ clash — it names a registered kind, gives a reason, and another version of the
 kind in the same package keeps the wrapper — so the table cannot be used to drop a
 constructor nothing else stands in for.
 
-The one entry is MetalLB's `BGPPeer` at `metallb.io/v1beta1`, which upstream
-deprecates. `metallb.CreateBGPPeer` returns `metallb.io/v1beta2`, the version MetalLB
-stores.
+There are three entries, each a version upstream deprecates:
+
+- MetalLB's `BGPPeer` at `metallb.io/v1beta1`. `metallb.CreateBGPPeer` returns
+  `metallb.io/v1beta2`, the version MetalLB stores.
+- Flux's `Provider` and `Alert` at `notification.toolkit.fluxcd.io/v1beta3`.
+  `fluxcd.CreateProvider` and `fluxcd.CreateAlert` return `notification.toolkit.fluxcd.io/v1`,
+  the version Flux 2.10 stores. A cluster on an older Flux still needs `v1beta3`; build it
+  with `Create[notificationv1beta3.Provider]` (or `.Alert`).
 
 ### Base kinds covered
 

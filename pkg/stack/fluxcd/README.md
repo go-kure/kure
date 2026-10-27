@@ -864,7 +864,7 @@ its upstream registry with no pull secret.
 
 The `"flux-operator"` bundle is vendored from the upstream flux-operator release and pinned
 in lockstep with the `github.com/controlplaneio-fluxcd/flux-operator` Go module
-(`FluxOperatorVersion`, currently **v0.58.1**). Renovate re-vendors the bundle and updates
+(`FluxOperatorVersion`, currently **v0.62.0**). Renovate re-vendors the bundle and updates
 the constant and this version when it bumps the module (`scripts/sync-flux-operator-pin.sh`);
 see `flux_operator_install.go` for the manual refresh procedure.
 
@@ -872,7 +872,7 @@ The `"gotk"` components are built from the flux2 release's install manifests bas
 at the module root (`internal/gotk/manifests.tar.gz`, shared with the tests that read the
 toolkit's CustomResourceDefinitions out of it) in lockstep with the
 `github.com/fluxcd/flux2/v2` Go module
-(`GotkVersion`, currently **v2.9.5**), so gotk generation makes no network call and the same
+(`GotkVersion`, currently **v2.10.0**), so gotk generation makes no network call and the same
 input always produces the same manifests. That happens when `FluxVersion` is empty or names
 `GotkVersion` (with or without the leading `v`). Any other `FluxVersion`, `"latest"` included,
 is an explicit opt-in to the upstream behaviour: a manifests base is downloaded from GitHub at
@@ -1642,7 +1642,7 @@ Each `Target` here is for a patch of one object; a patch of several is first wri
 
 **A second integration** keeps the per-layout Kustomization the first one placed, as it is: its settings and patches are not written again, so a field changed on the layout or the bundle in between is not on it. A kept Kustomization still counts as a build that can hold a patch's object, so a second integration of an unchanged tree refuses nothing the first took and changes no byte: the patch for an object of a layout is on that layout's kept Kustomization already. A patch the bundle got, lost or changed between two integrations of one tree is not written on a kept Kustomization and not taken off it: the kept Kustomization then carries the patches of the first integration, stale like every other setting on it, and a new untargeted patch whose object only a kept Kustomization builds is written on none. Remove the kept Kustomization or walk the cluster again.
 
-**Readiness through the chain.** With `wait`, a Kustomization health-checks every object it applied, the Kustomization objects among them, and becomes Ready only after that check. A Kustomization object is healthy once the controller has observed its current generation and its `Ready` condition is true. With `Bundle.Wait` set, the bundle's Kustomization is therefore Ready only when the Kustomization of each application directory is, which is Ready only when the Kustomization of each layout below it is, each of them Ready only when the objects in its directory are: a `dependsOn` on the bundle's Kustomization waits for the workloads, where it used to wait only until each directory had been applied. This is how kustomize-controller v1.9.5 reads, with the status rules of fluxcd/cli-utils v1.2.3, and it holds for a first apply and for every change of a Kustomization's own spec. Two limits:
+**Readiness through the chain.** With `wait`, a Kustomization health-checks every object it applied, the Kustomization objects among them, and becomes Ready only after that check. A Kustomization object is healthy once the controller has observed its current generation and its `Ready` condition is true. With `Bundle.Wait` set, the bundle's Kustomization is therefore Ready only when the Kustomization of each application directory is, which is Ready only when the Kustomization of each layout below it is, each of them Ready only when the objects in its directory are: a `dependsOn` on the bundle's Kustomization waits for the workloads, where it used to wait only until each directory had been applied. This is how kustomize-controller v1.10.1 reads, with the status rules of fluxcd/cli-utils v1.4.0, and it holds for a first apply and for every change of a Kustomization's own spec. Two limits:
 
 - **A change of content only.** When a new revision of the source changes the files in a layout's directory and leaves the layout's Kustomization object as it was, the Kustomization above finds that object unchanged, with its generation observed and `Ready` true from the revision before. The health check does not look at the revision an object last applied, so the Kustomization above can be Ready for the new revision before the one below has applied it.
 - **Nested timeouts.** A health check runs under its own Kustomization's timeout (`spec.timeout`, or the interval less 30 seconds without one) and has to outlast everything below it. One timeout inherited on every level gives the innermost Kustomization as long as the outermost, which then fails at the moment the innermost would. Set a shorter `Timeout` on the layouts below: the layout fields are how the layouts get a shorter timeout than their bundle. Flux raises any timeout under 30 seconds to 30 seconds, so a shorter value gives no margin below that: the timeout above has to exceed the timeout in effect below, which is never less than 30 seconds.
@@ -1750,8 +1750,8 @@ depth. `FluxSeparate` and non-Flux paths are unaffected.
 Every duration this package writes into an object it generates is held to the pattern the Flux
 API holds that field to, `^([0-9]+(\.[0-9]+)?(ms|s|m|h))+$`, where the object is created. The
 pattern is the same on a Kustomization's `spec.interval`, `spec.timeout` and `spec.retryInterval`
-(kustomize-controller v1.9.5), on the `spec.interval` of a `GitRepository` and an `OCIRepository`
-(source-controller v1.9.5) and on a `FluxInstance`'s `spec.sync.interval` (flux-operator v0.58.1):
+(kustomize-controller v1.10.1), on the `spec.interval` of a `GitRepository` and an `OCIRepository`
+(source-controller v1.10.1) and on a `FluxInstance`'s `spec.sync.interval` (flux-operator v0.62.0):
 
 | Generated object | Durations checked |
 |---|---|

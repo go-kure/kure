@@ -21,7 +21,9 @@ import (
 // does not resolve such a clash, so the table cannot be used to drop a
 // constructor that nothing else stands in for.
 var skippedWrappers = map[schema.GroupVersionKind]string{
-	{Group: "metallb.io", Version: "v1beta1", Kind: "BGPPeer"}: "deprecated upstream; CreateBGPPeer builds metallb.io/v1beta2, the stored version",
+	{Group: "metallb.io", Version: "v1beta1", Kind: "BGPPeer"}:                      "deprecated upstream; CreateBGPPeer builds metallb.io/v1beta2, the stored version",
+	{Group: "notification.toolkit.fluxcd.io", Version: "v1beta3", Kind: "Alert"}:    "deprecated upstream; CreateAlert builds notification.toolkit.fluxcd.io/v1, the stored version",
+	{Group: "notification.toolkit.fluxcd.io", Version: "v1beta3", Kind: "Provider"}: "deprecated upstream; CreateProvider builds notification.toolkit.fluxcd.io/v1, the stored version",
 }
 
 // applySkips marks, in place, the kinds the given table names.

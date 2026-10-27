@@ -80,6 +80,12 @@ kure's builders let callers assign upstream fields directly, so an object the ol
 accepted can be rejected by the newer one. When that happens the widening's note in
 `docs/compatibility.md` says so; check it before upgrading across a range boundary.
 
+A range also does not say that every kind kure emits applies at its lower bound. Some kinds
+are emitted at an API version the dependency first served later in the range, so their floor
+is higher. For example, the `fluxcd` range starts at 2.4, but OCIRepository `v1` needs 2.6 and
+Provider/Alert `v1` need 2.10. `SupportedRange`/`Min`/`Max` carry the range only. The per-kind
+floors are in the notes, which this API does not export.
+
 A widening can also move `GoVersion`. The release kure widens to may raise the `go`
 directive of the dependency's own Go module, and kure's `go.mod` must then declare at least
 that version, so the Go toolchain needed to build kure, and any module that requires it, rises

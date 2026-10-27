@@ -79,7 +79,7 @@ infrastructure:
       - "github.com/cilium/proxy"
   fluxcd:
     go_module: "github.com/fluxcd/flux2/v2"
-    supported_range: "2.4 - 2.9"
+    supported_range: "2.4 - 2.10"
     notes: |
       v1beta2 APIs removed in 2.8, DependsOn uses DependencyReference.
       image-automation-controller promoted to v1.
@@ -88,14 +88,29 @@ infrastructure:
       *HelmChartVerification); OCIRepositoryVerification gained TrustedRootSecretRef.
       notification-controller/api v1.9: Receiver.Spec.Resources is now []ReceiverResource
       (embeds CrossNamespaceObjectReference + CEL Filter) and Receiver.Spec.SecretRef is a
-      pointer. Provider/Alert remain v1beta3 upstream (tracked by #250/#252).
+      pointer.
       All github.com/fluxcd/* packages upgraded together.
+      v2.10 (notification-controller/api v1.10): Provider and Alert are built at
+      notification.toolkit.fluxcd.io/v1, which Flux serves from 2.10 only; v1beta3 stays
+      registered so v1beta3 manifests still parse, but has no constructors. Kinds whose
+      floor is above the range's 2.4: OCIRepository source.toolkit.fluxcd.io/v1 from 2.6;
+      ImagePolicy, ImageRepository and ImageUpdateAutomation image.toolkit.fluxcd.io/v1 and
+      ExternalArtifact source.toolkit.fluxcd.io/v1 from 2.7; Provider and Alert v1 from
+      2.10. pkg/versions exports the range only, not these floors. Caller-visible Go
+      changes: OCIRepositorySpec.Interval (source-controller/api v1.10) and
+      HelmChartTemplateSpec.SourceRef (helm-controller/api v1.7) are now pointers;
+      HelmChartTemplateSpec embeds sourcev1.OCIRepositorySpec, which owns Interval and Verify
+      (HelmChartTemplateVerification is removed); HelmChartTemplate.GetInterval/GetNamespace,
+      HelmRelease.GetHelmChartName and HelmReleaseStatus.GetHelmChart are removed. The gotk
+      rbac.yaml no longer grants serviceaccounts/token create and grants
+      subjectaccessreviews instead; the install inventory is unchanged. Migration steps:
+      pkg/kubernetes/fluxcd/README.md, "Migrating Provider and Alert to v1".
     related_packages:
       - "github.com/fluxcd/*"
       - "github.com/controlplaneio-fluxcd/*"
   flux-operator:
     go_module: "github.com/controlplaneio-fluxcd/flux-operator"
-    supported_range: "0.23 - 0.58"
+    supported_range: "0.23 - 0.62"
     notes: |
       Routine minors, assessed against the vendored CRDs rather than the Go types alone.
       Three of the four bundled CRDs (fluxinstances, fluxreports, resourcesets) are
@@ -114,13 +129,30 @@ infrastructure:
       1.21.0 and meta 1.32.0 carry no type changes at all. The vendored install bundle
       (pkg/stack/fluxcd/flux_operator_install.yaml) and FluxOperatorVersion constant are
       re-pinned to v0.58.1 in the same change and the install inventory is unchanged.
+      v0.62 (from v0.58.1): the fluxreports CRD is identical; fluxinstances adds
+      multitenantObjectIdentity and objectIdentityRBAC (two workload-identity fields become
+      legacy); resourcesetinputproviders changes descriptions only. The bootstrap output
+      uses none of these fields, and the FluxInstance sync template it models (names, refs,
+      the fixed Kustomization interval and prune: true) is unchanged. resourcesets adds the
+      CEL rule !has(self.readyExpr) || has(self.ready): a caller-built ResourceSet
+      dependency with readyExpr set and ready false (omitted), which v0.58 admitted without
+      evaluating the expression, is rejected at apply time; set Ready: true or drop
+      ReadyExpr. The install bundle and FluxOperatorVersion are re-pinned to v0.62.0.
   source-watcher:
     go_module: "github.com/fluxcd/source-watcher/api/v2"
-    supported_range: "2.0 - 2.2"
+    supported_range: "2.0 - 2.3"
     notes: |
       Optional FluxCD controller for source composition/decomposition.
       Manages ArtifactGenerator CRD (source.extensions.fluxcd.io/v1beta1).
       Not in default Flux installation; requires --components-extra=source-watcher.
+      Distributed with Flux 2.7+.
+      v2.3 (from v2.2.4): ArtifactGenerator gains optional spec.serviceAccountName,
+      spec.managedNamespaces and per-artifact namespace and inputsFrom; the 253-character
+      artifact-name limit moves from the schema into CEL, applied only when pathPattern is
+      not set. The scheme still registers ArtifactGenerator and its List only. Caller-visible
+      Go changes: Status.Inventory is now []InventoryEntry (was
+      []ExternalArtifactReference), and EnabledValue/DisabledValue changed case; kure uses
+      neither.
     related_packages:
       - "github.com/fluxcd/source-controller"
   metallb:

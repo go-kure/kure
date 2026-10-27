@@ -15,10 +15,10 @@ import (
 // applies, and a label value is at most 63 characters: a longer name is
 // admitted by the API server and then fails every apply.
 //
-// Read in kustomize-controller v1.9.5: the reconciler hands the
+// Read in kustomize-controller v1.10.1: the reconciler hands the
 // Kustomization's name to the apply manager as the owner of the objects
-// (internal/controller/kustomization_controller.go:462), and the manager
-// writes it as a label value (github.com/fluxcd/pkg/ssa v0.76.2,
+// (internal/controller/kustomization_controller.go:489), and the manager
+// writes it as a label value (github.com/fluxcd/pkg/ssa v0.83.0,
 // manager.go:66-78).
 const KustomizationNameMaxLength = 63
 

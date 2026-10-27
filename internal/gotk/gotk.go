@@ -30,7 +30,7 @@ import (
 //  4. Update this constant, and the version named in
 //     pkg/stack/fluxcd/README.md ("currently **vX.Y.Z**").
 //  5. Run the tests under internal/ and pkg/stack/fluxcd.
-const Version = "v2.9.5"
+const Version = "v2.10.0"
 
 //go:embed manifests.tar.gz
 var manifests []byte

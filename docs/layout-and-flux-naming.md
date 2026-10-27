@@ -179,7 +179,7 @@ them.
 directly under the walked root (`addSeparateFluxToLayout` in `layout_integrator.go`).
 
 **Bootstrap, flux-operator mode (the default).**
-- Emits the embedded flux-operator install bundle (`v0.58.1`) and a `FluxInstance` named `flux`.
+- Emits the embedded flux-operator install bundle (`v0.62.0`) and a `FluxInstance` named `flux`.
 - `distribution.registry` and `distribution.version` are written verbatim. `v0.2.0-beta.15` wrote
   an empty value too, as an empty string; since
   [go-kure/kure#975](https://github.com/go-kure/kure/issues/975) an empty value is an error.
@@ -768,10 +768,10 @@ go-kure/kure#1030, shortens the one name kure composes itself, a layout's
     such a directory cannot be created. Characters that only some file systems refuse are not
     checked.
 - **Why 63.** Flux labels every object it applies with the Kustomization's name, and a label
-  value is at most 63 characters. Verified in kustomize-controller v1.9.5, the version this module
+  value is at most 63 characters. Verified in kustomize-controller v1.10.1, the version this module
   pins: the reconciler hands the name to the apply manager as the owner of the objects
-  (`internal/controller/kustomization_controller.go:462`), and the manager writes it as the value
-  of the `kustomize.toolkit.fluxcd.io/name` label (`github.com/fluxcd/pkg/ssa` v0.76.2,
+  (`internal/controller/kustomization_controller.go:489`), and the manager writes it as the value
+  of the `kustomize.toolkit.fluxcd.io/name` label (`github.com/fluxcd/pkg/ssa` v0.83.0,
   `manager.go:66-78`). The API server admits a longer name and every apply then fails.
 - **The model** (`Bundle.Validate`, `ValidateCluster`): a bundle's `Name`, and that of every
   umbrella descendant, is a bundle name and a directory name (`Bundle.validateNames`). A
@@ -1530,8 +1530,8 @@ layout. Readiness passes through the chain of Kustomizations a bundle with `Wait
   said otherwise and is corrected; the behaviour is unchanged.
 - **Readiness through the chain:** with `wait`, a Kustomization health-checks every object it
   applied, Kustomization objects included, and one of those is healthy once its generation is
-  observed and its `Ready` condition is true (kustomize-controller v1.9.5, fluxcd/cli-utils
-  v1.2.3). With `Bundle.Wait` the bundle's Kustomization is Ready only when every Kustomization
+  observed and its `Ready` condition is true (kustomize-controller v1.10.1, fluxcd/cli-utils
+  v1.4.0). With `Bundle.Wait` the bundle's Kustomization is Ready only when every Kustomization
   below it is. Two limits: a revision that changes a directory's content and not its
   Kustomization object can be read as Ready before the Kustomization below applied it, and a
   health check runs under its own Kustomization's timeout, so one timeout inherited on every

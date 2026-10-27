@@ -10,16 +10,15 @@ import (
 	imagereflectorcontrollerv1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	kustomizecontrollerv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	notificationcontrollerv1 "github.com/fluxcd/notification-controller/api/v1"
-	notificationcontrollerv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
 	sourcecontrollerv1 "github.com/fluxcd/source-controller/api/v1"
 	sourcewatcherv2v1beta1 "github.com/fluxcd/source-watcher/api/v2/v1beta1"
 
 	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
-// CreateAlert returns a notification.toolkit.fluxcd.io/v1beta3 Alert carrying TypeMeta and identity only.
-func CreateAlert(name, namespace string) *notificationcontrollerv1beta3.Alert {
-	return kubernetes.Create[notificationcontrollerv1beta3.Alert](name, namespace)
+// CreateAlert returns a notification.toolkit.fluxcd.io/v1 Alert carrying TypeMeta and identity only.
+func CreateAlert(name, namespace string) *notificationcontrollerv1.Alert {
+	return kubernetes.Create[notificationcontrollerv1.Alert](name, namespace)
 }
 
 // CreateArtifactGenerator returns a source.extensions.fluxcd.io/v1beta1 ArtifactGenerator carrying TypeMeta and identity only.
@@ -92,9 +91,9 @@ func CreateOCIRepository(name, namespace string) *sourcecontrollerv1.OCIReposito
 	return kubernetes.Create[sourcecontrollerv1.OCIRepository](name, namespace)
 }
 
-// CreateProvider returns a notification.toolkit.fluxcd.io/v1beta3 Provider carrying TypeMeta and identity only.
-func CreateProvider(name, namespace string) *notificationcontrollerv1beta3.Provider {
-	return kubernetes.Create[notificationcontrollerv1beta3.Provider](name, namespace)
+// CreateProvider returns a notification.toolkit.fluxcd.io/v1 Provider carrying TypeMeta and identity only.
+func CreateProvider(name, namespace string) *notificationcontrollerv1.Provider {
+	return kubernetes.Create[notificationcontrollerv1.Provider](name, namespace)
 }
 
 // CreateReceiver returns a notification.toolkit.fluxcd.io/v1 Receiver carrying TypeMeta and identity only.

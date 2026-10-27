@@ -122,7 +122,8 @@ carries the source's digest: the chart's semver version with its build metadata 
 first 12 hex characters of the manifest digest (`1.16.5` becomes `1.16.5+3f1c5a9e0b7d`).
 `WithDigestVersion` renders at that same version, computed from the digest of the manifest the
 pull received, so every template that prints `.Chart.Version`, such as the conventional
-`helm.sh/chart` label, matches the release helm-controller makes. Combined with `WithDigest`, the
+`helm.sh/chart` label, matches the release helm-controller makes. The version string follows
+helm-controller v1.7.1's `mutateChartWithSourceRevision`. Combined with `WithDigest`, the
 digest is checked first. As helm-controller refuses to install them, a chart version that is not
 semver, a semver tag (with `_` read as `+`, the OCI tag form) naming another version than the
 chart's, build metadata aside, and a chart that is not a Helm v2 API chart (`apiVersion: v1` or

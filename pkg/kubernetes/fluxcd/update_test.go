@@ -74,12 +74,6 @@ func TestResourceSetHelpers(t *testing.T) {
 func TestProviderHelpers(t *testing.T) {
 	provider := CreateProvider("slack-provider", "flux-system")
 
-	interval := metav1.Duration{Duration: 10 * time.Minute}
-	SetProviderInterval(provider, interval)
-	if provider.Spec.Interval.Duration != 10*time.Minute {
-		t.Errorf("expected interval 10m, got %v", provider.Spec.Interval.Duration)
-	}
-
 	timeout := metav1.Duration{Duration: 30 * time.Second}
 	SetProviderTimeout(provider, timeout)
 	if provider.Spec.Timeout.Duration != 30*time.Second {
