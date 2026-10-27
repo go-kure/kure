@@ -24,6 +24,14 @@
 #      pkg/stack/fluxcd/flux_operator_install.go.
 #   5. Rewrite the "currently **vX.Y.Z**" mention in
 #      pkg/stack/fluxcd/README.md.
+#   6. When the bundle changed, regenerate the stored bootstrap outputs under
+#      pkg/stack/fluxcd/testdata/bootstrap-output with the tests' -update flag.
+#      They summarise the bundle as one line, `=== install bundle: N objects,
+#      sha256 ... ===`, so a re-vendor changes that line in each
+#      flux-operator-*.txt file. The result is kept only when that line, with
+#      N unchanged, is all that changed. Anything wider means the rendered
+#      bootstrap changed, which a person has to read: the stored files are
+#      put back and the script fails, so the bot's PR stays red on `test`.
 #
 # Each rewrite target must be found exactly once, checked up front — silently
 # rewriting nothing is how a lockstep pin drifts.
@@ -53,6 +61,9 @@ BUNDLE_DIR="$REPO_ROOT/pkg/stack/fluxcd"
 BUNDLE_FILE="$BUNDLE_DIR/flux_operator_install.yaml"
 CONST_FILE="$BUNDLE_DIR/flux_operator_install.go"
 README_FILE="$BUNDLE_DIR/README.md"
+GOLDEN_DIR="$BUNDLE_DIR/testdata/bootstrap-output"
+# The tests that write the files in GOLDEN_DIR (compareWithStored with -update).
+GOLDEN_TESTS='^(TestBootstrap_OutputUnchanged|TestBootstrapSource(Access|SemVer|Verify)_StoredOutput)$'
 
 # Required for the script to do its job, so a fail-fast bound rather than a
 # best-effort one — but it must be bounded: a stalled connection with no
@@ -65,6 +76,10 @@ for f in "$VERSIONS_FILE" "$GO_MOD" "$BUNDLE_FILE" "$CONST_FILE" "$README_FILE";
         exit 1
     fi
 done
+if ! compgen -G "$GOLDEN_DIR/flux-operator-*.txt" >/dev/null; then
+    echo "sync-flux-operator-pin: no stored bootstrap output found: $GOLDEN_DIR/flux-operator-*.txt" >&2
+    exit 1
+fi
 
 GO_MODULE="$(yq ".infrastructure.${DEP}.go_module // \"\"" "$VERSIONS_FILE")"
 if [[ -z "$GO_MODULE" || "$GO_MODULE" == "null" ]]; then
@@ -139,9 +154,12 @@ url="https://github.com/${UPSTREAM_REPO}/releases/download/${version}/install.ya
 echo "sync-flux-operator-pin: ${GO_MODULE} ${version} -- downloading ${url}"
 
 tmp="$(mktemp)"
+# golden_snap holds the stored bootstrap outputs as they were, so step 6 can
+# put them back.
+golden_snap="$(mktemp -d)"
 # The .new files are stage()'s scratch copies; a failure while staging must not
 # leave one behind in the source tree.
-trap 'rm -f "$tmp" "$BUNDLE_FILE.new" "$CONST_FILE.new" "$README_FILE.new"' EXIT
+trap 'rm -f "$tmp" "$BUNDLE_FILE.new" "$CONST_FILE.new" "$README_FILE.new"; rm -rf "$golden_snap"' EXIT
 
 if ! curl -fsSL "${CURL_TIMEOUT_ARGS[@]}" -o "$tmp" "$url"; then
     echo "sync-flux-operator-pin: could not download ${url}" >&2
@@ -200,9 +218,84 @@ stage "$README_FILE" \
 
 # ${staged[@]+...}: an empty array is an unbound variable under `set -u` on bash
 # older than 4.4.
+bundle_changed=false
 for file in ${staged[@]+"${staged[@]}"}; do
     mv "$file.new" "$file"
     echo "sync-flux-operator-pin: ${file#"$REPO_ROOT"/} -> ${version}"
+    if [[ "$file" == "$BUNDLE_FILE" ]]; then
+        bundle_changed=true
+    fi
 done
 
+if [[ "$bundle_changed" != true ]]; then
+    echo "sync-flux-operator-pin: done"
+    exit 0
+fi
+
+# Step 6. The bundle is already in place by now and stays there: on a failure
+# below, the bot's commit carries the re-vendor with the stored outputs as they
+# were, and `test` names the files that differ.
+golden_rel="${GOLDEN_DIR#"$REPO_ROOT"/}"
+cp -Rp "$GOLDEN_DIR" "$golden_snap/stored"
+
+# restore_goldens -- put the stored outputs back exactly as they were, removing
+# any file the update added.
+restore_goldens() {
+    rm -rf "$GOLDEN_DIR"
+    cp -Rp "$golden_snap/stored" "$GOLDEN_DIR"
+}
+
+echo "sync-flux-operator-pin: regenerating ${golden_rel}"
+# -count=1: a cached pass would run nothing, so write nothing.
+if ! (cd "$REPO_ROOT" && go test ./pkg/stack/fluxcd/ -run "$GOLDEN_TESTS" -count=1 -update); then
+    restore_goldens
+    echo "sync-flux-operator-pin: regenerating ${golden_rel} failed; stored outputs left as they were" >&2
+    exit 1
+fi
+
+# The one change a re-vendor may make: the summary line of a flux-operator-*.txt
+# file, with the same object count. Each kind's count follows on its own line,
+# so a bundle that gained or lost an object changes more than that line anyway.
+header_re='^=== install bundle: ([0-9]+) objects, sha256 [0-9a-f]{64} ===$'
+digest_only() {
+    local old="$1" new="$2" old_header new_header old_count
+    old_header="$(head -n 1 "$old")"
+    new_header="$(head -n 1 "$new")"
+    [[ "$old_header" =~ $header_re ]] || return 1
+    old_count="${BASH_REMATCH[1]}"
+    [[ "$new_header" =~ $header_re ]] || return 1
+    [[ "${BASH_REMATCH[1]}" == "$old_count" ]] || return 1
+    cmp -s <(tail -n +2 "$old") <(tail -n +2 "$new")
+}
+
+regenerated=()
+wider=()
+while IFS= read -r name; do
+    old="$golden_snap/stored/$name"
+    new="$GOLDEN_DIR/$name"
+    if [[ -f "$old" && -f "$new" ]] && cmp -s "$old" "$new"; then
+        continue
+    fi
+    if [[ "$name" == flux-operator-*.txt && -f "$old" && -f "$new" ]] && digest_only "$old" "$new"; then
+        regenerated+=("$name")
+    else
+        wider+=("$name")
+    fi
+done < <({ ls -A "$golden_snap/stored"; ls -A "$GOLDEN_DIR"; } | sort -u)
+
+if [[ ${#wider[@]} -gt 0 ]]; then
+    echo "sync-flux-operator-pin: the re-vendor changed ${golden_rel} beyond the bundle digest line:" >&2
+    for name in "${wider[@]}"; do
+        echo "  ${name}" >&2
+        diff -u --label "stored/$name" --label "regenerated/$name" \
+            "$golden_snap/stored/$name" "$GOLDEN_DIR/$name" 2>&1 | head -n 40 >&2 || true
+    done
+    restore_goldens
+    echo "sync-flux-operator-pin: stored outputs left as they were; the rendered bootstrap changed, so review it and regenerate by hand: go test ./pkg/stack/fluxcd/ -update" >&2
+    exit 1
+fi
+
+for name in ${regenerated[@]+"${regenerated[@]}"}; do
+    echo "sync-flux-operator-pin: ${golden_rel}/${name} -> bundle digest of ${version}"
+done
 echo "sync-flux-operator-pin: done"
