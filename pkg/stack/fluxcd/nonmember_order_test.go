@@ -137,21 +137,37 @@ func TestMissedCycles_SubstitutedNonMemberIsRead(t *testing.T) {
 // h depends on platform with a readyExpr, and platform waits for h, which its
 // application emits. Under kustomize-controller's default feature gates Flux
 // evaluates only the expression, so with "true" this tree converges; but kure
-// does not evaluate CEL, and an expression may itself require Ready, so the
-// dependsOn waits for platform's Ready and the cycle is refused
+// does not evaluate CEL and cannot see the gate. Without
+// AdditiveCELDependencyCheckOff the dependsOn waits for platform's Ready and
+// the cycle is refused. With it, "true" waits only for platform to exist,
+// which the Flux bootstrap creates, and the tree is admitted; any other
+// expression may itself require Ready, and is still refused
 // (go-kure/kure#1161). This tree integrated before go-kure/kure#1094.
-func TestMissedCycles_NonMemberReadyExprWaitsForReady(t *testing.T) {
-	for name, expr := range map[string]string{
-		"true":                   "true",
-		"an expression on Ready": "dep.status.conditions.filter(c, c.type == 'Ready').all(c, c.status == 'True')",
+func TestMissedCycles_NonMemberReadyExpr(t *testing.T) {
+	const onReady = "dep.status.conditions.filter(c, c.type == 'Ready').all(c, c.status == 'True')"
+	for name, c := range map[string]struct {
+		expr     string
+		off      bool
+		admitted bool
+	}{
+		"true":                             {expr: "true"},
+		"an expression on Ready":           {expr: onReady},
+		"true, gate off":                   {expr: "true", off: true, admitted: true},
+		"an expression on Ready, gate off": {expr: onReady, off: true},
 	} {
 		for _, placement := range integratedPlacements {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
 				h := handWritten("h")
-				h.Spec.DependsOn = []kustv1.DependencyReference{{Name: "platform", ReadyExpr: expr}}
+				h.Spec.DependsOn = []kustv1.DependencyReference{{Name: "platform", ReadyExpr: c.expr}}
 				platform := srBundle("platform", objApp("platform-app", client.Object(h)))
 				platform.Wait = boolPtr(true)
-				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(platform, true), withPlacement(nodeOnly, placement))
+				_, err := fluxstack.NewLayoutIntegrator(celGateOffGenerator(c.off)).CreateLayoutWithResources(noWaitCluster(platform, true), withPlacement(nodeOnly, placement))
+				if c.admitted {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
 				if err == nil || !strings.Contains(err.Error(), "can never all become Ready") || !strings.Contains(err.Error(), "flux-system/h") {
 					t.Fatalf("got %v, want the cycle through h's dependsOn refused", err)
 				}

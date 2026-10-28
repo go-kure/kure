@@ -99,6 +99,29 @@ type ResourceGenerator struct {
 	// Unlike UmbrellasDoNotWait it changes no other field, and no entry
 	// point refuses it.
 	OmitUmbrellaChildHealthChecks bool
+	// AdditiveCELDependencyCheckOff states that every kustomize-controller
+	// reconciling the tree runs with its AdditiveCELDependencyCheck feature
+	// gate off. That is Flux's default since v1.7 (kustomize-controller
+	// v1.10.1 internal/features/features.go:97-99), so an operator running the
+	// default controller sets this to true. kure cannot see the gate.
+	//
+	// false keeps the conservative read: a dependsOn with a readyExpr waits
+	// for the dependency's Ready, whatever the expression says.
+	//
+	// true changes one case: a dependsOn whose readyExpr is exactly "true"
+	// waits only for the dependency to exist. With the gate off Flux evaluates
+	// the expression instead of its own readiness check, and it always
+	// requires the dependency to exist first
+	// (internal/controller/kustomization_controller.go:597-628). The
+	// reconcile-order checks then wait for the apply of the Kustomization
+	// that creates the dependency, or for nothing when no Kustomization of
+	// the tree does (the Flux bootstrap, say). Every other expression still
+	// waits for Ready. Set on a cluster whose gate is on, where Flux checks
+	// Ready after the expression, the checks can admit a tree that never
+	// becomes Ready. Kustomizations kure generates carry no readyExpr, so it
+	// changes only how Kustomizations an application emits, or a caller
+	// keeps, patches or substitutes, are judged; no entry point refuses it.
+	AdditiveCELDependencyCheckOff bool
 }
 
 // waitFor resolves a bundle's or a layout's tri-state wait input: waitValue,
@@ -262,7 +285,7 @@ func (g *ResourceGenerator) generateFromLayout(root *layout.ManifestLayout, c *s
 			out = append(out, o)
 		}
 	}
-	if err := checkReconcileOrder(kusts, nil, nil); err != nil {
+	if err := checkReconcileOrder(kusts, nil, nil, g.AdditiveCELDependencyCheckOff); err != nil {
 		return nil, nil, err
 	}
 	return out, ix, nil

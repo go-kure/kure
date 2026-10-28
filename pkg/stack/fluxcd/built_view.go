@@ -55,6 +55,10 @@ import (
 // in the results too (objectWriter).
 type builtView struct {
 	t *kustomizationTree
+	// existenceOnly is ResourceGenerator.AdditiveCELDependencyCheckOff: a
+	// dependsOn whose readyExpr is exactly "true" waits only for the
+	// dependency to exist (specDeps), in every graph built from this view.
+	existenceOnly bool
 	// writers lists the writers' keys in the order they were found, "" first;
 	// writerSpec holds the spec each was built from (nil for the bootstrap),
 	// and results what its build made.
@@ -91,15 +95,17 @@ type builtCopy struct {
 
 // newBuiltView builds every writer of the tree t indexes and reads their
 // results. The builds run here, in a directory removed before it returns.
-func newBuiltView(t *kustomizationTree) (*builtView, error) {
+// existenceOnly is ResourceGenerator.AdditiveCELDependencyCheckOff.
+func newBuiltView(t *kustomizationTree, existenceOnly bool) (*builtView, error) {
 	v := &builtView{
-		t:           t,
-		writerSpec:  map[string]*kustv1.Kustomization{},
-		results:     map[string][]substituted{},
-		occurrences: map[string][]occurrence{},
-		builtFrom:   map[string]builtCopy{},
-		specs:       map[string]*kustv1.Kustomization{},
-		specErrs:    map[string]error{},
+		t:             t,
+		existenceOnly: existenceOnly,
+		writerSpec:    map[string]*kustv1.Kustomization{},
+		results:       map[string][]substituted{},
+		occurrences:   map[string][]occurrence{},
+		builtFrom:     map[string]builtCopy{},
+		specs:         map[string]*kustv1.Kustomization{},
+		specErrs:      map[string]error{},
 	}
 	builds := newTreeBuilds(t.root)
 	defer builds.close()
@@ -613,16 +619,39 @@ func (v *builtView) applies(o occurrence) bool {
 	return !excludedFromApply(labels) && !excludedFromApply(annotations)
 }
 
-// specDeps returns k's spec.dependsOn as keys, an entry without namespace in
-// k's.
-func specDeps(k *kustv1.Kustomization) []string {
-	var out []string
+// depRef is one entry of a Kustomization's spec.dependsOn: the dependency's
+// key, and whether the entry waits only for the dependency to exist.
+type depRef struct {
+	key   string
+	exist bool
+}
+
+// node is the node of the reconcile-order graph the entry waits for: "exist
+// D" for an existence wait, "ready D" otherwise.
+func (d depRef) node() string {
+	if d.exist {
+		return "exist " + d.key
+	}
+	return "ready " + d.key
+}
+
+// specDeps returns k's spec.dependsOn, an entry without namespace in k's.
+// Every entry waits for its dependency's Ready, also with a readyExpr: kure
+// evaluates no CEL, and an expression may itself require Ready. With
+// existenceOnly (ResourceGenerator.AdditiveCELDependencyCheckOff) an entry
+// whose readyExpr is exactly "true" waits only for the dependency to exist:
+// Flux first requires every dependency to exist and, with the
+// AdditiveCELDependencyCheck feature gate off, then evaluates the expression
+// in place of its own readiness check (kustomize-controller v1.10.1
+// internal/controller/kustomization_controller.go:597-628).
+func specDeps(k *kustv1.Kustomization, existenceOnly bool) []depRef {
+	var out []depRef
 	for _, d := range k.Spec.DependsOn {
 		ns := d.Namespace
 		if ns == "" {
 			ns = k.Namespace
 		}
-		out = append(out, crKey(ns, d.Name))
+		out = append(out, depRef{key: crKey(ns, d.Name), exist: existenceOnly && d.ReadyExpr == "true"})
 	}
 	return out
 }

@@ -232,7 +232,7 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	if len(rewritten) == 0 {
 		return nil
 	}
-	v, err := newBuiltView(t)
+	v, err := newBuiltView(t, p.gen.AdditiveCELDependencyCheckOff)
 	if err != nil {
 		return err
 	}

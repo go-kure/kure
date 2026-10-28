@@ -937,6 +937,13 @@ application emits is followed as a placed one is, and a `dependsOn` with a
 `readyExpr` waits for `Ready`, which under kustomize-controller's default
 feature gates refuses a tree whose expression asks for less and whose
 `dependsOn` closes a cycle ([reconcile order](/api-reference/flux-engine/#one-kustomization-per-directory)).
+Flux's default since v1.7 is the `AdditiveCELDependencyCheck` gate off, so an
+operator running the default controller sets
+`ResourceGenerator.AdditiveCELDependencyCheckOff` to true; false keeps that
+conservative read. With it, a `readyExpr` of exactly `"true"` waits only for
+the dependency to exist; set on a cluster whose gate is on, the checks can
+admit a tree that never becomes Ready
+([details](/api-reference/flux-engine/#with-additiveceldependencycheckoff)).
 `fluxcd.UmbrellaTerminals` returns each umbrella's terminal leaves, for a
 dependency written from outside the tree, for trees as an integration returned
 them: only a Kustomization the integration recorded, still on the recorded
