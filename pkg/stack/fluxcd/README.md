@@ -377,14 +377,17 @@ built from its spec as its own writer's result holds it. The build uses Flux's k
 but not Flux's reset of kustomize's global OpenAPI schema around each build: that reset writes a
 schema every other use of kustomize in the process reads, so two integrations, or one beside any
 other kustomize build, would race. kure builds only with kustomize's built-in schema, which it
-parses once before any of its uses of kustomize reads it.
+has kustomize parse before any of its uses of kustomize reads it, again after a reset.
 
 **kustomize's schema is the process's, not kure's.** kure guarantees that its own goroutines,
-concurrent integrations included, do not race each other on it, and that a schema it cannot build
-with is refused, never read. It cannot order another use of kustomize in the same process: one
-that sets or resets the schema while an integration runs, `fluxcd/pkg/kustomize`'s `Build` among
-them, races with it, and one that makes kustomize parse the schema for the first time while an
-integration starts may too. Run such a use apart from an integration.
+concurrent integrations included, do not race each other on it. It refuses a build under a custom
+schema or another built-in version, naming it, but definitions added to the built-in schema
+(kyaml's `AddSchema` and `AddDefinitions`) <!-- doc-api-refs:ignore kyaml openapi functions, not kure API --> are not detected and can change kure's verdict in
+either direction. It cannot order another use of kustomize in the same process: one that sets or
+resets the schema while an integration runs, `fluxcd/pkg/kustomize`'s `Build` among them, races
+with it, and one that makes kustomize parse the schema for the first time while an integration
+starts may too. Run such a use apart from an integration, and add no definitions to kustomize's
+schema in a process that integrates. go-kure/kure#1166 tracks this.
 
 A copy whose apply skips it,
 `kustomize.toolkit.fluxcd.io/ssa: Ignore` or `kustomize.toolkit.fluxcd.io/reconcile: disabled` on

@@ -119,7 +119,7 @@ kustomize builds both. A build is every `kustomization.yaml` a writer writes, wi
 and the Flux build of a `KustomizationRecursive` directory marked with `SetFluxBuild` (see
 "Kustomization Generation"). The error names both layouts and the innermost build. Whether
 kustomize knows a kind is cluster-scoped is read from kustomize's process-global OpenAPI schema,
-which kure parses once before its first read, so a concurrent build of the Flux integration does
+which kure has kustomize parse before each read, so a concurrent build of the Flux integration does
 not race with the check (see the Flux engine's reconcile-order section). A child its
 parent does not list (an umbrella child, one that renders bundles, a directory child of a
 `FluxIntegratedPerLayout` parent, or under `WriteToDisk` and `WriteToTar` a directory child of
