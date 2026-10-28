@@ -471,18 +471,26 @@ cannot decode is not read, as above, so no merge is missed. A file no build read
 data, merges nothing. This refuses conservatively: a tree whose build merges into a Secret is
 refused even where Flux converges. go-kure/kure#1181 tracks reading such a build.
 
-kure adds the existence wait only when the object's writer is certain: exactly one writer other
-than the Flux bootstrap applies an object matching it by group, kind, namespace and name as built
-(the version ignored; an empty `apiVersion` is `apps/v1`, as Flux reads it), that apply does not
-skip it, and no other apply may write it under an identity the tree does not show. The writer may
-be a Kustomization an application emits, when its build is the tree's. A new refusal through a
-health check on such an object comes only from such a wait. A matching copy its apply excludes,
+kure adds the existence wait only when the object's writers are certain: only writers other than
+the Flux bootstrap apply an object matching it by group, kind, namespace and name as built (the
+version ignored; an empty `apiVersion` is `apps/v1`, as Flux reads it), none of those applies
+skips it, and no other apply may write it under an identity the tree does not show. A writer may
+be a Kustomization an application emits, when its build is the tree's. With one writer the check
+waits for its apply. With several it waits for whichever creates the object first, so the tree is
+refused only when every writer's apply waits for the checking Kustomization's `Ready` through a
+chain of these waits, and the checker, or a Kustomization on any such chain from a writer, is one
+a cycle through it would be refused for: a member, or one a build writes under a name the tree
+holds none by (below; the refusal names one chain per writer). A chain
+does not pass through another health check with several writers, so a deadlock that needs two of
+them at once is admitted, which errs towards admitting (go-kure/kure#1172). A new refusal through
+a health check on such an object comes only from such a wait. A matching copy its apply excludes,
 `kustomize.toolkit.fluxcd.io/ssa: Ignore` or `kustomize.toolkit.fluxcd.io/reconcile: disabled`
 (any case) on it or in that apply's `spec.commonMetadata`, is never created, so it counts neither
 as a match nor as another writer, as for a Flux Kustomization's copy above. That holds only when
 neither the copy as written nor that `spec.commonMetadata` holds `$` or `ENC[` anywhere: a
 substitution or a decryption may change the copy's marks, so a templated or encrypted copy is
-counted as before. These leave the writer uncertain and add none, so a cycle through them passes:
+counted as before. These leave the writers uncertain and add no wait, so a cycle through them
+passes:
 
 - a check with no namespace, or a matching object written with none that its apply does not
   exclude, a cluster-scoped one included (it may exist before any apply);
@@ -490,8 +498,8 @@ counted as before. These leave the writer uncertain and add none, so a cycle thr
   writer that transforms nothing, or that of a Kustomization whose build is not the tree's) whose
   name, or that name and a dash, begins the checked name, as kustomize appends a content hash; a
   transformed build's generated names are read as built;
-- an object whose identity may change at apply, whatever it names, unless only the writer's own
-  result holds it: `$` left after substitution or `ENC[` (SOPS) in its `apiVersion`, kind,
+- an object whose identity may change at apply, whatever it names, unless only the results of the
+  object's writers hold it: `$` left after substitution or `ENC[` (SOPS) in its `apiVersion`, kind,
   namespace or name, or a namespace or name a `substituteFrom` variable sets. Another apply may
   give it the checked identity. For a ConfigMap, so does such a `configMapGenerator` entry read as
   held;
@@ -515,9 +523,7 @@ counted as before. These leave the writer uncertain and add none, so a cycle thr
   overriding the cluster's. This errs towards refusing;
 - a ServiceAccount `default` or a ConfigMap `kube-root-ca.crt`, which Kubernetes creates in every
   namespace; this list is closed;
-- a match the Flux bootstrap applies, or two writers apply, that the apply does not exclude; with
-  two writers that both wait for the checking Kustomization the tree cannot become Ready, and is
-  still admitted, which errs towards admitting (go-kure/kure#1172);
+- a match the Flux bootstrap applies that its apply does not exclude;
 - a Kustomization on this cluster whose `spec.path` is a directory of the tree but whose build is
   not the tree's (another Source), read from its first copy an apply does not skip (one every
   apply skips applies nothing): it may apply a match it does not exclude, read as its directory

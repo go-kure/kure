@@ -210,26 +210,28 @@ func mapVaries(m map[string]string) bool {
 	return false
 }
 
-// objectWriter names the writer whose apply writes the object a health check
-// on apiVersion, kind, namespace and name names, only when that is certain:
-// "" otherwise, and the check adds no edge. A check that waits for an object
-// another apply may also create does not wait for this one, and an edge that
-// may not exist would refuse a tree that converges. It matches by group,
-// kind, namespace and name as applied, read from each writer's result
-// (builtView): patched, renamed, moved and substituted as its build makes
-// it, the version ignored as Flux resolves it; an empty apiVersion is
-// apps/v1, as Flux reads it (kustomize-controller v1.10.1
-// internal/inventory/inventory.go:166-169). It is certain when exactly one
-// writer other than the Flux bootstrap applies a match, and that match's
-// labels and annotations, with the writer's spec.commonMetadata set over
+// objectWriters names the writers whose applies write the object a health
+// check on apiVersion, kind, namespace and name names, sorted, only when
+// they are certain: nil otherwise, and the check adds no edge. The check
+// waits for whichever of them creates the object first, so one writer is an
+// edge and several are alternatives (orderGraph.next); a writer the set
+// misses would be one more way for the check to be met, and an edge or an
+// alternative that may not exist would refuse a tree that converges. It
+// matches by group, kind, namespace and name as applied, read from each
+// writer's result (builtView): patched, renamed, moved and substituted as
+// its build makes it, the version ignored as Flux resolves it; an empty
+// apiVersion is apps/v1, as Flux reads it (kustomize-controller v1.10.1
+// internal/inventory/inventory.go:166-169). They are certain when only
+// writers other than the Flux bootstrap apply a match, and each match's
+// labels and annotations, with its writer's spec.commonMetadata set over
 // them, do not let the apply skip it (skipsApply; a skip a substitution reads
 // from the cluster is read as written, builtObject). A match its apply
 // excludes (objectSource.excludes) is never created and counts for no
 // apply. A match written with "$" or "ENC[" anywhere, or under a
 // commonMetadata that holds one, is never read as excluded, as its apply may
-// change its marks; and an IfNotPresent one leaves the writer uncertain.
+// change its marks; and an IfNotPresent one leaves the writers uncertain.
 //
-// The writer stays uncertain when, a match its apply excludes aside:
+// The writers stay uncertain when, a match its apply excludes aside:
 //   - the check names no namespace, or a match is applied with none: a
 //     namespaced object may be applied in another namespace than its build
 //     says, and a cluster-scoped one may exist before any apply;
@@ -237,7 +239,7 @@ func mapVaries(m map[string]string) bool {
 //     apply a match too (objectSource), or one that cannot be read may;
 //   - a Kustomization whose build is not the tree's transforms it
 //     (mayTransformInto);
-//   - an apply other than the writer's holds an object whose identity may
+//   - an apply other than the writers' holds an object whose identity may
 //     change at apply (builtObject.unresolved), whatever it names, as it may
 //     take the checked identity;
 //   - a configMapGenerator entry an apply read as held runs (heldScope) has a
@@ -249,21 +251,21 @@ func mapVaries(m map[string]string) bool {
 // that is no directory of the tree, is not modelled: the check assumes an
 // object the tree writes is created only by the applies of the tree's
 // directories.
-func (v *builtView) objectWriter(apiVersion, kind, namespace, name string) (string, error) {
+func (v *builtView) objectWriters(apiVersion, kind, namespace, name string) ([]string, error) {
 	if err := v.objectIndex(); err != nil {
-		return "", err
+		return nil, err
 	}
 	if apiVersion == "" {
 		apiVersion = "apps/v1"
 	}
 	group := apiGroup(apiVersion)
 	if namespace == "" || kubernetesCreated(group, kind, name) || v.generatorMayName(group, kind, name) {
-		return "", nil
+		return nil, nil
 	}
-	writer, found := "", false
+	var writers []string
 	for _, s := range v.sources {
 		if s.unreadable || !s.writer && s.mayTransformInto(group, kind) {
-			return "", nil
+			return nil, nil
 		}
 		for _, o := range s.objects {
 			if o.unresolved || o.group != group || o.kind != kind || o.name != name {
@@ -275,38 +277,41 @@ func (v *builtView) objectWriter(apiVersion, kind, namespace, name string) (stri
 				continue
 			}
 			if o.namespace == "" {
-				return "", nil
+				return nil, nil
 			}
 			if o.namespace != namespace {
 				continue
 			}
-			if !s.writer || s.key == "" || found && s.key != writer {
-				return "", nil
+			if !s.writer || s.key == "" {
+				return nil, nil
 			}
 			labels, annotations := o.labels, o.annotations
 			if cm := s.spec.Spec.CommonMetadata; cm != nil {
 				labels, annotations = setOver(labels, cm.Labels), setOver(annotations, cm.Annotations)
 			}
 			if skipsApply(labels) || skipsApply(annotations) {
-				return "", nil
+				return nil, nil
 			}
-			writer, found = s.key, true
+			if !slices.Contains(writers, s.key) {
+				writers = append(writers, s.key)
+			}
 		}
 	}
-	if !found {
-		return "", nil
+	if len(writers) == 0 {
+		return nil, nil
 	}
 	for _, s := range v.sources {
-		if s.writer && s.key == writer {
+		if s.writer && slices.Contains(writers, s.key) {
 			continue
 		}
 		for _, o := range s.objects {
 			if o.unresolved {
-				return "", nil
+				return nil, nil
 			}
 		}
 	}
-	return writer, nil
+	slices.Sort(writers)
+	return writers, nil
 }
 
 // generatorMayName reports whether a generator whose output the object
