@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utiljson "k8s.io/apimachinery/pkg/util/json"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/kustomize/api/konfig"
 	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/api/provider"
 	"sigs.k8s.io/kustomize/api/resmap"
@@ -27,7 +26,6 @@ import (
 	kusttypes "sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
-	"sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/internal/kustomizeschema"
 	"github.com/go-kure/kure/pkg/errors"
@@ -91,21 +89,25 @@ var fluxBuildMu sync.Mutex
 // them, each as the unstructured object the build holds. It is
 // kustomize-controller's build, kustomize with fluxcd/pkg/kustomize's Build
 // options under one lock, but for SOPS decryption, which reads keys from the
-// cluster, and for that Build's reset of kustomize's global OpenAPI schema
-// around the build (kustomize_generator.go:706-707). The reset writes the
-// schema that every other kustomize caller in the process reads without a
-// lock, so two integrations, or one beside any other use of kustomize, would
-// race. It matters only where the schema is not kustomize's built-in one:
-// the build is not read, with an unreadBuild, when another use of kustomize
-// in the process set the schema, or when the build reads a kustomization
-// file that sets openapi (a component a layout's extra files write may),
-// which openAPIGuard refuses before kustomize reads its fields. Nor is a
-// build that loads, as a kustomization, a file that may merge into a Secret
-// (openAPIGuard.merged): kustomize hashes a merged Secret's name over its
-// merged content, a hash that differs between kustomize versions, and kure
-// does not read which Secret a merge changes, or under which name
-// (go-kure/kure#1181). Like the controller it refuses a built object without
-// an apiVersion, kind or name (kustomization_controller.go:855-859).
+// cluster, for that Build's reset of kustomize's global OpenAPI schema
+// around the build (kustomize_generator.go:706-707), and for any fetch: an
+// integration never reaches the network (go-kure/kure#1168). The reset
+// writes the schema that every other kustomize caller in the process reads
+// without a lock, so two integrations, or one beside any other use of
+// kustomize, would race. It matters only where the schema is not kustomize's
+// built-in one: the build is not read, with an unreadBuild, when another use
+// of kustomize in the process set the schema, or when the build reads a
+// kustomization file that sets openapi (a component a layout's extra files
+// write may). Nor is a build read that reads a file naming a remote
+// reference, a Git repository or an http(s) URL kustomize-controller fetches,
+// or a file kure cannot check for one. buildGuard refuses both kinds of file
+// before kustomize reads its fields. Nor is a build read that loads, as a
+// kustomization, a file that may merge into a Secret (buildGuard.merged):
+// kustomize hashes a merged Secret's name over its merged content, a hash
+// that differs between kustomize versions, and kure does not read which
+// Secret a merge changes, or under which name (go-kure/kure#1181). Like the
+// controller it refuses a built object without an apiVersion, kind or name
+// (kustomization_controller.go:855-859).
 func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	tree, err := b.tree()
 	if err != nil {
@@ -138,16 +140,16 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "open the tree")
 	}
-	guard := &openAPIGuard{FileSystem: fsys}
+	guard := newBuildGuard(fsys, tree)
 	rm, err := kustomizeBuild(guard, dir)
-	if guard.sets != "" {
-		return nil, unreadBuild{errors.Errorf("its build reads %s, which sets openapi: kustomize would keep that schema for every later build in the process, and kure, which does not reset it around each build as kustomize-controller does, cannot build it as Flux does; drop the field", relFile(tree, guard.sets))}
+	if guard.unread != nil {
+		return nil, unreadBuild{guard.unread}
 	}
 	if err != nil {
 		return nil, errors.Wrap(err, "kustomize build failed")
 	}
 	if file, ok := guard.merged(); ok {
-		return nil, unreadBuild{errors.Errorf("its build loads %s, which may merge into a Secret (a secretGenerator entry with behavior merge, or a generators entry): kure does not read which Secret a merge changes, or under which name", relFile(tree, file))}
+		return nil, unreadBuild{errors.Errorf("its build loads %s, which may merge into a Secret (a secretGenerator entry with behavior merge, or a generators entry): kure does not read which Secret a merge changes, or under which name", guard.rel(file))}
 	}
 	objs := make([]client.Object, 0, rm.Size())
 	for _, res := range rm.Resources() {
@@ -181,117 +183,6 @@ func kustomizeBuild(fsys filesys.FileSystem, dir string) (rm resmap.ResMap, err 
 		LoadRestrictions: kusttypes.LoadRestrictionsNone,
 		PluginConfig:     kusttypes.DisabledPluginConfig(),
 	}).Run(fsys, dir)
-}
-
-// openAPIGuard is the tree as a build reads it, but that it refuses a
-// kustomization file setting openapi, and records it in sets, before
-// kustomize reads its fields: kustomize sets the global OpenAPI schema from
-// the field of every kustomization it loads (krusty/kustomizer.go:79-88,
-// internal/target/kusttarget.go:511-520). kustomize reads a kustomization
-// file it cannot load as one that is absent, so the build's own error does
-// not name it; build reports sets instead. A file is a kustomization file by
-// its name, so a generator's data file of that name that sets openapi is
-// refused too, though kustomize reads it only as data.
-//
-// It also records which reads load a kustomization (merged). kustomize loads
-// a directory's kustomization by reading every kustomization file name in it
-// and takes the one that exists (api internal/target/kusttarget.go:101-121);
-// with no load restriction a missing name reaches ReadFile too
-// (internal/loader/loadrestrictions.go:32-35). A generator reads its data
-// file once.
-type openAPIGuard struct {
-	filesys.FileSystem
-	sets string
-	// read holds, per directory, the kustomization file names a read asked
-	// for in it, and found those that exist; merges lists each file found
-	// that may merge into a Secret (ReadFile).
-	read, found map[string]map[string]bool
-	merges      []string
-}
-
-// ReadFile reads name from the tree. A kustomization file setting openapi is
-// refused (openAPIGuard). One that may merge into a Secret is recorded in
-// merges: it holds a secretGenerator entry with behavior merge, or a
-// generators entry, whose generator may merge too, or kure cannot decode it.
-// The decode is kustomize's own, sigs.k8s.io/yaml into its Kustomization type
-// (api types/kustomization.go:340-355: YAML to JSON, then encoding/json, which
-// matches keys in any case), without the strictness that refuses an unknown
-// field; so a file kustomize loads decodes here to the values kustomize reads
-// (aliases, merge keys and the last of duplicate keys included), and
-// kustomize compares the behavior exactly
-// (types/generationbehavior.go:35-46), as here. A file that does not decode
-// is counted as merging, so that no merge is missed.
-func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
-	b, err := g.FileSystem.ReadFile(name)
-	if !slices.Contains(konfig.RecognizedKustomizationFileNames(), filepath.Base(name)) {
-		return b, err
-	}
-	g.read = markRead(g.read, name)
-	if err != nil {
-		return b, err
-	}
-	g.found = markRead(g.found, name)
-	var k kusttypes.Kustomization
-	decoded := yaml.Unmarshal(b, &k) == nil
-	if decoded && len(k.OpenAPI) > 0 {
-		if g.sets == "" {
-			g.sets = name
-		}
-		return nil, errors.Errorf("%s sets openapi", name)
-	}
-	merges := !decoded || slices.ContainsFunc(k.SecretGenerator, func(gen kusttypes.SecretArgs) bool {
-		return gen.Behavior == kusttypes.BehaviorMerge.String()
-	})
-	if merges || len(k.Generators) > 0 {
-		g.merges = append(g.merges, name)
-	}
-	return b, nil
-}
-
-// merged returns the first kustomization file the build loaded as one, a
-// component's included, that may merge into a Secret (ReadFile): a file in a
-// directory where every kustomization file name was read and exactly one
-// exists. A file only a generator reads as data, or one no build reads,
-// merges nothing. A directory holding two kustomization files is no
-// kustomization a build can load (kusttarget.go:118-120), so files read
-// there are data.
-func (g *openAPIGuard) merged() (string, bool) {
-	for _, file := range g.merges {
-		if g.loaded(file) {
-			return file, true
-		}
-	}
-	return "", false
-}
-
-// loaded reports whether the build loaded file, which it read, as a
-// kustomization (merged).
-func (g *openAPIGuard) loaded(file string) bool {
-	dir := filepath.Dir(file)
-	return len(g.read[dir]) == len(konfig.RecognizedKustomizationFileNames()) && len(g.found[dir]) == 1
-}
-
-// relFile is file relative to dir, with forward slashes; file where it has
-// none.
-func relFile(dir, file string) string {
-	rel, err := filepath.Rel(dir, file)
-	if err != nil {
-		return file
-	}
-	return filepath.ToSlash(rel)
-}
-
-// markRead adds name's base to the names m holds for its directory.
-func markRead(m map[string]map[string]bool, name string) map[string]map[string]bool {
-	if m == nil {
-		m = map[string]map[string]bool{}
-	}
-	dir := filepath.Dir(name)
-	if m[dir] == nil {
-		m[dir] = map[string]bool{}
-	}
-	m[dir][filepath.Base(name)] = true
-	return m
 }
 
 // replaceFile writes content to name and returns what puts back the file as

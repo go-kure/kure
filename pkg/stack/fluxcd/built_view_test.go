@@ -1,6 +1,9 @@
 package fluxcd_test
 
 import (
+	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -349,6 +352,120 @@ func TestBuiltView_ABuildThatReadsOpenAPIIsRefused(t *testing.T) {
 				want := `Flux Kustomization "flux-system/hand-written"`
 				if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "is not read") || strings.Contains(err.Error(), "never applies") || !strings.Contains(err.Error(), "extra/kustomization.yaml, which sets openapi") {
 					t.Fatalf("got %v, want %s not read (not a failed build) for a build that reads extra/kustomization.yaml, which sets openapi", err, want)
+				}
+			})
+		}
+	}
+}
+
+// TestBuiltView_ABuildThatReadsARemoteReferenceIsNotRead: hand-written builds
+// web's directory with a component that layout extra files write, and the
+// component names a remote reference in a field kustomize fetches from: a Git
+// base it clones, or a URL it requests. Flux fetches them; kure never reaches
+// the network during an integration (go-kure/kure#1168), so the build is not
+// read, naming the file and the reference, which is no failed build. The
+// witness shows that nothing ran git or sent a request. The controls run
+// without either: a local resource, admitted, and a standalone
+// ConfigMapGenerator whose singular env kustomize does not read there, which
+// is not read only as a build that may merge into a Secret, as every
+// generators entry is (go-kure/kure#1181), and never for its env.
+func TestBuiltView_ABuildThatReadsARemoteReferenceIsNotRead(t *testing.T) {
+	const component = "apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\n"
+	const patchTransformer = "apiVersion: builtin\nkind: PatchTransformer\nmetadata:\n  name: remote-patch\npath: %s/p.yaml\ntarget:\n  kind: ConfigMap\n"
+	for _, tc := range []struct {
+		name  string
+		files func(w *fluxstack.NetworkWitness) map[string]string
+		file  string // the file the refusal names; "" admits the tree
+		ref   func(w *fluxstack.NetworkWitness) string
+		// merge: the build is not read only as one that may merge into a
+		// Secret, naming no remote reference.
+		merge bool
+	}{
+		{name: "a git base over file", file: "extra/kustomization.yaml",
+			files: func(*fluxstack.NetworkWitness) map[string]string {
+				return map[string]string{"extra/kustomization.yaml": component + "resources:\n- file:///nonexistent-kure-1168/repo//base?ref=v1\n"}
+			},
+			ref: func(*fluxstack.NetworkWitness) string { return "file:///nonexistent-kure-1168/repo//base?ref=v1" }},
+		{name: "b git base over https", file: "extra/kustomization.yaml",
+			files: func(w *fluxstack.NetworkWitness) map[string]string {
+				return map[string]string{"extra/kustomization.yaml": component + "resources:\n- " + w.URL + "/org/repo//base?ref=v1\n"}
+			},
+			ref: func(w *fluxstack.NetworkWitness) string { return w.URL + "/org/repo//base?ref=v1" }},
+		{name: "c resource URL", file: "extra/kustomization.yaml",
+			files: func(w *fluxstack.NetworkWitness) map[string]string {
+				return map[string]string{"extra/kustomization.yaml": component + "resources:\n- " + w.URL + "/cm.yaml\n"}
+			},
+			ref: func(w *fluxstack.NetworkWitness) string { return w.URL + "/cm.yaml" }},
+		{name: "d patch path URL", file: "extra/kustomization.yaml",
+			files: func(w *fluxstack.NetworkWitness) map[string]string {
+				return map[string]string{"extra/kustomization.yaml": component + "patches:\n- path: " + w.URL + "/p.yaml\n"}
+			},
+			ref: func(w *fluxstack.NetworkWitness) string { return w.URL + "/p.yaml" }},
+		{name: "e transformer config file", file: "extra/pt.yaml",
+			files: func(w *fluxstack.NetworkWitness) map[string]string {
+				return map[string]string{
+					"extra/kustomization.yaml": component + "transformers:\n- pt.yaml\n",
+					"extra/pt.yaml":            fmt.Sprintf(patchTransformer, w.URL),
+				}
+			},
+			ref: func(w *fluxstack.NetworkWitness) string { return w.URL + "/p.yaml" }},
+		{name: "f generator file source", file: "extra/kustomization.yaml",
+			files: func(w *fluxstack.NetworkWitness) map[string]string {
+				return map[string]string{"extra/kustomization.yaml": component + "configMapGenerator:\n- name: generated\n  namespace: default\n  files:\n  - k=" + w.URL + "/f\n"}
+			},
+			ref: func(w *fluxstack.NetworkWitness) string { return w.URL + "/f" }},
+		{name: "g inline transformer config", file: "extra/kustomization.yaml",
+			files: func(w *fluxstack.NetworkWitness) map[string]string {
+				inline := strings.ReplaceAll(strings.TrimSuffix(fmt.Sprintf(patchTransformer, w.URL), "\n"), "\n", "\n  ")
+				return map[string]string{"extra/kustomization.yaml": component + "transformers:\n- |\n  " + inline + "\n"}
+			},
+			ref: func(w *fluxstack.NetworkWitness) string { return w.URL + "/p.yaml" }},
+		{name: "control local resource",
+			files: func(*fluxstack.NetworkWitness) map[string]string {
+				return map[string]string{
+					"extra/kustomization.yaml": component + "resources:\n- added.yaml\n",
+					"extra/added.yaml":         "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: added\n  namespace: default\n",
+				}
+			}},
+		{name: "control standalone generator env", merge: true,
+			files: func(w *fluxstack.NetworkWitness) map[string]string {
+				return map[string]string{
+					"extra/kustomization.yaml": component + "generators:\n- gen.yaml\n",
+					"extra/gen.yaml":           "apiVersion: builtin\nkind: ConfigMapGenerator\nmetadata:\n  name: generated\n  namespace: default\nliterals:\n- k=v\nenv: " + w.URL + "/e\n",
+				}
+			}},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(tc.name+"/"+string(placement), func(t *testing.T) {
+				w := fluxstack.NewNetworkWitness(t)
+				k := handWritten("hand-written")
+				k.Spec.Path, k.Spec.Components = webDirectory(t, placement), []string{"extra"}
+				cluster := noWaitCluster(srBundle("platform", objApp("platform-app", k)), false)
+				rules := withPlacement(nodeOnly, placement)
+				ml := mustWalk(t, cluster, rules)
+				l := layoutAtPath(t, ml, k.Spec.Path)
+				files := tc.files(w)
+				for _, name := range slices.Sorted(maps.Keys(files)) {
+					l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: name, Content: []byte(files[name])})
+				}
+				err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, cluster, rules)
+				w.Check(t)
+				if tc.merge {
+					if err == nil || !strings.Contains(err.Error(), "may merge into a Secret") || strings.Contains(err.Error(), "remote reference") || strings.Contains(err.Error(), w.URL) {
+						t.Fatalf("got %v, want the build not read only as one that may merge into a Secret, naming no remote reference", err)
+					}
+					return
+				}
+				if tc.file == "" {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
+				want := `Flux Kustomization "flux-system/hand-written"`
+				if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "is not read") || strings.Contains(err.Error(), "never applies") ||
+					!strings.Contains(err.Error(), tc.file) || !strings.Contains(err.Error(), tc.ref(w)) {
+					t.Fatalf("got %v, want %s not read (not a failed build), naming %s and %s", err, want, tc.file, tc.ref(w))
 				}
 			})
 		}
