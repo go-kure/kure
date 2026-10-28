@@ -88,13 +88,6 @@ type kustomizationTree struct {
 	mayKeep        map[string]bool
 	reached        map[string]map[*layout.ManifestLayout]bool
 	fromRoot       map[*layout.ManifestLayout]bool
-	// objects and generators list what the layouts of the tree hold, read on
-	// the first health check on an object (objectIndex); objectsErr is the
-	// error of that read.
-	objects     []treeObject
-	generators  []treeGenerator
-	objectsRead bool
-	objectsErr  error
 }
 
 // memberFilter returns the Flux Kustomizations of l that are members of the
