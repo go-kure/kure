@@ -416,10 +416,11 @@ each naming the Kustomization: a build that fails, as the controller's apply wou
 does not read, which Flux may build and apply, when it reads a kustomization file setting
 `openapi`, naming the file, since kustomize would keep its schema for every later build and kure
 does not reset it, when it reads a file naming a remote reference, or one kure cannot check for
-one, naming the file, since an integration never fetches, when another use of kustomize in the
-process has set a schema other than the built-in one, naming it, or when it loads, as a
-kustomization (a component's included), a file holding a `secretGenerator` entry with
-`behavior: merge` or a `generators` entry, naming the file (see the merging build below); a
+one, a kustomization file kustomize rejects among them, naming the file, since an integration
+never fetches, when another use of kustomize in the process has set a schema other than the
+built-in one, naming it, or when it loads, as a kustomization (a component's included), a file
+holding a `secretGenerator` entry with `behavior: merge` or a `generators` entry, naming the file
+(see the merging build below); a
 Kustomization two writers apply with a different `dependsOn`, `wait`, `healthChecks`,
 `healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata`, `images`
 (which Flux's generator writes into the build) or transform (`ignoreMissingComponents` included,
