@@ -17,12 +17,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/api/provider"
-	"sigs.k8s.io/kustomize/api/resmap"
 	"sigs.k8s.io/kustomize/api/resource"
-	kusttypes "sigs.k8s.io/kustomize/api/types"
-	"sigs.k8s.io/kustomize/kyaml/filesys"
 
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -82,12 +78,11 @@ var fluxBuildMu sync.Mutex
 
 // build returns the objects k's build makes, in the order kustomize emits
 // them, each as the unstructured object the build holds. It is
-// kustomize-controller's build but for two steps, which no tree the writers
-// write needs: SOPS decryption, which reads keys from the cluster, and the
-// reset of kustomize's global OpenAPI schema around the build, which a
-// kustomization that sets openapi needs and the writers never write; that
-// reset would race any other kustomize build of the process. Like the
-// controller it refuses a built object without an apiVersion, kind or name
+// kustomize-controller's build, fluxcd/pkg/kustomize's Build with its lock and
+// its reset of kustomize's global OpenAPI schema around the build (a
+// component a layout's extra files write may set openapi), but for SOPS
+// decryption, which reads keys from the cluster. Like the controller it
+// refuses a built object without an apiVersion, kind or name
 // (kustomization_controller.go:855-859).
 func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	tree, err := b.tree()
@@ -117,7 +112,7 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "open the tree")
 	}
-	rm, err := kustomizeLikeFlux(fsys, dir)
+	rm, err := fluxkustomize.Build(fsys, dir)
 	if err != nil {
 		return nil, errors.Wrap(err, "kustomize build failed")
 	}
@@ -153,22 +148,6 @@ func replaceFile(name string, content []byte) (func(), error) {
 			_ = os.Remove(name)
 		}
 	}, nil
-}
-
-// kustomizeLikeFlux runs kustomize as fluxcd/pkg/kustomize Build does
-// (kustomize_generator.go:682-711) after its schema reset: no load
-// restriction, built-in plugins only, a kustomize panic recovered as an
-// error.
-func kustomizeLikeFlux(fsys filesys.FileSystem, dir string) (rm resmap.ResMap, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = errors.Errorf("recovered from kustomize build panic: %v", r)
-		}
-	}()
-	return krusty.MakeKustomizer(&krusty.Options{
-		LoadRestrictions: kusttypes.LoadRestrictionsNone,
-		PluginConfig:     kusttypes.DisabledPluginConfig(),
-	}).Run(fsys, dir)
 }
 
 // substituted is one object of a build after k's postBuild substitution:
@@ -252,13 +231,15 @@ func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substitut
 
 // refuseUnknownVars applies substituteBuild's rule for the variables res
 // references and inline does not set, under k's substituteFrom: an error for
-// one in a Flux Kustomization or in an apiVersion or kind, and whether one is
-// in the namespace or the name.
+// one in an apiVersion or kind, or in a Flux Kustomization, as the inline
+// values make its apiVersion and kind, and whether one is in the namespace or
+// the name.
 func refuseUnknownVars(k *kustv1.Kustomization, res *resource.Resource, inline map[string]string) (bool, error) {
 	refuse := func(where string, vars []string) error {
 		return errors.Errorf("Flux Kustomization %q (spec.path %q) substitutes with spec.postBuild.substituteFrom, and %s %q of its build references %s in %s, which spec.postBuild.substitute does not set: its value is read from the cluster, so what the object waits for cannot be read from the tree; set %s in spec.postBuild.substitute",
 			k.Name, k.Spec.Path, res.GetKind(), res.GetName(), quoteAll(vars), where, strings.Join(vars, ", "))
 	}
+	var typ []string
 	for _, f := range []struct{ where, value string }{{"its apiVersion", res.GetApiVersion()}, {"its kind", res.GetKind()}} {
 		vars, err := unknownVars(f.value, inline)
 		if err != nil {
@@ -267,8 +248,18 @@ func refuseUnknownVars(k *kustv1.Kustomization, res *resource.Resource, inline m
 		if len(vars) > 0 {
 			return false, refuse(f.where, vars)
 		}
+		// Every variable it references is set inline: the object is applied
+		// as the type these values make.
+		value, err := envsubst.Eval(f.value, func(name string) (string, bool) {
+			v, ok := inline[name]
+			return v, ok
+		})
+		if err != nil {
+			return false, errors.Wrap(err, "parse the variables")
+		}
+		typ = append(typ, value)
 	}
-	if isFluxKustomizationType(res.GetApiVersion(), res.GetKind()) {
+	if isFluxKustomizationType(typ[0], typ[1]) {
 		text, err := res.AsYAML()
 		if err != nil {
 			return false, errors.Wrap(err, "read the object")

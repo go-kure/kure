@@ -190,19 +190,27 @@ func transformsBuild(k *kustv1.Kustomization) bool {
 }
 
 // checkTreeOrder refuses a tree whose Flux Kustomizations can never all become
-// Ready because of a cycle through a member: a strongly connected component of
-// the order graph (orderGraph) that holds a cycle and a member's node. The
-// graph is entered at the members' nodes and follows the other Kustomizations
-// of the tree as orderPath does: each dependsOn as built and each health
-// check whose object has a certain writer (objectWriter). A cycle made only
-// of Kustomizations the integration did not place is their author's, and is
-// not refused here. The error names one cycle, as checkReconcileOrder does.
+// Ready because of a cycle through a judged Kustomization (judged): a strongly
+// connected component of the order graph (orderGraph) that holds a cycle and
+// a judged Kustomization's node. The graph is entered at those nodes and
+// follows the other Kustomizations of the tree as orderPath does: each
+// dependsOn as built and each health check whose object has a certain writer
+// (objectWriter). A cycle made only of Kustomizations the integration did not
+// place, under the identities the tree holds them by, is their author's, and
+// is not refused here. The error names one cycle, as checkReconcileOrder does.
 func (v *builtView) checkTreeOrder() error {
 	g := v.newOrderGraph()
 	var starts []string
 	for _, k := range v.t.kusts {
 		key := crKey(k.Namespace, k.Name)
 		starts = append(starts, "ready "+key, "apply "+key)
+	}
+	for _, w := range v.writers {
+		for _, key := range v.heldKeys(w) {
+			if !v.isMember(key) && v.judged(key) && !slices.Contains(starts, "ready "+key) {
+				starts = append(starts, "ready "+key, "apply "+key)
+			}
+		}
 	}
 	comp, err := g.components(starts)
 	if err != nil {
@@ -248,7 +256,7 @@ func (v *builtView) checkTreeOrder() error {
 
 // component is a strongly connected component of the order graph: refused
 // when it holds a cycle (more than one node, or a node waiting for itself)
-// and a member's node.
+// and a judged Kustomization's node.
 type component struct {
 	refused bool
 }
@@ -303,7 +311,7 @@ func (g *orderGraph) components(starts []string) (map[string]*component, error) 
 		if len(nodes) > 1 || self {
 			for _, m := range nodes {
 				_, key, _ := strings.Cut(m, " ")
-				if g.v.isMember(key) {
+				if g.v.judged(key) {
 					c.refused = true
 					break
 				}
