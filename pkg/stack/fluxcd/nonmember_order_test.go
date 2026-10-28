@@ -135,10 +135,11 @@ func TestMissedCycles_SubstitutedNonMemberIsRead(t *testing.T) {
 }
 
 // h depends on platform with a readyExpr, and platform waits for h, which its
-// application emits. Flux adds its own readiness check to the expression
-// unless a controller feature gate kure cannot see is off, and an expression
-// may itself require Ready, so the dependsOn waits for platform's Ready and
-// the cycle is refused. This tree integrated before go-kure/kure#1094.
+// application emits. Under kustomize-controller's default feature gates Flux
+// evaluates only the expression, so with "true" this tree converges; but kure
+// does not evaluate CEL, and an expression may itself require Ready, so the
+// dependsOn waits for platform's Ready and the cycle is refused
+// (go-kure/kure#1161). This tree integrated before go-kure/kure#1094.
 func TestMissedCycles_NonMemberReadyExprWaitsForReady(t *testing.T) {
 	for name, expr := range map[string]string{
 		"true":                   "true",

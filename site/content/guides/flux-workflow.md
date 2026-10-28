@@ -917,21 +917,24 @@ is read as a readiness wait, whatever it says.
 A `wait` does not wait for a Flux Kustomization its apply skips
 (`kustomize.toolkit.fluxcd.io/ssa: Ignore` or
 `kustomize.toolkit.fluxcd.io/reconcile: disabled`, on the object or in the
-waiting Kustomization's `spec.commonMetadata`) when its build transforms
-nothing, and a health check on the checker itself is dropped, as Flux drops it,
+waiting Kustomization's `spec.commonMetadata`, as its build makes the object),
+and a health check on the checker itself is dropped, as Flux drops it,
 unless it is written with no namespace, which never passes and is refused (see
 the [Flux Engine reference](/api-reference/flux-engine/)).
 With or without the setting, every integration also judges the order of the
-Kustomizations it placed or kept, on each later integration too: one without
-`wait` that health-checks any other object waits for the Kustomization that
-applies it, whatever its expression says, when that writer is certain, and a
-cycle through them is refused. A tree whose other Kustomizations use patches or
-components gets no such wait. An object a controller, or a Kustomization
-outside the tree, also writes is outside what the check models, and a tree
-Flux would converge can then be refused. Without the setting, what a Kustomization an
-application emits waits for is its author's; under it, this check follows it as
-the rules above do
-([reconcile order](/api-reference/flux-engine/#one-kustomization-per-directory)).
+Kustomizations of the tree, on each later integration too, each read as
+kustomize-controller builds its writer: patches, components, name prefix and
+suffix, target namespace and postBuild substitution applied. A build that
+fails, and a Kustomization two builds write differently, are refused. One
+without `wait` that health-checks any other object waits for the Kustomization
+that applies it, whatever its expression says, when that writer is certain,
+and a cycle through them is refused. An object a controller, or a
+Kustomization outside the tree, also writes is outside what the check models,
+and a tree Flux would converge can then be refused. A Kustomization an
+application emits is followed as a placed one is, and a `dependsOn` with a
+`readyExpr` waits for `Ready`, which under kustomize-controller's default
+feature gates refuses a tree whose expression asks for less and whose
+`dependsOn` closes a cycle ([reconcile order](/api-reference/flux-engine/#one-kustomization-per-directory)).
 `fluxcd.UmbrellaTerminals` returns each umbrella's terminal leaves, for a
 dependency written from outside the tree, for trees as an integration returned
 them: only a Kustomization the integration recorded, still on the recorded
