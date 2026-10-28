@@ -99,6 +99,67 @@ func TestBuiltObjects_SubstitutedIdentityIsRead(t *testing.T) {
 	}
 }
 
+// A Kustomization that is no member, but whose build is the tree's, may be
+// the certain writer: a's application emits h, which builds a's directory
+// with a component adding default/h-cm, which nothing else applies, and
+// b-longer health-checks h-cm. Under UmbrellasDoNotWait, which follows the
+// other Kustomizations of the tree, b-longer waits for h's apply; when h
+// depends on b-longer the cycle is refused, naming it, and without that
+// dependsOn the tree is admitted.
+func TestBuiltObjects_NonMemberIsTheCertainWriter(t *testing.T) {
+	for _, dependsOnB := range []bool{true, false} {
+		for _, placement := range integratedPlacements {
+			name := "h independent/"
+			if dependsOnB {
+				name = "h depends on b-longer/"
+			}
+			t.Run(name+string(placement), func(t *testing.T) {
+				c := pairCluster(stack.HealthCheck{},
+					[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "a-cm")},
+					[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "b-cm")})
+				c.Node.Children[0].Bundle.HealthChecks = nil
+				// No dependsOn on a, which the setting would write as one on h:
+				// only the existence edge onto h's apply can close the cycle.
+				c.Node.Children[1].Bundle.DependsOn = nil
+				// A leaf waits under the setting, and Flux ignores health checks
+				// under wait.
+				c.Node.Children[1].Bundle.Wait = boolPtr(false)
+				c.Node.Children[1].Bundle.HealthChecks = []stack.HealthCheck{{APIVersion: "v1", Kind: "ConfigMap", Namespace: "default", Name: "h-cm"}}
+				rules := withPlacement(nodeOnly, placement)
+				ml, err := layout.WalkCluster(c, rules)
+				if err != nil {
+					t.Fatalf("WalkCluster: %v", err)
+				}
+				a := findLayout(ml, "a-cm")
+				if a == nil {
+					t.Fatal("no layout holds a-cm")
+				}
+				var h *kustv1.Kustomization
+				if dependsOnB {
+					h = handWritten("h", "b-longer")
+				} else {
+					h = handWritten("h")
+				}
+				h.Spec.Path = "./" + a.FullRepoPath()
+				h.Spec.Components = []string{"component"}
+				a.Resources = append(a.Resources, h)
+				// a's kustomization.yaml lists neither file: only h's build,
+				// through its component, holds h-cm.
+				a.ExtraFiles = append(a.ExtraFiles,
+					layout.ExtraFile{Name: "component/kustomization.yaml", Content: []byte("apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\nresources:\n- h-cm.yaml\n")},
+					layout.ExtraFile{Name: "component/h-cm.yaml", Content: []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: h-cm\n  namespace: default\n")})
+				err = fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules)
+				if dependsOnB && (err == nil || !strings.Contains(err.Error(), "can never all become Ready") || !strings.Contains(err.Error(), "apply flux-system/h")) {
+					t.Fatalf("got %v, want the cycle through b-longer's health check on what h writes refused; tree %s", err, describeKustomizations(ml))
+				}
+				if !dependsOnB && err != nil {
+					t.Fatalf("got %v, want the tree admitted", err)
+				}
+			})
+		}
+	}
+}
+
 // keptPair integrates pairCluster with no health check, lets edit change the
 // layout that holds b-cm and b-longer's kept Kustomization, makes a's kept
 // Kustomization health-check the v1 object of kind in default that
