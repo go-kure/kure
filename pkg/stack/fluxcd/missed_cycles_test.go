@@ -515,17 +515,17 @@ func TestMissedCycles_UncertainWriterAddsNoEdge(t *testing.T) {
 			return pairCluster(stack.HealthCheck{APIVersion: "v1", Kind: "Namespace", Name: "default"},
 				[]client.Object{cm("default", "a-cm")}, []client.Object{unstructuredObj("v1", "Namespace", "", "default")})
 		}},
-		// b-longer's patches may rename or remove b-cm.
+		// b-longer's patch renames b-cm.
 		"b patches its build": {cluster: func() *stack.Cluster {
 			c := pairCluster(check("default", "b-cm"), []client.Object{cm("default", "a-cm")}, []client.Object{cm("default", "b-cm")})
-			c.Node.Children[1].Bundle.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "b-cm"}}}
+			c.Node.Children[1].Bundle.Patches = []stack.Patch{{Patch: "- op: replace\n  path: /metadata/name\n  value: b-renamed\n", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "b-cm"}}}
 			return c
 		}},
-		// b-longer writes b-cm, and a's patches may rename a-cm to b-cm, so
-		// a's own apply may write it.
+		// b-longer writes b-cm, and a's patch renames a-cm to b-cm, so a's
+		// own apply writes it too.
 		"a patches its build": {cluster: func() *stack.Cluster {
 			c := pairCluster(check("default", "b-cm"), []client.Object{cm("default", "a-cm")}, []client.Object{cm("default", "b-cm")})
-			c.Node.Children[0].Bundle.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "a-cm"}}}
+			c.Node.Children[0].Bundle.Patches = []stack.Patch{{Patch: "- op: replace\n  path: /metadata/name\n  value: b-cm\n", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "a-cm"}}}
 			return c
 		}},
 		// b-longer writes red/ready; a's application emits h, whose build is
@@ -547,24 +547,25 @@ func TestMissedCycles_UncertainWriterAddsNoEdge(t *testing.T) {
 			},
 		},
 		// b-longer writes the ConfigMap default/ready; a holds only a Secret
-		// of that name, and a patch may change its kind.
+		// of that name, and a patch changes its kind.
 		"a patch may change a kind": {cluster: func() *stack.Cluster {
 			c := pairCluster(check("default", "ready"), []client.Object{unstructuredObj("v1", "Secret", "default", "ready")}, []client.Object{cm("default", "ready")})
-			c.Node.Children[0].Bundle.Patches = []stack.Patch{{Patch: "- op: replace", Target: &stack.PatchSelector{Kind: "Secret", Name: "ready"}}}
+			c.Node.Children[0].Bundle.Patches = []stack.Patch{{Patch: "- op: replace\n  path: /kind\n  value: ConfigMap\n", Target: &stack.PatchSelector{Kind: "Secret", Name: "ready"}}}
 			return c
 		}},
 		// b-longer writes default/ready; a holds its own copy as local config,
-		// which a patch may keep, and otherwise no ConfigMap.
+		// which a patch keeps by removing the annotation, and otherwise no
+		// ConfigMap.
 		"a patch may keep a local-config object": {cluster: func() *stack.Cluster {
 			local := cm("default", "ready")
 			local.SetAnnotations(map[string]string{"config.kubernetes.io/local-config": "true"})
 			c := pairCluster(check("default", "ready"), []client.Object{unstructuredObj("v1", "Secret", "default", "a-secret"), local}, []client.Object{cm("default", "ready")})
-			c.Node.Children[0].Bundle.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "ready"}}}
+			c.Node.Children[0].Bundle.Patches = []stack.Patch{{Patch: "- op: remove\n  path: /metadata/annotations/config.kubernetes.io~1local-config\n", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "ready"}}}
 			return c
 		}},
 		// b-longer writes red/ready; a's application emits h, which builds a's
-		// directory, holding no ConfigMap, with a component, which may add any
-		// object.
+		// directory, holding no ConfigMap, with a component, which adds
+		// red/ready.
 		"another Kustomization's component may add it": {
 			cluster: func() *stack.Cluster {
 				return pairCluster(check("red", "ready"), []client.Object{unstructuredObj("v1", "Secret", "default", "a-secret")}, []client.Object{cm("red", "ready")})
@@ -576,8 +577,13 @@ func TestMissedCycles_UncertainWriterAddsNoEdge(t *testing.T) {
 				}
 				h := handWritten("h")
 				h.Spec.Path = "./" + a.FullRepoPath()
-				h.Spec.Components = []string{"../component"}
+				h.Spec.Components = []string{"component"}
 				a.Resources = append(a.Resources, h)
+				// a's kustomization.yaml lists neither file: only h's build,
+				// through its component, holds red/ready.
+				a.ExtraFiles = append(a.ExtraFiles,
+					layout.ExtraFile{Name: "component/kustomization.yaml", Content: []byte("apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\nresources:\n- ready.yaml\n")},
+					layout.ExtraFile{Name: "component/ready.yaml", Content: []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ready\n  namespace: red\n")})
 			},
 		},
 		// b-longer writes red/ready; a writes ready in a namespace postBuild

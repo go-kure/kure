@@ -1190,7 +1190,9 @@ func TestGenerateFromLayout_PatchScopeUsesEffectiveNamespace(t *testing.T) {
 // is not refused for them.
 func TestIntegrateWithLayout_PerLayoutPatchScopeIsWhatTheUnitBuilds(t *testing.T) {
 	c := mergedCluster(func(_, b1, _ *stack.Bundle) {
-		b1.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap"}}}
+		// A patch kustomize can apply: the layout's Kustomization builds every
+		// ConfigMap of b1 with it.
+		b1.Patches = []stack.Patch{{Patch: "- op: add\n  path: /metadata/labels\n  value:\n    patched: \"yes\"\n", Target: &stack.PatchSelector{Kind: "ConfigMap"}}}
 	})
 	rules := allFlat
 	rules.ApplicationGrouping = layout.GroupByName

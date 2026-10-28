@@ -457,8 +457,10 @@ func rootLayoutCRName(t *testing.T, build func() *stack.Cluster, rules layout.La
 // is refused only where the build the Flux bootstrap applies holds the
 // directory too (go-kure/kure#908): the two would apply the Source
 // differently. No tree the integration places has such a Kustomization, so
-// every case here is accepted; the refusals are pinned on the check itself
-// (TestCheckRootBuildKeepsHostedSources_FollowsTheBootstrapBuild).
+// no case here is refused for its Source; the refusals are pinned on the
+// check itself (TestCheckRootBuildKeepsHostedSources_FollowsTheBootstrapBuild).
+// Two cases are refused before the Source is read: a build kustomize fails,
+// and a substitution whose result depends on the cluster.
 //
 // The root bundle's Kustomization builds the bundle's own directory inside the
 // root node's layout (go-kure/kure#979). Each case is run with its patch or
@@ -492,12 +494,22 @@ func TestIntegrate_RootBuildChangesHostedSource(t *testing.T) {
 		// layout Kustomization, whose build holds none of the bundle's
 		// objects: a target-less patch must name an object of that build.
 		layoutPatch string
+		// broken is set where the root bundle's build fails in kustomize, as
+		// it fails on the cluster: the integration refuses it, naming
+		// broken, in every placement, before any Source is read.
+		broken string
+		// layoutRefused is set where the root node's layout Kustomization,
+		// given the root bundle's postBuild, is refused, naming
+		// layoutRefused.
+		layoutRefused string
 	}{
 		{name: "1 patch selecting the Source by kind", build: rootBundleTree("", rootPatch(sourceKind))},
 		{name: "2 patch selecting the Source by kind regex", build: rootBundleTree("", rootPatch(stack.Patch{Patch: sourcePatch, Target: &stack.PatchSelector{Kind: "Git.*"}}))},
 		{name: "3 patch selecting another kind", build: rootBundleTree("", rootPatch(stack.Patch{Patch: sourcePatch, Target: &stack.PatchSelector{Kind: "Deployment"}}))},
 		{name: "4 patch selecting by a label the Source lacks", build: rootBundleTree("", rootPatch(stack.Patch{Patch: sourcePatch, Target: &stack.PatchSelector{LabelSelector: "app=x"}}))},
-		{name: "5 target-less patch naming the Source", build: rootBundleTree("", rootPatch(stack.Patch{Patch: "apiVersion: source.toolkit.fluxcd.io/v1\nkind: GitRepository\nmetadata:\n  name: shared\n  namespace: flux-system\nspec:\n  interval: 5m\n"}))},
+		// The root bundle's build holds no Source, so kustomize fails it.
+		{name: "5 target-less patch naming the Source", build: rootBundleTree("", rootPatch(stack.Patch{Patch: "apiVersion: source.toolkit.fluxcd.io/v1\nkind: GitRepository\nmetadata:\n  name: shared\n  namespace: flux-system\nspec:\n  interval: 5m\n"})),
+			broken: `no resource matches strategic merge patch "GitRepository.v1.source.toolkit.fluxcd.io/shared.flux-system"`},
 		{name: "6 target-less patch naming another object", build: rootBundleTree("", rootPatch(stack.Patch{Patch: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: platform-app-cm\n  namespace: default\ndata:\n  patched: \"true\"\n"})),
 			layoutPatch: "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: a\n  namespace: flux-system\nspec:\n  interval: 5m\n"},
 		{name: "7 postBuild over a plain Source", build: rootBundleTree("", rootPostBuild(&stack.PostBuild{Substitute: map[string]string{"GIT_HOST": "git.example.com"}}))},
@@ -508,11 +520,15 @@ func TestIntegrate_RootBuildChangesHostedSource(t *testing.T) {
 		// that it changes the URL.
 		{name: "8e postBuild substituteFrom only, escaped expression", build: rootBundleTree("https://git.example.com/$${REPO}.git", rootPostBuild(&stack.PostBuild{SubstituteFrom: []stack.SubstituteRef{{Kind: "ConfigMap", Name: "cluster-vars"}}}))},
 		// The inline PREFIX reproduces the expression offline, but a SUFFIX
-		// from the cluster's ConfigMap would change the URL.
+		// from the cluster's ConfigMap would change the URL. On the root
+		// node's layout Kustomization the same postBuild substitutes the
+		// build that writes the root bundle's Kustomization, whose own
+		// postBuild reads ${SUFFIX}: what that Kustomization is depends on
+		// the cluster, and it is refused, naming SUFFIX.
 		{name: "8c postBuild substituteFrom var the offline result hides", build: rootBundleTree("https://git.example.com/${PREFIX}${SUFFIX}.git", rootPostBuild(&stack.PostBuild{
 			Substitute:     map[string]string{"PREFIX": "${PREFIX}${SUFFIX}"},
 			SubstituteFrom: []stack.SubstituteRef{{Kind: "ConfigMap", Name: "cluster-vars"}},
-		}))},
+		})), layoutRefused: `Kustomization "platform" of its build references "SUFFIX"`},
 		// An inline var overrides substituteFrom's, so an expression reading
 		// only inline vars is decided offline: here it is unchanged.
 		{name: "8d postBuild substituteFrom with an inline var that keeps the Source", build: rootBundleTree("https://git.example.com/${REPO}.git", rootPostBuild(&stack.PostBuild{
@@ -528,6 +544,11 @@ func TestIntegrate_RootBuildChangesHostedSource(t *testing.T) {
 				rules := propertyGroupings["nodeOnly"]
 				rules.FluxPlacement = placement
 				integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+				if tc.broken != "" {
+					_, err := integrator.CreateLayoutWithResources(tc.build(), rules)
+					mustContainAll(t, err, `Flux Kustomization "flux-system/platform"`, "does not build as kustomize-controller builds it", tc.broken)
+					return
+				}
 				switch {
 				case tc.callerCopy:
 					// checkIdempotent rebuilds from the cluster, which drops
@@ -576,6 +597,11 @@ func TestIntegrate_RootBuildChangesHostedSource(t *testing.T) {
 			rules := propertyGroupings["nodeOnly"]
 			rules.FluxPlacement = layout.FluxIntegratedPerLayout
 			rules.ClusterName = "prod"
+			if tc.broken != "" {
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(tc.build(), rules)
+				mustContainAll(t, err, `Flux Kustomization "flux-system/platform"`, "does not build as kustomize-controller builds it", tc.broken)
+				return
+			}
 			var bundleCR *kustv1.Kustomization
 			for _, k := range kustomizations(integrated(t, tc.build(), rules)) {
 				if k.Name == "platform" {
@@ -599,7 +625,12 @@ func TestIntegrate_RootBuildChangesHostedSource(t *testing.T) {
 				root := layoutAtPath(t, ml, rootDir)
 				root.Resources = append(root.Resources, callers)
 			}
-			if err := integrate(ml, c, rules); err != nil {
+			err := integrate(ml, c, rules)
+			if tc.layoutRefused != "" {
+				mustContainAll(t, err, tc.layoutRefused)
+				return
+			}
+			if err != nil {
 				t.Fatalf("the kept Kustomization of the root node's layout is the only one to apply what the layout hosts: %v", err)
 			}
 			if got, want := sourceCopies(ml, "shared"), map[string]int{rootDir: 1}; !intMapsEqual(got, want) {

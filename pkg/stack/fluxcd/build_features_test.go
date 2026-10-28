@@ -49,6 +49,13 @@ func handWrittenWritingWeb(t *testing.T, placement layout.FluxPlacement, edit fu
 	return ml, fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, cl, rules)
 }
 
+// webPatch is a strategic-merge patch for the Flux Kustomization w that
+// merges label, one "key: value" line, into its labels.
+func webPatch(w *kustv1.Kustomization, label string) string {
+	return "apiVersion: " + kustv1.GroupVersion.String() + "\nkind: " + kustv1.KustomizationKind +
+		"\nmetadata:\n  name: " + w.Name + "\n  namespace: " + w.Namespace + "\n  labels:\n    " + label + "\n"
+}
+
 // builtKustomizations returns the names of the Flux Kustomizations the build
 // of dir, a directory of the tree WriteToDisk writes for ml, holds, as
 // kustomize-controller builds it.
@@ -79,8 +86,9 @@ func builtKustomizations(t *testing.T, ml *layout.ManifestLayout, dir string) []
 // the root's included: web never exists, a stall the checks do not judge,
 // and hand-written's wait does not close the cycle either. ssa IfNotPresent
 // skips only an object that exists, so hand-written's apply creates web and
-// waits for it; a patch may set or clear the mark, which the check does not
-// read; and a health check waits for a skipped object too.
+// waits for it; a patch of hand-written's build that sets or clears web's
+// mark is read as that build applies it; and a health check waits for a
+// skipped object too.
 func TestBuildFeatures_ExcludedObjectLeavesTheWait(t *testing.T) {
 	label := func(key, value string) *kustv1.CommonMetadata {
 		return &kustv1.CommonMetadata{Labels: map[string]string{key: value}}
@@ -118,10 +126,19 @@ func TestBuildFeatures_ExcludedObjectLeavesTheWait(t *testing.T) {
 			hw.Spec.Wait = true
 			hw.Spec.CommonMetadata = label("kustomize.toolkit.fluxcd.io/ssa", "IfNotPresent")
 		}, true},
-		"commonMetadata mark, patched build": {func(hw, _ *kustv1.Kustomization) {
+		"commonMetadata mark, patched build": {func(hw, w *kustv1.Kustomization) {
 			hw.Spec.Wait = true
 			hw.Spec.CommonMetadata = label("kustomize.toolkit.fluxcd.io/ssa", "Ignore")
-			hw.Spec.Patches = []kustomize.Patch{{Patch: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: unrelated\n  namespace: default\n"}}
+			hw.Spec.Patches = []kustomize.Patch{{Patch: webPatch(w, "patched: \"yes\"")}}
+		}, false},
+		"a patch labels web ssa Ignore": {func(hw, w *kustv1.Kustomization) {
+			hw.Spec.Wait = true
+			hw.Spec.Patches = []kustomize.Patch{{Patch: webPatch(w, "kustomize.toolkit.fluxcd.io/ssa: Ignore")}}
+		}, false},
+		"a patch clears web's ssa Ignore": {func(hw, w *kustv1.Kustomization) {
+			hw.Spec.Wait = true
+			w.Labels = map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "Ignore"}
+			hw.Spec.Patches = []kustomize.Patch{{Patch: webPatch(w, "kustomize.toolkit.fluxcd.io/ssa: null")}}
 		}, true},
 		"commonMetadata mark, health check without wait": {func(hw, w *kustv1.Kustomization) {
 			hw.Spec.CommonMetadata = label("kustomize.toolkit.fluxcd.io/ssa", "Ignore")

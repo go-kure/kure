@@ -73,16 +73,16 @@ type kustomizationTree struct {
 	otherSpecs map[string]*kustv1.Kustomization
 	otherErr   error
 	// dropped lists, per layout, the keys of the Flux Kustomizations it holds
-	// that a build drops as local config (builtItems), droppedObjs each
-	// object and droppedDeps its spec.dependsOn as keys. They are no member,
-	// other or writer: only one a build that patches what it holds
-	// (patchesBuild) may keep is read (keptDropped, from mayKeep, built on
-	// first use). droppedErrs holds the error of each that cannot be read in
-	// typed form, in droppedErrKeys order: one a build may keep refuses the
-	// tree as otherErr does (keptDroppedErr).
+	// that a build drops as local config (builtItems), and droppedObjs each
+	// object. They are no member, other or writer here; the reconcile-order
+	// checks read what a build that keeps one makes (builtView).
+	// droppedErrs holds the error of each that cannot be read in typed form,
+	// in droppedErrKeys order: one a build that patches what it holds
+	// (patchesBuild) may keep (mayBeKept, from mayKeep, built on first use)
+	// refuses the tree for UmbrellasDoNotWait and UmbrellaTerminals, which read
+	// no build, as otherErr does (keptDroppedErr).
 	dropped        map[*layout.ManifestLayout][]string
 	droppedObjs    map[string]client.Object
-	droppedDeps    map[string][]string
 	droppedErrs    map[string]error
 	droppedErrKeys []string
 	mayKeep        map[string]bool
@@ -124,7 +124,6 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 		otherSpecs:  map[string]*kustv1.Kustomization{},
 		dropped:     map[*layout.ManifestLayout][]string{},
 		droppedObjs: map[string]client.Object{},
-		droppedDeps: map[string][]string{},
 		droppedErrs: map[string]error{},
 		reached:     map[string]map[*layout.ManifestLayout]bool{},
 		fromRoot:    map[*layout.ManifestLayout]bool{},
@@ -189,20 +188,9 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 			key := crKey(obj.GetNamespace(), obj.GetName())
 			t.dropped[l] = append(t.dropped[l], key)
 			t.droppedObjs[key] = obj
-			spec, err := typedKustomization(obj)
-			if err != nil {
-				if t.droppedErrs[key] == nil {
-					t.droppedErrKeys = append(t.droppedErrKeys, key)
-					t.droppedErrs[key] = err
-				}
-				continue
-			}
-			for _, d := range spec.Spec.DependsOn {
-				ns := d.Namespace
-				if ns == "" {
-					ns = obj.GetNamespace()
-				}
-				t.droppedDeps[key] = append(t.droppedDeps[key], crKey(ns, d.Name))
+			if _, err := typedKustomization(obj); err != nil && t.droppedErrs[key] == nil {
+				t.droppedErrKeys = append(t.droppedErrKeys, key)
+				t.droppedErrs[key] = err
 			}
 		}
 		for _, child := range l.Children {
@@ -255,27 +243,6 @@ func (t *kustomizationTree) builds(key string) map[*layout.ManifestLayout]bool {
 	}
 	t.reached[key] = r
 	return r
-}
-
-// creator names the member whose apply creates the CR with key, or "" when
-// the Flux bootstrap does (the root's build reaches its host) or no member
-// does. The innermost wins: the member with the longest spec.path.
-func (t *kustomizationTree) creator(key string) string {
-	host := t.hostOf[key]
-	if t.fromRoot[host] {
-		return ""
-	}
-	best, bestLen := "", -1
-	for _, k := range t.kusts {
-		other := crKey(k.Namespace, k.Name)
-		if other == key {
-			continue
-		}
-		if t.builds(other)[host] && len(k.Spec.Path) > bestLen {
-			best, bestLen = other, len(k.Spec.Path)
-		}
-	}
-	return best
 }
 
 // readsLocalBuild reports whether the Flux Kustomization with key, which is
@@ -336,8 +303,9 @@ func (t *kustomizationTree) children(key string) []string {
 }
 
 // written lists every Flux Kustomization the apply of the Kustomization with
-// key writes, as children does for a member, and for another whose build is
-// the tree's (readsLocalBuild): what its wait waits for.
+// key writes, as the tree holds them, as children does for a member, and for
+// another whose build is the tree's (readsLocalBuild). The reconcile-order
+// checks read what a build makes instead (builtView.written).
 func (t *kustomizationTree) written(key string) []string {
 	out := t.applied(key)
 	if t.builds(key) == nil {
@@ -347,36 +315,15 @@ func (t *kustomizationTree) written(key string) []string {
 	if k == nil {
 		k = t.otherSpecs[key]
 	}
-	patched := t.byKey[key] == nil && patchesBuild(k)
 	for _, b := range buildScope(t.layoutAt[path.Clean(k.Spec.Path)]) {
 		for _, other := range t.others[b] {
 			if other != key {
 				out = append(out, other)
 			}
 		}
-		if !patched {
-			continue
-		}
-		for _, other := range t.dropped[b] {
-			if other == key {
-				continue
-			}
-			out = append(out, other)
-			if t.byKey[other] != nil || t.otherObjs[other] != nil {
-				out = append(out, other+keptCopy)
-			}
-		}
 	}
 	return out
 }
-
-// keptCopy marks, in what written returns, a Flux Kustomization the tree
-// holds as local config where a member or other Kustomization of the tree has
-// the same key: a patched build then waits for the namesake, under its key,
-// and for that copy, read on its own (deps, orderPath), which may be what it
-// applies. A name a dependsOn or health check gives reads the namesake only,
-// and the copy's own wait reaches nothing (go-kure/kure#1133).
-const keptCopy = " (local config)"
 
 // patchesBuild reports whether k, a Flux Kustomization that is no member,
 // patches what its build holds: spec.patches, or a component, which may carry
@@ -408,27 +355,7 @@ func (t *kustomizationTree) deps(key string) []string {
 		}
 		return out
 	}
-	if base, ok := strings.CutSuffix(key, keptCopy); ok {
-		return t.droppedDeps[base]
-	}
-	if t.keptDropped(key) {
-		return t.droppedDeps[key]
-	}
 	return t.otherDeps[key]
-}
-
-// keptDropped reports whether the Flux Kustomization with key is one the tree
-// holds only as local config (dropped) that a build may still apply: the
-// build of another Kustomization that is the tree's (readsLocalBuild) and
-// patches what it holds (patchesBuild) holds it, so a patch may keep it. A
-// member or other Kustomization with the same key is read instead, and that
-// build's wait reaches the copy under its own node (keptCopy). One no such
-// build holds is not there, whoever names it.
-func (t *kustomizationTree) keptDropped(key string) bool {
-	if t.byKey[key] != nil || t.otherObjs[key] != nil {
-		return false
-	}
-	return t.mayBeKept(key)
 }
 
 // mayBeKept reports whether a build that is the tree's and patches what it

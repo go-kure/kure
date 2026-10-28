@@ -47,10 +47,12 @@ func untargeted(docs ...string) stack.Patch {
 }
 
 // everyConfigMap is a JSON6902 patch with a target, which selects every
-// ConfigMap; note tells two of them apart.
+// ConfigMap; note tells two of them apart. It adds the labels map whole: the
+// ConfigMaps it selects carry none, and kustomize fails a build whose
+// JSON6902 add names a key under a map the object does not have.
 func everyConfigMap(note string) stack.Patch {
 	return stack.Patch{
-		Patch:  "- op: add\n  path: /metadata/labels/" + note + "\n  value: \"yes\"\n",
+		Patch:  "- op: add\n  path: /metadata/labels\n  value:\n    " + note + ": \"yes\"\n",
 		Target: &stack.PatchSelector{Kind: "ConfigMap"},
 	}
 }
@@ -167,10 +169,6 @@ func TestLayoutPatches_PlacedByObject(t *testing.T) {
 			patches: []stack.Patch{untargeted("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: values\ndata:\n  patched: \"yes\"\n")},
 			want:    map[string][]int{"shop-00-pre": {0}},
 		},
-		"a JSON6902 patch without a target stays on the bundle's own": {
-			patches: []stack.Patch{{Patch: json6902}},
-			want:    map[string][]int{"shop": {0}},
-		},
 		"each Kustomization holds its patches in the bundle's order": {
 			patches: []stack.Patch{everyConfigMapMerged("a"), untargeted(cmDoc("pre")), untargeted(cmDoc("web-cm")), everyConfigMap("b")},
 			want: map[string][]int{
@@ -197,7 +195,8 @@ func TestLayoutPatches_PlacedByObject(t *testing.T) {
 // Kustomization of the bundle builds an object it names, and when its
 // documents name objects no one Kustomization builds together. The refusal
 // names the bundle, the patch by its index, the object and the remedy, and
-// comes before anything is written.
+// comes before anything is written. A JSON6902 patch without a target is
+// refused too, by the build of the Kustomization that holds it.
 func TestLayoutPatches_Refusals(t *testing.T) {
 	for name, tc := range map[string]struct {
 		patches []stack.Patch
@@ -241,6 +240,15 @@ func TestLayoutPatches_Refusals(t *testing.T) {
 				`ConfigMap "web-cm" (v1, namespace "default") is built by "shop", spec.path "prod/shop"`,
 				`ConfigMap "pre" (v1, namespace "default") is built by "shop-00-pre", spec.path "prod/shop/db/00-pre"`,
 				"the documents of one patch are applied in one build; write one patch per object",
+			},
+		},
+		// No placement check reads a JSON6902 patch without a target: it stays on
+		// the bundle's own Kustomization, and kustomize fails that build.
+		"a JSON6902 patch without a target fails the bundle's own build": {
+			patches: []stack.Patch{{Patch: json6902}},
+			wants: []string{
+				`Flux Kustomization "flux-system/shop" (spec.path "prod/shop") does not build as kustomize-controller builds it`,
+				"must specify a target for JSON patch",
 			},
 		},
 	} {
@@ -318,14 +326,29 @@ func TestLayoutPatches_AnObjectTheBundlesOwnBuildsStaysThere(t *testing.T) {
 // TestLayoutPatches_BundleWithoutLayoutKustomizations: a bundle none of whose
 // applications got a Kustomization of its own keeps every patch on its own
 // Kustomization under per-layout placement as well, the untargeted ones
-// included, and none is refused, whatever it names: its file is the one
-// written before the per-layout Kustomizations took patches.
+// included: its file is the one written before the per-layout Kustomizations
+// took patches. No placement check refuses a patch there, whatever it names,
+// but a patch kustomize cannot apply fails that Kustomization's build, which
+// is refused.
 func TestLayoutPatches_BundleWithoutLayoutKustomizations(t *testing.T) {
-	patches := []stack.Patch{untargeted(cmDoc("web-cm")), everyConfigMap("a"), untargeted(cmDoc("absent")), {Patch: json6902}}
-	b := srBundle("shop", cmApp("web"))
-	b.Patches = patches
-	ml := integrated(t, oneBundleCluster(b), perLayoutRules())
-	if got, want := patchPlacement(t, ml, patches), (map[string][]int{"shop": {0, 1, 2, 3}}); !reflect.DeepEqual(got, want) {
+	patches := []stack.Patch{untargeted(cmDoc("web-cm")), everyConfigMap("a")}
+	shop := func(patches ...stack.Patch) *stack.Cluster {
+		b := srBundle("shop", cmApp("web"))
+		b.Patches = patches
+		return oneBundleCluster(b)
+	}
+	for name, broken := range map[string]stack.Patch{
+		"a strategic-merge patch for an object the build does not hold": untargeted(cmDoc("absent")),
+		"a JSON6902 patch without a target":                             {Patch: json6902},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).
+				CreateLayoutWithResources(shop(append(slices.Clone(patches), broken)...), perLayoutRules())
+			mustContainAll(t, err, `Flux Kustomization "flux-system/shop" (spec.path "prod/shop") does not build as kustomize-controller builds it`)
+		})
+	}
+	ml := integrated(t, shop(patches...), perLayoutRules())
+	if got, want := patchPlacement(t, ml, patches), (map[string][]int{"shop": {0, 1}}); !reflect.DeepEqual(got, want) {
 		t.Fatalf("the patches are held by %v, want %v", got, want)
 	}
 	const want = `apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -346,22 +369,11 @@ spec:
         patched: "yes"
   - patch: |
       - op: add
-        path: /metadata/labels/a
-        value: "yes"
+        path: /metadata/labels
+        value:
+          a: "yes"
     target:
       kind: ConfigMap
-  - patch: |
-      apiVersion: v1
-      kind: ConfigMap
-      metadata:
-        name: absent
-        namespace: default
-      data:
-        patched: "yes"
-  - patch: |
-      - op: add
-        path: /metadata/labels/x
-        value: y
   path: prod/shop
   prune: false
   sourceRef:
@@ -449,10 +461,11 @@ spec:
 
 // TestLayoutPatches_OtherPlacementsUnchanged: under FluxIntegratedPerBundle
 // and FluxSeparate no layout gets a Kustomization of its own, so every patch
-// of the bundle stays on the bundle's own Kustomization and none is refused,
-// an untargeted one for an object nothing builds included.
+// of the bundle stays on the bundle's own Kustomization and no placement check
+// refuses one. An untargeted one for an object nothing builds fails that
+// Kustomization's build, which is refused.
 func TestLayoutPatches_OtherPlacementsUnchanged(t *testing.T) {
-	patches := []stack.Patch{untargeted(cmDoc("absent")), untargeted(cmDoc("pre")), everyConfigMap("a"), untargeted(cmDoc("web-cm"), cmDoc("pre"))}
+	patches := []stack.Patch{untargeted(cmDoc("pre")), everyConfigMap("a"), untargeted(cmDoc("web-cm"), cmDoc("pre"))}
 	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerBundle, layout.FluxSeparate} {
 		t.Run(string(placement), func(t *testing.T) {
 			rules := layout.DefaultLayoutRules()
@@ -461,9 +474,14 @@ func TestLayoutPatches_OtherPlacementsUnchanged(t *testing.T) {
 			if names := slices.Sorted(maps.Keys(kustomizationsByName(ml))); !slices.Equal(names, []string{"shop"}) {
 				t.Fatalf("Kustomizations = %q, want the bundle's alone", names)
 			}
-			if got, want := patchPlacement(t, ml, patches), (map[string][]int{"shop": {0, 1, 2, 3}}); !reflect.DeepEqual(got, want) {
+			if got, want := patchPlacement(t, ml, patches), (map[string][]int{"shop": {0, 1, 2}}); !reflect.DeepEqual(got, want) {
 				t.Errorf("the patches are held by %v, want %v", got, want)
 			}
+			absent := append(slices.Clone(patches), untargeted(cmDoc("absent")))
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).
+				CreateLayoutWithResources(oneBundleCluster(patchShop(unordered(nil), absent...)), rules)
+			mustContainAll(t, err, `Flux Kustomization "flux-system/shop"`, "does not build as kustomize-controller builds it",
+				`no resource matches strategic merge patch "ConfigMap.v1.[noGrp]/absent.default"`)
 		})
 	}
 }
@@ -549,7 +567,7 @@ func TestLayoutPatches_AGeneratedConfigMapHasNoNamespace(t *testing.T) {
 func TestLayoutPatches_MergedBundles(t *testing.T) {
 	patch := func(app string) stack.Patch {
 		return stack.Patch{
-			Patch:  "- op: add\n  path: /metadata/labels/" + app + "\n  value: \"yes\"\n",
+			Patch:  "- op: add\n  path: /metadata/labels\n  value:\n    " + app + ": \"yes\"\n",
 			Target: &stack.PatchSelector{Kind: "ConfigMap", Name: app + "-cm"},
 		}
 	}

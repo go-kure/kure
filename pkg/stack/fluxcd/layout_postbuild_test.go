@@ -41,7 +41,7 @@ func postBuildTreeWith(set func(app, pre, main, deep *layout.ManifestLayout), pb
 	b := shopSettings(set)
 	b.PostBuild = pb
 	b.Patches = []stack.Patch{{
-		Patch:  "- op: add\n  path: /data/note\n  value: \"" + value + "\"\n",
+		Patch:  "- op: add\n  path: /data\n  value:\n    note: \"" + value + "\"\n",
 		Target: &stack.PatchSelector{Kind: "ConfigMap"},
 	}}
 	maps.Copy(b.Annotations, annotations)
@@ -131,7 +131,7 @@ func TestLayoutPostBuild_ThroughTheParentsBuild(t *testing.T) {
 				t.Errorf("%s: postBuild = %#v, want the bundle's", name, pb)
 			}
 			want := []kustomize.Patch{{
-				Patch:  "- op: add\n  path: /data/note\n  value: \"plain\"\n",
+				Patch:  "- op: add\n  path: /data\n  value:\n    note: \"plain\"\n",
 				Target: &kustomize.Selector{Kind: "ConfigMap"},
 			}}
 			if !reflect.DeepEqual(k.Spec.Patches, want) {
@@ -259,7 +259,7 @@ func TestLayoutPostBuild_ThroughTheParentsBuild(t *testing.T) {
 			b := shopSettings(nil)
 			b.PostBuild = &stack.PostBuild{Substitute: map[string]string{"VAR": "x"}}
 			b.Patches = []stack.Patch{{
-				Patch:  "- op: add\n  path: /data/note\n  value: \"${VAR}\"\n",
+				Patch:  "- op: add\n  path: /data\n  value:\n    note: \"${VAR}\"\n",
 				Target: &stack.PatchSelector{Kind: "ConfigMap"},
 			}}
 			return oneBundleCluster(b)
