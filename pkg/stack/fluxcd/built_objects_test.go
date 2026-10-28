@@ -71,22 +71,32 @@ func builtName(t *testing.T, names []string, prefix string) string {
 // a, which health-checks red/ready. With NS=red set inline, b-longer's apply
 // writes red/ready, the edge is certain and the cycle is refused. With NS
 // read from the cluster, or set nowhere (so the namespace is empty), the
-// writer stays uncertain.
+// writer stays uncertain. Written ${NS:=red}, the namespace is red where NS is
+// set nowhere, and refused; read from the cluster, NS may override the
+// default, and the writer stays uncertain.
 func TestBuiltObjects_SubstitutedIdentityIsRead(t *testing.T) {
+	fromCluster := []stack.SubstituteRef{{Kind: "ConfigMap", Name: "vars"}}
 	cases := map[string]struct {
+		namespace string
 		postBuild *stack.PostBuild
 		refused   bool
 	}{
-		"NS set inline":            {postBuild: &stack.PostBuild{Substitute: map[string]string{"NS": "red"}}, refused: true},
-		"NS read from the cluster": {postBuild: &stack.PostBuild{SubstituteFrom: []stack.SubstituteRef{{Kind: "ConfigMap", Name: "vars"}}}},
-		"NS set nowhere":           {postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}}},
+		"NS set inline":                       {postBuild: &stack.PostBuild{Substitute: map[string]string{"NS": "red"}}, refused: true},
+		"NS read from the cluster":            {postBuild: &stack.PostBuild{SubstituteFrom: fromCluster}},
+		"NS set nowhere":                      {postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}}},
+		"NS defaulted":                        {namespace: "${NS:=red}", postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}}, refused: true},
+		"NS defaulted, read from the cluster": {namespace: "${NS:=red}", postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}},
 	}
 	for name, tc := range cases {
 		for _, placement := range append(slices.Clone(integratedPlacements), layout.FluxSeparate) {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				namespace := tc.namespace
+				if namespace == "" {
+					namespace = "${NS}"
+				}
 				c := pairCluster(stack.HealthCheck{APIVersion: "v1", Kind: "ConfigMap", Namespace: "red", Name: "ready"},
 					[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "a-cm")},
-					[]client.Object{unstructuredObj("v1", "ConfigMap", "${NS}", "ready")})
+					[]client.Object{unstructuredObj("v1", "ConfigMap", namespace, "ready")})
 				c.Node.Children[1].Bundle.PostBuild = tc.postBuild
 				err := integrateWalked(t, c, placement, nil)
 				if tc.refused && (err == nil || !strings.Contains(err.Error(), "can never all become Ready")) {
