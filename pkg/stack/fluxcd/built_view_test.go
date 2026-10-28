@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 // Each Flux Kustomization is read as its writer's apply makes it
@@ -22,14 +23,20 @@ import (
 // Kustomization, so x is applied as a Flux Kustomization, and its dependsOn
 // references DEP. With substituteFrom, DEP may be read from the cluster
 // whatever its default, so what x waits for cannot be read and the tree is
-// refused, naming DEP. With DEP set inline the tree is admitted.
+// refused, naming DEP. Flux removes every newline from an inline value before
+// it substitutes, so KIND set to Kustomization and a newline is read the same.
+// With DEP set inline the tree is admitted.
 func TestBuiltView_SubstitutedKindIsAKustomization(t *testing.T) {
-	for _, depInline := range []bool{false, true} {
+	for name, c := range map[string]struct {
+		kind      string
+		depInline bool
+	}{
+		"DEP read from the cluster":                 {kind: "Kustomization"},
+		"DEP read from the cluster, KIND a newline": {kind: "Kustomization\n"},
+		"DEP set inline":                            {kind: "Kustomization", depInline: true},
+	} {
+		depInline := c.depInline
 		for _, placement := range integratedPlacements {
-			name := "DEP read from the cluster"
-			if depInline {
-				name = "DEP set inline"
-			}
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
 				u := unstructuredObj(kustv1.GroupVersion.String(), "${KIND}", "flux-system", "x")
 				for _, f := range []struct {
@@ -45,7 +52,7 @@ func TestBuiltView_SubstitutedKindIsAKustomization(t *testing.T) {
 					}
 				}
 				platform := srBundle("platform", objApp("platform-app", u))
-				inline := map[string]string{"KIND": "Kustomization"}
+				inline := map[string]string{"KIND": c.kind}
 				if depInline {
 					inline["DEP"] = "safe"
 				}
@@ -112,20 +119,34 @@ func TestBuiltView_DroppedFieldsDoNotHideAKustomization(t *testing.T) {
 // renamed: the tree holds no Kustomization by that name, so it cannot tell
 // whose x-web is, and judges it as the integration's. With the dependsOn on
 // x-web itself, x-web can never become Ready and the tree is refused; with
-// one on web, no cycle closes and the tree is admitted.
+// one on web, no cycle closes and the tree is admitted. Where hand-written's
+// apply skips every object of its build, kustomize.toolkit.fluxcd.io/ssa
+// Ignore in its spec.commonMetadata, x-web is never created, no cycle runs
+// through it, and the tree is admitted.
 func TestBuiltView_ARenamedMemberIsJudged(t *testing.T) {
-	for _, dep := range []string{"x-web", "web"} {
+	for name, c := range map[string]struct {
+		dep     string
+		skipped bool
+	}{
+		"dependsOn x-web":          {dep: "x-web"},
+		"dependsOn web":            {dep: "web"},
+		"dependsOn x-web, skipped": {dep: "x-web", skipped: true},
+	} {
+		dep := c.dep
 		for _, placement := range integratedPlacements {
-			t.Run("dependsOn "+dep+"/"+string(placement), func(t *testing.T) {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
 				k := handWritten("hand-written")
 				k.Spec.Path, k.Spec.NamePrefix = webDirectory(t, placement), "x-"
+				if c.skipped {
+					k.Spec.CommonMetadata = &kustv1.CommonMetadata{Annotations: map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "Ignore"}}
+				}
 				k.Spec.Patches = []kustomize.Patch{{
 					Patch:  "- op: add\n  path: /spec/dependsOn\n  value:\n  - name: " + dep + "\n",
 					Target: &kustomize.Selector{Kind: "Kustomization", Name: "web"},
 				}}
 				platform := srBundle("platform", objApp("platform-app", k))
 				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(platform, false), withPlacement(nodeOnly, placement))
-				if dep == "web" {
+				if dep == "web" || c.skipped {
 					if err != nil {
 						t.Fatalf("got %v, want the tree admitted", err)
 					}
@@ -176,4 +197,70 @@ func TestBuiltView_ASkippedCopyDoesNotDisagree(t *testing.T) {
 			})
 		}
 	}
+}
+
+// web carries kustomize.toolkit.fluxcd.io/ssa Ignore, so the bootstrap's
+// apply skips its copy, and hand-written builds web's directory with a patch
+// removing it: hand-written's apply alone creates web. With hand-written
+// depending on web, web is never created and the tree is refused; without
+// the annotation the bootstrap creates web and the tree is admitted. Where
+// hand-written's copy also gives web wait and platform's directory as its
+// path, web applies hand-written and, with hand-written's wait, each waits
+// for the other; web was built from the bootstrap's copy, the first known,
+// so what web applies cannot be read and the tree is refused. With nothing
+// changed but the annotation the tree is admitted.
+func TestBuiltView_TheOnlyApplyCreatesAndBuilds(t *testing.T) {
+	const unskip = "- op: remove\n  path: /metadata/annotations/kustomize.toolkit.fluxcd.io~1ssa\n"
+	for name, c := range map[string]struct {
+		skipped, dependsOnWeb, rebuilt bool
+		refused                        string
+	}{
+		"bootstrap skips web, dependsOn web":   {skipped: true, dependsOnWeb: true, refused: "can never all become Ready: flux-system/web waits for itself (ready flux-system/web -> apply flux-system/web -> apply flux-system/hand-written -> ready flux-system/web)"},
+		"bootstrap applies web, dependsOn web": {dependsOnWeb: true},
+		"bootstrap skips web, copy differs":    {skipped: true, rebuilt: true, refused: `Flux Kustomization "flux-system/web" is built from the copy the Flux bootstrap`},
+		"bootstrap skips web":                  {skipped: true},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				k := handWritten("hand-written")
+				k.Spec.Path, k.Spec.Wait = webDirectory(t, placement), c.rebuilt
+				if c.dependsOnWeb {
+					k.Spec.DependsOn = []kustv1.DependencyReference{{Name: "web"}}
+				}
+				if c.skipped {
+					patch := unskip
+					if c.rebuilt {
+						patch += "- op: add\n  path: /spec/wait\n  value: true\n- op: add\n  path: /spec/path\n  value: " + platformDirectory(t, placement) + "\n"
+					}
+					k.Spec.Patches = []kustomize.Patch{{Patch: patch, Target: &kustomize.Selector{Kind: "Kustomization", Name: "web"}}}
+				}
+				platform := srBundle("platform", objApp("platform-app", k))
+				platform.Wait = boolPtr(false)
+				cluster := noWaitCluster(platform, false)
+				if c.skipped {
+					cluster.Node.Children[1].Bundle.Annotations = map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "Ignore"}
+				}
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(cluster, withPlacement(nodeOnly, placement))
+				if c.refused == "" {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
+				if err == nil || !strings.Contains(err.Error(), c.refused) {
+					t.Fatalf("got %v, want %s", err, c.refused)
+				}
+			})
+		}
+	}
+}
+
+// platformDirectory is the spec.path of platform in noWaitCluster.
+func platformDirectory(t *testing.T, placement layout.FluxPlacement) string {
+	t.Helper()
+	off, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(srBundle("platform", cmApp("platform-app")), true), withPlacement(nodeOnly, placement))
+	if err != nil {
+		t.Fatalf("without the setting: %v", err)
+	}
+	return findKept(off, "platform").Spec.Path
 }

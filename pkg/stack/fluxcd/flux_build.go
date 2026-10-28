@@ -191,7 +191,12 @@ func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substitut
 	if err != nil {
 		return nil, errors.Wrap(err, "convert the Kustomization to unstructured")
 	}
-	inline := k.Spec.PostBuild.Substitute
+	// Flux removes every newline from an inline value before it substitutes
+	// (kustomize_varsub.go:155), so the checks read the values it uses.
+	inline := make(map[string]string, len(k.Spec.PostBuild.Substitute))
+	for name, value := range k.Spec.PostBuild.Substitute {
+		inline[name] = strings.ReplaceAll(value, "\n", "")
+	}
 	fromCluster := len(k.Spec.PostBuild.SubstituteFrom) > 0
 	always := k.GetSubstituteStrategy() == kustv1.SubstituteStrategyAlways
 	rf := provider.NewDefaultDepProvider().GetResourceFactory()
