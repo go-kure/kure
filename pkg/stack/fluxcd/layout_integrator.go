@@ -397,6 +397,10 @@ type integratedPlacement struct {
 	// Kustomizations checkKeptNodeCR found lacking a dependency, for
 	// umbrellasDoNotWait to judge against the terminal sets.
 	keptNodeDeps []keptNodeDependencies
+	// laterPatches maps the namespace/name of a bundle's own Kustomization
+	// that placeBundlePatches wrote a later patch on to what it wrote there:
+	// laterPatchRefusal reads it when a check's build of it fails.
+	laterPatches map[string]ownPatches
 }
 
 // hostedObject is an object and the layout whose Resources hold it (directly
@@ -540,7 +544,7 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		return nil, err
 	}
 	if err := checkPlacedReconcileOrder(ml, p.generated, p.gen.AdditiveCELDependencyCheckOff); err != nil {
-		return nil, err
+		return nil, p.laterPatchRefusal(ml, err)
 	}
 	return p.generated, markFluxBuilds(ml, p.generated)
 }

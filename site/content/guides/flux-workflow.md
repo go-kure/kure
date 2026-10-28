@@ -720,7 +720,8 @@ whole, and the bundle's patches are placed by object. What to do:
   (`$patch: delete`, or `config.kubernetes.io/local-config` at any value but `"false"`),
   the patches that follow are not placed by object and stay
   on the bundle's own Kustomization as well; one whose object only a layout builds still fails
-  there. Put it before that entry, or give it a target.
+  there. The integration refuses that build, naming the patch, the entry and the object
+  (go-kure/kure#1160). Put the patch before that entry, or give it a target.
 - **Expect Flux's opt-out on a Kustomization whose postBuild or patches the parent would
   change.** A per-layout Kustomization is in its parent's build, whose postBuild substitution runs
   over its own postBuild and patches first. Where that would change either at all, a plain
