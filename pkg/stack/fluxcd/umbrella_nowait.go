@@ -237,7 +237,7 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	}
 	v, err := newBuiltView(t, p.gen.AdditiveCELDependencyCheckOff)
 	if err != nil {
-		return err
+		return p.laterPatchRefusal(root, err)
 	}
 	for _, e := range rewritten {
 		chain, err := v.orderPath("ready "+e.to, "apply "+e.from)

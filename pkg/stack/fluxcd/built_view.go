@@ -238,9 +238,23 @@ func (v *builtView) local(key string) *kustv1.Kustomization {
 	return k
 }
 
+// buildFailure is the refusal of a tree whose writer with key, built from
+// built, does not build: cause is the build's error, and the refusal's text is
+// err's. laterPatchRefusal reads it to name the patch the build stopped at.
+type buildFailure struct {
+	key   string
+	built *kustv1.Kustomization
+	cause error
+	err   error
+}
+
+func (f *buildFailure) Error() string { return f.err.Error() }
+func (f *buildFailure) Unwrap() error { return f.err }
+
 // add runs the build of the writer with key, from its spec k (nil for the
 // bootstrap), and records its result. A Kustomization whose spec.path is no
-// directory of the tree builds nothing of it, and is no writer.
+// directory of the tree builds nothing of it, and is no writer. A build that
+// fails is refused with a buildFailure.
 func (v *builtView) add(builds *treeBuilds, key string, k *kustv1.Kustomization) error {
 	var objs []client.Object
 	var err error
@@ -266,7 +280,8 @@ func (v *builtView) add(builds *treeBuilds, key string, k *kustv1.Kustomization)
 		if stderrors.As(err, &u) {
 			return errors.Wrapf(u.error, "Flux Kustomization %q (spec.path %q) is not read, so what it applies cannot be read", key, k.Spec.Path)
 		}
-		return errors.Wrapf(err, "Flux Kustomization %q (spec.path %q) does not build as kustomize-controller builds it, so it never applies, and what it would apply cannot be read", key, k.Spec.Path)
+		return &buildFailure{key: key, built: k, cause: err,
+			err: errors.Wrapf(err, "Flux Kustomization %q (spec.path %q) does not build as kustomize-controller builds it, so it never applies, and what it would apply cannot be read", key, k.Spec.Path)}
 	}
 	res := make([]substituted, 0, len(objs))
 	if k == nil {

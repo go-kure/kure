@@ -181,7 +181,9 @@ func holds(host *layout.ManifestLayout, cr *kustv1.Kustomization) bool {
 // Kustomization whose build holds every object it names as generated. What
 // the entry does is not read, so one that changes no identity counts as
 // well. What that leaves as it was, the build of the bundle's own
-// Kustomization failing on the cluster as it did:
+// Kustomization failing as it did on the cluster, which the integration's
+// checks refuse (in the first two cases naming the later patch, which is
+// recorded in laterPatches for laterPatchRefusal):
 //
 //   - such a later patch for an object only a layout builds: it is on that
 //     layout's Kustomization as well, which builds and patches the object,
@@ -229,12 +231,17 @@ func (p *integratedPlacement) placeBundlePatches() error {
 			own         bool
 			everyLayout bool
 			held        []patchBuild
+			// later is set for an untargeted plain patch that comes after
+			// an entry that is not plain.
+			later *laterPatch
 		}
 		placements := make([]placement, len(b.Patches))
 		// Set once an entry that is not a plain strategic-merge patch has
 		// passed: from there the identities as generated no longer say what
 		// an untargeted patch names.
 		identityChanged := false
+		// notPlain is the index of the first entry that is not plain.
+		notPlain := -1
 		for i, patch := range b.Patches {
 			docs, plain := plainStrategicMerge(rf, patch.Patch)
 			if !plain {
@@ -242,6 +249,9 @@ func (p *integratedPlacement) placeBundlePatches() error {
 				// any, are not read.
 				placements[i] = placement{own: true, everyLayout: patch.Target != nil}
 				identityChanged = true
+				if notPlain < 0 {
+					notPlain = i
+				}
 				continue
 			}
 			if patch.Target != nil {
@@ -250,8 +260,10 @@ func (p *integratedPlacement) placeBundlePatches() error {
 			}
 			on := candidates
 			var split []string
+			var named []resid.ResId
 			for _, doc := range docs {
 				id := doc.OrgId()
+				named = append(named, id)
 				var holders []patchBuild
 				for _, c := range candidates {
 					ids, err := objectsOf(c.layout)
@@ -273,7 +285,7 @@ func (p *integratedPlacement) placeBundlePatches() error {
 				})
 			}
 			if identityChanged {
-				placements[i] = placement{own: true, held: on}
+				placements[i] = placement{own: true, held: on, later: &laterPatch{index: i, after: notPlain, ids: named, before: len(on) > 0}}
 				continue
 			}
 			if len(on) == 0 {
@@ -289,12 +301,27 @@ func (p *integratedPlacement) placeBundlePatches() error {
 		}
 		if own := builds.own.cr; own != nil && !builds.merged {
 			var kept []kustomize.Patch
+			var later []laterPatch
 			for i, patch := range b.Patches {
 				if placements[i].own || heldBy(i, builds.own) {
+					if lp := placements[i].later; lp != nil {
+						lp.at = len(kept)
+						later = append(later, *lp)
+					}
 					kept = append(kept, fluxPatch(patch))
 				}
 			}
 			own.Spec.Patches = kept
+			if len(later) > 0 {
+				if p.laterPatches == nil {
+					p.laterPatches = map[string]ownPatches{}
+				}
+				written := make([]kustomize.Patch, 0, len(kept))
+				for _, k := range kept {
+					written = append(written, *k.DeepCopy())
+				}
+				p.laterPatches[crKey(own.Namespace, own.Name)] = ownPatches{bundle: b.GetPath(), kept: written, later: later}
+			}
 		}
 		for _, lay := range builds.layouts {
 			if lay.cr == nil {
