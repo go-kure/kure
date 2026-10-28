@@ -379,6 +379,24 @@ schema every other use of kustomize in the process reads, so two integrations, o
 other kustomize build, would race. kure builds only with kustomize's built-in schema, which it
 has kustomize parse before any of its uses of kustomize reads it, again after a reset.
 
+**An integration never fetches; a remote reference is reported as not read.**
+kustomize-controller fetches what a build names remotely: a Git repository in `resources`,
+`bases`, `components` or a `generators`, `transformers` or `validators` entry, which it clones,
+and an `http(s)` URL in any of those or in a field kustomize loads a file through (`patches`,
+`replacements`, `crds`, `configurations`, generator `files` and `envs`, and the same fields of a
+builtin plugin config), which it requests. kure fetches nothing. A build that reads a file naming
+a remote reference is not read, naming the file and the reference, and kure refuses the file
+before kustomize reads its fields, so nothing is cloned or requested. The check fails closed: a
+build is not read either when it reads a file kure cannot check, a kustomization or plugin config
+file that does not parse, a plugin config that is not builtin (Flux builds with builtins only and
+refuses it too) or of a builtin kure does not classify, or a `generators`, `transformers` or
+`validators` entry that is a directory, whose plugin configs a kustomization builds. A local path
+shaped like a repository, such as `github.com/org/repo`, is read as one. A data file named like a
+kustomization file is checked as one. The property rests on one dependency: kustomize reads files
+through no field kure leaves unclassified, which kure's tests pin to every field of kustomize's
+`Kustomization`, every builtin plugin, and the kustomize version kure builds with. Vendor a remote
+base into the tree, or reference it through a Flux Source.
+
 **kustomize's schema is the process's, not kure's.** kure guarantees that its own goroutines,
 concurrent integrations included, do not race each other on it. It refuses a build under a custom
 schema or another built-in version, naming it, but definitions added to the built-in schema
@@ -397,10 +415,11 @@ applies it. A member every apply skips is still read, from its first copy. Seven
 each naming the Kustomization: a build that fails, as the controller's apply would; a build kure
 does not read, which Flux may build and apply, when it reads a kustomization file setting
 `openapi`, naming the file, since kustomize would keep its schema for every later build and kure
-does not reset it, or when another use of kustomize in the process has set a schema other than
-the built-in one, naming it, or when it loads, as a kustomization (a component's included), a
-file holding a `secretGenerator` entry with `behavior: merge` or a `generators` entry, naming the
-file (see the merging build below); a
+does not reset it, when it reads a file naming a remote reference, or one kure cannot check for
+one, naming the file, since an integration never fetches, when another use of kustomize in the
+process has set a schema other than the built-in one, naming it, or when it loads, as a
+kustomization (a component's included), a file holding a `secretGenerator` entry with
+`behavior: merge` or a `generators` entry, naming the file (see the merging build below); a
 Kustomization two writers apply with a different `dependsOn`, `wait`, `healthChecks`,
 `healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata`, `images`
 (which Flux's generator writes into the build) or transform (`ignoreMissingComponents` included,
@@ -446,8 +465,8 @@ v1.10.1's v0.21.1 does not); kure does not read which Secret a merge changes, or
 A build may merge when a kustomization file it loads as one (a component's included) holds a
 `secretGenerator` entry with `behavior: merge`, or a `generators` entry, whose generator may merge
 too. kure decodes each such file as kustomize does: keys in any case, YAML anchors, aliases and
-merge keys expanded, and the last of duplicate keys taking effect; a file it cannot decode counts as
-one that merges, so no merge is missed. A file no build reads, or one a generator reads only as
+merge keys expanded, and the last of duplicate keys taking effect; a build that reads a file it
+cannot decode is not read, as above, so no merge is missed. A file no build reads, or one a generator reads only as
 data, merges nothing. This refuses conservatively: a tree whose build merges into a Secret is
 refused even where Flux converges. go-kure/kure#1181 tracks reading such a build.
 
@@ -1691,6 +1710,11 @@ build makes it, its own `wait` included. What they still leave out:
   by its name, so a generator's data file named `kustomization.yaml`, `kustomization.yml` or
   `Kustomization` whose content sets `openapi` is refused too, though kustomize reads it only as
   data: rename it.
+- **Remote references.** A build that reads a remote reference, a Git repository or an `http(s)`
+  URL kustomize-controller would fetch, is not read, naming the file and the reference: an
+  integration never fetches (see [One Kustomization per
+  directory](#one-kustomization-per-directory)). Vendor the base into the tree, or reference it
+  through a Flux Source.
 
 A tree refused for a cycle through one of these integrates once the dependency or health check
 that closes the reported chain is dropped, or names another Kustomization. The "umbrellas do not

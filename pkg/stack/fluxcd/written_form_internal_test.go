@@ -144,9 +144,9 @@ func canonicalJSON(t *testing.T, content map[string]any) string {
 // list before the real one, the field in two cases, and a builtin
 // SecretGenerator listed under generators. kustomize is the oracle: its build
 // must change creds, or the case tests nothing. The guard must then report
-// the component as a merge the build loads (openAPIGuard.merged). A
+// the component as a merge the build loads (buildGuard.merged). A
 // component base does not load merges nothing.
-func TestOpenAPIGuard_FindsEveryMerge(t *testing.T) {
+func TestBuildGuard_FindsEveryMerge(t *testing.T) {
 	const (
 		head    = "apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\n"
 		entry   = "  name: creds\n  namespace: default\n"
@@ -204,7 +204,7 @@ func TestOpenAPIGuard_FindsEveryMerge(t *testing.T) {
 			if merged == tc.unloaded {
 				t.Fatalf("kustomize merges into creds: %v, the case expects %v: it tests nothing", merged, !tc.unloaded)
 			}
-			guard := &openAPIGuard{FileSystem: filesys.MakeFsOnDisk()}
+			guard := newBuildGuard(filesys.MakeFsOnDisk(), dir)
 			if _, err := kustomizeBuild(guard, base); err != nil {
 				t.Fatalf("build through the guard: %v", err)
 			}
