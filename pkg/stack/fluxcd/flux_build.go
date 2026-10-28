@@ -17,8 +17,14 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/kustomize/api/konfig"
+	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/api/provider"
+	"sigs.k8s.io/kustomize/api/resmap"
 	"sigs.k8s.io/kustomize/api/resource"
+	kusttypes "sigs.k8s.io/kustomize/api/types"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
+	"sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -78,12 +84,17 @@ var fluxBuildMu sync.Mutex
 
 // build returns the objects k's build makes, in the order kustomize emits
 // them, each as the unstructured object the build holds. It is
-// kustomize-controller's build, fluxcd/pkg/kustomize's Build with its lock and
-// its reset of kustomize's global OpenAPI schema around the build (a
-// component a layout's extra files write may set openapi), but for SOPS
-// decryption, which reads keys from the cluster. Like the controller it
-// refuses a built object without an apiVersion, kind or name
-// (kustomization_controller.go:855-859).
+// kustomize-controller's build, kustomize with fluxcd/pkg/kustomize's Build
+// options under one lock, but for SOPS decryption, which reads keys from the
+// cluster, and for that Build's reset of kustomize's global OpenAPI schema
+// around the build (kustomize_generator.go:706-707). The reset writes the
+// schema that every other kustomize caller in the process reads without a
+// lock, so two integrations, or one beside any other use of kustomize, would
+// race. It matters only to a kustomization that sets openapi, whose schema
+// would then hold for every later build: a build that reads one (a component
+// a layout's extra files write may) is refused before kustomize reads its
+// fields (openAPIGuard). Like the controller it refuses a built object
+// without an apiVersion, kind or name (kustomization_controller.go:855-859).
 func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	tree, err := b.tree()
 	if err != nil {
@@ -112,7 +123,12 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "open the tree")
 	}
-	rm, err := fluxkustomize.Build(fsys, dir)
+	guard := &openAPIGuard{FileSystem: fsys}
+	rm, err := kustomizeBuild(guard, dir)
+	if guard.sets != "" {
+		rel, _ := filepath.Rel(tree, guard.sets)
+		return nil, errors.Errorf("its build reads %s, which sets openapi: kustomize would keep that schema for every later build in the process, so kure cannot build it as Flux does in isolation; drop the field", filepath.ToSlash(rel))
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "kustomize build failed")
 	}
@@ -128,6 +144,49 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 		objs = append(objs, &unstructured.Unstructured{Object: m})
 	}
 	return objs, nil
+}
+
+// kustomizeBuild builds dir as fluxcd/pkg/kustomize v1.44.0's Build does
+// after its schema reset (kustomize_generator.go:682-710): every load
+// restriction lifted, plugins disabled, and a kustomize panic returned as an
+// error.
+func kustomizeBuild(fsys filesys.FileSystem, dir string) (rm resmap.ResMap, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.Errorf("recovered from kustomize build panic: %v", r)
+		}
+	}()
+	return krusty.MakeKustomizer(&krusty.Options{
+		LoadRestrictions: kusttypes.LoadRestrictionsNone,
+		PluginConfig:     kusttypes.DisabledPluginConfig(),
+	}).Run(fsys, dir)
+}
+
+// openAPIGuard is the tree as a build reads it, but that it refuses a
+// kustomization file setting openapi, and records it in sets, before
+// kustomize reads its fields: kustomize sets the global OpenAPI schema from
+// the field of every kustomization it loads (krusty/kustomizer.go:79-88,
+// internal/target/kusttarget.go:511-520). kustomize reads a kustomization
+// file it cannot load as one that is absent, so the build's own error does
+// not name it; build reports sets instead.
+type openAPIGuard struct {
+	filesys.FileSystem
+	sets string
+}
+
+func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
+	b, err := g.FileSystem.ReadFile(name)
+	if err != nil || !slices.Contains(konfig.RecognizedKustomizationFileNames(), filepath.Base(name)) {
+		return b, err
+	}
+	var k kusttypes.Kustomization
+	if yaml.Unmarshal(b, &k) == nil && len(k.OpenAPI) > 0 {
+		if g.sets == "" {
+			g.sets = name
+		}
+		return nil, errors.Errorf("%s sets openapi", name)
+	}
+	return b, nil
 }
 
 // replaceFile writes content to name and returns what puts back the file as
