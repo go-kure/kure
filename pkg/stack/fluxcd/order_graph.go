@@ -27,7 +27,11 @@ func (v *builtView) newOrderGraph() *orderGraph {
 }
 
 // next returns what node n waits for. "apply K" needs every Kustomization K
-// depends on Ready, and the writer whose apply creates K applied (writer).
+// depends on Ready, or, for an entry that waits only for its dependency D to
+// exist (specDeps), "exist D"; and the writer whose apply creates K applied
+// (writer). "exist D" needs the writer whose apply creates D applied, and
+// nothing when no Kustomization of the tree creates it: D keeps its own node
+// so that a cycle through D's existence is judged as one through D.
 // "ready K" needs "apply K"; what K's wait or its Kustomization health checks
 // wait for (awaitedKustomizations; the wait leaves out what K's apply skips,
 // unskipped); and, for each health check on an object that is no Flux
@@ -42,7 +46,12 @@ func (v *builtView) newOrderGraph() *orderGraph {
 // internal/features/features.go:97-99,
 // internal/controller/kustomization_controller.go:614-626), but kure does not
 // evaluate CEL and an expression may itself require Ready, so this read never
-// admits a deadlock, and refuses a tree whose expression asks for less.
+// admits a deadlock, and refuses a tree whose expression asks for less. With
+// the gate on Flux checks Ready after the expression (:630-655), so the one
+// exception, a readyExpr of exactly "true" as an existence wait, applies only
+// where the caller states the gate is off
+// (ResourceGenerator.AdditiveCELDependencyCheckOff); Flux requires the
+// dependency to exist in either case (:597-611).
 // A Kustomization that is no member and cannot be read in typed form, even
 // from its writer's substituted result, has no successor: its writer's apply
 // fails, a stall the checks do not judge (builtView.spec).
@@ -53,6 +62,13 @@ func (g *orderGraph) next(n string) ([]string, error) {
 	v := g.v
 	kind, key, _ := strings.Cut(n, " ")
 	var out []string
+	if kind == "exist" {
+		if w := g.writer(key); w != "" {
+			out = append(out, "apply "+w)
+		}
+		g.succ[n] = out
+		return out, nil
+	}
 	k, err := v.spec(key)
 	if err != nil {
 		return nil, err
@@ -63,8 +79,8 @@ func (g *orderGraph) next(n string) ([]string, error) {
 	}
 	if kind == "apply" {
 		if k != nil {
-			for _, d := range specDeps(k) {
-				out = append(out, "ready "+d)
+			for _, d := range specDeps(k, v.existenceOnly) {
+				out = append(out, d.node())
 			}
 		}
 		if w := g.writer(key); w != "" {
@@ -101,6 +117,13 @@ func (g *orderGraph) next(n string) ([]string, error) {
 	}
 	g.succ[n] = out
 	return out, nil
+}
+
+// nodeKey is the key of the Kustomization a node of the reconcile-order graph
+// names ("ready K", "apply K" or "exist K").
+func nodeKey(n string) string {
+	_, key, _ := strings.Cut(n, " ")
+	return key
 }
 
 func (g *orderGraph) writer(key string) string {
@@ -229,7 +252,7 @@ func (v *builtView) checkTreeOrder() error {
 			}
 			i := slices.Index(stack, n)
 			return errors.Errorf("Flux Kustomizations can never all become Ready: %s waits for itself (%s); a dependsOn waits before applying, a health check before becoming Ready, a Kustomization with wait becomes Ready only once every Kustomization it applied is, and a CR exists only once the Kustomization that creates it has applied",
-				strings.TrimPrefix(strings.TrimPrefix(n, "ready "), "apply "), strings.Join(append(stack[i:], n), " -> "))
+				nodeKey(n), strings.Join(append(stack[i:], n), " -> "))
 		}
 		state[n] = 1
 		stack = append(stack, n)

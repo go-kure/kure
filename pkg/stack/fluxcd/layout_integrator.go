@@ -539,7 +539,7 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	if err := p.umbrellasDoNotWait(ml); err != nil {
 		return nil, err
 	}
-	if err := checkPlacedReconcileOrder(ml, p.generated); err != nil {
+	if err := checkPlacedReconcileOrder(ml, p.generated, p.gen.AdditiveCELDependencyCheckOff); err != nil {
 		return nil, err
 	}
 	return p.generated, markFluxBuilds(ml, p.generated)
@@ -609,12 +609,12 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) erro
 // writer, and the other Kustomizations of the tree too, each read from its
 // writer's result; checkReconcileOrder runs first so its refusals keep their
 // chains.
-func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string]bool) error {
+func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string]bool, existenceOnly bool) error {
 	t, err := indexKustomizationTree(root, generatedMembers(generated))
 	if err != nil {
 		return err
 	}
-	v, err := newBuiltView(t)
+	v, err := newBuiltView(t, existenceOnly)
 	if err != nil {
 		return err
 	}
@@ -623,7 +623,7 @@ func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string
 		return err
 	}
 	applied := func(key string) []string { return v.unskipped(key, v.applied(key)) }
-	if err := checkReconcileOrder(kusts, v.creator, applied); err != nil {
+	if err := checkReconcileOrder(kusts, v.creator, applied, existenceOnly); err != nil {
 		return err
 	}
 	return v.checkTreeOrder()
@@ -1090,7 +1090,11 @@ func set(kusts []*kustv1.Kustomization) map[string]*kustv1.Kustomization {
 // application emits) are not modelled. A cycle is a deadlock on a fresh install: a merge can close one
 // (a health check or dependency on a bundle merged into a unit that waits for
 // it), and so can a dependency chain ending at a CR its first member creates.
-func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string) string, applied func(key string) []string) error {
+// With existenceOnly (ResourceGenerator.AdditiveCELDependencyCheckOff) a
+// dependsOn whose readyExpr is exactly "true" waits only for the dependency to
+// exist (specDeps): applying waits for "exist D", which waits for the apply of
+// D's creator when creator names one.
+func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string) string, applied func(key string) []string, existenceOnly bool) error {
 	set := set(kusts)
 	edges := map[string][]string{}
 	for _, k := range kusts {
@@ -1100,13 +1104,17 @@ func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string)
 		key := crKey(k.Namespace, k.Name)
 		ready, apply := "ready "+key, "apply "+key
 		edges[ready] = append(edges[ready], apply)
-		for _, d := range k.Spec.DependsOn {
-			ns := d.Namespace
-			if ns == "" {
-				ns = k.Namespace
+		for _, d := range specDeps(k, existenceOnly) {
+			if set[d.key] == nil {
+				continue
 			}
-			if dep := crKey(ns, d.Name); set[dep] != nil {
-				edges[apply] = append(edges[apply], "ready "+dep)
+			edges[apply] = append(edges[apply], d.node())
+			if !d.exist || creator == nil {
+				continue
+			}
+			if c := creator(d.key); c != "" {
+				exist := d.node()
+				edges[exist] = append(edges[exist], "apply "+c)
 			}
 		}
 		var appliedBy func() []string
@@ -1135,7 +1143,7 @@ func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string)
 		case 1:
 			i := slices.Index(stack, n)
 			return errors.Errorf("Flux Kustomizations can never all become Ready: %s waits for itself (%s); a dependsOn waits before applying, a health check before becoming Ready, a Kustomization with wait becomes Ready only once every Kustomization it applied is, and a CR exists only once the Kustomization that creates it has applied",
-				strings.TrimPrefix(strings.TrimPrefix(n, "ready "), "apply "), strings.Join(append(stack[i:], n), " -> "))
+				nodeKey(n), strings.Join(append(stack[i:], n), " -> "))
 		}
 		state[n] = 1
 		stack = append(stack, n)
@@ -2423,7 +2431,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		// above leaves out with the child).
 		if fluxDir.Namespace == ml.FullRepoPath() && len(fluxDir.Children) == 0 &&
 			reflect.DeepEqual(fluxDir.Resources, fluxResources) {
-			if err := checkPlacedReconcileOrder(ml, generated); err != nil {
+			if err := checkPlacedReconcileOrder(ml, generated, li.Generator.AdditiveCELDependencyCheckOff); err != nil {
 				return nil, err
 			}
 			return generated, markFluxBuilds(ml, generated)
@@ -2464,7 +2472,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	// placement adds what a wait on the root's Kustomization covers: the
 	// root's kustomization.yaml lists flux-system, so it applies every CR.
 	// A refused placement is taken back, so the tree is as the caller gave it.
-	if err := checkPlacedReconcileOrder(ml, generated); err != nil {
+	if err := checkPlacedReconcileOrder(ml, generated, li.Generator.AdditiveCELDependencyCheckOff); err != nil {
 		ml.Children = ml.Children[:len(ml.Children)-1]
 		return nil, err
 	}

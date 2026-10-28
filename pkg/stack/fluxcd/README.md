@@ -529,8 +529,39 @@ expression and skips its own readiness check (`internal/controller/kustomization
 kure does not evaluate CEL and cannot see the gate, and an expression may itself require `Ready`,
 so it reads the readiness wait, which never admits a deadlock. Under the default gate a tree whose
 expression asks for less than `Ready`, and whose dependsOn closes a cycle, is therefore refused
-although it converges. Drop that `dependsOn`, or depend on the object some other way.
-go-kure/kure#1161 tracks a narrower read.
+although it converges. Drop that `dependsOn`, depend on the object some other way, or, for a
+`readyExpr` of exactly `"true"`, set `AdditiveCELDependencyCheckOff` (below).
+
+#### With `AdditiveCELDependencyCheckOff`
+
+`ResourceGenerator.AdditiveCELDependencyCheckOff` states that every kustomize-controller
+reconciling the tree runs with its `AdditiveCELDependencyCheck` feature gate off. That is Flux's
+default since v1.7 (kustomize-controller v1.10.1 `internal/features/features.go:97-99`), so an
+operator running the default controller sets it to true. kure cannot see the gate.
+
+- **false**, the default, keeps the conservative read: a `dependsOn` with a `readyExpr` waits for
+  the dependency's `Ready`, whatever the expression says.
+- **true** changes one case: a `dependsOn` whose `readyExpr` is exactly `"true"` waits only for
+  the dependency to exist. With the gate off Flux evaluates the expression instead of its own
+  readiness check, and it always requires the dependency to exist first
+  (`internal/controller/kustomization_controller.go:597-628`). The reconcile-order checks then
+  wait for the apply of the Kustomization that creates the dependency, or for nothing when no
+  Kustomization of the tree does (the Flux bootstrap, say); a chain through that wait is reported
+  as `exist namespace/name`. Every other expression still waits for `Ready`.
+- **The risk:** set on a cluster whose gate is on, where Flux checks `Ready` after the expression
+  (`:630-655`), the checks can admit a tree that never becomes Ready.
+- **Where it applies:** Kustomizations kure generates carry no `readyExpr`, so the field changes
+  only how Kustomizations an application emits, or a caller keeps, patches or substitutes, are
+  judged, in every check: the members' check, the tree's, and the "umbrellas do not wait" rewrite.
+  No entry point refuses it. A v1beta2 Kustomization's `dependsOn` has no `readyExpr` field, so
+  it still waits for `Ready`.
+
+<!-- doc-example:excerpt setting the field on a generator; the behaviour is pinned by pkg/stack/fluxcd/readyexpr_existence_test.go -->
+```go
+gen := fluxcd.NewResourceGenerator()
+gen.AdditiveCELDependencyCheckOff = true
+integrator := fluxcd.NewLayoutIntegrator(gen)
+```
 
 #### Patches in a shared directory
 
@@ -1633,8 +1664,9 @@ build makes it, its own `wait` included. What they still leave out:
   so a variable `spec.postBuild` does not set and that has no default fails the build. kure
   substitutes non-strictly and reads it as empty. That Kustomization then never applies and the
   tree stalls whatever kure reads, so the read may refuse such a tree but never admits a deadlock.
-- **`readyExpr`.** Read as a wait for `Ready` (see [One Kustomization per
-  directory](#one-kustomization-per-directory)).
+- **`readyExpr`.** Read as a wait for `Ready`, or for existence when the expression is exactly
+  `"true"` and the generator sets `AdditiveCELDependencyCheckOff` (see [With
+  `AdditiveCELDependencyCheckOff`](#with-additiveceldependencycheckoff)).
 - **`openapi`.** A build that reads a kustomization file setting `openapi` is not read:
   kustomize-controller isolates its schema by resetting kustomize's global one around each build,
   which kure does not do (see [One Kustomization per
