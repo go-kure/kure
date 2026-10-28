@@ -117,7 +117,10 @@ one; so one layout holding such an object with and without a namespace field is 
 kustomize builds both. A build is every `kustomization.yaml` a writer writes, with the files and the
 `AppFileSingle` child files it lists and, recursively, the build of each child directory it lists;
 and the Flux build of a `KustomizationRecursive` directory marked with `SetFluxBuild` (see
-"Kustomization Generation"). The error names both layouts and the innermost build. A child its
+"Kustomization Generation"). The error names both layouts and the innermost build. Whether
+kustomize knows a kind is cluster-scoped is read from kustomize's process-global OpenAPI schema,
+which kure parses once before its first read, so a concurrent build of the Flux integration does
+not race with the check (see the Flux engine's reconcile-order section). A child its
 parent does not list (an umbrella child, one that renders bundles, a directory child of a
 `FluxIntegratedPerLayout` parent, or under `WriteToDisk` and `WriteToTar` a directory child of
 another package) is a build of its own, so it may hold an object its parent holds. An

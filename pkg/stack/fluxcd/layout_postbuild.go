@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/kustomize/api/provider"
 	"sigs.k8s.io/kustomize/api/resource"
 
+	"github.com/go-kure/kure/internal/kustomizeschema"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
@@ -84,6 +85,7 @@ func (p *integratedPlacement) keepEmbeddedPostBuild(top *layout.ManifestLayout) 
 	if err != nil {
 		return err
 	}
+	kustomizeschema.Parse()
 	rf := provider.NewDefaultDepProvider().GetResourceFactory()
 	for _, child := range children {
 		// own and other gather over every Kustomization whose build holds the

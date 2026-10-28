@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/resid"
 
 	"github.com/go-kure/kure/internal/built"
+	"github.com/go-kure/kure/internal/kustomizeschema"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -837,6 +838,7 @@ func (p *integratedPlacement) checkRootBuildKeepsHostedSources(top *layout.Manif
 	if err != nil {
 		return err
 	}
+	kustomizeschema.Parse()
 	rf := provider.NewDefaultDepProvider().GetResourceFactory()
 	for _, k := range crs {
 		b := layoutAt[path.Clean(k.Spec.Path)]
@@ -933,6 +935,7 @@ func patchDocumentID(doc *resource.Resource) (id resid.ResId, ok bool) {
 // apiVersion, kind, name and namespace.
 func resourceID(obj client.Object) resid.ResId {
 	gvk := obj.GetObjectKind().GroupVersionKind()
+	kustomizeschema.Parse()
 	return resid.NewResIdWithNamespace(resid.NewGvk(gvk.Group, gvk.Version, gvk.Kind), obj.GetName(), obj.GetNamespace())
 }
 

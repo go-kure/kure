@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"path"
 	"slices"
@@ -221,6 +222,10 @@ func (v *builtView) add(builds *treeBuilds, key string, k *kustv1.Kustomization)
 	if err != nil {
 		if k == nil {
 			return err
+		}
+		var u unreadBuild
+		if stderrors.As(err, &u) {
+			return errors.Wrapf(u.error, "Flux Kustomization %q (spec.path %q) is not read, so what it applies cannot be read", key, k.Spec.Path)
 		}
 		return errors.Wrapf(err, "Flux Kustomization %q (spec.path %q) does not build as kustomize-controller builds it, so it never applies, and what it would apply cannot be read", key, k.Spec.Path)
 	}
