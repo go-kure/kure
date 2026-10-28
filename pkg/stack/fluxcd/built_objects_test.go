@@ -225,6 +225,51 @@ func TestBuiltObjects_AnotherSourcesTransformLeavesTheWriterUncertain(t *testing
 	}
 }
 
+// A Kustomization on another Source that builds a's directory with a
+// component, other, is read as its first copy an apply does not skip: a's
+// copy carries kustomize.toolkit.fluxcd.io/ssa Ignore, so a's apply skips it.
+// Where p, which also builds a's directory, removes the mark, other applies
+// with its component and h stops being the certain writer: the tree is
+// admitted. Where p also gives other a spec.kubeConfig, other applies on
+// another cluster, h stays certain and the cycle is refused; so it is where no
+// p applies other at all.
+func TestBuiltObjects_AnotherSourceIsReadAsItsAppliedCopy(t *testing.T) {
+	const unskip = "- op: remove\n  path: /metadata/annotations/kustomize.toolkit.fluxcd.io~1ssa\n"
+	for name, c := range map[string]struct {
+		patch   string
+		refused bool
+	}{
+		"applied here":           {patch: unskip},
+		"applied on another one": {patch: unskip + "- op: add\n  path: /spec/kubeConfig\n  value:\n    secretRef:\n      name: remote-kubeconfig\n", refused: true},
+		"never applied":          {refused: true},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				ml, err := integrateNonMemberWriter(t, placement, true, func(dir string) []*kustv1.Kustomization {
+					o := handWritten("other")
+					o.Spec.Path, o.Spec.Components = dir, []string{"component"}
+					o.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{Kind: "GitRepository", Name: "other-repo"}
+					o.Annotations = map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "Ignore"}
+					out := []*kustv1.Kustomization{o}
+					if c.patch != "" {
+						p := handWritten("p")
+						p.Spec.Path = dir
+						p.Spec.Patches = []kustomize.Patch{{Patch: c.patch, Target: &kustomize.Selector{Kind: "Kustomization", Name: "other"}}}
+						out = append(out, p)
+					}
+					return out
+				})
+				if c.refused && (err == nil || !strings.Contains(err.Error(), "apply flux-system/h")) {
+					t.Fatalf("got %v, want the cycle through h refused; tree %s", err, describeKustomizations(ml))
+				}
+				if !c.refused && err != nil {
+					t.Fatalf("got %v, want the tree admitted: other may write h-cm", err)
+				}
+			})
+		}
+	}
+}
+
 // keptPair integrates pairCluster with no health check, lets edit change the
 // layout that holds b-cm and b-longer's kept Kustomization, makes a's kept
 // Kustomization health-check the v1 object of kind in default that
@@ -291,27 +336,40 @@ func TestBuiltObjects_GeneratedNameIsRead(t *testing.T) {
 // makes. A generator merging into creds (behavior: merge) gives it a content
 // hash that depends on the kustomize version (go-kure/kure#1094 §7), so the
 // writer stays uncertain; a generator creating another Secret, extra, keeps
-// the edge certain and the cycle is refused.
+// the edge certain and the cycle is refused. So does a literal Secret
+// b-longer also writes, credsx or creds-foo, whose name is neither creds nor
+// creds and a content hash. A name suffix is not read: the merged Secret
+// built as credsx under nameSuffix x keeps its writer certain too, and the
+// tree is refused.
 func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 	creds := unstructuredObj("v1", "Secret", "default", "creds")
 	creds.Object["data"] = map[string]any{"base": "dg=="}
+	const merge = "- name: creds\n  namespace: default\n  behavior: merge\n  literals:\n  - k=v\n"
 	cases := map[string]struct {
-		generator, prefix string
-		refused           bool
+		generator, prefix, suffix, literal string
+		refused                            bool
 	}{
-		"merge":  {generator: "- name: creds\n  namespace: default\n  behavior: merge\n  literals:\n  - k=v\n", prefix: "creds"},
-		"create": {generator: "- name: extra\n  namespace: default\n  literals:\n  - k=v\n", prefix: "extra-", refused: true},
+		"merge":                    {generator: merge, prefix: "creds"},
+		"merge, name suffix x":     {generator: merge, prefix: "credsx", suffix: "x", refused: true},
+		"create":                   {generator: "- name: extra\n  namespace: default\n  literals:\n  - k=v\n", prefix: "extra-", refused: true},
+		"merge, literal credsx":    {generator: merge, prefix: "credsx", literal: "credsx", refused: true},
+		"merge, literal creds-foo": {generator: merge, prefix: "creds-foo", literal: "creds-foo", refused: true},
 	}
 	for name, tc := range cases {
 		for _, placement := range integratedPlacements {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
-				err := keptPair(t, placement, []client.Object{unstructuredObj("v1", "ConfigMap", "default", "b-cm"), creds.DeepCopy()}, "Secret", tc.prefix,
+				objs := []client.Object{unstructuredObj("v1", "ConfigMap", "default", "b-cm"), creds.DeepCopy()}
+				if tc.literal != "" {
+					objs = append(objs, unstructuredObj("v1", "Secret", "default", tc.literal))
+				}
+				err := keptPair(t, placement, objs, "Secret", tc.prefix,
 					func(l *layout.ManifestLayout, b *kustv1.Kustomization) {
 						l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{
 							Name:    "component/kustomization.yaml",
 							Content: []byte("apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\nsecretGenerator:\n" + tc.generator),
 						})
 						b.Spec.Components = []string{"component"}
+						b.Spec.NameSuffix = tc.suffix
 					})
 				if tc.refused && (err == nil || !strings.Contains(err.Error(), "can never all become Ready")) {
 					t.Fatalf("got %v, want the cycle through a's health check refused", err)

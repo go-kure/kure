@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"path"
+	"slices"
 	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
@@ -99,7 +100,10 @@ func (v *builtView) readObjects() error {
 		if _, ok := v.writerSpec[key]; ok || v.isMember(key) {
 			continue
 		}
-		k := v.nonWriterSpec(key)
+		k, created := v.nonWriterSpec(key)
+		if !created {
+			continue
+		}
 		if k == nil {
 			v.sources = append(v.sources, objectSource{key: key, unreadable: true})
 			continue
@@ -127,17 +131,23 @@ func (v *builtView) readObjects() error {
 }
 
 // nonWriterSpec returns the Kustomization with key, which is no writer, in
-// typed form, as the first result that holds it holds it, else as the tree
-// holds it; nil when it cannot be read so.
-func (v *builtView) nonWriterSpec(key string) *kustv1.Kustomization {
+// typed form, as the first copy the results hold that an apply does not skip
+// (applies) holds it, else, where no result holds it, as the tree holds it;
+// nil when it cannot be read so. created is false when the results hold only
+// copies their applies skip: no apply creates it, and it applies nothing.
+func (v *builtView) nonWriterSpec(key string) (k *kustv1.Kustomization, created bool) {
 	if occ := v.occurrences[key]; len(occ) > 0 {
-		k, err := typedKustomization(occ[0].obj)
-		if err != nil {
-			return nil
+		i := slices.IndexFunc(occ, v.applies)
+		if i < 0 {
+			return nil, false
 		}
-		return k
+		k, err := typedKustomization(occ[i].obj)
+		if err != nil {
+			return nil, true
+		}
+		return k, true
 	}
-	return v.t.otherSpecs[key]
+	return v.t.otherSpecs[key], true
 }
 
 func readBuiltObject(r substituted) (builtObject, error) {
@@ -219,8 +229,8 @@ func mergedSecrets(root *layout.ManifestLayout) []string {
 //     take the checked identity;
 //   - a configMapGenerator entry an apply read as held runs (heldScope) has a
 //     name the check's starts with, as kustomize appends a content hash, or
-//     one that may change at apply; or a Secret's name holds a merged
-//     generator Secret's (mergedSecrets);
+//     one that may change at apply; or a Secret's name may be the one a
+//     merged generator Secret keeps (mergedName);
 //   - Kubernetes creates the object itself (kubernetesCreated).
 //
 // An object a controller creates, from a HelmRelease's chart, say, or a build
@@ -287,8 +297,8 @@ func (v *builtView) objectWriter(apiVersion, kind, namespace, name string) (stri
 // name: a configMapGenerator entry of a layout an apply reads as held
 // (objectSource.heldScope), whose name the object's is or starts with, or
 // which may change at apply; or, for a Secret, a merged generator Secret
-// (mergedSecrets) whose name the object's holds, under any name prefix or
-// suffix.
+// (mergedSecrets) whose name may be the object's (mergedName), or which may
+// change at apply.
 func (v *builtView) generatorMayName(group, kind, name string) bool {
 	if group != "" {
 		return false
@@ -306,12 +316,40 @@ func (v *builtView) generatorMayName(group, kind, name string) bool {
 		}
 	case "Secret":
 		for _, n := range v.mergedSecrets {
-			if name == n || strings.Contains(name, n+"-") || unresolved(n) {
+			if mergedName(name, n) || unresolved(n) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// mergedName reports whether name may be that of the Secret a generator
+// named n merges into, which keeps that Secret's name (api
+// resmap/reswrangler.go:585-592, resource/resource.go:181): n itself, or n,
+// "-" and a content hash, the first 10 characters of a hex digest with 0, 1,
+// 3, a and e written g, h, k, m and t (api hasher/hasher.go:28-49). A name
+// prefix or suffix is not read, so a merged Secret under one keeps its
+// writer certain, an edge that may not exist and errs towards refusing
+// (go-kure/kure#1171); a
+// literal Secret named so, credsx or creds-foo for n creds, keeps its writer
+// certain too. A literal name n, or n and a hash, is matched, and its writer
+// read as uncertain: an edge through it is dropped, which errs towards
+// admitting.
+func mergedName(name, n string) bool {
+	if name == n {
+		return true
+	}
+	hash, ok := strings.CutPrefix(name, n+"-")
+	if !ok || len(hash) != 10 {
+		return false
+	}
+	for _, c := range hash {
+		if !strings.ContainsRune("bcdfghkmt2456789", c) {
+			return false
+		}
+	}
+	return true
 }
 
 // mayTransformInto reports whether s, a Kustomization whose build is not the

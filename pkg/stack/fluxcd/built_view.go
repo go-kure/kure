@@ -119,6 +119,9 @@ func newBuiltView(t *kustomizationTree) (*builtView, error) {
 // first copy known whose apply does not skip it (applies), else the first;
 // agree refuses the tree when what a member was built from, a skipped copy or
 // its spec as the tree holds it, differs from the first copy that is applied.
+// find refuses a member built from a copy on another cluster or Source
+// (onThisTree), and one built from its spec as the tree holds it that no
+// apply creates once every writer is known: nothing applies what it builds.
 // A member's writer is a member or the bootstrap, so every member's result is
 // known before another's locality is read (local).
 func (v *builtView) find(builds *treeBuilds) error {
@@ -139,6 +142,9 @@ func (v *builtView) find(builds *treeBuilds) error {
 			if err != nil {
 				return err
 			}
+			if err := v.onThisTree(key, k, from.writer); err != nil {
+				return err
+			}
 			v.builtFrom[key] = builtCopy{occurrence: from}
 			if err := v.add(builds, key, k); err != nil {
 				return err
@@ -147,7 +153,10 @@ func (v *builtView) find(builds *treeBuilds) error {
 	}
 	for _, k := range v.t.kusts {
 		key := crKey(k.Namespace, k.Name)
-		if _, done := v.writerSpec[key]; !done {
+		// A member a result reached was built from that copy, also where
+		// its spec.path is no directory of the tree and its build recorded
+		// nothing: it is not built again from its spec as the tree holds it.
+		if _, done := v.builtFrom[key]; !done {
 			v.builtFrom[key] = builtCopy{occurrence: occurrence{writer: key, obj: k}, held: true}
 			if err := v.add(builds, key, k); err != nil {
 				return err
@@ -160,13 +169,37 @@ func (v *builtView) find(builds *treeBuilds) error {
 			if decided[key] || v.t.byKey[key] != nil {
 				continue
 			}
-			decided[key] = true
+			// Decided once built: a writer found later may apply a copy of
+			// one every copy known so far skips.
 			if k := v.local(key); k != nil {
+				decided[key] = true
 				if err := v.add(builds, key, k); err != nil {
 					return err
 				}
 			}
 		}
+	}
+	for _, k := range v.t.kusts {
+		key := crKey(k.Namespace, k.Name)
+		if !v.builtFrom[key].held || slices.ContainsFunc(v.occurrences[key], func(o occurrence) bool { return o.writer != key && v.applies(o) }) {
+			continue
+		}
+		return errors.Errorf("Flux Kustomization %q is created by no apply: no build holds a copy of it that its apply does not skip, so it never exists, and what it was built from, its spec as the tree holds it, is applied by nothing: let a build create it, or drop it from the tree", key)
+	}
+	return nil
+}
+
+// onThisTree refuses the member with key when k, the copy of it the apply of
+// writer w makes, which it is built from, sets spec.kubeConfig or names
+// another Source than its spec as the tree holds it: its build is then not
+// the tree's, on this cluster, and what it applies cannot be read.
+func (v *builtView) onThisTree(key string, k *kustv1.Kustomization, w string) error {
+	held := v.t.byKey[key]
+	switch {
+	case k.Spec.KubeConfig != nil:
+		return errors.Errorf("Flux Kustomization %q is applied by %s with spec.kubeConfig, so it applies on another cluster what another tree may hold, and what it applies cannot be read; let no build set it on a Kustomization of the tree", key, describeWriter(w))
+	case sourceRefKey(k.Spec.SourceRef, k.Namespace) != sourceRefKey(held.Spec.SourceRef, held.Namespace):
+		return errors.Errorf("Flux Kustomization %q is applied by %s with spec.sourceRef %s, not %s as the tree holds it, so it builds another Source's directory, and what it applies cannot be read; let no build change it on a Kustomization of the tree", key, describeWriter(w), sourceRefKey(k.Spec.SourceRef, k.Namespace), sourceRefKey(held.Spec.SourceRef, held.Namespace))
 	}
 	return nil
 }
@@ -282,7 +315,7 @@ func (v *builtView) heldKeys(w string) []string {
 // checks read, or that decide what its build makes.
 var graphFields = []string{
 	"dependsOn", "healthChecks", "healthCheckExprs", "wait", "path", "sourceRef", "kubeConfig",
-	"patches", "components", "namePrefix", "nameSuffix", "targetNamespace", "postBuild", "commonMetadata",
+	"patches", "components", "ignoreMissingComponents", "namePrefix", "nameSuffix", "targetNamespace", "postBuild", "commonMetadata",
 }
 
 // agree refuses a Flux Kustomization two writers apply with different
