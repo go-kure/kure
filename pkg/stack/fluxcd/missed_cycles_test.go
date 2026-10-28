@@ -740,21 +740,15 @@ func TestMissedCycles_WritersOwnUnresolvedObjectKeepsTheEdge(t *testing.T) {
 	}
 }
 
-// Without UmbrellasDoNotWait a Kustomization the integration did not place
-// waits for nothing in the reconcile-order check: platform waits for h,
-// which its application emits, and h's own dependsOn, health checks and
-// spec are its author's. Each tree integrated on main and still does.
-func TestMissedCycles_NonMemberEdgesAreTheAuthorsWithoutTheSetting(t *testing.T) {
+// Without UmbrellasDoNotWait a Kustomization the integration did not place is
+// followed too, and adds only the edges it has: platform waits for h, which
+// its application emits, and h closes no cycle. h depending on platform with
+// a readyExpr is refused (TestMissedCycles_NonMemberReadyExprWaitsForReady).
+func TestMissedCycles_NonMemberWithoutACycleIsAdmittedWithoutTheSetting(t *testing.T) {
 	cases := map[string]func(t *testing.T, placement layout.FluxPlacement) client.Object{
-		// h depends on platform with a readyExpr, which replaces the
-		// readiness check unless a controller feature gate makes it additive.
-		"h depends on platform with a readyExpr": func(*testing.T, layout.FluxPlacement) client.Object {
-			h := handWritten("h")
-			h.Spec.DependsOn = []kustv1.DependencyReference{{Name: "platform", ReadyExpr: "true"}}
-			return h
-		},
-		// h's spec.interval is substituted by a postBuild before Flux
-		// applies it, so it cannot be read in typed form here.
+		// h's spec.interval is ${INTERVAL} and no postBuild sets it, so h
+		// cannot be read in typed form, even from platform's result:
+		// platform's apply fails, a stall, and h adds no edge.
 		"h cannot be read before substitution": func(t *testing.T, _ layout.FluxPlacement) client.Object {
 			u := unstructuredObj(kustv1.GroupVersion.String(), "Kustomization", "flux-system", "h")
 			for _, f := range []struct {

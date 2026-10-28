@@ -262,22 +262,21 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 // Kustomization K), here over every Kustomization of the tree, or nil when
 // there is none (orderGraph). "ready K" needs "apply K", what K's wait or its
 // Kustomization health checks wait for (awaitedKustomizations), and the apply
-// of the member certain to write each other object K health-checks
-// (objectWriter); "apply K"
-// needs every Kustomization K depends on Ready, and the member whose apply
+// of the Kustomization certain to write each other object K health-checks
+// (objectWriter); "apply K" needs every Kustomization K depends on Ready, and the member whose apply
 // writes K applied (writer), also when another Kustomization's build writes K
 // as well: that one is no alternate creator. Every Kustomization is read as
 // its writer's build makes it (builtView); one that is no member waits for
 // what its build writes only when that build is the tree's, and for nothing
 // the tree holds otherwise.
 func (v *builtView) orderPath(from, to string) ([]string, error) {
-	return v.newOrderGraph(true).path(from, to, map[string]bool{})
+	return v.newOrderGraph().path(from, to, map[string]bool{})
 }
 
 // cycleThrough returns a chain from node n back to itself, both ends n, in
 // the graph orderPath walks, or nil when n is on no cycle.
 func (v *builtView) cycleThrough(n string) ([]string, error) {
-	g := v.newOrderGraph(true)
+	g := v.newOrderGraph()
 	succ, err := g.next(n)
 	if err != nil {
 		return nil, err
