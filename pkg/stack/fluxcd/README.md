@@ -377,12 +377,14 @@ built from its spec as its own writer's result holds it. A copy whose apply skip
 `kustomize.toolkit.fluxcd.io/ssa: Ignore` or `kustomize.toolkit.fluxcd.io/reconcile: disabled` on
 it or in its writer's `spec.commonMetadata`, overwrites nothing and creates nothing: the
 Kustomization is read from the first copy an apply does not skip, and is created by a writer that
-applies it. Four cases are refused, each naming the Kustomization: a build that fails, as the
-controller's apply would; a Kustomization two writers apply with a different `dependsOn`, `wait`,
-`healthChecks`, `healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`,
-`commonMetadata` or transform, which both keep overwriting; a Kustomization built from a skipped
-copy, the first its writers' results showed, where a copy that is applied differs in those
-fields, since what it applies cannot then be read; and, with `spec.postBuild.substituteFrom`, a
+applies it. A member every apply skips is still read, from its first copy. Four cases are refused,
+each naming the Kustomization: a build that fails, as the controller's apply would; a
+Kustomization two writers apply with a different `dependsOn`, `wait`, `healthChecks`,
+`healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata` or
+transform, which both keep overwriting; a member built from what no apply creates, a skipped
+copy, the first its writers' results showed, or its spec as the tree holds it, where no result
+held it yet, when the first copy that is applied differs in those fields, since what it applies
+cannot then be read; and, with `spec.postBuild.substituteFrom`, a
 variable that a Flux Kustomization of the build, or any object's `apiVersion` or kind, references
 and `spec.postBuild.substitute` does not set, since its value is read from the cluster. An object
 is a Flux Kustomization by the `apiVersion` and kind the inline values make, each value with
