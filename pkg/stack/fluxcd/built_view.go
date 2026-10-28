@@ -61,8 +61,11 @@ type builtView struct {
 	// occurrences lists, per key, each writer whose result holds the Flux
 	// Kustomization with that key, and the object as it holds it.
 	occurrences map[string][]occurrence
-	specs       map[string]*kustv1.Kustomization
-	specErrs    map[string]error
+	// builtFrom holds, per writer other than the bootstrap, the occurrence
+	// its build was run from, nil for a member no result holds.
+	builtFrom map[string]*occurrence
+	specs     map[string]*kustv1.Kustomization
+	specErrs  map[string]error
 	// sources and mergedSecrets are what the object index reads
 	// (objectIndex), on the first health check on an object; objectsErr is
 	// the error of that read.
@@ -86,6 +89,7 @@ func newBuiltView(t *kustomizationTree) (*builtView, error) {
 		writerSpec:  map[string]*kustv1.Kustomization{},
 		results:     map[string][]substituted{},
 		occurrences: map[string][]occurrence{},
+		builtFrom:   map[string]*occurrence{},
 		specs:       map[string]*kustv1.Kustomization{},
 		specErrs:    map[string]error{},
 	}
@@ -103,9 +107,12 @@ func newBuiltView(t *kustomizationTree) (*builtView, error) {
 // find runs the builds of every writer: the bootstrap's, then the members'
 // in the order the results reach them (one no result reaches, from its spec
 // as the tree holds it), then the other Kustomizations' whose build is the
-// tree's, in the order the results reach them. A member's writer is a member
-// or the bootstrap, so every member's result is known before another's
-// locality is read (local).
+// tree's, in the order the results reach them. A member is built from the
+// first copy known whose apply does not skip it (applies), else the first;
+// agree refuses the tree when a copy a writer was built from is skipped and
+// differs from one that is applied. A member's writer is a member or the
+// bootstrap, so every member's result is known before another's locality is
+// read (local).
 func (v *builtView) find(builds *treeBuilds) error {
 	if err := v.add(builds, "", nil); err != nil {
 		return err
@@ -115,10 +122,16 @@ func (v *builtView) find(builds *treeBuilds) error {
 			if _, done := v.writerSpec[key]; done || v.t.byKey[key] == nil {
 				continue
 			}
-			k, err := typedKustomization(v.occurrences[key][0].obj)
+			occ := v.occurrences[key]
+			from := occ[0]
+			if j := slices.IndexFunc(occ, v.applies); j >= 0 {
+				from = occ[j]
+			}
+			k, err := typedKustomization(from.obj)
 			if err != nil {
 				return err
 			}
+			v.builtFrom[key] = &from
 			if err := v.add(builds, key, k); err != nil {
 				return err
 			}
@@ -160,9 +173,11 @@ func (v *builtView) local(key string) *kustv1.Kustomization {
 		return nil
 	}
 	var k *kustv1.Kustomization
+	var from occurrence
 	for _, o := range v.occurrences[key] {
 		if o.writer == w {
 			k, _ = typedKustomization(o.obj)
+			from = o
 			break
 		}
 	}
@@ -170,6 +185,7 @@ func (v *builtView) local(key string) *kustv1.Kustomization {
 	if k == nil || k.Spec.KubeConfig != nil || sourceRefKey(k.Spec.SourceRef, k.Namespace) != sourceRefKey(ws.Spec.SourceRef, ws.Namespace) {
 		return nil
 	}
+	v.builtFrom[key] = &from
 	return k
 }
 
@@ -258,7 +274,9 @@ var graphFields = []string{
 // agree refuses a Flux Kustomization two writers apply with different
 // graphFields: each applies its own, so the cluster holds whichever applied
 // last, and neither is what the checks could judge. A copy its writer's apply
-// skips (applies) overwrites nothing.
+// skips (applies) overwrites nothing, but a Kustomization built from one
+// (find) builds what that copy says: it is refused too where that copy and
+// an applied one have different graphFields.
 func (v *builtView) agree() error {
 	var keys []string
 	for _, w := range v.writers {
@@ -270,23 +288,23 @@ func (v *builtView) agree() error {
 	}
 	for _, key := range keys {
 		occ := slices.DeleteFunc(slices.Clone(v.occurrences[key]), func(o occurrence) bool { return !v.applies(o) })
-		if len(occ) < 2 {
-			continue
-		}
-		first, err := specFields(occ[0].obj)
-		if err != nil {
-			return err
-		}
-		for _, o := range occ[1:] {
-			fields, err := specFields(o.obj)
+		if from := v.builtFrom[key]; from != nil && !v.applies(*from) && len(occ) > 0 {
+			differ, err := differingFields(*from, occ[0])
 			if err != nil {
 				return err
 			}
-			var differ []string
-			for _, f := range graphFields {
-				if first[f] != fields[f] {
-					differ = append(differ, "spec."+f)
-				}
+			if len(differ) > 0 {
+				return errors.Errorf("Flux Kustomization %q is built from the copy %s writes, whose apply skips it, and %s applies it with different %s: what its build applies cannot be read; let one build write it, or make both write the same spec",
+					key, describeWriter(from.writer), describeWriter(occ[0].writer), strings.Join(differ, ", "))
+			}
+		}
+		if len(occ) < 2 {
+			continue
+		}
+		for _, o := range occ[1:] {
+			differ, err := differingFields(occ[0], o)
+			if err != nil {
+				return err
 			}
 			if len(differ) > 0 {
 				return errors.Errorf("Flux Kustomization %q is written by %s and by %s with different %s: both apply it, and each overwrites what the other applied, so what it waits for cannot be read; let one build write it, or make both write the same spec",
@@ -295,6 +313,26 @@ func (v *builtView) agree() error {
 		}
 	}
 	return nil
+}
+
+// differingFields lists, as spec.<field>, the graphFields a and b's objects
+// set differently.
+func differingFields(a, b occurrence) ([]string, error) {
+	first, err := specFields(a.obj)
+	if err != nil {
+		return nil, err
+	}
+	fields, err := specFields(b.obj)
+	if err != nil {
+		return nil, err
+	}
+	var differ []string
+	for _, f := range graphFields {
+		if first[f] != fields[f] {
+			differ = append(differ, "spec."+f)
+		}
+	}
+	return differ, nil
 }
 
 // specFields returns each of graphFields of obj's spec as JSON, "" for one
@@ -338,17 +376,19 @@ func (v *builtView) isMember(key string) bool {
 // Kustomization with key: a member, or one a build makes under an identity
 // the tree holds no Kustomization by (a name prefix or suffix, a target
 // namespace, a patch or a substitution changed it). That one may be a member
-// under its built identity, and the tree cannot tell whose it is.
+// under its built identity, and the tree cannot tell whose it is. One every
+// apply skips (applies) is never created, so no cycle runs through it.
 func (v *builtView) judged(key string) bool {
-	return v.isMember(key) || len(v.occurrences[key]) > 0 && v.t.otherObjs[key] == nil
+	return v.isMember(key) || slices.ContainsFunc(v.occurrences[key], v.applies) && v.t.otherObjs[key] == nil
 }
 
 // spec returns the Flux Kustomization with key as the results hold it, the
-// first copy an apply does not skip (applies), or the first when every apply
-// skips it; when no result holds it, as the tree holds it; nil when neither
-// holds it. One the results hold that cannot be read in typed form is an
-// error for a member, and nil for another: its writer's apply fails, a stall
-// and no cycle (go-kure/kure#1094 A4).
+// first copy an apply does not skip (applies); for a member every apply
+// skips, the first copy, and for another nil: no apply creates it, so it
+// waits for nothing. When no result holds it, it is read as the tree holds
+// it; nil when neither holds it. One the results hold that cannot be read in
+// typed form is an error for a member, and nil for another: its writer's
+// apply fails, a stall and no cycle (go-kure/kure#1094 A4).
 func (v *builtView) spec(key string) (*kustv1.Kustomization, error) {
 	if k, ok := v.specs[key]; ok {
 		return k, v.specErrs[key]
@@ -357,11 +397,13 @@ func (v *builtView) spec(key string) (*kustv1.Kustomization, error) {
 	var err error
 	switch occ := v.occurrences[key]; {
 	case len(occ) > 0:
-		read := occ[0]
-		if i := slices.IndexFunc(occ, v.applies); i >= 0 {
-			read = occ[i]
+		i := slices.IndexFunc(occ, v.applies)
+		switch {
+		case i >= 0:
+			k, err = typedKustomization(occ[i].obj)
+		case v.isMember(key):
+			k, err = typedKustomization(occ[0].obj)
 		}
-		k, err = typedKustomization(read.obj)
 		if err != nil && !v.isMember(key) {
 			k, err = nil, nil
 		}
@@ -391,13 +433,14 @@ func (v *builtView) members() ([]*kustv1.Kustomization, error) {
 // writer names the writer whose apply creates the Flux Kustomization with
 // key, other than itself: "" when the bootstrap writes it, or no writer does;
 // else the innermost member that does (the longest spec.path), else, unless
-// membersOnly, the innermost other. Another writer that also writes it is no
+// membersOnly, the innermost other. A writer whose apply skips its copy
+// (applies) does not write it. Another writer that also writes it is no
 // alternate creator: which applies first depends on controller settings the
 // tree does not carry.
 func (v *builtView) writer(key string, membersOnly bool) string {
 	best, bestLen, bestMember := "", -1, false
 	for _, o := range v.occurrences[key] {
-		if o.writer == key {
+		if o.writer == key || !v.applies(o) {
 			continue
 		}
 		if o.writer == "" {

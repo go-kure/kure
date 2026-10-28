@@ -373,18 +373,22 @@ whose `spec.path` is a directory of the tree and whose Source is that of the Kus
 writes it. kure builds each writer as kustomize-controller does: its `spec.patches`,
 `spec.components`, `spec.namePrefix`, `spec.nameSuffix` and `spec.targetNamespace` applied, its
 local config dropped, its generators run, then its `spec.postBuild` substitution, and a writer is
-built from its spec as its own writer's result holds it. Three cases are refused, each naming the
-Kustomization: a build that fails, as the controller's apply would; a Kustomization two writers
-apply with a different `dependsOn`, `wait`, `healthChecks`, `healthCheckExprs`, `path`,
-`sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata` or transform, which both keep
-overwriting (a copy whose apply skips it, `kustomize.toolkit.fluxcd.io/ssa: Ignore` or
-`kustomize.toolkit.fluxcd.io/reconcile: disabled` on it or in its writer's `spec.commonMetadata`,
-is neither compared nor read); and, with `spec.postBuild.substituteFrom`, a
+built from its spec as its own writer's result holds it. A copy whose apply skips it,
+`kustomize.toolkit.fluxcd.io/ssa: Ignore` or `kustomize.toolkit.fluxcd.io/reconcile: disabled` on
+it or in its writer's `spec.commonMetadata`, overwrites nothing and creates nothing: the
+Kustomization is read from the first copy an apply does not skip, and is created by a writer that
+applies it. Four cases are refused, each naming the Kustomization: a build that fails, as the
+controller's apply would; a Kustomization two writers apply with a different `dependsOn`, `wait`,
+`healthChecks`, `healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`,
+`commonMetadata` or transform, which both keep overwriting; a Kustomization built from a skipped
+copy, the first its writers' results showed, where a copy that is applied differs in those
+fields, since what it applies cannot then be read; and, with `spec.postBuild.substituteFrom`, a
 variable that a Flux Kustomization of the build, or any object's `apiVersion` or kind, references
 and `spec.postBuild.substitute` does not set, since its value is read from the cluster. An object
-is a Flux Kustomization by the `apiVersion` and kind the inline values make. A Kustomization is
-read as it is applied: kustomize-controller drops its `status` and `metadata.creationTimestamp`
-first, so neither keeps it from being read.
+is a Flux Kustomization by the `apiVersion` and kind the inline values make, each value with
+every newline removed, as Flux removes it before substituting. A Kustomization is read as it is
+applied: kustomize-controller drops its `status` and `metadata.creationTimestamp` first, so
+neither keeps it from being read.
 
 kure adds the existence wait only when the object's writer is certain: exactly one writer other
 than the Flux bootstrap applies an object matching it by group, kind, namespace and name as built
@@ -440,7 +444,8 @@ which the checks do not judge. A cycle made only of Kustomizations the integrati
 under the names the tree holds them by, is their author's, and is admitted. A Kustomization a
 build writes under a name the tree holds no Kustomization by (a member renamed by a name prefix,
 for one) may be a member, and the tree cannot tell whose it is: it is judged as the
-integration's, and a cycle through it is refused.
+integration's, and a cycle through it is refused. Such a one that every apply skips is never
+created, and is not judged.
 
 A `dependsOn` with a `readyExpr`, on any Kustomization, waits for the dependency's `Ready`. With
 kustomize-controller's `AdditiveCELDependencyCheck` feature gate off, its default
