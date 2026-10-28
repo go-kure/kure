@@ -3,7 +3,9 @@ package fluxcd_test
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"path"
+	"slices"
 	"strings"
 	"testing"
 
@@ -59,11 +61,32 @@ func webDirectory(t *testing.T, placement layout.FluxPlacement) string {
 // platform, whose application emits hand-written as edit leaves it: platform
 // applies it, so web's dependsOn is written as one on hand-written.
 func integrateWithHandWritten(placement layout.FluxPlacement, edit func(k *kustv1.Kustomization)) (*layout.ManifestLayout, error) {
+	return integrateNoWait(handWrittenCluster(edit), nodeOnly, placement)
+}
+
+// handWrittenCluster is the tree integrateWithHandWritten integrates.
+func handWrittenCluster(edit func(k *kustv1.Kustomization)) *stack.Cluster {
 	k := handWritten("hand-written")
 	edit(k)
 	var o client.Object = k
 	app := stack.NewApplication("platform-app", "default", &fakeAppConfig{objs: []*client.Object{&o}})
-	return integrateNoWait(noWaitCluster(srBundle("platform", app), true), nodeOnly, placement)
+	return noWaitCluster(srBundle("platform", app), true)
+}
+
+// integrateNoWaitWithComponent is integrateNoWait with a kustomize Component
+// written into the layout at dir as extra files, under the directory name: a
+// Flux Kustomization building dir names it in spec.components as name. The
+// layout's kustomization.yaml lists neither file.
+func integrateNoWaitWithComponent(t *testing.T, c *stack.Cluster, placement layout.FluxPlacement, dir, name, component string, files map[string]string) (*layout.ManifestLayout, error) {
+	t.Helper()
+	rules := withPlacement(nodeOnly, placement)
+	ml := mustWalk(t, c, rules)
+	l := layoutAtPath(t, ml, dir)
+	l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: name + "/kustomization.yaml", Content: []byte(component)})
+	for _, f := range slices.Sorted(maps.Keys(files)) {
+		l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: name + "/" + f, Content: []byte(files[f])})
+	}
+	return ml, fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules)
 }
 
 // An application's Kustomization with wait on the tree's own source builds
@@ -288,34 +311,75 @@ func webBuildDirectory(t *testing.T, placement layout.FluxPlacement) string {
 
 // hand-written waiting on web's directory, as in
 // TestReconcileContext_SameSourceWaitIsACycle, but transforming what its
-// build writes: a patch can delete web from it, a component add to it, a
-// name prefix or suffix, or a target namespace, change which Kustomizations
-// it writes. The check does not model them, so it keeps the wait on all the
-// directory holds and refuses the cycle through web. With a component, a
-// name prefix or suffix, or a target namespace, web (renamed or moved) is
-// still applied and still depends on hand-written, since dependsOn is no
-// reference kustomize rewrites: a deadlock. A patch deleting web is a false
-// refusal, kept on purpose (go-kure/kure#1094).
-func TestReconcileContext_TransformedBuildIsUnknown(t *testing.T) {
-	cases := map[string]func(k *kustv1.Kustomization){
-		"patch deleting web": func(k *kustv1.Kustomization) {
-			k.Spec.Patches = []kustomize.Patch{{Patch: "$patch: delete\napiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: web\n  namespace: flux-system\n"}}
-		},
-		"component":        func(k *kustv1.Kustomization) { k.Spec.Components = []string{"../extra"} },
-		"name prefix":      func(k *kustv1.Kustomization) { k.Spec.NamePrefix = "x-" },
-		"name suffix":      func(k *kustv1.Kustomization) { k.Spec.NameSuffix = "-x" },
-		"target namespace": func(k *kustv1.Kustomization) { k.Spec.TargetNamespace = "elsewhere" },
+// build writes. The check reads that build as kustomize-controller builds
+// it. A patch deleting web, written on hand-written or in a component it
+// uses, takes web out of what hand-written's wait waits for, and the rewrite
+// is accepted. A patch that keeps web, a component that only adds an object,
+// or a name prefix or suffix leave web, renamed or not, in hand-written's build,
+// still depending on hand-written, since dependsOn is no reference kustomize
+// rewrites: a deadlock, refused through web under the name it is built with.
+// A target namespace moves web's copy into another namespace, where its
+// dependsOn, written without one, names a hand-written that does not exist:
+// the copy never becomes Ready, a stall the checks do not judge, and no
+// cycle, so the rewrite is accepted.
+func TestReconcileContext_TransformedBuildIsRead(t *testing.T) {
+	const throughWeb = "ready flux-system/hand-written -> ready flux-system/web -> apply flux-system/web"
+	const deleteWeb = "$patch: delete\napiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: web\n  namespace: flux-system\n"
+	// A component adding an object beside web, and one whose patch deletes
+	// web: the second is admitted only because the component is read.
+	addsObject := map[string]string{
+		"kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\nresources:\n- added.yaml\n",
+		"added.yaml":         "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: added\n  namespace: default\n",
 	}
-	for name, edit := range cases {
+	deletesWeb := map[string]string{
+		"kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\npatches:\n- patch: |\n    " +
+			strings.ReplaceAll(strings.TrimSuffix(deleteWeb, "\n"), "\n", "\n    ") + "\n",
+	}
+	cases := map[string]struct {
+		edit      func(k *kustv1.Kustomization)
+		component map[string]string
+		chain     string
+	}{
+		"patch deleting web": {edit: func(k *kustv1.Kustomization) {
+			k.Spec.Patches = []kustomize.Patch{{Patch: deleteWeb}}
+		}},
+		"patch keeping web": {edit: func(k *kustv1.Kustomization) {
+			k.Spec.Patches = []kustomize.Patch{{Patch: "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: web\n  namespace: flux-system\n  labels:\n    patched: \"yes\"\n"}}
+		}, chain: throughWeb},
+		"component keeping web":  {edit: func(k *kustv1.Kustomization) { k.Spec.Components = []string{"extra"} }, component: addsObject, chain: throughWeb},
+		"component deleting web": {edit: func(k *kustv1.Kustomization) { k.Spec.Components = []string{"extra"} }, component: deletesWeb},
+		"name prefix": {edit: func(k *kustv1.Kustomization) { k.Spec.NamePrefix = "x-" },
+			chain: "ready flux-system/hand-written -> ready flux-system/x-web -> apply flux-system/x-web"},
+		"name suffix": {edit: func(k *kustv1.Kustomization) { k.Spec.NameSuffix = "-x" },
+			chain: "ready flux-system/hand-written -> ready flux-system/web-x -> apply flux-system/web-x"},
+		"target namespace": {edit: func(k *kustv1.Kustomization) { k.Spec.TargetNamespace = "elsewhere" }},
+	}
+	for name, tc := range cases {
 		for _, placement := range integratedPlacements {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
 				dir := webDirectory(t, placement)
-				_, err := integrateWithHandWritten(placement, func(k *kustv1.Kustomization) {
+				c := handWrittenCluster(func(k *kustv1.Kustomization) {
 					k.Spec.Wait, k.Spec.Path = true, dir
-					edit(k)
+					tc.edit(k)
 				})
-				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "ready flux-system/hand-written -> ready flux-system/web -> apply flux-system/web") {
-					t.Fatalf("got %v, want ErrUmbrellaDependency naming the chain through web", err)
+				var ml *layout.ManifestLayout
+				var err error
+				if tc.component != nil {
+					files := maps.Clone(tc.component)
+					delete(files, "kustomization.yaml")
+					ml, err = integrateNoWaitWithComponent(t, c, placement, dir, "extra", tc.component["kustomization.yaml"], files)
+				} else {
+					ml, err = integrateNoWait(c, nodeOnly, placement)
+				}
+				if tc.chain == "" {
+					if err != nil {
+						t.Fatalf("got %v, want the rewrite accepted", err)
+					}
+					assertDependsOn(t, ml, "web", "hand-written")
+					return
+				}
+				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), tc.chain) {
+					t.Fatalf("got %v, want ErrUmbrellaDependency naming the chain %s", err, tc.chain)
 				}
 			})
 		}
@@ -327,16 +391,20 @@ func TestReconcileContext_TransformedBuildIsUnknown(t *testing.T) {
 // objects, so a patch, or a component's, setting the annotation to "false"
 // keeps it. hand-written waits for the seed directory, which holds inner,
 // local config, depending on web; web depends on hand-written once
-// rewritten. With a patch or a component the check keeps the wait on inner
-// too and refuses the cycle; without one, or with a transform that cannot
+// rewritten. With a patch or a component the build keeps inner and the
+// check refuses the cycle; without one, or with a transform that cannot
 // change an annotation, inner is dropped and the rewrite is accepted, even
 // where hand-written depends on it by name. A kept inner that health-checks
 // web, instead of depending on it, closes the same cycle through its own
-// readiness. So does the kept inner where another application's directory
-// holds a live inner with no dependsOn: the wait reaches the kept copy, read
-// on its own (renamed by a prefix, it is not the live one either).
+// readiness. Where a sibling bundle's directory holds a live inner with no
+// dependsOn, the kept copy and the live one are one object with two specs,
+// each overwriting the other: refused, naming both writers. Renamed by a
+// prefix, the kept copy is another object, x-inner, and closes the cycle
+// under that name.
 func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 	patch := "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: inner\n  namespace: flux-system\n  annotations:\n    " + localConfigAnnotation + `: "false"` + "\n"
+	keepInner := "apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\npatches:\n- patch: |\n    " +
+		strings.ReplaceAll(strings.TrimSuffix(patch, "\n"), "\n", "\n    ") + "\n"
 	cases := map[string]struct {
 		edit    func(k *kustv1.Kustomization)
 		check   bool
@@ -349,7 +417,7 @@ func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 		}, false, true, true},
 		"patch, live namesake, health check": {func(k *kustv1.Kustomization) { k.Spec.Patches = []kustomize.Patch{{Patch: patch}} }, true, true, true},
 		"patch":                              {func(k *kustv1.Kustomization) { k.Spec.Patches = []kustomize.Patch{{Patch: patch}} }, false, true, false},
-		"component":                          {func(k *kustv1.Kustomization) { k.Spec.Components = []string{"../keep-inner"} }, false, true, false},
+		"component":                          {func(k *kustv1.Kustomization) { k.Spec.Components = []string{"keep-inner"} }, false, true, false},
 		"patch, health check":                {func(k *kustv1.Kustomization) { k.Spec.Patches = []kustomize.Patch{{Patch: patch}} }, true, true, false},
 		"no patch":                           {func(*kustv1.Kustomization) {}, false, false, false},
 		"no patch, health check":             {func(*kustv1.Kustomization) {}, true, false, false},
@@ -373,15 +441,19 @@ func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 			in.Spec.HealthChecks = []metaapi.NamespacedObjectKindReference{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "web"}}
 		}
 		var inner client.Object = annotateLocalConfig(in, &dropped)
-		apps := []*stack.Application{
+		c := noWaitCluster(srBundle("platform",
 			stack.NewApplication("platform-app", "default", &fakeAppConfig{objs: []*client.Object{&hw}}),
 			stack.NewApplication("seed-app", "default", &fakeAppConfig{objs: []*client.Object{&inner}}),
-		}
+		), true)
 		if live {
+			// In a sibling bundle: in platform's directory the tree would
+			// hold inner twice, which no writer writes.
 			var namesake client.Object = handWritten("inner")
-			apps = append(apps, stack.NewApplication("live-app", "default", &fakeAppConfig{objs: []*client.Object{&namesake}}))
+			other := &stack.Node{Name: "other", Bundle: srBundle("other", stack.NewApplication("live-app", "default", &fakeAppConfig{objs: []*client.Object{&namesake}}))}
+			other.SetParent(c.Node)
+			c.Node.Children = append(c.Node.Children, other)
 		}
-		return noWaitCluster(srBundle("platform", apps...), true)
+		return c
 	}
 	for _, placement := range integratedPlacements {
 		first, err := integrateNoWait(build(func(*kustv1.Kustomization) {}, "", false, false), nodeOnly, placement)
@@ -391,7 +463,14 @@ func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 		seed := hostDirectory(t, first, "inner")
 		for name, c := range cases {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
-				ml, err := integrateNoWait(build(c.edit, seed, c.check, c.live), nodeOnly, placement)
+				tree := build(c.edit, seed, c.check, c.live)
+				var ml *layout.ManifestLayout
+				var err error
+				if name == "component" {
+					ml, err = integrateNoWaitWithComponent(t, tree, placement, seed, "keep-inner", keepInner, nil)
+				} else {
+					ml, err = integrateNoWait(tree, nodeOnly, placement)
+				}
 				if !c.refused {
 					if err != nil {
 						t.Fatalf("got %v, want the rewrite accepted", err)
@@ -399,18 +478,22 @@ func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 					assertDependsOn(t, ml, "web", "hand-written")
 					return
 				}
+				if c.live && c.check {
+					if err == nil || !strings.Contains(err.Error(), `Flux Kustomization "flux-system/inner" is written by`) ||
+						!strings.Contains(err.Error(), `"flux-system/hand-written"`) || !strings.Contains(err.Error(), `"flux-system/other"`) {
+						t.Fatalf("got %v, want the two writers of inner refused, naming hand-written and other", err)
+					}
+					return
+				}
 				chain := "ready flux-system/hand-written -> ready flux-system/inner -> apply flux-system/inner -> ready flux-system/web -> apply flux-system/web"
 				if c.check {
 					chain = "ready flux-system/hand-written -> ready flux-system/inner -> ready flux-system/web -> apply flux-system/web"
 				}
 				if c.live {
-					chain = "ready flux-system/hand-written -> ready flux-system/inner (local config) -> apply flux-system/inner (local config) -> ready flux-system/web -> apply flux-system/web"
-					if c.check {
-						chain = "ready flux-system/hand-written -> ready flux-system/inner (local config) -> ready flux-system/web -> apply flux-system/web"
-					}
+					chain = "ready flux-system/x-inner -> apply flux-system/x-inner -> ready flux-system/web -> apply flux-system/web"
 				}
 				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), chain) {
-					t.Fatalf("got %v, want ErrUmbrellaDependency naming the chain through inner", err)
+					t.Fatalf("got %v, want ErrUmbrellaDependency naming the chain %s", err, chain)
 				}
 			})
 		}
@@ -418,11 +501,11 @@ func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
 }
 
 // A patched build that keeps a local-config inner, renamed by a prefix, while
-// a sibling bundle's directory holds a live inner, waits for both: the
-// kept copy, read on its own, and the live one, whose spec the kept copy may
-// share. Here both wait for web's directory, so hand-written's wait waits for
-// web, which depends on hand-written once rewritten. The kept copy's own wait
-// is not followed (go-kure/kure#1133); the live one's closes the cycle.
+// a sibling bundle's directory holds a live inner: the build writes the kept
+// copy as x-inner, another object than the live inner, which hand-written's
+// wait does not reach. Both wait for web's directory; the kept copy's own
+// wait, read from the build, waits for web, which depends on hand-written
+// once rewritten, and closes the cycle (go-kure/kure#1133).
 func TestReconcileContext_KeptCopyBesideLiveNamesakeWaits(t *testing.T) {
 	patch := "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: inner\n  namespace: flux-system\n  annotations:\n    " + localConfigAnnotation + `: "false"` + "\n"
 	build := func(seed, web string) *stack.Cluster {
@@ -476,8 +559,8 @@ func TestReconcileContext_KeptCopyBesideLiveNamesakeWaits(t *testing.T) {
 				t.Fatal("no layout holds the local-config inner")
 			}
 			_, err = integrateNoWait(build(seed, hostDirectory(t, first, "web")), nodeOnly, placement)
-			if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "ready flux-system/inner -> ready flux-system/web -> apply flux-system/web") {
-				t.Fatalf("got %v, want ErrUmbrellaDependency naming the chain through the live inner's wait", err)
+			if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "ready flux-system/x-inner -> ready flux-system/web -> apply flux-system/web") {
+				t.Fatalf("got %v, want ErrUmbrellaDependency naming the chain through the kept copy's own wait", err)
 			}
 		})
 	}

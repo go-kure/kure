@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/go-kure/kure/pkg/stack"
+	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
@@ -153,10 +154,14 @@ func localKust(name, value string) string {
 // that is not is written where it was before, with a target on the bundle's
 // own Kustomization and on every per-layout one, without one on the bundle's
 // own only. An untargeted strategic-merge patch that comes after it stays on
-// the bundle's own Kustomization, is written besides on each per-layout
-// Kustomization whose build holds every object it names as generated, and is
-// not refused, whatever it names. One that comes before it is placed by
-// object.
+// the bundle's own Kustomization and is written besides on each per-layout
+// Kustomization whose build holds every object it names as generated. One
+// that comes before it is placed by object.
+//
+// No placement check refuses what an entry that is not plain leaves on the
+// bundle's own Kustomization, whatever it names; but where the build of that
+// Kustomization does not hold an object a patch names, kustomize fails the
+// build, which is refused: broken names the object of the patch it fails on.
 func TestLayoutPatches_AfterAnEntryThatIsNotPlain(t *testing.T) {
 	layouts := func(i ...int) map[string][]int {
 		out := map[string][]int{}
@@ -169,9 +174,14 @@ func TestLayoutPatches_AfterAnEntryThatIsNotPlain(t *testing.T) {
 		base[name] = i
 		return base
 	}
+	// The objects the bundle's own build does not hold, as kustomize names them.
+	const noPre, noMain, noDB, noAbsent = `"ConfigMap.v1.[noGrp]/pre.default"`, `"ConfigMap.v1.[noGrp]/main.default"`,
+		`"ConfigMap.v1.[noGrp]/db.default"`, `"ConfigMap.v1.[noGrp]/absent.default"`
+	const noPreKust = `"Kustomization.v1.kustomize.toolkit.fluxcd.io/shop-00-pre.flux-system"`
 	for name, tc := range map[string]struct {
 		patches []stack.Patch
 		want    map[string][]int
+		broken  string
 	}{
 		"a plain list is placed by object": {
 			patches: []stack.Patch{everyConfigMapMerged("a"), untargeted(cmDoc("pre")), untargeted(cmDoc("web-cm"))},
@@ -181,57 +191,57 @@ func TestLayoutPatches_AfterAnEntryThatIsNotPlain(t *testing.T) {
 			patches: []stack.Patch{annotateEveryConfigMap(), untargeted(cmDoc("web-cm"))},
 			want:    with(layouts(0), "shop", 0, 1),
 		},
-		"an object of a layout: the bundle's own and the layout's": {
+		"an object of a layout: the bundle's own, whose build fails": {
 			patches: []stack.Patch{annotateEveryConfigMap(), untargeted(cmDoc("pre"))},
-			want:    with(with(layouts(0), "shop", 0, 1), "shop-00-pre", 0, 1),
+			broken:  noPre,
 		},
-		"an object no build holds as generated: the bundle's own, not refused": {
+		"an object no build holds as generated: the bundle's own, whose build fails": {
 			patches: []stack.Patch{annotateEveryConfigMap(), untargeted(cmDoc("absent"))},
-			want:    with(layouts(0), "shop", 0, 1),
+			broken:  noAbsent,
 		},
-		"two documents whose objects two builds hold: the bundle's own, not refused": {
+		"two documents whose objects two builds hold: the bundle's own, whose build fails": {
 			patches: []stack.Patch{annotateEveryConfigMap(), untargeted(cmDoc("web-cm"), cmDoc("pre"))},
-			want:    with(layouts(0), "shop", 0, 1),
+			broken:  noPre,
 		},
 		"the patch before the entry is placed by object": {
-			patches: []stack.Patch{untargeted(cmDoc("pre")), annotateEveryConfigMap(), untargeted(cmDoc("main"))},
-			want:    with(with(with(layouts(1), "shop", 1, 2), "shop-00-pre", 0, 1), "shop-01-main", 1, 2),
+			patches: []stack.Patch{untargeted(cmDoc("pre")), annotateEveryConfigMap(), untargeted(cmDoc("web-cm"))},
+			want:    with(with(layouts(1), "shop", 1, 2), "shop-00-pre", 0, 1),
 		},
-		"a JSON6902 entry without a target: the bundle's own, and what follows is not placed by object": {
+		"a JSON6902 entry without a target: the bundle's own, whose build fails": {
 			patches: []stack.Patch{{Patch: json6902}, untargeted(cmDoc("pre")), untargeted(cmDoc("absent"))},
-			want:    map[string][]int{"shop": {0, 1, 2}, "shop-00-pre": {1}},
+			broken:  "must specify a target for JSON patch",
 		},
 		"a build annotation in a patch with a target: as a JSON6902 one": {
 			patches: []stack.Patch{renameAllowed("web-cm", "renamed"), untargeted(cmDoc("absent")), untargeted(cmDoc("pre"))},
-			want:    with(with(layouts(0), "shop", 0, 1, 2), "shop-00-pre", 0, 2),
+			broken:  noAbsent,
 		},
 		"a build annotation in a patch without a target: the bundle's own, whatever it names": {
 			patches: []stack.Patch{renamePrevious("pre", "renamed"), untargeted(cmDoc("pre")), untargeted(cmDoc("absent"))},
-			want:    map[string][]int{"shop": {0, 1, 2}, "shop-00-pre": {1}},
+			broken:  noPre,
 		},
 		"a build annotation in one document of several": {
 			patches: []stack.Patch{untargeted(cmDoc("main"), renamePrevious("pre", "renamed").Patch), untargeted(cmDoc("absent"))},
-			want:    map[string][]int{"shop": {0, 1}},
+			broken:  noMain,
 		},
 		"the patch before a build annotation is placed by object": {
 			patches: []stack.Patch{untargeted(cmDoc("pre")), renamePrevious("web-cm", "renamed")},
 			want:    map[string][]int{"shop": {1}, "shop-00-pre": {0}},
 		},
-		"a deletion of a layout's Kustomization: the bundle's own, and what follows is not placed by object": {
+		"a deletion of a layout's Kustomization: the bundle's own, whose build fails": {
 			patches: []stack.Patch{untargeted(deleteKust("shop-00-pre")), untargeted(cmDoc("pre"))},
-			want:    map[string][]int{"shop": {0, 1}, "shop-00-pre": {1}},
+			broken:  noPreKust,
 		},
 		"a deletion in one document of several": {
 			patches: []stack.Patch{untargeted(cmDoc("db"), deleteKust("shop-00-pre")), untargeted(cmDoc("pre"))},
-			want:    map[string][]int{"shop": {0, 1}, "shop-00-pre": {1}},
+			broken:  noDB,
 		},
 		"the local-config annotation on a layout's Kustomization: as a deletion": {
 			patches: []stack.Patch{untargeted(localKust("shop-00-pre", `"true"`)), untargeted(cmDoc("pre"))},
-			want:    map[string][]int{"shop": {0, 1}, "shop-00-pre": {1}},
+			broken:  noPreKust,
 		},
 		"the local-config annotation set to null: as a deletion": {
 			patches: []stack.Patch{untargeted(localKust("shop-00-pre", "null")), untargeted(cmDoc("pre"))},
-			want:    map[string][]int{"shop": {0, 1}, "shop-00-pre": {1}},
+			broken:  noPreKust,
 		},
 		"the local-config annotation set to false is plain": {
 			patches: []stack.Patch{untargeted(localKust("shop-00-pre", `"false"`)), untargeted(cmDoc("pre"))},
@@ -243,6 +253,12 @@ func TestLayoutPatches_AfterAnEntryThatIsNotPlain(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			if tc.broken != "" {
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).
+					CreateLayoutWithResources(oneBundleCluster(patchShop(nil, tc.patches...)), perLayoutRules())
+				mustContainAll(t, err, `Flux Kustomization "flux-system/shop" (spec.path "prod/shop") does not build as kustomize-controller builds it`, tc.broken)
+				return
+			}
 			ml := integrated(t, oneBundleCluster(patchShop(nil, tc.patches...)), perLayoutRules())
 			if got := patchPlacement(t, ml, tc.patches); !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("patches are held by %v, want %v", got, tc.want)
@@ -324,24 +340,21 @@ func TestLayoutPatches_ARenameThenAPatchBuildsAsBefore(t *testing.T) {
 
 // TestLayoutPatches_ABuildAnnotationThatDoesNotAgree: kustomize panics where
 // it reads the identities an object had from annotations that do not agree,
-// as many names as namespaces and kinds being its rule. The integration does
-// not read a patch that carries such an annotation: it returns, and the patch
-// is on the bundle's own Kustomization as it was before the per-layout
-// Kustomizations took patches. The tree is not built here, since kustomize
-// panics on it there as it did.
+// as many names as namespaces and kinds being its rule. The placement does
+// not read a patch that carries such an annotation and leaves it on the
+// bundle's own Kustomization, as it was before the per-layout Kustomizations
+// took patches; the build of that Kustomization panics in kustomize, as
+// kustomize-controller's does, and the integration refuses it, naming the
+// Kustomization, instead of panicking.
 func TestLayoutPatches_ABuildAnnotationThatDoesNotAgree(t *testing.T) {
 	patches := []stack.Patch{
 		{Patch: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: web-cm\n  namespace: default\n  annotations:\n    internal.config.kubernetes.io/previousNames: old,older\ndata:\n  patched: \"yes\"\n"},
 		untargeted(cmDoc("absent")),
 	}
-	ml := integrated(t, oneBundleCluster(patchShop(nil, patches...)), perLayoutRules())
-	if got, want := patchPlacement(t, ml, patches), (map[string][]int{"shop": {0, 1}}); !reflect.DeepEqual(got, want) {
-		t.Errorf("patches are held by %v, want %v", got, want)
-	}
-	disk := treeFiles(t, writeAll(t, ml)["WriteToDisk"].root)
-	if got, before := string(disk[shopKustomizationFile]), shopOwnHolding(patches...); got != before {
-		t.Errorf("%s:\n%s\nwant the file written before:\n%s", shopKustomizationFile, got, before)
-	}
+	_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).
+		CreateLayoutWithResources(oneBundleCluster(patchShop(nil, patches...)), perLayoutRules())
+	mustContainAll(t, err, `Flux Kustomization "flux-system/shop" (spec.path "prod/shop") does not build as kustomize-controller builds it`,
+		"recovered from kustomize build panic")
 }
 
 // TestLayoutPatches_ARenameInALayoutsBuild is the limit of the rule: what an
@@ -349,24 +362,19 @@ func TestLayoutPatches_ABuildAnnotationThatDoesNotAgree(t *testing.T) {
 // untargeted patch after it reaches a layout's Kustomization only for an
 // object that build holds as generated and stays on the bundle's own in every
 // case, and an untargeted entry that is not plain stays on the bundle's own
-// alone. Three trees are left as they were, the build of the bundle's own
-// Kustomization failing on the cluster and nothing refused: a later patch for
-// an object only a layout builds, a later patch for the name the entry gives
-// an object of a layout, and an untargeted entry with a build annotation for
-// an object only a layout builds. Each has a remedy that builds.
+// alone. Three trees fail the build of the bundle's own Kustomization, as they
+// fail it on the cluster, and are refused, naming it: a later patch for an
+// object only a layout builds, a later patch for the name the entry gives an
+// object of a layout, and an untargeted entry with a build annotation for an
+// object only a layout builds. Each has a remedy that builds.
 func TestLayoutPatches_ARenameInALayoutsBuild(t *testing.T) {
 	t.Parallel()
-	const noMatch = "no resource matches strategic merge patch"
-	ownFails := func(t *testing.T, ml *layout.ManifestLayout) map[string]map[string]map[string]string {
+	ownFails := func(t *testing.T, patches []stack.Patch, object string) {
 		t.Helper()
-		built, failed := patchedBuilds(t, ml)
-		if err := failed["shop"]; err == nil || !strings.Contains(err.Error(), noMatch) {
-			t.Errorf("kustomize build of the bundle's own Kustomization: %v, want an error containing %q", err, noMatch)
-		}
-		if len(failed) > 1 {
-			t.Errorf("builds failed: %v, want the bundle's own alone", failed)
-		}
-		return built
+		_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).
+			CreateLayoutWithResources(oneBundleCluster(patchShop(nil, patches...)), perLayoutRules())
+		mustContainAll(t, err, `Flux Kustomization "flux-system/shop" (spec.path "prod/shop") does not build as kustomize-controller builds it`,
+			`no resource matches strategic merge patch "ConfigMap.v1.[noGrp]/`+object+`.default"`)
 	}
 	allBuild := func(t *testing.T, ml *layout.ManifestLayout) map[string]map[string]map[string]string {
 		t.Helper()
@@ -378,12 +386,7 @@ func TestLayoutPatches_ARenameInALayoutsBuild(t *testing.T) {
 	}
 
 	t.Run("an object only a layout builds", func(t *testing.T) {
-		patches := []stack.Patch{annotateEveryConfigMap(), untargeted(cmDoc("pre"))}
-		ml := integrated(t, oneBundleCluster(patchShop(nil, patches...)), perLayoutRules())
-		built := ownFails(t, ml)
-		if got := built["shop-00-pre"]["pre"]; !reflect.DeepEqual(got, patchedData) {
-			t.Errorf("shop-00-pre builds ConfigMap pre with data %v, want %v", got, patchedData)
-		}
+		ownFails(t, []stack.Patch{annotateEveryConfigMap(), untargeted(cmDoc("pre"))}, "pre")
 	})
 	t.Run("remedy: the untargeted patch before the entry", func(t *testing.T) {
 		patches := []stack.Patch{untargeted(cmDoc("pre")), annotateEveryConfigMap()}
@@ -398,24 +401,7 @@ func TestLayoutPatches_ARenameInALayoutsBuild(t *testing.T) {
 	})
 
 	t.Run("the name the entry gives an object of a layout", func(t *testing.T) {
-		patches := []stack.Patch{renameConfigMap("pre", "renamed"), untargeted(cmDoc("renamed"))}
-		ml := integrated(t, oneBundleCluster(patchShop(nil, patches...)), perLayoutRules())
-		want := map[string][]int{"shop": {0, 1}}
-		for _, l := range shopLayoutNames {
-			want[l] = []int{0}
-		}
-		if got := patchPlacement(t, ml, patches); !reflect.DeepEqual(got, want) {
-			t.Errorf("patches are held by %v, want %v", got, want)
-		}
-		disk := treeFiles(t, writeAll(t, ml)["WriteToDisk"].root)
-		if got, before := string(disk[shopKustomizationFile]), shopOwnHolding(patches...); got != before {
-			t.Errorf("%s:\n%s\nwant the file written before:\n%s", shopKustomizationFile, got, before)
-		}
-		built := ownFails(t, ml)
-		// The layout's build renames its ConfigMap and does not patch it.
-		if got, want := built["shop-00-pre"], (map[string]map[string]string{"renamed": {}}); !reflect.DeepEqual(got, want) {
-			t.Errorf("shop-00-pre builds the ConfigMaps %v, want %v", got, want)
-		}
+		ownFails(t, []stack.Patch{renameConfigMap("pre", "renamed"), untargeted(cmDoc("renamed"))}, "renamed")
 	})
 	t.Run("remedy: a target on the patch", func(t *testing.T) {
 		patched := stack.Patch{Patch: cmDoc("renamed"), Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "renamed"}}
@@ -428,16 +414,7 @@ func TestLayoutPatches_ARenameInALayoutsBuild(t *testing.T) {
 	})
 
 	t.Run("an untargeted entry with a build annotation for an object only a layout builds", func(t *testing.T) {
-		patches := []stack.Patch{renamePrevious("pre", "renamed")}
-		ml := integrated(t, oneBundleCluster(patchShop(nil, patches...)), perLayoutRules())
-		if got, want := patchPlacement(t, ml, patches), (map[string][]int{"shop": {0}}); !reflect.DeepEqual(got, want) {
-			t.Errorf("patches are held by %v, want %v", got, want)
-		}
-		built := ownFails(t, ml)
-		// The layout's build does not hold the patch: its ConfigMap keeps its name.
-		if got, want := built["shop-00-pre"], (map[string]map[string]string{"pre": {}}); !reflect.DeepEqual(got, want) {
-			t.Errorf("shop-00-pre builds the ConfigMaps %v, want %v", got, want)
-		}
+		ownFails(t, []stack.Patch{renamePrevious("pre", "renamed")}, "pre")
 	})
 	t.Run("remedy: a target on the entry", func(t *testing.T) {
 		patches := []stack.Patch{renameAllowed("pre", "renamed")}
@@ -451,22 +428,16 @@ func TestLayoutPatches_ARenameInALayoutsBuild(t *testing.T) {
 	// A target is a remedy for an entry of one object. Kustomize refuses one
 	// on an entry of several before it selects anything, so that entry, which
 	// is written on every Kustomization of the bundle, fails each of their
-	// builds, the ones whose objects it does not select included. The objects
-	// of an entry are its documents, and for a document that is a List its
-	// items, which kustomize loads as a patch each.
+	// builds, the ones whose objects it does not select included, and the
+	// integration refuses the first it builds. The objects of an entry are its
+	// documents, and for a document that is a List its items, which kustomize
+	// loads as a patch each.
 	noneBuilds := func(t *testing.T, entry stack.Patch) {
 		t.Helper()
-		const refused = "Multiple Strategic-Merge Patches in one `patches` entry is not allowed to set `patches.target` field"
-		ml := integrated(t, oneBundleCluster(patchShop(nil, entry)), perLayoutRules())
-		built, failed := patchedBuilds(t, ml)
-		if len(built) != 0 {
-			t.Errorf("builds made %v, want none to build", built)
-		}
-		for name, err := range failed {
-			if !strings.Contains(err.Error(), refused) {
-				t.Errorf("kustomize build of %s: %v, want an error containing %q", name, err, refused)
-			}
-		}
+		_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).
+			CreateLayoutWithResources(oneBundleCluster(patchShop(nil, entry)), perLayoutRules())
+		mustContainAll(t, err, "does not build as kustomize-controller builds it",
+			"Multiple Strategic-Merge Patches in one `patches` entry is not allowed to set `patches.target` field")
 	}
 	t.Run("a target on an entry of several documents", func(t *testing.T) {
 		entry := renameAllowed("pre", "renamed")

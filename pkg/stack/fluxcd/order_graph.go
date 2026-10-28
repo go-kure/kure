@@ -14,25 +14,25 @@ import (
 )
 
 // orderGraph is the graph checkReconcileOrder judges ("ready K" and "apply K"
-// for each Kustomization K) over the Flux Kustomizations of a tree: the graph
-// orderPath walks and checkTreeOrder judges. With others it follows every
-// Kustomization of the tree, members and others alike, as UmbrellasDoNotWait
-// reads them; without, a Kustomization that is no member waits for nothing
-// here: what it waits for is its author's. Each node's successors are
-// computed once.
+// for each Kustomization K) over the Flux Kustomizations of a tree, each read
+// as its writer's build makes it (builtView): the graph orderPath walks and
+// checkTreeOrder judges. With others it follows every Kustomization of the
+// tree, members and others alike, as UmbrellasDoNotWait reads them; without,
+// a Kustomization that is no member waits for nothing here: what it waits for
+// is its author's. Each node's successors are computed once.
 type orderGraph struct {
-	t       *kustomizationTree
+	v       *builtView
 	others  bool
 	writers map[string]string
 	succ    map[string][]string
 }
 
-func (t *kustomizationTree) newOrderGraph(others bool) *orderGraph {
-	return &orderGraph{t: t, others: others, writers: map[string]string{}, succ: map[string][]string{}}
+func (v *builtView) newOrderGraph(others bool) *orderGraph {
+	return &orderGraph{v: v, others: others, writers: map[string]string{}, succ: map[string][]string{}}
 }
 
 // next returns what node n waits for. "apply K" needs every Kustomization K
-// depends on Ready, and the member whose apply writes K applied (writer).
+// depends on Ready, and the writer whose apply creates K applied (writer).
 // "ready K" needs "apply K"; what K's wait or its Kustomization health checks
 // wait for (awaitedKustomizations; the wait leaves out what K's apply skips,
 // unskipped); and, for each health check on an object
@@ -41,21 +41,28 @@ func (t *kustomizationTree) newOrderGraph(others bool) *orderGraph {
 // healthCheckExprs entry, so an expression, whatever it says, still waits for
 // the object to exist. Under wait Flux ignores health checks, and on another
 // cluster (spec.kubeConfig) none names an object of the tree. Without others,
-// a Kustomization that is no member has no successor.
+// a Kustomization that is no member has no successor; with, one that cannot
+// be read in typed form has none either (builtView.spec).
 func (g *orderGraph) next(n string) ([]string, error) {
 	if out, ok := g.succ[n]; ok {
 		return out, nil
 	}
-	t := g.t
+	v := g.v
 	kind, key, _ := strings.Cut(n, " ")
 	var out []string
-	if !g.others && t.byKey[key] == nil {
+	if !g.others && !v.isMember(key) {
 		g.succ[n] = out
 		return out, nil
 	}
+	k, err := v.spec(key)
+	if err != nil {
+		return nil, err
+	}
 	if kind == "apply" {
-		for _, d := range t.deps(key) {
-			out = append(out, "ready "+d)
+		if k != nil {
+			for _, d := range specDeps(k) {
+				out = append(out, "ready "+d)
+			}
 		}
 		if w := g.writer(key); w != "" {
 			out = append(out, "apply "+w)
@@ -64,22 +71,8 @@ func (g *orderGraph) next(n string) ([]string, error) {
 		return out, nil
 	}
 	out = append(out, "apply "+key)
-	k := t.byKey[key]
-	obj := t.otherObjs[key]
-	if base, ok := strings.CutSuffix(key, keptCopy); ok {
-		obj = t.droppedObjs[base]
-	} else if t.keptDropped(key) {
-		obj = t.droppedObjs[key]
-	}
-	if k == nil && obj != nil {
-		spec, err := typedKustomization(obj)
-		if err != nil {
-			return nil, err
-		}
-		k = spec
-	}
 	if k != nil {
-		for _, x := range awaitedKustomizations(k, func() []string { return t.unskipped(k, t.written(key)) }) {
+		for _, x := range awaitedKustomizations(k, func() []string { return v.unskipped(key, v.written(key)) }) {
 			out = append(out, "ready "+x)
 		}
 		if !k.Spec.Wait && k.Spec.KubeConfig == nil {
@@ -93,7 +86,7 @@ func (g *orderGraph) next(n string) ([]string, error) {
 				if isFluxKustomizationCheck(hc.APIVersion, hc.Kind) {
 					continue // read by awaitedKustomizations
 				}
-				w, err := t.objectWriter(hc.APIVersion, hc.Kind, hc.Namespace, hc.Name)
+				w, err := v.t.objectWriter(hc.APIVersion, hc.Kind, hc.Namespace, hc.Name)
 				if err != nil {
 					return nil, err
 				}
@@ -110,7 +103,7 @@ func (g *orderGraph) next(n string) ([]string, error) {
 func (g *orderGraph) writer(key string) string {
 	w, ok := g.writers[key]
 	if !ok {
-		w = g.t.writer(key)
+		w = g.v.writer(key, false)
 		g.writers[key] = w
 	}
 	return w
@@ -157,39 +150,6 @@ func skipsApply(metadata map[string]string) bool {
 func excludedFromApply(metadata map[string]string) bool {
 	return strings.EqualFold(metadata["kustomize.toolkit.fluxcd.io/ssa"], "Ignore") ||
 		strings.EqualFold(metadata["kustomize.toolkit.fluxcd.io/reconcile"], "disabled")
-}
-
-// unskipped returns keys, Flux Kustomizations the apply of w writes, without
-// those w's apply skips (excludedFromApply): kustomize-controller leaves a
-// skipped object out of what its wait waits for (kustomization_controller.go
-// :1089-1097). The mark is read on the object as the tree holds it, with w's
-// spec.commonMetadata set over it, as Flux sets it before applying
-// (:916-917). A w whose build transforms what it holds (transformsBuild) may
-// set or clear the mark, so nothing is left out for it (go-kure/kure#1094).
-// Only the wait reads this: what w writes (applied, written, children) is
-// unchanged, and so are the creation and existence edges onto a skipped
-// object, which some other apply may still create unmarked (the root
-// Kustomization applies what it reaches without w's commonMetadata).
-func (t *kustomizationTree) unskipped(w *kustv1.Kustomization, keys []string) []string {
-	if transformsBuild(w) {
-		return keys
-	}
-	var out []string
-	for _, key := range keys {
-		var labels, annotations map[string]string
-		if k := t.byKey[key]; k != nil {
-			labels, annotations = k.GetLabels(), k.GetAnnotations()
-		} else if o := t.otherObjs[key]; o != nil {
-			labels, annotations = o.GetLabels(), o.GetAnnotations()
-		}
-		if cm := w.Spec.CommonMetadata; cm != nil {
-			labels, annotations = setOver(labels, cm.Labels), setOver(annotations, cm.Annotations)
-		}
-		if !excludedFromApply(labels) && !excludedFromApply(annotations) {
-			out = append(out, key)
-		}
-	}
-	return out
 }
 
 // setOver returns base with every key of over set over it, as Flux sets
@@ -464,16 +424,16 @@ func transformsBuild(k *kustv1.Kustomization) bool {
 // Ready because of a cycle through a member: a strongly connected component of
 // the order graph (orderGraph) that holds a cycle and a member's node. The
 // graph is entered at the members' nodes. Without others it judges the
-// members' edges only, each dependsOn as written and each health check whose
+// members' edges only, each dependsOn as built and each health check whose
 // object has a certain writer (objectWriter); with others, under
 // UmbrellasDoNotWait, it follows the other Kustomizations of the tree as
 // orderPath does. A cycle made only of Kustomizations the integration did not
 // place is their author's, and is not refused here. The error names one
 // cycle, as checkReconcileOrder does.
-func (t *kustomizationTree) checkTreeOrder(others bool) error {
-	g := t.newOrderGraph(others)
+func (v *builtView) checkTreeOrder(others bool) error {
+	g := v.newOrderGraph(others)
 	var starts []string
-	for _, k := range t.kusts {
+	for _, k := range v.t.kusts {
 		key := crKey(k.Namespace, k.Name)
 		starts = append(starts, "ready "+key, "apply "+key)
 	}
@@ -576,7 +536,7 @@ func (g *orderGraph) components(starts []string) (map[string]*component, error) 
 		if len(nodes) > 1 || self {
 			for _, m := range nodes {
 				_, key, _ := strings.Cut(m, " ")
-				if g.t.byKey[key] != nil {
+				if g.v.isMember(key) {
 					c.refused = true
 					break
 				}

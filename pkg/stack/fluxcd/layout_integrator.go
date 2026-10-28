@@ -594,29 +594,38 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) erro
 
 // checkPlacedReconcileOrder runs checkReconcileOrder over the Kustomizations
 // this integration placed or kept (generated: their namespace/name keys; a
-// kept one in whatever form it has, generatedKustomizations), with the
-// creation rule integrated placement adds: a CR exists only once the
-// Kustomization whose directory references reach its file has applied, and a
-// CR the root directory reaches is created by the Flux bootstrap. A CR the
-// build of another Kustomization of the tree also writes still waits for that
-// member's apply: whether the other applies first depends on controller
-// settings the tree does not carry, so it is no alternate creator. A member's
-// wait leaves out the members its apply skips (unskipped). Under
-// separate placement every CR sits in flux-system, which the root lists.
-// checkTreeOrder then judges the members' edges again, each dependsOn as
-// written and each health check whose object has a certain writer, and with
-// others (UmbrellasDoNotWait) the other Kustomizations of the tree too;
-// checkReconcileOrder runs first so its refusals keep their chains.
+// kept one in whatever form it has, generatedKustomizations), each read as
+// the build of its writer makes it (builtView), with the creation rule
+// integrated placement adds: a CR exists only once the member whose build
+// writes it has applied, and a CR the root directory's build writes is
+// created by the Flux bootstrap. A CR the build of another Kustomization of
+// the tree also writes still waits for that member's apply: whether the other
+// applies first depends on controller settings the tree does not carry, so it
+// is no alternate creator. A member's wait leaves out the members its apply
+// skips (unskipped). Under separate placement every CR sits in flux-system,
+// which the root lists. checkTreeOrder then judges the members' edges again,
+// each dependsOn as built and each health check whose object has a certain
+// writer, and with others (UmbrellasDoNotWait) the other Kustomizations of
+// the tree too; checkReconcileOrder runs first so its refusals keep their
+// chains.
 func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string]bool, others bool) error {
 	t, err := indexKustomizationTree(root, generatedMembers(generated))
 	if err != nil {
 		return err
 	}
-	applied := func(key string) []string { return t.unskipped(t.byKey[key], t.applied(key)) }
-	if err := checkReconcileOrder(t.kusts, t.creator, applied); err != nil {
+	v, err := newBuiltView(t)
+	if err != nil {
 		return err
 	}
-	return t.checkTreeOrder(others)
+	kusts, err := v.members()
+	if err != nil {
+		return err
+	}
+	applied := func(key string) []string { return v.unskipped(key, v.applied(key)) }
+	if err := checkReconcileOrder(kusts, v.creator, applied); err != nil {
+		return err
+	}
+	return v.checkTreeOrder(others)
 }
 
 // buildDirectories returns, in pre-order, the layouts whose directories a

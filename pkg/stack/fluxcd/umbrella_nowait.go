@@ -223,15 +223,35 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	// through Kustomizations an application emits. The edge onto the umbrella
 	// closed no cycle the reconcile-order check sees, but the edge onto the
 	// leaf closes one. That check reads members only, so the cycle is refused
-	// here, over every Kustomization of the tree.
+	// here, over every Kustomization of the tree, each read as its writer's
+	// build makes it from the rewritten tree (builtView). A build that writes
+	// a copy of the dependent under another name (a name prefix, say) copies
+	// the rewritten dependsOn too, and the cycle may close through the copy
+	// alone: the leaf then never becomes Ready, and the dependent, waiting for
+	// it, never applies.
+	if len(rewritten) == 0 {
+		return nil
+	}
+	v, err := newBuiltView(t)
+	if err != nil {
+		return err
+	}
 	for _, e := range rewritten {
-		chain, err := t.orderPath("ready "+e.to, "apply "+e.from)
+		chain, err := v.orderPath("ready "+e.to, "apply "+e.from)
 		if err != nil {
 			return err
 		}
 		if chain != nil {
 			return errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q depends on %q, written as a dependsOn on its terminal leaf %q, which cannot become Ready before %q applies (%s): the rewrite would close a cycle, and none of these Kustomizations would become Ready; remove the dependency",
 				e.from, e.umbrella, e.to, e.from, strings.Join(chain, " -> "))
+		}
+		chain, err = v.cycleThrough("ready " + e.to)
+		if err != nil {
+			return err
+		}
+		if chain != nil {
+			return errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q depends on %q, written as a dependsOn on its terminal leaf %q, which waits for itself (%s): %q would never become Ready, so %q would never apply; remove the dependency",
+				e.from, e.umbrella, e.to, strings.Join(chain, " -> "), e.to, e.from)
 		}
 	}
 	return nil
@@ -246,38 +266,59 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 // (objectWriter); "apply K"
 // needs every Kustomization K depends on Ready, and the member whose apply
 // writes K applied (writer), also when another Kustomization's build writes K
-// as well: that one is no alternate creator. A Kustomization
-// that is no member is read from its own spec, as its author wrote it; its
-// wait waits for what its build writes only when that build is the tree's
-// (readsLocalBuild), and for nothing the tree holds otherwise.
-func (t *kustomizationTree) orderPath(from, to string) ([]string, error) {
-	g := t.newOrderGraph(true)
+// as well: that one is no alternate creator. Every Kustomization is read as
+// its writer's build makes it (builtView); one that is no member waits for
+// what its build writes only when that build is the tree's, and for nothing
+// the tree holds otherwise.
+func (v *builtView) orderPath(from, to string) ([]string, error) {
+	return v.newOrderGraph(true).path(from, to, map[string]bool{})
+}
+
+// cycleThrough returns a chain from node n back to itself, both ends n, in
+// the graph orderPath walks, or nil when n is on no cycle.
+func (v *builtView) cycleThrough(n string) ([]string, error) {
+	g := v.newOrderGraph(true)
+	succ, err := g.next(n)
+	if err != nil {
+		return nil, err
+	}
 	seen := map[string]bool{}
-	var walk func(n string) ([]string, error)
-	walk = func(n string) ([]string, error) {
-		if n == to {
-			return []string{n}, nil
-		}
-		if seen[n] {
-			return nil, nil
-		}
-		seen[n] = true
-		succ, err := g.next(n)
+	for _, m := range succ {
+		rest, err := g.path(m, n, seen)
 		if err != nil {
 			return nil, err
 		}
-		for _, m := range succ {
-			rest, err := walk(m)
-			if err != nil {
-				return nil, err
-			}
-			if rest != nil {
-				return append([]string{n}, rest...), nil
-			}
+		if rest != nil {
+			return append([]string{n}, rest...), nil
 		}
+	}
+	return nil, nil
+}
+
+// path returns a chain from node from to node to, both included, through no
+// node of seen, which it marks; nil when there is none.
+func (g *orderGraph) path(from, to string, seen map[string]bool) ([]string, error) {
+	if from == to {
+		return []string{from}, nil
+	}
+	if seen[from] {
 		return nil, nil
 	}
-	return walk(from)
+	seen[from] = true
+	succ, err := g.next(from)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range succ {
+		rest, err := g.path(m, to, seen)
+		if err != nil {
+			return nil, err
+		}
+		if rest != nil {
+			return append([]string{from}, rest...), nil
+		}
+	}
+	return nil, nil
 }
 
 // writer names the member whose apply writes the Flux Kustomization with key,

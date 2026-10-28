@@ -660,7 +660,7 @@ func sixSettings(b *stack.Bundle) {
 		SubstituteFrom: []stack.SubstituteRef{{Kind: "ConfigMap", Name: "cluster-vars", Optional: true}},
 	}
 	b.Patches = []stack.Patch{{
-		Patch:  "- op: add\n  path: /metadata/labels/patched\n  value: \"yes\"\n",
+		Patch:  "- op: add\n  path: /metadata/labels\n  value:\n    patched: \"yes\"\n",
 		Target: &stack.PatchSelector{Kind: "ConfigMap"},
 	}}
 }
@@ -735,8 +735,9 @@ func TestLayoutSettings_SixMoreInheritedFromTheBundle(t *testing.T) {
   patches:
   - patch: |
       - op: add
-        path: /metadata/labels/patched
-        value: "yes"
+        path: /metadata/labels
+        value:
+          patched: "yes"
     target:
       kind: ConfigMap
   path: %s
