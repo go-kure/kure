@@ -207,8 +207,9 @@ func TestBuiltView_ASkippedCopyDoesNotDisagree(t *testing.T) {
 // hand-written's copy also gives web wait and platform's directory as its
 // path, web applies hand-written and, with hand-written's wait, each waits
 // for the other; web was built from the bootstrap's copy, the first known,
-// so what web applies cannot be read and the tree is refused. With nothing
-// changed but the annotation the tree is admitted.
+// so what web applies cannot be read and the tree is refused. The control is
+// the same tree with hand-written's copy identical to web's but for the
+// annotation: it is admitted.
 func TestBuiltView_TheOnlyApplyCreatesAndBuilds(t *testing.T) {
 	const unskip = "- op: remove\n  path: /metadata/annotations/kustomize.toolkit.fluxcd.io~1ssa\n"
 	for name, c := range map[string]struct {
@@ -218,7 +219,7 @@ func TestBuiltView_TheOnlyApplyCreatesAndBuilds(t *testing.T) {
 		"bootstrap skips web, dependsOn web":   {skipped: true, dependsOnWeb: true, refused: "can never all become Ready: flux-system/web waits for itself (ready flux-system/web -> apply flux-system/web -> apply flux-system/hand-written -> ready flux-system/web)"},
 		"bootstrap applies web, dependsOn web": {dependsOnWeb: true},
 		"bootstrap skips web, copy differs":    {skipped: true, rebuilt: true, refused: `Flux Kustomization "flux-system/web" is built from the copy the Flux bootstrap`},
-		"bootstrap skips web":                  {skipped: true},
+		"bootstrap skips web, copy identical":  {skipped: true},
 	} {
 		for _, placement := range integratedPlacements {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
@@ -249,6 +250,60 @@ func TestBuiltView_TheOnlyApplyCreatesAndBuilds(t *testing.T) {
 				}
 				if err == nil || !strings.Contains(err.Error(), c.refused) {
 					t.Fatalf("got %v, want %s", err, c.refused)
+				}
+			})
+		}
+	}
+}
+
+// TestBuiltView_AMemberNoBuildHoldsIsComparedWithItsAppliedCopy: shop's
+// patch deletes its child web from shop's build, so no build that the tree's
+// results reach holds web, and web is built from its spec as the tree holds
+// it. platform's application emits hand-written, building shop's directory
+// without that patch: hand-written's apply alone creates web. Where
+// hand-written's copy gives web wait and platform's directory as its path,
+// web applies hand-written and, with hand-written's wait, each waits for the
+// other; what web applies cannot be read from the spec it was built from, so
+// the tree is refused. The control is the same tree with hand-written's copy
+// of web as the tree holds it: it is admitted.
+func TestBuiltView_AMemberNoBuildHoldsIsComparedWithItsAppliedCopy(t *testing.T) {
+	tree := func(hw *kustv1.Kustomization) *stack.Cluster {
+		shop := umbrellaOf("shop", srBundle("web", cmApp("web-app")))
+		shop.Patches = []stack.Patch{{Patch: deleteKust("web"), Target: &stack.PatchSelector{Kind: "Kustomization", Name: "web"}}}
+		app := cmApp("platform-app")
+		if hw != nil {
+			app = objApp("platform-app", hw)
+		}
+		apps := &stack.Node{Name: "apps", Bundle: srBundle("platform", app)}
+		shopNode := &stack.Node{Name: "shop", Bundle: shop}
+		root := &stack.Node{Name: "demo", Children: []*stack.Node{apps, shopNode}}
+		apps.SetParent(root)
+		shopNode.SetParent(root)
+		return &stack.Cluster{Name: "demo", Node: root}
+	}
+	for name, rebuilt := range map[string]bool{"copy differs": true, "copy identical": false} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				off, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(tree(nil), withPlacement(nodeOnly, placement))
+				if err != nil {
+					t.Fatalf("without hand-written: %v", err)
+				}
+				k := handWritten("hand-written")
+				k.Spec.Path, k.Spec.Wait = findKept(off, "shop").Spec.Path, true
+				if rebuilt {
+					patch := "- op: add\n  path: /spec/wait\n  value: true\n- op: replace\n  path: /spec/path\n  value: " + findKept(off, "platform").Spec.Path + "\n"
+					k.Spec.Patches = []kustomize.Patch{{Patch: patch, Target: &kustomize.Selector{Kind: "Kustomization", Name: "web"}}}
+				}
+				_, err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(tree(k), withPlacement(nodeOnly, placement))
+				if !rebuilt {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
+				const refused = `Flux Kustomization "flux-system/web" is built from its spec as the tree holds it`
+				if err == nil || !strings.Contains(err.Error(), refused) {
+					t.Fatalf("got %v, want %s", err, refused)
 				}
 			})
 		}
