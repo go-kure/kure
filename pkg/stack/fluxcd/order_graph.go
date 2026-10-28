@@ -2,15 +2,12 @@ package fluxcd
 
 import (
 	"maps"
-	"path"
 	"slices"
 	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 
-	"github.com/go-kure/kure/internal/built"
 	"github.com/go-kure/kure/pkg/errors"
-	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 // orderGraph is the graph checkReconcileOrder judges ("ready K" and "apply K"
@@ -35,9 +32,9 @@ func (v *builtView) newOrderGraph(others bool) *orderGraph {
 // depends on Ready, and the writer whose apply creates K applied (writer).
 // "ready K" needs "apply K"; what K's wait or its Kustomization health checks
 // wait for (awaitedKustomizations; the wait leaves out what K's apply skips,
-// unskipped); and, for each health check on an object
-// that is no Flux Kustomization, the apply of the member whose build writes it
-// (objectWriter): Flux fetches a checked object before it evaluates any
+// unskipped); and, for each health check on an object that is no Flux
+// Kustomization, the apply of the writer whose result holds it, when that
+// writer is certain (objectWriter): Flux fetches a checked object before it evaluates any
 // healthCheckExprs entry, so an expression, whatever it says, still waits for
 // the object to exist. Under wait Flux ignores health checks, and on another
 // cluster (spec.kubeConfig) none names an object of the tree. Without others,
@@ -86,7 +83,7 @@ func (g *orderGraph) next(n string) ([]string, error) {
 				if isFluxKustomizationCheck(hc.APIVersion, hc.Kind) {
 					continue // read by awaitedKustomizations
 				}
-				w, err := v.t.objectWriter(hc.APIVersion, hc.Kind, hc.Namespace, hc.Name)
+				w, err := v.objectWriter(hc.APIVersion, hc.Kind, hc.Namespace, hc.Name)
 				if err != nil {
 					return nil, err
 				}
@@ -113,17 +110,6 @@ func (g *orderGraph) writer(key string) string {
 // kind names a Flux Kustomization, as checkedKustomizations reads one.
 func isFluxKustomizationCheck(apiVersion, kind string) bool {
 	return kind == "Kustomization" && strings.HasPrefix(apiVersion, kustv1.GroupVersion.Group+"/")
-}
-
-// treeObject is one object a kustomize build of a layout of the tree holds
-// (builtItems), as written: its group, kind, namespace and name, whether any
-// of those, or its apiVersion, may change at apply (unresolved), whether its
-// labels or annotations let the apply leave it uncreated (skipsApply), and
-// the layout that holds it.
-type treeObject struct {
-	group, kind, namespace, name string
-	unresolved, skipped          bool
-	host                         *layout.ManifestLayout
 }
 
 // skipsApply reports whether metadata, an object's labels or annotations,
@@ -179,52 +165,6 @@ func kubernetesCreated(group, kind, name string) bool {
 	return group == "" && (kind == "ServiceAccount" && name == "default" || kind == "ConfigMap" && name == "kube-root-ca.crt")
 }
 
-// treeGenerator is one configMapGenerator entry of a layout of the tree.
-type treeGenerator struct {
-	name string
-	host *layout.ManifestLayout
-}
-
-// objectIndex reads, once, every object the layouts of the tree hold and
-// every configMapGenerator entry, in depth-first layout order.
-func (t *kustomizationTree) objectIndex() error {
-	if t.objectsRead {
-		return t.objectsErr
-	}
-	t.objectsRead = true
-	var walk func(l *layout.ManifestLayout) error
-	walk = func(l *layout.ManifestLayout) error {
-		objs, err := builtItems(l)
-		if err != nil {
-			return err
-		}
-		for _, obj := range objs {
-			kind, apiVersion, err := built.WrittenType(obj)
-			if err != nil {
-				return errors.Wrapf(err, "layout %q: read an object as written", l.FullRepoPath())
-			}
-			t.objects = append(t.objects, treeObject{
-				group: apiGroup(apiVersion), kind: kind, namespace: obj.GetNamespace(), name: obj.GetName(),
-				unresolved: unresolved(apiVersion) || unresolved(kind) || unresolved(obj.GetNamespace()) || unresolved(obj.GetName()),
-				skipped:    skipsApply(obj.GetLabels()) || skipsApply(obj.GetAnnotations()), host: l,
-			})
-		}
-		for _, gen := range l.ConfigMapGenerators {
-			t.generators = append(t.generators, treeGenerator{name: gen.Name, host: l})
-		}
-		for _, c := range l.Children {
-			if c != nil {
-				if err := walk(c); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}
-	t.objectsErr = walk(t.root)
-	return t.objectsErr
-}
-
 // apiGroup is the group of apiVersion: "" for the core group ("v1").
 func apiGroup(apiVersion string) string {
 	group, _, ok := strings.Cut(apiVersion, "/")
@@ -232,183 +172,6 @@ func apiGroup(apiVersion string) string {
 		return ""
 	}
 	return group
-}
-
-// objectWriter names the member whose apply writes the object a health check
-// on apiVersion, kind, namespace and name names, only when that is certain:
-// "" otherwise, and the check adds no edge. A check that waits for an object
-// another apply may also create does not wait for this one, and an edge
-// that may not exist would refuse a tree that converges. It matches by group,
-// kind, namespace and name as written, the version ignored as Flux resolves
-// it; an empty apiVersion is apps/v1, as Flux reads it (kustomize-controller
-// v1.10.1 internal/inventory/inventory.go:166-169). It is certain when every
-// match sits in a directory exactly one member's build holds (hostWriters),
-// the same member for all, that member's build transforms nothing
-// (transformsBuild) and its spec.commonMetadata does not let the apply skip
-// what it writes (skipsApply), and no other apply may write the object under
-// an identity its file does not show (transformedProducer). A check that
-// names no namespace, or a match written with none, leaves the writer
-// uncertain: a namespaced object may be applied in another namespace than its
-// file says, and a cluster-scoped one may exist before any apply. So do a
-// match whose labels or annotations let the apply skip it (skipsApply); an
-// object whose apiVersion, kind, namespace or name may change at apply
-// (unresolved), whatever it names, unless only the writer's build holds it,
-// as another apply may give it the checked identity; a configMapGenerator entry whose name the check's
-// starts with, as kustomize appends a content hash, or that may change at
-// apply; and an object Kubernetes creates itself (kubernetesCreated). An
-// object a controller creates, from a HelmRelease's chart, say, or a build
-// that is no directory of the tree, is not modelled: the check assumes an
-// object the tree writes is created only by the applies of the tree's
-// directories.
-func (t *kustomizationTree) objectWriter(apiVersion, kind, namespace, name string) (string, error) {
-	if err := t.objectIndex(); err != nil {
-		return "", err
-	}
-	if apiVersion == "" {
-		apiVersion = "apps/v1"
-	}
-	group := apiGroup(apiVersion)
-	if kubernetesCreated(group, kind, name) {
-		return "", nil
-	}
-	var hosts []*layout.ManifestLayout
-	for _, o := range t.objects {
-		if o.unresolved || o.group != group || o.kind != kind || o.name != name {
-			continue
-		}
-		if o.namespace == "" {
-			return "", nil
-		}
-		if o.namespace == namespace {
-			if o.skipped {
-				return "", nil
-			}
-			hosts = append(hosts, o.host)
-		}
-	}
-	if group == "" && kind == "ConfigMap" {
-		for _, gen := range t.generators {
-			if name == gen.name || strings.HasPrefix(name, gen.name+"-") || unresolved(gen.name) {
-				return "", nil
-			}
-		}
-	}
-	writer := ""
-	for _, h := range hosts {
-		ws, ok := t.hostWriters(h)
-		if !ok || len(ws) != 1 || (writer != "" && ws[0] != writer) {
-			return "", nil
-		}
-		writer = ws[0]
-	}
-	if writer == "" {
-		return "", nil
-	}
-	for _, o := range t.objects {
-		if o.unresolved {
-			if ws, ok := t.hostWriters(o.host); !ok || len(ws) != 1 || ws[0] != writer {
-				return "", nil
-			}
-		}
-	}
-	w := t.byKey[writer]
-	if transformsBuild(w) || w.Spec.CommonMetadata != nil &&
-		(skipsApply(w.Spec.CommonMetadata.Labels) || skipsApply(w.Spec.CommonMetadata.Annotations)) ||
-		t.transformedProducer(group, kind) {
-		return "", nil
-	}
-	return writer, nil
-}
-
-// transformedProducer reports whether another apply may write an object of
-// group and kind under an identity its file does not show. That is so when a
-// Kustomization of the tree on this cluster:
-//   - cannot be read in typed form;
-//   - builds a directory of the tree and has spec.components, which may add
-//     any object;
-//   - has spec.patches and its build holds any object or configMapGenerator
-//     entry, local config included: a patch may change a kind, or keep what
-//     the build would drop as local config (patchesBuild);
-//   - otherwise transforms (transformsBuild: a name prefix or suffix, or a
-//     target namespace) and its build holds an object of group and kind, or,
-//     for a ConfigMap, a configMapGenerator entry.
-func (t *kustomizationTree) transformedProducer(group, kind string) bool {
-	ks := slices.Clone(t.kusts)
-	for _, keys := range t.others {
-		for _, key := range keys {
-			k := t.otherSpecs[key]
-			if k == nil {
-				return true
-			}
-			if k.Spec.KubeConfig == nil {
-				ks = append(ks, k)
-			}
-		}
-	}
-	for _, k := range ks {
-		l := t.layoutAt[path.Clean(k.Spec.Path)]
-		if l == nil || !transformsBuild(k) {
-			continue
-		}
-		if len(k.Spec.Components) > 0 {
-			return true
-		}
-		scope := buildScope(l)
-		if len(k.Spec.Patches) > 0 {
-			for _, s := range scope {
-				if len(s.Resources) > 0 || len(s.ConfigMapGenerators) > 0 {
-					return true
-				}
-			}
-			continue
-		}
-		for _, o := range t.objects {
-			if o.group == group && o.kind == kind && slices.Contains(scope, o.host) {
-				return true
-			}
-		}
-		if group == "" && kind == "ConfigMap" {
-			for _, gen := range t.generators {
-				if slices.Contains(scope, gen.host) {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-// hostWriters lists the Flux Kustomizations of the tree whose build holds
-// layout host: every member, and every other on this cluster, whatever its
-// Source, whose spec.path names a directory whose build holds it. ok is false
-// when that is not known: the Flux bootstrap applies host, or a Kustomization
-// of the tree cannot be read in typed form, so its spec.path is unknown.
-func (t *kustomizationTree) hostWriters(host *layout.ManifestLayout) ([]string, bool) {
-	if host == nil || slices.Contains(buildScope(t.root), host) {
-		return nil, false
-	}
-	holds := func(p string) bool {
-		l := t.layoutAt[path.Clean(p)]
-		return l != nil && slices.Contains(buildScope(l), host)
-	}
-	var out []string
-	for _, k := range t.kusts {
-		if holds(k.Spec.Path) {
-			out = append(out, crKey(k.Namespace, k.Name))
-		}
-	}
-	for _, keys := range t.others {
-		for _, key := range keys {
-			k := t.otherSpecs[key]
-			if k == nil {
-				return nil, false
-			}
-			if k.Spec.KubeConfig == nil && holds(k.Spec.Path) {
-				out = append(out, key)
-			}
-		}
-	}
-	return out, true
 }
 
 // transformsBuild reports whether k's build may change what its directory

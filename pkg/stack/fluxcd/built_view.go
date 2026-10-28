@@ -47,7 +47,8 @@ import (
 // Every Flux Kustomization a result holds is read as it is held there, under
 // its identity as built. One two writers write with different graph-relevant
 // fields (graphFields) is refused: both apply it, and they keep overwriting
-// each other. One no result holds is read as the tree holds it.
+// each other. One no result holds is read as the tree holds it. An object a
+// health check names is looked up in the results too (objectWriter).
 type builtView struct {
 	t *kustomizationTree
 	// writers lists the writers' keys in the order they were found, "" first;
@@ -61,6 +62,13 @@ type builtView struct {
 	occurrences map[string][]occurrence
 	specs       map[string]*kustv1.Kustomization
 	specErrs    map[string]error
+	// sources and mergedSecrets are what the object index reads
+	// (objectIndex), on the first health check on an object; objectsErr is
+	// the error of that read.
+	sources       []objectSource
+	mergedSecrets []string
+	objectsRead   bool
+	objectsErr    error
 }
 
 // occurrence is a Flux Kustomization as one writer's result holds it.
