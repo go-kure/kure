@@ -25,15 +25,20 @@ import (
 // whatever its default, so what x waits for cannot be read and the tree is
 // refused, naming DEP. Flux removes every newline from an inline value before
 // it substitutes, so KIND set to Kustomization and a newline is read the same.
+// Flux substitutes the object's YAML text and then parses it, so KIND set to
+// Kustomization in YAML quotes is read as Kustomization too.
 // With DEP set inline the tree is admitted.
 func TestBuiltView_SubstitutedKindIsAKustomization(t *testing.T) {
 	for name, c := range map[string]struct {
 		kind      string
 		depInline bool
 	}{
-		"DEP read from the cluster":                 {kind: "Kustomization"},
-		"DEP read from the cluster, KIND a newline": {kind: "Kustomization\n"},
-		"DEP set inline":                            {kind: "Kustomization", depInline: true},
+		"DEP read from the cluster":                     {kind: "Kustomization"},
+		"DEP read from the cluster, KIND a newline":     {kind: "Kustomization\n"},
+		"DEP read from the cluster, KIND single-quoted": {kind: "'Kustomization'"},
+		"DEP read from the cluster, KIND double-quoted": {kind: `"Kustomization"`},
+		"DEP set inline":                                {kind: "Kustomization", depInline: true},
+		"DEP set inline, KIND single-quoted":            {kind: "'Kustomization'", depInline: true},
 	} {
 		depInline := c.depInline
 		for _, placement := range integratedPlacements {
