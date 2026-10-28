@@ -49,6 +49,9 @@ type builtObject struct {
 	// substituteFrom (substituted.writtenLabels, writtenAnnotations), which
 	// they hold as written.
 	labels, annotations map[string]string
+	// varies marks an object whose text as written, before any substitution,
+	// holds "$" or "ENC[" (writtenVaries): its apply may change its marks.
+	varies bool
 }
 
 // objectIndex reads, once, what every source of the tree applies.
@@ -156,11 +159,55 @@ func readBuiltObject(r substituted) (builtObject, error) {
 	}
 	obj := r.obj
 	labels, annotations := r.writtenLabels.over(obj.GetLabels()), r.writtenAnnotations.over(obj.GetAnnotations())
+	// The object as read is as written unless substituteBuild substituted
+	// it, which records what it was written as (substituted.varies).
+	content, err := writtenContent(obj)
+	if err != nil {
+		return builtObject{}, err
+	}
+	varies, err := writtenVaries(content)
+	if err != nil {
+		return builtObject{}, err
+	}
 	return builtObject{
 		group: apiGroup(apiVersion), kind: kind, namespace: obj.GetNamespace(), name: obj.GetName(),
 		unresolved: r.unknownIdentity || unresolved(apiVersion) || unresolved(kind) || unresolved(obj.GetNamespace()) || unresolved(obj.GetName()),
 		labels:     labels, annotations: annotations,
+		varies: r.varies || varies,
 	}, nil
+}
+
+// excludes reports whether s's apply skips o whatever the cluster holds
+// (excludedFromApply), with s's spec.commonMetadata set over o's labels and
+// annotations, so never creates it (fluxcd/pkg/ssa v0.83.0
+// manager_apply.go:695-697). It reads that only when the apply cannot change
+// it: o as written holds no "$" or "ENC[" (builtObject.varies), and nor does
+// that commonMetadata, which a Kustomization read as the tree holds it may
+// carry unsubstituted.
+func (s objectSource) excludes(o builtObject) bool {
+	if o.varies {
+		return false
+	}
+	labels, annotations := o.labels, o.annotations
+	if s.spec != nil && s.spec.Spec.CommonMetadata != nil {
+		cm := s.spec.Spec.CommonMetadata
+		if mapVaries(cm.Labels) || mapVaries(cm.Annotations) {
+			return false
+		}
+		labels, annotations = setOver(labels, cm.Labels), setOver(annotations, cm.Annotations)
+	}
+	return excludedFromApply(labels) || excludedFromApply(annotations)
+}
+
+// mapVaries reports whether a key or a value of m holds "$" or "ENC["
+// (unresolved).
+func mapVaries(m map[string]string) bool {
+	for k, v := range m {
+		if unresolved(k) || unresolved(v) {
+			return true
+		}
+	}
+	return false
 }
 
 // objectWriter names the writer whose apply writes the object a health check
@@ -176,9 +223,13 @@ func readBuiltObject(r substituted) (builtObject, error) {
 // writer other than the Flux bootstrap applies a match, and that match's
 // labels and annotations, with the writer's spec.commonMetadata set over
 // them, do not let the apply skip it (skipsApply; a skip a substitution reads
-// from the cluster is read as written, builtObject).
+// from the cluster is read as written, builtObject). A match its apply
+// excludes (objectSource.excludes) is never created and counts for no
+// apply. A match written with "$" or "ENC[" anywhere, or under a
+// commonMetadata that holds one, is never read as excluded, as its apply may
+// change its marks; and an IfNotPresent one leaves the writer uncertain.
 //
-// The writer stays uncertain when:
+// The writer stays uncertain when, a match its apply excludes aside:
 //   - the check names no namespace, or a match is applied with none: a
 //     namespaced object may be applied in another namespace than its build
 //     says, and a cluster-scoped one may exist before any apply;
@@ -216,6 +267,11 @@ func (v *builtView) objectWriter(apiVersion, kind, namespace, name string) (stri
 		}
 		for _, o := range s.objects {
 			if o.unresolved || o.group != group || o.kind != kind || o.name != name {
+				continue
+			}
+			// A copy its apply excludes is never created: it is no match,
+			// wherever it is applied, and competes with no writer.
+			if s.excludes(o) {
 				continue
 			}
 			if o.namespace == "" {
