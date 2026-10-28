@@ -36,8 +36,13 @@ func (v *builtView) newOrderGraph() *orderGraph {
 // healthCheckExprs entry, so an expression, whatever it says, still waits for
 // the object to exist. Under wait Flux ignores health checks, and on another
 // cluster (spec.kubeConfig) none names an object of the tree. A dependsOn
-// waits for the dependency's Ready also with a readyExpr: Flux adds its own
-// readiness check unless a controller feature gate kure cannot see is off.
+// waits for the dependency's Ready also with a readyExpr: with the
+// AdditiveCELDependencyCheck feature gate off, its default, Flux evaluates
+// only the expression (kustomize-controller v1.10.1
+// internal/features/features.go:97-99,
+// internal/controller/kustomization_controller.go:614-626), but kure does not
+// evaluate CEL and an expression may itself require Ready, so this read never
+// admits a deadlock, and refuses a tree whose expression asks for less.
 // A Kustomization that is no member and cannot be read in typed form, even
 // from its writer's substituted result, has no successor: its writer's apply
 // fails, a stall the checks do not judge (builtView.spec).

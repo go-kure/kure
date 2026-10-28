@@ -355,7 +355,7 @@ refused there. Give bundles directories of their own (`NodeGrouping` or
 `BundleGrouping` `GroupByName`) when they need different settings.
 
 Every integrator entry point, in every placement, then judges the order of the Kustomizations the
-integration placed or kept again (go-kure/kure#1133), each `dependsOn` as written (a kept
+integration placed or kept again (go-kure/kure#1133), each `dependsOn` as built (a kept
 Kustomization's `dependsOn` that closes a cycle on a later integration is refused too), each
 `wait` and each health check. A health check on an object that is no Flux Kustomization, on a
 Kustomization without `wait` or `spec.kubeConfig`, waits for that object to exist: Flux fetches a
@@ -364,37 +364,61 @@ says. As Flux does, a check on a Kustomization of any group that carries the che
 namespace and name is dropped, a check on a Flux Kustomization included; there the checker's
 namespace is the one it has on the cluster, `default` for a checker written without one. Flux does not default a
 check's namespace, so a check on itself written with no namespace is not dropped: its poller
-rejects it, the checker never becomes Ready, and the integration refuses it, saying so. kure adds that wait only when the object's writer is certain: every copy of it, matched by
-group, kind, namespace and name as written (the version ignored; an empty `apiVersion` is
-`apps/v1`, as Flux reads it), sits in a directory exactly one Kustomization's build holds, the
-same one for all, that build transforms nothing and skips nothing, and no other build may write the
-object under an identity its file does not show. A new refusal through a health check on such
-an object comes only from such a wait. These leave the writer uncertain and add none, so a cycle
-through them passes:
+rejects it, the checker never becomes Ready, and the integration refuses it, saying so.
 
-- a check, or a matching object, written with no namespace, a cluster-scoped one included (it may
-  exist before any apply);
-- a `configMapGenerator` entry whose name, or that name and a dash, begins the checked name, as
-  kustomize appends a content hash;
-- an object whose `apiVersion`, kind, namespace or name holds `$` (`spec.postBuild` substitution)
-  or `ENC[` (SOPS), whatever it names, unless only the writer's own build holds it: another apply
-  may give it the checked identity. For a ConfigMap, so does a `configMapGenerator` entry anywhere
-  in the tree whose name holds either;
-- a matching object whose labels or annotations, or its writer's `spec.commonMetadata`, carry
-  `kustomize.toolkit.fluxcd.io/ssa: IfNotPresent` or `Ignore`, or
-  `kustomize.toolkit.fluxcd.io/reconcile: disabled` (any case), as the apply may then skip it;
+Every Kustomization and object is read as its writer's build makes it (go-kure/kure#1094). A
+writer is a Kustomization whose build is the tree's: the Flux bootstrap, each one the integration
+placed or kept, and each other one written into the tree on this cluster (no `spec.kubeConfig`),
+whose `spec.path` is a directory of the tree and whose Source is that of the Kustomization that
+writes it. kure builds each writer as kustomize-controller does: its `spec.patches`,
+`spec.components`, `spec.namePrefix`, `spec.nameSuffix` and `spec.targetNamespace` applied, its
+local config dropped, its generators run, then its `spec.postBuild` substitution, and a writer is
+built from its spec as its own writer's result holds it. Three cases are refused, each naming the
+Kustomization: a build that fails, as the controller's apply would; a Kustomization two writers
+write with a different `dependsOn`, `wait`, `healthChecks`, `healthCheckExprs`, `path`,
+`sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata` or transform, which both keep
+overwriting; and, with `spec.postBuild.substituteFrom`, a
+variable that a Flux Kustomization of the build, or any object's `apiVersion` or kind, references
+and `spec.postBuild.substitute` does not set, since its value is read from the cluster.
+
+kure adds the existence wait only when the object's writer is certain: exactly one writer other
+than the Flux bootstrap applies an object matching it by group, kind, namespace and name as built
+(the version ignored; an empty `apiVersion` is `apps/v1`, as Flux reads it), that apply does not
+skip it, and no other apply may write it under an identity the tree does not show. The writer may
+be a Kustomization an application emits, when its build is the tree's. A new refusal through a
+health check on such an object comes only from such a wait. These leave the writer uncertain and
+add none, so a cycle through them passes:
+
+- a check, or a matching object, with no namespace, a cluster-scoped one included (it may exist
+  before any apply);
+- a `configMapGenerator` entry of a directory read as the tree holds it (the bootstrap's, that of a
+  writer that transforms nothing, or that of a Kustomization whose build is not the tree's) whose
+  name, or that name and a dash, begins the checked name, as kustomize appends a content hash; a
+  transformed build's generated names are read as built;
+- a Secret whose name holds, under any prefix or suffix, the name of a `secretGenerator` entry with
+  `behavior: merge` in a component's or a hand-written kustomization file: the merged Secret's
+  hash depends on the kustomize version that builds it;
+- an object whose identity may change at apply, whatever it names, unless only the writer's own
+  result holds it: `$` left after substitution or `ENC[` (SOPS) in its `apiVersion`, kind,
+  namespace or name, or a namespace or name a `substituteFrom` variable sets. Another apply may
+  give it the checked identity. For a ConfigMap, so does such a `configMapGenerator` entry read as
+  held;
+- a matching object whose labels or annotations as built, with its writer's
+  `spec.commonMetadata` set over them, carry `kustomize.toolkit.fluxcd.io/ssa: IfNotPresent` or
+  `Ignore`, or `kustomize.toolkit.fluxcd.io/reconcile: disabled` (any case), as the apply may then
+  skip it;
 - a ServiceAccount `default` or a ConfigMap `kube-root-ca.crt`, which Kubernetes creates in every
   namespace; this list is closed;
-- a writer whose build transforms (`spec.patches`, `spec.components`, `spec.namePrefix`,
-  `spec.nameSuffix`, `spec.targetNamespace`), or any other Kustomization of the tree that may
-  write the object under another identity: one with `spec.components`, one with `spec.patches`
-  whose build holds any object or `configMapGenerator` entry (a patch may change a kind, or keep
-  an object marked `config.kubernetes.io/local-config`), or one with a name prefix or suffix or a
-  target namespace whose build holds an object of the checked group and kind (for a ConfigMap,
-  also a `configMapGenerator` entry). In practice, a tree whose other Kustomizations use patches
-  or components gets no object-existence edge;
-- a directory the Flux bootstrap applies, or that another Kustomization's build also holds, or a
-  Kustomization of the tree that cannot be read before substitution, whose `spec.path` is unknown.
+- a match the Flux bootstrap applies, or two writers apply;
+- a Kustomization on this cluster whose `spec.path` is a directory of the tree but whose build is
+  not the tree's (another Source): it may apply a match, read as its directory holds it, or write
+  the object under another identity: with `spec.components`; with `spec.patches`, when its
+  directory holds any object or `configMapGenerator` entry (a patch may change a kind, or keep an
+  object marked `config.kubernetes.io/local-config`); or with a name prefix or suffix or a target
+  namespace, when it holds an object of the checked group and kind (for a ConfigMap, also a
+  `configMapGenerator` entry);
+- a Kustomization of the tree that cannot be read in typed form, even from its writer's
+  substituted result.
 
 The check assumes that an object the tree writes literally is created only by the applies of the
 tree's own directories. An object that a controller also creates (a HelmRelease's chart, an
@@ -402,14 +426,23 @@ operator), or that a Kustomization outside the modelled tree also writes (anothe
 path that is no directory of the tree), is outside the model: such a tree has two owners of one
 object, and the check can then refuse a tree Flux would converge.
 
-A `spec.healthCheckExprs` entry adds that existence wait only, never readiness. Without
-`UmbrellasDoNotWait` a Kustomization an application emits waits for nothing here: its
-`dependsOn`, `readyExpr`, `wait` and health checks are its author's, and a cycle through them
-passes. Under the setting this check follows them as the umbrella rules do (see [With
-UmbrellasDoNotWait](#with-umbrellasdonotwait)), so a tree can be refused for a cycle through one,
-or for a Flux feature those rules do not model. A cycle made only of Kustomizations the
-integration did not place is their author's, and is admitted. go-kure/kure#1094 tracks reading
-these cases from a built model of each build.
+A `spec.healthCheckExprs` entry adds that existence wait only, never readiness. A Kustomization an
+application emits, or the caller writes, is followed as a placed one is, with or without
+`UmbrellasDoNotWait`, read from its writer's result: its `dependsOn`, `wait` and health checks are
+judged, so a tree can be refused for a cycle through one. One that cannot be read in typed form
+even there (a variable no `postBuild` sets) adds no wait: its writer's apply fails, a stall,
+which the checks do not judge. A cycle made only of Kustomizations the integration did not place
+is their author's, and is admitted.
+
+A `dependsOn` with a `readyExpr`, on any Kustomization, waits for the dependency's `Ready`. With
+kustomize-controller's `AdditiveCELDependencyCheck` feature gate off, its default
+(kustomize-controller v1.10.1 `internal/features/features.go:97-99`), Flux evaluates only the
+expression and skips its own readiness check (`internal/controller/kustomization_controller.go:614-626`).
+kure does not evaluate CEL and cannot see the gate, and an expression may itself require `Ready`,
+so it reads the readiness wait, which never admits a deadlock. Under the default gate a tree whose
+expression asks for less than `Ready`, and whose dependsOn closes a cycle, is therefore refused
+although it converges. Drop that `dependsOn`, or depend on the object some other way.
+go-kure/kure#1161 tracks a narrower read.
 
 #### Patches in a shared directory
 
@@ -1417,12 +1450,10 @@ writes, one on another Source, and one applying to another cluster build no dire
 tree: they add no wait, and are never refused for one. Their `dependsOn` and health checks are
 still judged: such a Kustomization that depends on, or health-checks, one that cannot be Ready
 before it is refused as any other. One that transforms its build (`spec.patches`,
-`spec.components`, `spec.namePrefix`, `spec.nameSuffix` or `spec.targetNamespace`) keeps the
-wait on all the directory holds: the transform is not modelled, and a renamed or moved
-Kustomization still depends on what it did before. One that patches its build (`spec.patches`,
-or `spec.components`, which may carry patches) also waits for the Flux Kustomizations the
-directory holds as local config: kustomize patches before it drops local config, so a patch may
-keep one. A health check on another cluster
+`spec.components`, `spec.namePrefix`, `spec.nameSuffix` or `spec.targetNamespace`) waits for
+what that build applies, read as kustomize-controller builds it: a renamed or moved Kustomization
+under its built name, one a patch deletes not at all, and one marked as local config only when
+a patch keeps it (kustomize patches before it drops local config). A health check on another cluster
 (`spec.kubeConfig`) names none of the tree's Kustomizations. Health-check expressions on Flux
 Kustomizations (`spec.healthCheckExprs`) are read conservatively, as readiness: an expression is
 arbitrary CEL and may itself wait for the `Ready` condition, so the check, and what a `wait`
@@ -1434,8 +1465,8 @@ These checks read what Flux's apply and wait do with a Kustomization's spec, as 
 - **Objects an apply skips.** A Flux Kustomization that a Kustomization's apply skips is left out
   of what its `wait` waits for. Skipped means `kustomize.toolkit.fluxcd.io/ssa: Ignore` or
   `kustomize.toolkit.fluxcd.io/reconcile: disabled`, as a label or annotation in any case, on the
-  object with the Kustomization's `spec.commonMetadata` applied over it. It is read only for a
-  build that transforms nothing, since a patch may set or clear the mark. `ssa: IfNotPresent` is
+  object with the Kustomization's `spec.commonMetadata` applied over it. It is read on the object
+  as that Kustomization's build makes it, so a patch that sets or clears the mark counts. `ssa: IfNotPresent` is
   not skipped: the apply creates the object and waits for it. A health check on a skipped object
   still waits for it. A mark in `spec.commonMetadata` is that Kustomization's alone, so another
   apply, the root's included, still creates the object. A mark on the object itself skips it in
@@ -1455,20 +1486,27 @@ These checks read what Flux's apply and wait do with a Kustomization's spec, as 
   that apply, even where another Kustomization of the tree writes it as well and would apply
   first. Let one Kustomization write the target.
 
-They do not model a generated Kustomization's patches rewriting a child Kustomization's spec,
-`spec.postBuild` substitution, or a build's own transforms (`spec.patches`, which may delete what
-the directory holds, `spec.components`, `spec.namePrefix`, `spec.nameSuffix`,
-`spec.targetNamespace`). Where the checks cannot tell what such a build writes or waits for, they
-keep the wait, so they may refuse a tree that would converge; and since the transformed spec is
-not read, a cycle that only the transform closes can pass. A tree refused for one of these
-integrates once the dependency or health check that closes the reported chain is dropped, or
-names another Kustomization.
+They read each build as kustomize-controller builds it (see [One Kustomization per
+directory](#one-kustomization-per-directory)): a generated Kustomization's patches rewriting a
+child Kustomization's spec, `spec.postBuild` substitution and a build's own transforms are applied
+before anything is read, and a Kustomization a patched build keeps as local config is read as that
+build makes it, its own `wait` included. What they still leave out:
 
-One cycle is known to pass these checks unrefused (go-kure/kure#1094): one through a local-config
-copy a patched build may keep. Such a copy is read as written in its directory: the keeping build's transforms (name prefix,
-`targetNamespace`, patches beyond the annotation) are not applied to it, so a cycle that depends
-on them can pass; its own `wait` is not followed; and a name it shares with a live Kustomization
-reads only the live one, or, with another such copy in a separate build, both as one entry.
+- **An object a build moves.** A health check on an object's name as its file writes it, where a
+  `spec.targetNamespace` or a name prefix or suffix applies it under another, names an object that
+  never exists: a stall, which the checks do not judge. Name the object as the build applies it.
+- **Strict substitution.** kustomize-controller substitutes strictly by default since v1.9
+  (`StrictPostBuildSubstitutions`, kustomize-controller v1.10.1 `internal/features/features.go`),
+  so a variable `spec.postBuild` does not set and that has no default fails the build. kure
+  substitutes non-strictly and reads it as empty. That Kustomization then never applies and the
+  tree stalls whatever kure reads, so the read may refuse such a tree but never admits a deadlock.
+- **`readyExpr`.** Read as a wait for `Ready` (see [One Kustomization per
+  directory](#one-kustomization-per-directory)).
+
+A tree refused for one of these integrates once the dependency or health check that closes the
+reported chain is dropped, or names another Kustomization. The "umbrellas do not wait" rewrite
+and `UmbrellaTerminals` still read the tree as it holds it, so a local-config Kustomization a
+patched build may keep, and that cannot be read in typed form, is still refused there.
 
 The rules apply to the Kustomizations the call generates. One kept from an earlier integration
 is not rewritten; it is refused when it breaks R1 (with `ErrUmbrellaWait`, for `wait` or any
