@@ -411,9 +411,16 @@ it builds; a member a build applies with `spec.kubeConfig`, or with another Sour
 spec in the tree names, since it then applies on another cluster or another Source's directory;
 and, with `spec.postBuild.substituteFrom`, a
 variable that a Flux Kustomization of the build, or any object's `apiVersion` or kind, references
-and `spec.postBuild.substitute` does not set, since its value is read from the cluster. An object
-is a Flux Kustomization by the `apiVersion` and kind the inline values make, each value with
-every newline removed, as Flux removes it before substituting. A Kustomization is read as it is
+and `spec.postBuild.substitute` does not set, since its value is read from the cluster; with it
+too, any variable in a key at an object's top level, which Flux may make its `apiVersion`, kind or
+metadata, and an inline value with a line break YAML reads but Flux keeps (a carriage return,
+U+0085, U+2028 or U+2029) that an object references, which may move a value the cluster sets
+anywhere in it. An object is a Flux Kustomization by the `apiVersion` and kind the inline values
+make, each value with every newline removed, as Flux removes it before substituting. A value read
+from the cluster is assumed to be plain text that keeps the structure Flux substitutes it into: one
+holding YAML syntax (a line break, a quote, a comment, `: ` in a key) can change any field at
+apply, which no offline reading sees, as main's reading of the object as written does not either.
+A Kustomization is read as it is
 applied: kustomize-controller drops its `status` and `metadata.creationTimestamp` first, so
 neither keeps it from being read.
 
@@ -446,7 +453,21 @@ add none, so a cycle through them passes:
 - a matching object whose labels or annotations as built, with its writer's
   `spec.commonMetadata` set over them, carry `kustomize.toolkit.fluxcd.io/ssa: IfNotPresent` or
   `Ignore`, or `kustomize.toolkit.fluxcd.io/reconcile: disabled` (any case), as the apply may then
-  skip it;
+  skip it. With `spec.postBuild.substituteFrom`, these labels and annotations are read as written,
+  before substitution, as main reads them: a skip holds only where it is written literally and the
+  substitution leaves it as written, never as a default or an inline value makes it
+  (`${SKIP:=Ignore}` does not skip, with `SKIP` set inline or not, nor does a key
+  `${KEY:=kustomize.toolkit.fluxcd.io/ssa}`). The cluster may set a variable, and an inline value
+  may carry YAML that moves a value the cluster sets into a skip, so whether the apply skips the
+  object is then not known. A key holding a `$` may become a skip key at apply and meet a written
+  one, so no skip is read from labels or annotations holding one, even beside a skip written
+  literally; a key of the object's metadata referencing a variable `spec.postBuild.substitute` does
+  not set may become its labels or annotations at apply, so no skip is read from either beside one.
+  No skip at all is read from an object referencing any variable `spec.postBuild.substitute` does
+  not set: an expression the cluster controls may change the text around a skip at apply (a
+  substring of an inline quote whose length the cluster sets swallows the skip line), while an
+  object every variable of which is set inline applies as substituted offline, inline values
+  overriding the cluster's. This errs towards refusing;
 - a ServiceAccount `default` or a ConfigMap `kube-root-ca.crt`, which Kubernetes creates in every
   namespace; this list is closed;
 - a match the Flux bootstrap applies, or two writers apply; with two writers that both wait for

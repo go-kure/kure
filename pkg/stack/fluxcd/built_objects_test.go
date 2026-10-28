@@ -1,6 +1,7 @@
 package fluxcd_test
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -99,6 +100,184 @@ func TestBuiltObjects_SubstitutedIdentityIsRead(t *testing.T) {
 					[]client.Object{unstructuredObj("v1", "ConfigMap", namespace, "ready")})
 				c.Node.Children[1].Bundle.PostBuild = tc.postBuild
 				err := integrateWalked(t, c, placement, nil)
+				if tc.refused && (err == nil || !strings.Contains(err.Error(), "can never all become Ready")) {
+					t.Fatalf("got %v, want the cycle through a's health check refused", err)
+				}
+				if !tc.refused && err != nil {
+					t.Fatalf("got %v, want the tree admitted", err)
+				}
+			})
+		}
+	}
+}
+
+// b-longer writes the ConfigMap red/ready and depends on a, which
+// health-checks it. The ConfigMap's kustomize.toolkit.fluxcd.io/ssa
+// annotation or kustomize.toolkit.fluxcd.io/reconcile label is written with a
+// defaulted variable, ${SKIP:=Ignore} or ${SKIP:=disabled}. Where SKIP is set
+// nowhere the default applies, the apply skips the ConfigMap and the writer
+// stays uncertain. Under a substituteFrom the cluster may set SKIP, to
+// Override or enabled, so whether the apply skips it is not known: the skip
+// is read as written, as main reads it, the edge is certain and the cycle is
+// refused. A value set inline is not read either, nor one whose default
+// nests a variable: only a literal skip holds, and only where the
+// substitution leaves it as written; an inline quote that swallows it, or an
+// inline anchor and alias that would move a value the cluster sets into it,
+// leave no skip.
+//
+// The same holds for the key: Flux substitutes the whole object, keys
+// included, so a key written ${KEY:=kustomize.toolkit.fluxcd.io/ssa}, or set
+// inline, quoted or not, is not read as the skip key, the edge stays and the
+// cycle is refused. A key holding a $, escaped, set inline or one the
+// cluster may set, may become a skip key at apply and meet a written one:
+// beside one no skip is read, even a literal skip.
+//
+// An object referencing any variable inline leaves unset reads no skip at
+// all, even a literal one beside a value the cluster may set elsewhere: an
+// expression the cluster controls may change the text around it at apply,
+// as a substring of an inline quote whose length the cluster sets, which
+// swallows the skip line. The same quote cut by a length set inline leaves
+// it, and so does an inline anchor that nothing aliases: an object every
+// variable of which is set inline applies as substituted offline.
+//
+// What may move an entry out of its map is not read either: an inline value
+// with a line break YAML reads but Flux keeps (CR, U+0085, U+2028, U+2029),
+// referenced by the ConfigMap, refuses it, and an unreferenced one does not;
+// a key at its top level the cluster may set refuses it, since it may become
+// its kind; a metadata key the cluster may set, which may become its
+// annotations, reads no skip beside it, a written one does. An inline key <<
+// merging a skip is a key holding a $, and reads none.
+func TestBuiltObjects_SubstitutedSkipIsRead(t *testing.T) {
+	const ssa, reconcile = "kustomize.toolkit.fluxcd.io/ssa", "kustomize.toolkit.fluxcd.io/reconcile"
+	fromCluster := []stack.SubstituteRef{{Kind: "ConfigMap", Name: "vars"}}
+	cases := map[string]struct {
+		label bool
+		key   string
+		value string
+		extra map[string]string
+		// other, if set, is the other map: the annotations where label is
+		// set, the labels otherwise.
+		other     map[string]string
+		postBuild *stack.PostBuild
+		refused   bool
+		// topKey and metaKey, if set, are a key at the ConfigMap's top level
+		// and one in its metadata; wantErr, if set, is the refusal expected
+		// in place of the cycle's.
+		topKey, metaKey, wantErr string
+	}{
+		"ssa certain beside a key the cluster may set, read from the cluster": {value: "Ignore", extra: map[string]string{"example.com/tag${SUFFIX}": "x"},
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa certain beside an inline key, read from the cluster": {value: "Ignore", extra: map[string]string{"example.com/tag${TAIL}": "x"},
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"TAIL": "x"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa certain beside an escaped key, read from the cluster": {value: "Ignore", extra: map[string]string{"example.com/tag$${TAIL}": "x"},
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa certain swallowed by an inline quote, read from the cluster": {value: "Ignore", extra: map[string]string{"a": "${QUOTE}", "z": "${QUOTE}"},
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"QUOTE": `"`}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa aliased to an inline anchor, read from the cluster": {label: true, key: ssa, value: "${ALIAS}",
+			other:     map[string]string{"example.com/value": "${ANCHOR}${SKIP:=Ignore}"},
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"ANCHOR": "&skip ", "ALIAS": "*skip"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa certain beside an inline anchor, read from the cluster": {label: true, key: ssa, value: "Ignore",
+			other:     map[string]string{"example.com/value": "${ANCHOR}x"},
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"ANCHOR": "&skip "}, SubstituteFrom: fromCluster}},
+		"ssa certain beside a value the cluster may set, read from the cluster": {label: true, key: ssa, value: "Ignore",
+			other:     map[string]string{"example.com/value": "${VALUE:=x}"},
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa certain swallowed by a quote the cluster exposes, read from the cluster": {value: "Ignore",
+			extra:     map[string]string{"a": "${QUOTE:0:${LEN:=0}}x", "z": "x${QUOTE:0:${LEN:=0}}"},
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"QUOTE": `"`}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa certain beside a quote cut inline, read from the cluster": {value: "Ignore",
+			extra:     map[string]string{"a": "${QUOTE:0:${LEN:=0}}x", "z": "x${QUOTE:0:${LEN:=0}}"},
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"QUOTE": `"`, "LEN": "0"}, SubstituteFrom: fromCluster}},
+		"ssa key the cluster may turn into a written one, read from the cluster": {value: "Ignore", extra: map[string]string{ssa + "${TAIL/${CUT:=y}/}": "Override"},
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"TAIL": "x"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa written beside an inline key with a cluster value, read from the cluster": {value: "Ignore", extra: map[string]string{"${KEY}": "${SKIP:=Override}"},
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"KEY": ssa}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa key nesting an unset default, read from the cluster": {key: "${KEY:=${FALLBACK}}", value: "Ignore",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"KEY": ssa}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa key meeting a written one, read from the cluster": {value: "Override", extra: map[string]string{ssa + "${SUFFIX:=}": "Ignore"},
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa defaulted":                              {value: "${SKIP:=Ignore}", postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}}},
+		"ssa defaulted, read from the cluster":       {value: "${SKIP:=Ignore}", postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa set inline, read from the cluster":      {value: "${SKIP:=Override}", postBuild: &stack.PostBuild{Substitute: map[string]string{"SKIP": "Ignore"}, SubstituteFrom: fromCluster}, refused: true},
+		"reconcile defaulted":                        {label: true, value: "${SKIP:=disabled}", postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}}},
+		"reconcile defaulted, read from the cluster": {label: true, value: "${SKIP:=disabled}", postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa key defaulted":                          {key: "${KEY:=" + ssa + "}", value: "Ignore", postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}}},
+		"ssa key defaulted, read from the cluster":   {key: "${KEY:=" + ssa + "}", value: "Ignore", postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}, refused: true},
+		"reconcile key defaulted, read from the cluster": {label: true, key: "${KEY:=" + reconcile + "}", value: "disabled",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa key set inline, value defaulted, read from the cluster": {key: "${KEY}", value: "${SKIP:=Ignore}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"KEY": ssa}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa key and value set inline, read from the cluster": {key: "${KEY}", value: "${SKIP}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"KEY": ssa, "SKIP": "Ignore"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa key set inline single-quoted, value defaulted, read from the cluster": {key: "${KEY}", value: "${SKIP:=Ignore}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"KEY": "'" + ssa + "'"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa key set inline double-quoted, value defaulted, read from the cluster": {key: "${KEY}", value: "${SKIP:=Ignore}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"KEY": `"` + ssa + `"`}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa key set inline quoted, value set inline, read from the cluster": {key: "${KEY}", value: "${SKIP}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"KEY": "'" + ssa + "'", "SKIP": "Ignore"}, SubstituteFrom: fromCluster}, refused: true},
+		"reconcile disabled beside an ssa the cluster may set, read from the cluster": {label: true, value: "disabled", extra: map[string]string{ssa: "${SKIP:=Override}"},
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa key set inline across a carriage return, read from the cluster": {key: "${KEY}", value: "${SKIP:=Ignore}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"KEY": "note: x\r  labels:\r    " + ssa}, SubstituteFrom: fromCluster}, wantErr: "holding a line break Flux keeps"},
+		"ssa key set inline across a U+0085, read from the cluster": {key: "${KEY}", value: "${SKIP:=Ignore}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"KEY": "note: x\u0085  labels:\u0085    " + ssa}, SubstituteFrom: fromCluster}, wantErr: "holding a line break Flux keeps"},
+		"ssa key set inline across a U+2028, read from the cluster": {key: "${KEY}", value: "${SKIP:=Ignore}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"KEY": "note: x\u2028  labels:\u2028    " + ssa}, SubstituteFrom: fromCluster}, wantErr: "holding a line break Flux keeps"},
+		"ssa key set inline across a U+2029, read from the cluster": {key: "${KEY}", value: "${SKIP:=Ignore}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"KEY": "note: x\u2029  labels:\u2029    " + ssa}, SubstituteFrom: fromCluster}, wantErr: "holding a line break Flux keeps"},
+		"ssa certain beside an unreferenced inline line break, read from the cluster": {value: "Ignore",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"UNUSED": "a\rb"}, SubstituteFrom: fromCluster}},
+		"type key the cluster may set": {value: "Ignore", topKey: "kind${SUFFIX:=Not}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}, wantErr: "has a key at its top level"},
+		"type key the cluster may not set": {value: "Ignore", topKey: "kindNot",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}},
+		"ssa certain beside a metadata key the cluster may set": {value: "Ignore", metaKey: "x${S:=y}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa certain beside a written metadata key": {value: "Ignore", metaKey: "xy",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"OTHER": "red"}, SubstituteFrom: fromCluster}},
+		"ssa merged under an inline key, read from the cluster": {key: "${KEY}", value: "${VALUE:=${UNSET}}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"KEY": "<<", "VALUE": "{" + ssa + ": Ignore}"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa nested default unused, read from the cluster": {value: "${SKIP:=${FALLBACK:=Override}}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"SKIP": "Ignore"}, SubstituteFrom: fromCluster}, refused: true},
+	}
+	for name, tc := range cases {
+		for _, placement := range append(slices.Clone(integratedPlacements), layout.FluxSeparate) {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				ready := unstructuredObj("v1", "ConfigMap", "red", "ready")
+				key := tc.key
+				switch {
+				case key != "":
+				case tc.label:
+					key = reconcile
+				default:
+					key = ssa
+				}
+				metadata := map[string]string{key: tc.value}
+				maps.Copy(metadata, tc.extra)
+				if tc.label {
+					ready.SetLabels(metadata)
+					ready.SetAnnotations(tc.other)
+				} else {
+					ready.SetAnnotations(metadata)
+					ready.SetLabels(tc.other)
+				}
+				if tc.topKey != "" {
+					ready.Object[tc.topKey] = "ignored"
+				}
+				if tc.metaKey != "" {
+					ready.Object["metadata"].(map[string]any)[tc.metaKey] = "x"
+				}
+				c := pairCluster(stack.HealthCheck{APIVersion: "v1", Kind: "ConfigMap", Namespace: "red", Name: "ready"},
+					[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "a-cm")},
+					[]client.Object{ready})
+				c.Node.Children[1].Bundle.PostBuild = tc.postBuild
+				err := integrateWalked(t, c, placement, nil)
+				if tc.wantErr != "" {
+					if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+						t.Fatalf("got %v, want the ConfigMap refused: %s", err, tc.wantErr)
+					}
+					return
+				}
 				if tc.refused && (err == nil || !strings.Contains(err.Error(), "can never all become Ready")) {
 					t.Fatalf("got %v, want the cycle through a's health check refused", err)
 				}

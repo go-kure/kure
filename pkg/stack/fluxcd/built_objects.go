@@ -46,7 +46,10 @@ type builtObject struct {
 	// unresolved marks an identity that may become another value at apply:
 	// one written with "$" or "ENC[" (unresolved), or one a substitution
 	// reads from the cluster (substituted.unknownIdentity).
-	unresolved          bool
+	unresolved bool
+	// labels and annotations are as applied, but for the skip keys under a
+	// substituteFrom (substituted.writtenLabels, writtenAnnotations), which
+	// they hold as written.
 	labels, annotations map[string]string
 }
 
@@ -156,10 +159,11 @@ func readBuiltObject(r substituted) (builtObject, error) {
 		return builtObject{}, err
 	}
 	obj := r.obj
+	labels, annotations := r.writtenLabels.over(obj.GetLabels()), r.writtenAnnotations.over(obj.GetAnnotations())
 	return builtObject{
 		group: apiGroup(apiVersion), kind: kind, namespace: obj.GetNamespace(), name: obj.GetName(),
 		unresolved: r.unknownIdentity || unresolved(apiVersion) || unresolved(kind) || unresolved(obj.GetNamespace()) || unresolved(obj.GetName()),
-		labels:     obj.GetLabels(), annotations: obj.GetAnnotations(),
+		labels:     labels, annotations: annotations,
 	}, nil
 }
 
@@ -214,7 +218,8 @@ func mergedSecrets(root *layout.ManifestLayout) []string {
 // internal/inventory/inventory.go:166-169). It is certain when exactly one
 // writer other than the Flux bootstrap applies a match, and that match's
 // labels and annotations, with the writer's spec.commonMetadata set over
-// them, do not let the apply skip it (skipsApply).
+// them, do not let the apply skip it (skipsApply; a skip a substitution reads
+// from the cluster is read as written, builtObject).
 //
 // The writer stays uncertain when:
 //   - the check names no namespace, or a match is applied with none: a

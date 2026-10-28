@@ -3,6 +3,7 @@ package fluxcd
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -223,11 +224,14 @@ func replaceFile(name string, content []byte) (func(), error) {
 }
 
 // substituted is one object of a build after k's postBuild substitution:
-// the object, and whether its namespace or name holds a variable whose value
-// only the cluster knows (unknownIdentity).
+// the object, whether its namespace or name holds a variable whose value
+// only the cluster knows (unknownIdentity), and, under a substituteFrom, the
+// labels and annotations that say whether the apply skips it, as written
+// (writtenLabels, writtenAnnotations; skipAsWritten).
 type substituted struct {
-	obj             client.Object
-	unknownIdentity bool
+	obj                               client.Object
+	unknownIdentity                   bool
+	writtenLabels, writtenAnnotations writtenSkip
 }
 
 // substituteBuild runs k's postBuild substitution over objs, the objects its
@@ -248,7 +252,22 @@ type substituted struct {
 //     variable: what that Kustomization waits for cannot be read
 //     (go-kure/kure#1094, Q2);
 //   - in another object's namespace or name it leaves that object's identity
-//     unknown (unknownIdentity).
+//     unknown (unknownIdentity);
+//   - in any key at an object's top level, or in an inline value with a line
+//     break YAML reads that the object references, it is refused: either may
+//     change what the object is at apply (refuseMovedStructure); in any key
+//     of its metadata, which may become its labels or annotations, no skip
+//     is read from them;
+//   - whether the apply skips another object, which kustomize-controller
+//     decides on the substituted object (kustomization_controller.go:876-891,
+//     :913-927), is read from its kustomize.toolkit.fluxcd.io/ssa and
+//     kustomize.toolkit.fluxcd.io/reconcile labels and annotations as
+//     written, as main reads them, never as substituted: a skip holds only
+//     where the substitution leaves it as written, none beside a key
+//     holding a $ (skipAsWritten), and none on an object referencing any
+//     variable inline leaves unset, whose text may change around a skip at
+//     apply, whatever the cluster's value (a substring of an inline quote
+//     with a cluster-set length, say).
 //
 // Without a postBuild objs is returned as it is.
 func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substituted, error) {
@@ -271,6 +290,10 @@ func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substitut
 	}
 	fromCluster := len(k.Spec.PostBuild.SubstituteFrom) > 0
 	always := k.GetSubstituteStrategy() == kustv1.SubstituteStrategyAlways
+	substitute := func(res *resource.Resource) (*resource.Resource, error) {
+		return fluxkustomize.SubstituteVariables(context.Background(), nil, unstructured.Unstructured{Object: kust}, res,
+			fluxkustomize.SubstituteWithDryRun(true), fluxkustomize.SubstituteWithAlways(always))
+	}
 	kustomizeschema.Parse()
 	rf := provider.NewDefaultDepProvider().GetResourceFactory()
 	for _, obj := range objs {
@@ -287,58 +310,223 @@ func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substitut
 			continue
 		}
 		unknownIdentity := false
+		var writtenLabels, writtenAnnotations writtenSkip
+		var written *resource.Resource
 		if fromCluster {
-			unknownIdentity, err = refuseUnknownVars(k, res, inline)
+			if err := refuseUnknownType(k, res, inline); err != nil {
+				return nil, err
+			}
+			// The substitution rewrites res in place
+			// (kustomize_varsub.go:165).
+			written = res.DeepCopy()
+			metadataKeyVar, err := refuseMovedStructure(k, written, inline)
 			if err != nil {
 				return nil, err
 			}
+			// An object referencing no variable inline leaves unset applies
+			// as substituted here, since inline values override the
+			// cluster's (kustomize_varsub.go:145-156), but for an escape $$
+			// the apply may turn into $ where this run substitutes nothing,
+			// which moves no entry; any other object may change at apply
+			// around a skip, so none is read from it.
+			text, err := written.AsYAML()
+			if err != nil {
+				return nil, errors.Wrap(err, "read the object")
+			}
+			objectVars, err := unknownVars(string(text), inline)
+			if err != nil {
+				return nil, err
+			}
+			if metadataKeyVar || len(objectVars) > 0 {
+				writtenLabels, writtenAnnotations = writtenSkip{read: true}, writtenSkip{read: true}
+			} else {
+				writtenLabels, writtenAnnotations = skipAsWritten(written.GetLabels()), skipAsWritten(written.GetAnnotations())
+			}
 		}
-		res, err = fluxkustomize.SubstituteVariables(context.Background(), nil, unstructured.Unstructured{Object: kust}, res,
-			fluxkustomize.SubstituteWithDryRun(true), fluxkustomize.SubstituteWithAlways(always))
+		res, err = substitute(res)
 		if err != nil {
 			return nil, errors.Wrapf(err, "post build failed for %s %q", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+		}
+		if fromCluster {
+			if unknownIdentity, err = refuseUnknownVars(k, written, res, inline); err != nil {
+				return nil, err
+			}
 		}
 		m, err := res.Map()
 		if err != nil {
 			return nil, errors.Wrap(err, "read a substituted object")
 		}
-		out = append(out, substituted{obj: &unstructured.Unstructured{Object: m}, unknownIdentity: unknownIdentity})
+		out = append(out, substituted{obj: &unstructured.Unstructured{Object: m}, unknownIdentity: unknownIdentity,
+			writtenLabels: writtenLabels, writtenAnnotations: writtenAnnotations})
 	}
 	return out, nil
 }
 
-// refuseUnknownVars applies substituteBuild's rule for the variables res
-// references and inline does not set, under k's substituteFrom: an error for
-// one in an apiVersion or kind, or in a Flux Kustomization, as the inline
-// values make its apiVersion and kind, and whether one is in the namespace or
-// the name.
-func refuseUnknownVars(k *kustv1.Kustomization, res *resource.Resource, inline map[string]string) (bool, error) {
-	refuse := func(where string, vars []string) error {
-		return errors.Errorf("Flux Kustomization %q (spec.path %q) substitutes with spec.postBuild.substituteFrom, and %s %q of its build references %s in %s, which spec.postBuild.substitute does not set: its value is read from the cluster, so what the object waits for cannot be read from the tree; set %s in spec.postBuild.substitute",
-			k.Name, k.Spec.Path, res.GetKind(), res.GetName(), quoteAll(vars), where, strings.Join(vars, ", "))
+// skipKeys are the label and annotation keys whose value says whether the
+// apply skips an object (skipsApply).
+var skipKeys = []string{"kustomize.toolkit.fluxcd.io/ssa", "kustomize.toolkit.fluxcd.io/reconcile"}
+
+// writtenSkip is, under a substituteFrom, what an object's labels or
+// annotations say, as written, before substitution, about whether the apply
+// skips it, as main reads them: read marks it so, and values holds each skip
+// key with its value as written, none beside a key holding a $
+// (skipAsWritten).
+type writtenSkip struct {
+	read   bool
+	values map[string]string
+}
+
+// over returns metadata, the substituted labels or annotations, where w is
+// read with each skip key kept only where the substitution leaves it as
+// written: a skip is read as written, and the substitution may only take one
+// away, never add or change one.
+func (w writtenSkip) over(metadata map[string]string) map[string]string {
+	if !w.read {
+		return metadata
 	}
-	var typ []string
-	for _, f := range []struct{ where, value string }{{"its apiVersion", res.GetApiVersion()}, {"its kind", res.GetKind()}} {
+	out := maps.Clone(metadata)
+	for _, key := range skipKeys {
+		if value, ok := w.values[key]; !ok || out[key] != value {
+			delete(out, key)
+		}
+	}
+	return out
+}
+
+// skipAsWritten returns, under a substituteFrom, how metadata, an object's
+// labels or annotations as written, says whether the apply skips it, as main
+// reads it: each skip key with its value as written, never as substituted,
+// since a variable may take any value the cluster sets and an inline value
+// may carry YAML that moves one the cluster sets into a skip
+// (go-kure/kure#1094). A value an inline variable sets is not read either;
+// that errs towards a certain writer, and so towards refusing. A key holding
+// a $ may become a skip key at apply and meet a written one, so no skip is
+// read beside one.
+func skipAsWritten(metadata map[string]string) writtenSkip {
+	w := writtenSkip{read: true}
+	for key := range metadata {
+		if strings.Contains(key, "$") {
+			return w
+		}
+	}
+	for _, key := range skipKeys {
+		if value, ok := metadata[key]; ok {
+			if w.values == nil {
+				w.values = map[string]string{}
+			}
+			w.values[key] = value
+		}
+	}
+	return w
+}
+
+// refuseUnknownType applies substituteBuild's rule for a variable written's
+// apiVersion or kind references and inline does not set, under k's
+// substituteFrom: an error naming it, since the object may then be a Flux
+// Kustomization.
+func refuseUnknownType(k *kustv1.Kustomization, written *resource.Resource, inline map[string]string) error {
+	for _, f := range []struct{ where, value string }{{"its apiVersion", written.GetApiVersion()}, {"its kind", written.GetKind()}} {
 		vars, err := unknownVars(f.value, inline)
+		if err != nil {
+			return err
+		}
+		if len(vars) > 0 {
+			return refuseUnknown(k, written, f.where, vars)
+		}
+	}
+	return nil
+}
+
+// yamlBreaks are the line breaks YAML reads (go.yaml.in/yaml/v2 v2.4.4
+// yamlprivateh.go:102-107) but Flux keeps in a value, removing only "\n"
+// (kustomize_varsub.go:155, :199, :210).
+const yamlBreaks = "\r\u0085\u2028\u2029"
+
+// refuseMovedStructure applies substituteBuild's rules for what may move an
+// object's structure at apply, under k's substituteFrom, to written, an
+// object as written: an error where it references a variable inline sets to
+// a value holding a line break YAML reads, which may put any text, a value
+// the cluster sets included, at any place in the object; an error where a key
+// at its top level references a variable, which may become its apiVersion,
+// kind or metadata at apply; and whether a key of its metadata references a
+// variable, which may become its labels or annotations at apply, so that no
+// skip is read from them. Its name and namespace are still read as
+// substituted, which errs towards a certain writer, and so towards refusing.
+func refuseMovedStructure(k *kustv1.Kustomization, written *resource.Resource, inline map[string]string) (bool, error) {
+	text, err := written.AsYAML()
+	if err != nil {
+		return false, errors.Wrap(err, "read the object")
+	}
+	vars, err := referencedVars(string(text), inline)
+	if err != nil {
+		return false, err
+	}
+	var broken []string
+	for _, name := range vars {
+		if v, ok := inline[name]; ok && strings.ContainsAny(v, yamlBreaks) {
+			broken = append(broken, name)
+		}
+	}
+	if len(broken) > 0 {
+		return false, errors.Errorf("Flux Kustomization %q (spec.path %q) substitutes with spec.postBuild.substituteFrom, and %s %q of its build references %s, which spec.postBuild.substitute sets to a value holding a line break Flux keeps (a carriage return, U+0085, U+2028 or U+2029): YAML reads it as a new line, which may move a value the cluster sets anywhere in the object, so what the object is cannot be read from the tree; remove the line break",
+			k.Name, k.Spec.Path, written.GetKind(), written.GetName(), quoteAll(broken))
+	}
+	m, err := written.Map()
+	if err != nil {
+		return false, errors.Wrap(err, "read the object")
+	}
+	for _, key := range slices.Sorted(maps.Keys(m)) {
+		vars, err := referencedVars(key, inline)
 		if err != nil {
 			return false, err
 		}
 		if len(vars) > 0 {
-			return false, refuse(f.where, vars)
+			return false, errors.Errorf("Flux Kustomization %q (spec.path %q) substitutes with spec.postBuild.substituteFrom, and %s %q of its build has a key at its top level, %q, that references %s: Flux substitutes keys too, so it may become the object's apiVersion, kind or metadata, and what the object is cannot be read from the tree; write the key without a variable",
+				k.Name, k.Spec.Path, written.GetKind(), written.GetName(), key, quoteAll(vars))
 		}
-		// Every variable it references is set inline: the object is applied
-		// as the type these values make.
-		value, err := envsubst.Eval(f.value, func(name string) (string, bool) {
-			v, ok := inline[name]
-			return v, ok
-		})
-		if err != nil {
-			return false, errors.Wrap(err, "parse the variables")
-		}
-		typ = append(typ, value)
 	}
-	if isFluxKustomizationType(typ[0], typ[1]) {
-		text, err := res.AsYAML()
+	metadata, _ := m["metadata"].(map[string]any)
+	for key := range metadata {
+		vars, err := referencedVars(key, inline)
+		if err != nil {
+			return false, err
+		}
+		if len(vars) > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// referencedVars lists, in order and once each, the variables text
+// references, those in a default included, used or not: envsubst evaluates
+// each default before it reads the variable (fluxcd/pkg/envsubst v1.9.0
+// template.go:113-132). An escaped one ($${var}) is none
+// (parse/scan.go:214-221).
+func referencedVars(text string, inline map[string]string) ([]string, error) {
+	var vars []string
+	_, err := envsubst.Eval(text, func(name string) (string, bool) {
+		if !slices.Contains(vars, name) {
+			vars = append(vars, name)
+		}
+		return inline[name], true
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "parse the variables")
+	}
+	return vars, nil
+}
+
+// refuseUnknownVars applies substituteBuild's rule for the variables
+// written, an object as written, references and inline does not set, under
+// k's substituteFrom, once refuseUnknownType has passed it: an error for one
+// in a Flux Kustomization, by the type applied, the object substituted and
+// parsed as Flux parses it (kustomize_varsub.go:236-247), so a type an inline
+// value makes is read as Flux reads it, quoted or not; and whether one is in
+// the namespace or the name.
+func refuseUnknownVars(k *kustv1.Kustomization, written, applied *resource.Resource, inline map[string]string) (bool, error) {
+	if isFluxKustomizationType(applied.GetApiVersion(), applied.GetKind()) {
+		text, err := written.AsYAML()
 		if err != nil {
 			return false, errors.Wrap(err, "read the object")
 		}
@@ -347,11 +535,11 @@ func refuseUnknownVars(k *kustv1.Kustomization, res *resource.Resource, inline m
 			return false, err
 		}
 		if len(vars) > 0 {
-			return false, refuse("the Kustomization", vars)
+			return false, refuseUnknown(k, written, "the Kustomization", vars)
 		}
 		return false, nil
 	}
-	for _, s := range []string{res.GetNamespace(), res.GetName()} {
+	for _, s := range []string{written.GetNamespace(), written.GetName()} {
 		vars, err := unknownVars(s, inline)
 		if err != nil {
 			return false, err
@@ -361,6 +549,13 @@ func refuseUnknownVars(k *kustv1.Kustomization, res *resource.Resource, inline m
 		}
 	}
 	return false, nil
+}
+
+// refuseUnknown is the error for vars, variables where in written, an object
+// of k's build, references, which k's spec.postBuild.substitute does not set.
+func refuseUnknown(k *kustv1.Kustomization, written *resource.Resource, where string, vars []string) error {
+	return errors.Errorf("Flux Kustomization %q (spec.path %q) substitutes with spec.postBuild.substituteFrom, and %s %q of its build references %s in %s, which spec.postBuild.substitute does not set: its value is read from the cluster, so what the object waits for cannot be read from the tree; set %s in spec.postBuild.substitute",
+		k.Name, k.Spec.Path, written.GetKind(), written.GetName(), quoteAll(vars), where, strings.Join(vars, ", "))
 }
 
 // unknownVars lists, in order and once each, the variables text references
