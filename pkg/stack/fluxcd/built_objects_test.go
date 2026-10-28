@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"github.com/fluxcd/pkg/apis/kustomize"
 	fluxkustomize "github.com/fluxcd/pkg/kustomize"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -114,46 +115,100 @@ func TestBuiltObjects_NonMemberIsTheCertainWriter(t *testing.T) {
 				name = "h depends on b-longer/"
 			}
 			t.Run(name+string(placement), func(t *testing.T) {
-				c := pairCluster(stack.HealthCheck{},
-					[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "a-cm")},
-					[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "b-cm")})
-				c.Node.Children[0].Bundle.HealthChecks = nil
-				// No dependsOn on a, which the setting would write as one on h:
-				// only the existence edge onto h's apply can close the cycle.
-				c.Node.Children[1].Bundle.DependsOn = nil
-				// A leaf waits under the setting, and Flux ignores health checks
-				// under wait.
-				c.Node.Children[1].Bundle.Wait = boolPtr(false)
-				c.Node.Children[1].Bundle.HealthChecks = []stack.HealthCheck{{APIVersion: "v1", Kind: "ConfigMap", Namespace: "default", Name: "h-cm"}}
-				rules := withPlacement(nodeOnly, placement)
-				ml, err := layout.WalkCluster(c, rules)
-				if err != nil {
-					t.Fatalf("WalkCluster: %v", err)
-				}
-				a := findLayout(ml, "a-cm")
-				if a == nil {
-					t.Fatal("no layout holds a-cm")
-				}
-				var h *kustv1.Kustomization
-				if dependsOnB {
-					h = handWritten("h", "b-longer")
-				} else {
-					h = handWritten("h")
-				}
-				h.Spec.Path = "./" + a.FullRepoPath()
-				h.Spec.Components = []string{"component"}
-				a.Resources = append(a.Resources, h)
-				// a's kustomization.yaml lists neither file: only h's build,
-				// through its component, holds h-cm.
-				a.ExtraFiles = append(a.ExtraFiles,
-					layout.ExtraFile{Name: "component/kustomization.yaml", Content: []byte("apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\nresources:\n- h-cm.yaml\n")},
-					layout.ExtraFile{Name: "component/h-cm.yaml", Content: []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: h-cm\n  namespace: default\n")})
-				err = fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules)
+				ml, err := integrateNonMemberWriter(t, placement, dependsOnB, nil)
 				if dependsOnB && (err == nil || !strings.Contains(err.Error(), "can never all become Ready") || !strings.Contains(err.Error(), "apply flux-system/h")) {
 					t.Fatalf("got %v, want the cycle through b-longer's health check on what h writes refused; tree %s", err, describeKustomizations(ml))
 				}
 				if !dependsOnB && err != nil {
 					t.Fatalf("got %v, want the tree admitted", err)
+				}
+			})
+		}
+	}
+}
+
+// integrateNonMemberWriter integrates, under UmbrellasDoNotWait, the tree of
+// TestBuiltObjects_NonMemberIsTheCertainWriter: a emits h, whose build of a's
+// directory adds h-cm through a component, and b-longer, without wait,
+// health-checks h-cm; with dependsOnB h depends on b-longer. a also emits
+// each of others.
+func integrateNonMemberWriter(t *testing.T, placement layout.FluxPlacement, dependsOnB bool, others func(dir string) []*kustv1.Kustomization) (*layout.ManifestLayout, error) {
+	t.Helper()
+	c := pairCluster(stack.HealthCheck{},
+		[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "a-cm")},
+		[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "b-cm")})
+	c.Node.Children[0].Bundle.HealthChecks = nil
+	// No dependsOn on a, which the setting would write as one on h:
+	// only the existence edge onto h's apply can close the cycle.
+	c.Node.Children[1].Bundle.DependsOn = nil
+	// A leaf waits under the setting, and Flux ignores health checks
+	// under wait.
+	c.Node.Children[1].Bundle.Wait = boolPtr(false)
+	c.Node.Children[1].Bundle.HealthChecks = []stack.HealthCheck{{APIVersion: "v1", Kind: "ConfigMap", Namespace: "default", Name: "h-cm"}}
+	rules := withPlacement(nodeOnly, placement)
+	ml, err := layout.WalkCluster(c, rules)
+	if err != nil {
+		t.Fatalf("WalkCluster: %v", err)
+	}
+	a := findLayout(ml, "a-cm")
+	if a == nil {
+		t.Fatal("no layout holds a-cm")
+	}
+	var h *kustv1.Kustomization
+	if dependsOnB {
+		h = handWritten("h", "b-longer")
+	} else {
+		h = handWritten("h")
+	}
+	h.Spec.Path = "./" + a.FullRepoPath()
+	h.Spec.Components = []string{"component"}
+	a.Resources = append(a.Resources, h)
+	if others != nil {
+		for _, o := range others("./" + a.FullRepoPath()) {
+			a.Resources = append(a.Resources, o)
+		}
+	}
+	// a's kustomization.yaml lists neither file: only h's build,
+	// through its component, holds h-cm.
+	a.ExtraFiles = append(a.ExtraFiles,
+		layout.ExtraFile{Name: "component/kustomization.yaml", Content: []byte("apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\nresources:\n- h-cm.yaml\n")},
+		layout.ExtraFile{Name: "component/h-cm.yaml", Content: []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: h-cm\n  namespace: default\n")})
+	return ml, fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules)
+}
+
+// A Kustomization on another Source that builds a's directory is no writer:
+// its build is not the tree's, so it is read as the directory holds it, which
+// shows no h-cm. A transform may still make one (spec.components; spec.patches
+// over a directory that holds objects; a name prefix over one that holds a
+// ConfigMap), so h stops being the certain writer, the existence edge goes
+// and the tree is admitted. Without a transform h stays certain and the cycle
+// is refused.
+func TestBuiltObjects_AnotherSourcesTransformLeavesTheWriterUncertain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		edit    func(k *kustv1.Kustomization)
+		refused bool
+	}{
+		"components": {edit: func(k *kustv1.Kustomization) { k.Spec.Components = []string{"component"} }},
+		"patches": {edit: func(k *kustv1.Kustomization) {
+			k.Spec.Patches = []kustomize.Patch{{Patch: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a-cm\n", Target: &kustomize.Selector{Kind: "ConfigMap"}}}
+		}},
+		"name prefix":  {edit: func(k *kustv1.Kustomization) { k.Spec.NamePrefix = "h-" }},
+		"no transform": {edit: func(*kustv1.Kustomization) {}, refused: true},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				ml, err := integrateNonMemberWriter(t, placement, true, func(dir string) []*kustv1.Kustomization {
+					o := handWritten("other")
+					o.Spec.Path = dir
+					o.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{Kind: "GitRepository", Name: "other-repo"}
+					tc.edit(o)
+					return []*kustv1.Kustomization{o}
+				})
+				if tc.refused && (err == nil || !strings.Contains(err.Error(), "apply flux-system/h")) {
+					t.Fatalf("got %v, want the cycle through h refused; tree %s", err, describeKustomizations(ml))
+				}
+				if !tc.refused && err != nil {
+					t.Fatalf("got %v, want the tree admitted: other may write h-cm", err)
 				}
 			})
 		}
