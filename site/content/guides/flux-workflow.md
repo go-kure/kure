@@ -932,7 +932,10 @@ creates, and a placed one a build applies on another cluster or from another
 Source, are refused. One
 without `wait` that health-checks any other object waits for the Kustomization
 that applies it, whatever its expression says, when that writer is certain,
-and a cycle through them is refused. An object a controller, or a
+and a cycle through them is refused. A copy another apply excludes
+(`kustomize.toolkit.fluxcd.io/ssa: Ignore` or `reconcile: disabled`) counts for
+no writer, unless it, or that apply's `spec.commonMetadata`, is templated or
+encrypted. An object a controller, or a
 Kustomization outside the tree, also writes is outside what the check models,
 and a tree Flux would converge can then be refused. A Kustomization an
 application emits is followed as a placed one is, and a `dependsOn` with a

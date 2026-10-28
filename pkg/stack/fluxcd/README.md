@@ -456,11 +456,16 @@ than the Flux bootstrap applies an object matching it by group, kind, namespace 
 (the version ignored; an empty `apiVersion` is `apps/v1`, as Flux reads it), that apply does not
 skip it, and no other apply may write it under an identity the tree does not show. The writer may
 be a Kustomization an application emits, when its build is the tree's. A new refusal through a
-health check on such an object comes only from such a wait. These leave the writer uncertain and
-add none, so a cycle through them passes:
+health check on such an object comes only from such a wait. A matching copy its apply excludes,
+`kustomize.toolkit.fluxcd.io/ssa: Ignore` or `kustomize.toolkit.fluxcd.io/reconcile: disabled`
+(any case) on it or in that apply's `spec.commonMetadata`, is never created, so it counts neither
+as a match nor as another writer, as for a Flux Kustomization's copy above. That holds only when
+neither the copy as written nor that `spec.commonMetadata` holds `$` or `ENC[` anywhere: a
+substitution or a decryption may change the copy's marks, so a templated or encrypted copy is
+counted as before. These leave the writer uncertain and add none, so a cycle through them passes:
 
-- a check, or a matching object, with no namespace, a cluster-scoped one included (it may exist
-  before any apply);
+- a check with no namespace, or a matching object written with none that its apply does not
+  exclude, a cluster-scoped one included (it may exist before any apply);
 - a `configMapGenerator` entry of a directory read as the tree holds it (the bootstrap's, that of a
   writer that transforms nothing, or that of a Kustomization whose build is not the tree's) whose
   name, or that name and a dash, begins the checked name, as kustomize appends a content hash; a
@@ -471,10 +476,10 @@ add none, so a cycle through them passes:
   give it the checked identity. For a ConfigMap, so does such a `configMapGenerator` entry read as
   held;
 - a matching object whose labels or annotations as built, with its writer's
-  `spec.commonMetadata` set over them, carry `kustomize.toolkit.fluxcd.io/ssa: IfNotPresent` or
-  `Ignore`, or `kustomize.toolkit.fluxcd.io/reconcile: disabled` (any case), as the apply may then
-  skip it. With `spec.postBuild.substituteFrom`, these labels and annotations are read as written,
-  before substitution, as main reads them: a skip holds only where it is written literally and the
+  `spec.commonMetadata` set over them, carry `kustomize.toolkit.fluxcd.io/ssa: IfNotPresent` (any
+  case), as the apply skips it only when it already exists, or an exclusion on a copy counted as
+  above (written with `$` or `ENC[`). With `spec.postBuild.substituteFrom`, these labels and
+  annotations are read as written, before substitution, as main reads them: a skip holds only where it is written literally and the
   substitution leaves it as written, never as a default or an inline value makes it
   (`${SKIP:=Ignore}` does not skip, with `SKIP` set inline or not, nor does a key
   `${KEY:=kustomize.toolkit.fluxcd.io/ssa}`). The cluster may set a variable, and an inline value
@@ -490,12 +495,13 @@ add none, so a cycle through them passes:
   overriding the cluster's. This errs towards refusing;
 - a ServiceAccount `default` or a ConfigMap `kube-root-ca.crt`, which Kubernetes creates in every
   namespace; this list is closed;
-- a match the Flux bootstrap applies, or two writers apply; with two writers that both wait for
-  the checking Kustomization the tree cannot become Ready, and is still admitted, which errs
-  towards admitting (go-kure/kure#1172);
+- a match the Flux bootstrap applies, or two writers apply, that the apply does not exclude; with
+  two writers that both wait for the checking Kustomization the tree cannot become Ready, and is
+  still admitted, which errs towards admitting (go-kure/kure#1172);
 - a Kustomization on this cluster whose `spec.path` is a directory of the tree but whose build is
   not the tree's (another Source), read from its first copy an apply does not skip (one every
-  apply skips applies nothing): it may apply a match, read as its directory holds it, or write
+  apply skips applies nothing): it may apply a match it does not exclude, read as its directory
+  holds it, or write
   the object under another identity: with `spec.components`; with `spec.patches`, when its
   directory holds any object or `configMapGenerator` entry (a patch may change a kind, or keep an
   object marked `config.kubernetes.io/local-config`); or with a name prefix or suffix or a target

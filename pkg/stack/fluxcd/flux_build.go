@@ -316,12 +316,15 @@ func replaceFile(name string, content []byte) (func(), error) {
 
 // substituted is one object of a build after k's postBuild substitution:
 // the object, whether its namespace or name holds a variable whose value
-// only the cluster knows (unknownIdentity), and, under a substituteFrom, the
-// labels and annotations that say whether the apply skips it, as written
-// (writtenLabels, writtenAnnotations; skipAsWritten).
+// only the cluster knows (unknownIdentity), whether the object as written,
+// before the substitution, holds "$" or "ENC[" (varies, writtenVaries), and,
+// under a substituteFrom, the labels and annotations that say whether the
+// apply skips it, as written (writtenLabels, writtenAnnotations;
+// skipAsWritten).
 type substituted struct {
 	obj                               client.Object
 	unknownIdentity                   bool
+	varies                            bool
 	writtenLabels, writtenAnnotations writtenSkip
 }
 
@@ -405,6 +408,10 @@ func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substitut
 			out = append(out, substituted{obj: obj})
 			continue
 		}
+		varies, err := writtenVaries(content)
+		if err != nil {
+			return nil, err
+		}
 		unknownIdentity := false
 		var writtenLabels, writtenAnnotations writtenSkip
 		var written *resource.Resource
@@ -452,7 +459,7 @@ func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substitut
 		if err != nil {
 			return nil, errors.Wrap(err, "read a substituted object")
 		}
-		out = append(out, substituted{obj: &unstructured.Unstructured{Object: m}, unknownIdentity: unknownIdentity,
+		out = append(out, substituted{obj: &unstructured.Unstructured{Object: m}, unknownIdentity: unknownIdentity, varies: varies,
 			writtenLabels: writtenLabels, writtenAnnotations: writtenAnnotations})
 	}
 	return out, nil
@@ -774,6 +781,21 @@ func writtenContent(obj client.Object) (map[string]any, error) {
 		return nil, errors.Wrapf(err, "decode %s %q", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
 	}
 	return content, nil
+}
+
+// writtenVaries reports whether content, an object as written, holds "$" or
+// "ENC[" anywhere, a key included (unresolved): its apply may then change any
+// of it, its marks too. Flux substitutes the object's text before it parses
+// it, keys included, and strips only "\n" from a value, so a value with a
+// bare "\r" may add a key (fluxcd/pkg/kustomize v1.44.0
+// kustomize_varsub.go:155, :199, :210, :236-247); kustomize-controller
+// decrypts a whole SOPS document (internal/decryptor/decryptor.go:678-701).
+func writtenVaries(content map[string]any) (bool, error) {
+	data, err := json.Marshal(content)
+	if err != nil {
+		return false, errors.Wrap(err, "marshal an object as written")
+	}
+	return unresolved(string(data)), nil
 }
 
 // quoteAll quotes each of names and joins them.
