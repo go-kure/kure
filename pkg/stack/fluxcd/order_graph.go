@@ -13,19 +13,17 @@ import (
 // orderGraph is the graph checkReconcileOrder judges ("ready K" and "apply K"
 // for each Kustomization K) over the Flux Kustomizations of a tree, each read
 // as its writer's build makes it (builtView): the graph orderPath walks and
-// checkTreeOrder judges. With others it follows every Kustomization of the
-// tree, members and others alike, as UmbrellasDoNotWait reads them; without,
-// a Kustomization that is no member waits for nothing here: what it waits for
-// is its author's. Each node's successors are computed once.
+// checkTreeOrder judges. It follows every Kustomization of the tree, members
+// and the others alike, each read from its writer's result, with or without
+// UmbrellasDoNotWait. Each node's successors are computed once.
 type orderGraph struct {
 	v       *builtView
-	others  bool
 	writers map[string]string
 	succ    map[string][]string
 }
 
-func (v *builtView) newOrderGraph(others bool) *orderGraph {
-	return &orderGraph{v: v, others: others, writers: map[string]string{}, succ: map[string][]string{}}
+func (v *builtView) newOrderGraph() *orderGraph {
+	return &orderGraph{v: v, writers: map[string]string{}, succ: map[string][]string{}}
 }
 
 // next returns what node n waits for. "apply K" needs every Kustomization K
@@ -37,9 +35,12 @@ func (v *builtView) newOrderGraph(others bool) *orderGraph {
 // writer is certain (objectWriter): Flux fetches a checked object before it evaluates any
 // healthCheckExprs entry, so an expression, whatever it says, still waits for
 // the object to exist. Under wait Flux ignores health checks, and on another
-// cluster (spec.kubeConfig) none names an object of the tree. Without others,
-// a Kustomization that is no member has no successor; with, one that cannot
-// be read in typed form has none either (builtView.spec).
+// cluster (spec.kubeConfig) none names an object of the tree. A dependsOn
+// waits for the dependency's Ready also with a readyExpr: Flux adds its own
+// readiness check unless a controller feature gate kure cannot see is off.
+// A Kustomization that is no member and cannot be read in typed form, even
+// from its writer's substituted result, has no successor: its writer's apply
+// fails, a stall the checks do not judge (builtView.spec).
 func (g *orderGraph) next(n string) ([]string, error) {
 	if out, ok := g.succ[n]; ok {
 		return out, nil
@@ -47,13 +48,13 @@ func (g *orderGraph) next(n string) ([]string, error) {
 	v := g.v
 	kind, key, _ := strings.Cut(n, " ")
 	var out []string
-	if !g.others && !v.isMember(key) {
-		g.succ[n] = out
-		return out, nil
-	}
 	k, err := v.spec(key)
 	if err != nil {
 		return nil, err
+	}
+	if k == nil && !v.isMember(key) {
+		g.succ[n] = out
+		return out, nil
 	}
 	if kind == "apply" {
 		if k != nil {
@@ -186,15 +187,13 @@ func transformsBuild(k *kustv1.Kustomization) bool {
 // checkTreeOrder refuses a tree whose Flux Kustomizations can never all become
 // Ready because of a cycle through a member: a strongly connected component of
 // the order graph (orderGraph) that holds a cycle and a member's node. The
-// graph is entered at the members' nodes. Without others it judges the
-// members' edges only, each dependsOn as built and each health check whose
-// object has a certain writer (objectWriter); with others, under
-// UmbrellasDoNotWait, it follows the other Kustomizations of the tree as
-// orderPath does. A cycle made only of Kustomizations the integration did not
-// place is their author's, and is not refused here. The error names one
-// cycle, as checkReconcileOrder does.
-func (v *builtView) checkTreeOrder(others bool) error {
-	g := v.newOrderGraph(others)
+// graph is entered at the members' nodes and follows the other Kustomizations
+// of the tree as orderPath does: each dependsOn as built and each health
+// check whose object has a certain writer (objectWriter). A cycle made only
+// of Kustomizations the integration did not place is their author's, and is
+// not refused here. The error names one cycle, as checkReconcileOrder does.
+func (v *builtView) checkTreeOrder() error {
+	g := v.newOrderGraph()
 	var starts []string
 	for _, k := range v.t.kusts {
 		key := crKey(k.Namespace, k.Name)
