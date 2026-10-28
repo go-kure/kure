@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"sigs.k8s.io/kustomize/kyaml/openapi"
+	"sigs.k8s.io/kustomize/kyaml/openapi/kubernetesapi"
 	"sigs.k8s.io/kustomize/kyaml/resid"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
@@ -67,6 +68,32 @@ func TestParse_ParsesAgainAfterAReset(t *testing.T) {
 		Parse()
 		openapi.ResetOpenAPI()
 		lookupThenParse(t)
+	}
+}
+
+// TestBuiltIn_TellsTheDefaultSchemaFromACustomOne runs in the test binary's
+// own process, so that it counts for coverage: after Parse the schema is
+// kustomize's default built-in one; a custom schema set after it is not, and a
+// reset makes it the default again.
+func TestBuiltIn_TellsTheDefaultSchemaFromACustomOne(t *testing.T) {
+	Parse()
+	if v, ok := BuiltIn(); !ok || v != kubernetesapi.DefaultOpenAPI {
+		t.Errorf("BuiltIn() = %q, %v after Parse, want %q, true", v, ok, kubernetesapi.DefaultOpenAPI)
+	}
+	if err := openapi.SetSchema(nil, []byte(`{"definitions":{}}`), true); err != nil {
+		t.Fatalf("set a custom schema: %v", err)
+	}
+	t.Cleanup(func() {
+		openapi.ResetOpenAPI()
+		Parse()
+	})
+	if v, ok := BuiltIn(); ok {
+		t.Errorf("BuiltIn() = %q, true under a custom schema, want false", v)
+	}
+	openapi.ResetOpenAPI()
+	Parse()
+	if v, ok := BuiltIn(); !ok {
+		t.Errorf("BuiltIn() = %q, false after a reset, want true", v)
 	}
 }
 
