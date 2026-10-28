@@ -376,14 +376,26 @@ local config dropped, its generators run, then its `spec.postBuild` substitution
 built from its spec as its own writer's result holds it. The build uses Flux's kustomize options
 but not Flux's reset of kustomize's global OpenAPI schema around each build: that reset writes a
 schema every other use of kustomize in the process reads, so two integrations, or one beside any
-other kustomize build, would race. A copy whose apply skips it,
+other kustomize build, would race. kure builds only with kustomize's built-in schema, which it
+parses once before any of its uses of kustomize reads it.
+
+**kustomize's schema is the process's, not kure's.** kure guarantees that its own goroutines,
+concurrent integrations included, do not race each other on it, and that a schema it cannot build
+with is refused, never read. It cannot order another use of kustomize in the same process: one
+that sets or resets the schema while an integration runs, `fluxcd/pkg/kustomize`'s `Build` among
+them, races with it, and one that makes kustomize parse the schema for the first time while an
+integration starts may too. Run such a use apart from an integration.
+
+A copy whose apply skips it,
 `kustomize.toolkit.fluxcd.io/ssa: Ignore` or `kustomize.toolkit.fluxcd.io/reconcile: disabled` on
 it or in its writer's `spec.commonMetadata`, overwrites nothing and creates nothing: the
 Kustomization is read from the first copy an apply does not skip, and is created by a writer that
 applies it. A member every apply skips is still read, from its first copy. Five cases are refused,
-each naming the Kustomization: a build that fails, as the controller's apply would; a build that
-reads a kustomization file setting `openapi`, naming the file, since kustomize would keep its
-schema for every later build and kure does not reset it; a
+each naming the Kustomization: a build that fails, as the controller's apply would; a build kure
+does not read, which Flux may build and apply, when it reads a kustomization file setting
+`openapi`, naming the file, since kustomize would keep its schema for every later build and kure
+does not reset it, or when another use of kustomize in the process has set a schema other than
+the built-in one, naming it; a
 Kustomization two writers apply with a different `dependsOn`, `wait`, `healthChecks`,
 `healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata` or
 transform, which both keep overwriting; a member built from what no apply creates, a skipped
@@ -1522,10 +1534,13 @@ build makes it, its own `wait` included. What they still leave out:
   tree stalls whatever kure reads, so the read may refuse such a tree but never admits a deadlock.
 - **`readyExpr`.** Read as a wait for `Ready` (see [One Kustomization per
   directory](#one-kustomization-per-directory)).
-- **`openapi`.** A build that reads a kustomization file setting `openapi` is refused, not read:
+- **`openapi`.** A build that reads a kustomization file setting `openapi` is not read:
   kustomize-controller isolates its schema by resetting kustomize's global one around each build,
   which kure does not do (see [One Kustomization per
-  directory](#one-kustomization-per-directory)). Drop the field.
+  directory](#one-kustomization-per-directory)). Drop the field. kure tells a kustomization file
+  by its name, so a generator's data file named `kustomization.yaml`, `kustomization.yml` or
+  `Kustomization` whose content sets `openapi` is refused too, though kustomize reads it only as
+  data: rename it.
 
 A tree refused for a cycle through one of these integrates once the dependency or health check
 that closes the reported chain is dropped, or names another Kustomization. The "umbrellas do not

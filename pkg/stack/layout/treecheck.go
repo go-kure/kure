@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/resid"
 
 	"github.com/go-kure/kure/internal/built"
+	"github.com/go-kure/kure/internal/kustomizeschema"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 )
@@ -726,6 +727,7 @@ func layoutIdentity(gvk schema.GroupVersionKind, namespace, name string) string 
 // when the object sets one; any other kind with no namespace is in "default".
 // It renders as "<apiVersion> <kind> [<namespace>/]<name>".
 func buildIdentity(gvk schema.GroupVersionKind, namespace, name string) string {
+	kustomizeschema.Parse()
 	if resid.NewGvk(gvk.Group, gvk.Version, gvk.Kind).IsClusterScoped() {
 		return fmt.Sprintf("%s %s %s", gvk.GroupVersion(), gvk.Kind, name)
 	}

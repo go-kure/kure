@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 	"sigs.k8s.io/yaml"
 
+	"github.com/go-kure/kure/internal/kustomizeschema"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
@@ -90,11 +91,13 @@ var fluxBuildMu sync.Mutex
 // around the build (kustomize_generator.go:706-707). The reset writes the
 // schema that every other kustomize caller in the process reads without a
 // lock, so two integrations, or one beside any other use of kustomize, would
-// race. It matters only to a kustomization that sets openapi, whose schema
-// would then hold for every later build: a build that reads one (a component
-// a layout's extra files write may) is refused before kustomize reads its
-// fields (openAPIGuard). Like the controller it refuses a built object
-// without an apiVersion, kind or name (kustomization_controller.go:855-859).
+// race. It matters only where the schema is not kustomize's built-in one:
+// the build is not read, with an unreadBuild, when another use of kustomize
+// in the process set the schema, or when the build reads a kustomization
+// file that sets openapi (a component a layout's extra files write may),
+// which openAPIGuard refuses before kustomize reads its fields. Like the
+// controller it refuses a built object without an apiVersion, kind or name
+// (kustomization_controller.go:855-859).
 func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	tree, err := b.tree()
 	if err != nil {
@@ -108,8 +111,12 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "convert the Kustomization to unstructured")
 	}
+	kustomizeschema.Parse()
 	fluxBuildMu.Lock()
 	defer fluxBuildMu.Unlock()
+	if v, ok := kustomizeschema.BuiltIn(); !ok {
+		return nil, unreadBuild{errors.Errorf("kustomize's OpenAPI schema in this process is %q, not its built-in one: another use of kustomize set it, and kustomize-controller builds with the built-in schema, so kure cannot build it as Flux does", v)}
+	}
 	manifest, kfile, _, err := fluxkustomize.NewGenerator(tree, unstructured.Unstructured{Object: content}).GenerateManifest(dir)
 	if err != nil {
 		return nil, errors.Wrap(err, "generate the kustomization.yaml of its spec.path")
@@ -127,7 +134,7 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	rm, err := kustomizeBuild(guard, dir)
 	if guard.sets != "" {
 		rel, _ := filepath.Rel(tree, guard.sets)
-		return nil, errors.Errorf("its build reads %s, which sets openapi: kustomize would keep that schema for every later build in the process, so kure cannot build it as Flux does in isolation; drop the field", filepath.ToSlash(rel))
+		return nil, unreadBuild{errors.Errorf("its build reads %s, which sets openapi: kustomize would keep that schema for every later build in the process, and kure, which does not reset it around each build as kustomize-controller does, cannot build it as Flux does; drop the field", filepath.ToSlash(rel))}
 	}
 	if err != nil {
 		return nil, errors.Wrap(err, "kustomize build failed")
@@ -145,6 +152,10 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	}
 	return objs, nil
 }
+
+// unreadBuild is a build kure does not read, not one that fails: Flux may
+// build and apply it, but kure cannot build it as Flux does.
+type unreadBuild struct{ error }
 
 // kustomizeBuild builds dir as fluxcd/pkg/kustomize v1.44.0's Build does
 // after its schema reset (kustomize_generator.go:682-710): every load
@@ -168,7 +179,9 @@ func kustomizeBuild(fsys filesys.FileSystem, dir string) (rm resmap.ResMap, err 
 // the field of every kustomization it loads (krusty/kustomizer.go:79-88,
 // internal/target/kusttarget.go:511-520). kustomize reads a kustomization
 // file it cannot load as one that is absent, so the build's own error does
-// not name it; build reports sets instead.
+// not name it; build reports sets instead. A file is a kustomization file by
+// its name, so a generator's data file of that name that sets openapi is
+// refused too, though kustomize reads it only as data.
 type openAPIGuard struct {
 	filesys.FileSystem
 	sets string
@@ -258,6 +271,7 @@ func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substitut
 	}
 	fromCluster := len(k.Spec.PostBuild.SubstituteFrom) > 0
 	always := k.GetSubstituteStrategy() == kustv1.SubstituteStrategyAlways
+	kustomizeschema.Parse()
 	rf := provider.NewDefaultDepProvider().GetResourceFactory()
 	for _, obj := range objs {
 		content, err := writtenContent(obj)

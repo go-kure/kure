@@ -314,8 +314,9 @@ func TestBuiltView_AMemberNoBuildHoldsIsComparedWithItsAppliedCopy(t *testing.T)
 // directory with a component that a layout extra file writes. A component
 // setting openapi would set kustomize's global schema for every later build
 // in the process, and Flux isolates each build only by resetting that schema,
-// which kure does not do: the build is refused, naming hand-written and the
-// file. The control is the same component without openapi: it is admitted.
+// which kure does not do: the build is not read, naming hand-written and the
+// file, which is no failed build: Flux builds and applies it. The control is
+// the same component without openapi: it is admitted.
 func TestBuiltView_ABuildThatReadsOpenAPIIsRefused(t *testing.T) {
 	for name, openAPI := range map[string]string{"sets openapi": "openapi:\n  version: v1.21.2\n", "no openapi": ""} {
 		for _, placement := range integratedPlacements {
@@ -337,8 +338,8 @@ func TestBuiltView_ABuildThatReadsOpenAPIIsRefused(t *testing.T) {
 					return
 				}
 				want := `Flux Kustomization "flux-system/hand-written"`
-				if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "extra/kustomization.yaml, which sets openapi") {
-					t.Fatalf("got %v, want %s refused for a build that reads extra/kustomization.yaml, which sets openapi", err, want)
+				if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "is not read") || strings.Contains(err.Error(), "never applies") || !strings.Contains(err.Error(), "extra/kustomization.yaml, which sets openapi") {
+					t.Fatalf("got %v, want %s not read (not a failed build) for a build that reads extra/kustomization.yaml, which sets openapi", err, want)
 				}
 			})
 		}

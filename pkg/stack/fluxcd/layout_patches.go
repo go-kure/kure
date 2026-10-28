@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/kustomize/api/resource"
 	"sigs.k8s.io/kustomize/kyaml/resid"
 
+	"github.com/go-kure/kure/internal/kustomizeschema"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -194,6 +195,7 @@ func (p *integratedPlacement) placeBundlePatches() error {
 	if !p.perLayout {
 		return nil
 	}
+	kustomizeschema.Parse()
 	rf := provider.NewDefaultDepProvider().GetResourceFactory()
 	built := map[*layout.ManifestLayout][]resid.ResId{}
 	objectsOf := func(l *layout.ManifestLayout) ([]resid.ResId, error) {
@@ -384,6 +386,7 @@ func carriesBuildAnnotation(doc *resource.Resource) bool {
 // one that names it in another namespace names an object the build does not
 // hold.
 func buildIDs(l *layout.ManifestLayout) ([]resid.ResId, error) {
+	kustomizeschema.Parse()
 	var ids []resid.ResId
 	for _, dir := range buildScope(l) {
 		objs, err := resourceItems(dir)
