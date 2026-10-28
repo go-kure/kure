@@ -11,21 +11,21 @@ go 1.27.3
 // k8s.io minor versions (v0.30–v0.36). Without explicit pins, `go mod tidy`
 // could pull in mismatched versions during dependency updates.
 //
-// Current pin: v0.37.1 (Kubernetes 1.37)
+// Current pin: v0.37.2 (Kubernetes 1.37)
 //
 // Removal condition: these directives can be removed when ALL direct and
 // transitive dependencies converge on the same k8s.io minor version, making
 // Go's MVS sufficient to maintain lockstep. Check with:
 //   go mod graph | grep 'k8s.io/' | awk '{print $2}' | sort -u
 replace (
-	k8s.io/api => k8s.io/api v0.37.1
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.37.1
-	k8s.io/apimachinery => k8s.io/apimachinery v0.37.1
-	k8s.io/apiserver => k8s.io/apiserver v0.37.1
-	k8s.io/cli-runtime => k8s.io/cli-runtime v0.37.1
-	k8s.io/client-go => k8s.io/client-go v0.37.1
-	k8s.io/component-base => k8s.io/component-base v0.37.1
-	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.37.1
+	k8s.io/api => k8s.io/api v0.37.2
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.37.2
+	k8s.io/apimachinery => k8s.io/apimachinery v0.37.2
+	k8s.io/apiserver => k8s.io/apiserver v0.37.2
+	k8s.io/cli-runtime => k8s.io/cli-runtime v0.37.2
+	k8s.io/client-go => k8s.io/client-go v0.37.2
+	k8s.io/component-base => k8s.io/component-base v0.37.2
+	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.37.2
 	// kube-openapi is untagged and not part of the lockstep above. From
 	// ca3452a79603 it builds on sigs.k8s.io/structured-merge-diff/v7, while
 	// apimachinery v0.37 still uses v6, so the newer one (pulled in by
@@ -88,12 +88,12 @@ require (
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.3.1
-	k8s.io/api v0.37.1
-	k8s.io/apiextensions-apiserver v0.37.1
-	k8s.io/apimachinery v0.37.1
-	k8s.io/apiserver v0.37.1
-	k8s.io/cli-runtime v0.37.1
-	k8s.io/kube-aggregator v0.37.1
+	k8s.io/api v0.37.2
+	k8s.io/apiextensions-apiserver v0.37.2
+	k8s.io/apimachinery v0.37.2
+	k8s.io/apiserver v0.37.2
+	k8s.io/cli-runtime v0.37.2
+	k8s.io/kube-aggregator v0.37.2
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
 	sigs.k8s.io/controller-runtime v0.25.2
 	sigs.k8s.io/gateway-api v1.6.3
@@ -252,11 +252,11 @@ require (
 	google.golang.org/grpc v1.84.0 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/client-go v0.37.1 // indirect
-	k8s.io/component-base v0.37.1 // indirect
+	k8s.io/client-go v0.37.2 // indirect
+	k8s.io/component-base v0.37.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20261014044854-ca3452a79603 // indirect
-	k8s.io/streaming v0.37.1 // indirect
+	k8s.io/streaming v0.37.2 // indirect
 	oras.land/oras-go/v2 v2.6.2 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.36.0 // indirect
 	sigs.k8s.io/json v0.0.0-20260909141634-11ed52e25bc5 // indirect
