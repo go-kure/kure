@@ -20,10 +20,21 @@ type orderGraph struct {
 	v       *builtView
 	writers map[string]string
 	succ    map[string][]string
+	// alts holds, by "ready K" node, K's health checks on an object several
+	// writers apply, as next expands the node.
+	alts map[string][]alternative
+}
+
+// alternative is a health check on an object several writers apply
+// (objectWriters): it waits for whichever of them creates the object first,
+// so it is met unless every one of them waits.
+type alternative struct {
+	check   string   // "Kind namespace/name"
+	writers []string // the writers' keys, sorted
 }
 
 func (v *builtView) newOrderGraph() *orderGraph {
-	return &orderGraph{v: v, writers: map[string]string{}, succ: map[string][]string{}}
+	return &orderGraph{v: v, writers: map[string]string{}, succ: map[string][]string{}, alts: map[string][]alternative{}}
 }
 
 // next returns what node n waits for. "apply K" needs every Kustomization K
@@ -36,9 +47,11 @@ func (v *builtView) newOrderGraph() *orderGraph {
 // wait for (awaitedKustomizations; the wait leaves out what K's apply skips,
 // unskipped); and, for each health check on an object that is no Flux
 // Kustomization, the apply of the writer whose result holds it, when that
-// writer is certain (objectWriter): Flux fetches a checked object before it evaluates any
+// writer is certain (objectWriters): Flux fetches a checked object before it evaluates any
 // healthCheckExprs entry, so an expression, whatever it says, still waits for
-// the object to exist. Under wait Flux ignores health checks, and on another
+// the object to exist. A check on an object several certain writers apply
+// waits for whichever creates it first: it adds no successor, and is kept as
+// an alternative of n (alts) for checkTreeOrder to judge. Under wait Flux ignores health checks, and on another
 // cluster (spec.kubeConfig) none names an object of the tree. A dependsOn
 // waits for the dependency's Ready also with a readyExpr: with the
 // AdditiveCELDependencyCheck feature gate off, its default, Flux evaluates
@@ -105,12 +118,15 @@ func (g *orderGraph) next(n string) ([]string, error) {
 				if isFluxKustomizationCheck(hc.APIVersion, hc.Kind) {
 					continue // read by awaitedKustomizations
 				}
-				w, err := v.objectWriter(hc.APIVersion, hc.Kind, hc.Namespace, hc.Name)
+				ws, err := v.objectWriters(hc.APIVersion, hc.Kind, hc.Namespace, hc.Name)
 				if err != nil {
 					return nil, err
 				}
-				if w != "" {
-					out = append(out, "apply "+w)
+				switch {
+				case len(ws) == 1:
+					out = append(out, "apply "+ws[0])
+				case len(ws) > 1:
+					g.alts[n] = append(g.alts[n], alternative{check: hc.Kind + " " + hc.Namespace + "/" + hc.Name, writers: ws})
 				}
 			}
 		}
@@ -217,10 +233,13 @@ func transformsBuild(k *kustv1.Kustomization) bool {
 // connected component of the order graph (orderGraph) that holds a cycle and
 // a judged Kustomization's node. The graph is entered at those nodes and
 // follows the other Kustomizations of the tree as orderPath does: each
-// dependsOn as built and each health check whose object has a certain writer
-// (objectWriter). A cycle made only of Kustomizations the integration did not
+// dependsOn as built and each health check whose object has one certain writer
+// (objectWriters). A cycle made only of Kustomizations the integration did not
 // place, under the identities the tree holds them by, is their author's, and
 // is not refused here. The error names one cycle, as checkReconcileOrder does.
+// Without such a cycle, a health check on an object several certain writers
+// apply (alternative) is refused when every one of them waits for the
+// checking Kustomization (checkAlternatives).
 func (v *builtView) checkTreeOrder() error {
 	g := v.newOrderGraph()
 	var starts []string
@@ -251,8 +270,8 @@ func (v *builtView) checkTreeOrder() error {
 				return nil
 			}
 			i := slices.Index(stack, n)
-			return errors.Errorf("Flux Kustomizations can never all become Ready: %s waits for itself (%s); a dependsOn waits before applying, a health check before becoming Ready, a Kustomization with wait becomes Ready only once every Kustomization it applied is, and a CR exists only once the Kustomization that creates it has applied",
-				nodeKey(n), strings.Join(append(stack[i:], n), " -> "))
+			return errors.Errorf("Flux Kustomizations can never all become Ready: %s waits for itself (%s); %s",
+				nodeKey(n), strings.Join(append(stack[i:], n), " -> "), orderWaits)
 		}
 		state[n] = 1
 		stack = append(stack, n)
@@ -274,7 +293,108 @@ func (v *builtView) checkTreeOrder() error {
 			return err
 		}
 	}
+	return g.checkAlternatives()
+}
+
+// orderWaits is how Flux Kustomizations wait for each other, as an order
+// refusal states it.
+const orderWaits = "a dependsOn waits before applying, a health check before becoming Ready, a Kustomization with wait becomes Ready only once every Kustomization it applied is, and a CR exists only once the Kustomization that creates it has applied"
+
+// checkAlternatives refuses a tree with a health check of K on an object
+// several writers apply (alternative) that can never be met: every writer's
+// apply waits for K's Ready, along a chain of the order graph each (path,
+// from a fresh seen set, as one writer's chain may run through another's
+// apply), and a node on any such chain, or K's Ready itself, names a judged
+// Kustomization. Unjudged, the knot is its author's, as a cycle is
+// (component). The chains follow no other alternative, so a deadlock that
+// needs two such checks at once is admitted. Every alternative reachable from
+// the starts was recorded while components expanded them; one only path
+// reaches holds no judged node on its chains, which would reach it from a
+// start.
+func (g *orderGraph) checkAlternatives() error {
+	for _, n := range slices.Sorted(maps.Keys(g.alts)) {
+		for _, alt := range g.alts[n] {
+			var chains []string
+			for _, w := range alt.writers {
+				chain, err := g.path("apply "+w, n, map[string]bool{})
+				if err != nil {
+					return err
+				}
+				if chain == nil {
+					chains = nil
+					break
+				}
+				chains = append(chains, strings.Join(chain, " -> "))
+			}
+			if chains == nil {
+				continue
+			}
+			judged, err := g.judgedOnChains(alt.writers, n)
+			if err != nil {
+				return err
+			}
+			if !judged {
+				continue
+			}
+			key := nodeKey(n)
+			return errors.Errorf("Flux Kustomizations can never all become Ready: %s health-checks %s, which only %s apply, and each of them waits for %s (%s); a health check waits for whichever writer creates its object first, %s",
+				key, alt.check, andList(alt.writers), key, strings.Join(chains, "; "), orderWaits)
+		}
+	}
 	return nil
+}
+
+// judgedOnChains reports whether target, or a node on any chain of the order
+// graph from a writer's apply to target, names a judged Kustomization: the
+// nodes reachable from the applies that also reach target. It reads every
+// chain, not only the one path returns first, which follows dependsOn order.
+func (g *orderGraph) judgedOnChains(writers []string, target string) (bool, error) {
+	from := map[string][]string{}
+	seen := map[string]bool{}
+	var queue []string
+	for _, w := range writers {
+		seen["apply "+w] = true
+		queue = append(queue, "apply "+w)
+	}
+	for len(queue) > 0 {
+		n := queue[0]
+		queue = queue[1:]
+		succ, err := g.next(n)
+		if err != nil {
+			return false, err
+		}
+		for _, m := range succ {
+			from[m] = append(from[m], n)
+			if !seen[m] {
+				seen[m] = true
+				queue = append(queue, m)
+			}
+		}
+	}
+	reaches := map[string]bool{target: true}
+	queue = []string{target}
+	for len(queue) > 0 {
+		n := queue[0]
+		queue = queue[1:]
+		if g.v.judged(nodeKey(n)) {
+			return true, nil
+		}
+		for _, m := range from[n] {
+			if !reaches[m] {
+				reaches[m] = true
+				queue = append(queue, m)
+			}
+		}
+	}
+	return false, nil
+}
+
+// andList joins keys as "a", "a and b" or "a, b and c".
+func andList(keys []string) string {
+	if len(keys) < 2 {
+		return strings.Join(keys, "")
+	}
+	return strings.Join(keys[:len(keys)-1], ", ") + " and " + keys[len(keys)-1]
 }
 
 // component is a strongly connected component of the order graph: refused

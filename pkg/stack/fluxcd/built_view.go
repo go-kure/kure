@@ -52,7 +52,7 @@ import (
 // fields (graphFields) is refused: they keep overwriting each other. A copy
 // an apply skips is neither compared nor read (applies). One no result holds
 // is read as the tree holds it. An object a health check names is looked up
-// in the results too (objectWriter).
+// in the results too, for each of its writers (objectWriters).
 type builtView struct {
 	t *kustomizationTree
 	// existenceOnly is ResourceGenerator.AdditiveCELDependencyCheckOff: a

@@ -265,8 +265,9 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 // Kustomization K), here over every Kustomization of the tree, or nil when
 // there is none (orderGraph). "ready K" needs "apply K", what K's wait or its
 // Kustomization health checks wait for (awaitedKustomizations), and the apply
-// of the Kustomization certain to write each other object K health-checks
-// (objectWriter); "apply K" needs every Kustomization K depends on Ready, and the member whose apply
+// of the Kustomization certain to write each other object K health-checks,
+// when it is the only one (objectWriters; a check with several writers adds
+// no edge here); "apply K" needs every Kustomization K depends on Ready, and the member whose apply
 // writes K applied (writer), also when another Kustomization's build writes K
 // as well: that one is no alternate creator. Every Kustomization is read as
 // its writer's build makes it (builtView); one that is no member waits for

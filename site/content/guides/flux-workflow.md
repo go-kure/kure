@@ -936,7 +936,11 @@ through a Flux Source), a kustomization file kure cannot parse, one that sets
 `openapi`, or one that may merge into a Secret. One
 without `wait` that health-checks any other object waits for the Kustomization
 that applies it, whatever its expression says, when that writer is certain,
-and a cycle through them is refused. A copy another apply excludes
+and a cycle through them is refused. With several certain writers it waits for
+whichever creates the object first: the tree is refused when every one of them
+waits for the checker, but not for a deadlock that needs two such checks at
+once ([health checks on objects](/api-reference/flux-engine/#one-kustomization-per-directory)).
+A copy another apply excludes
 (`kustomize.toolkit.fluxcd.io/ssa: Ignore` or `reconcile: disabled`) counts for
 no writer, unless it, or that apply's `spec.commonMetadata`, is templated or
 encrypted. An object a controller, or a

@@ -609,10 +609,10 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) erro
 // is no alternate creator. A member's wait leaves out the members its apply
 // skips (unskipped). Under separate placement every CR sits in flux-system,
 // which the root lists. checkTreeOrder then judges the members' edges again,
-// each dependsOn as built and each health check whose object has a certain
-// writer, and the other Kustomizations of the tree too, each read from its
-// writer's result; checkReconcileOrder runs first so its refusals keep their
-// chains.
+// each dependsOn as built and each health check whose object has one certain
+// writer, or, with several, whether every one of them waits for the checker,
+// and the other Kustomizations of the tree too, each read from its writer's
+// result; checkReconcileOrder runs first so its refusals keep their chains.
 func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string]bool, existenceOnly bool) error {
 	t, err := indexKustomizationTree(root, generatedMembers(generated))
 	if err != nil {
