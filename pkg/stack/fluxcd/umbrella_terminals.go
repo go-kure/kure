@@ -622,16 +622,26 @@ func normalRecord(r layout.FluxKustomizationRecord) layout.FluxKustomizationReco
 	return r
 }
 
-// typedKustomization returns the Flux Kustomization obj in typed form.
+// typedKustomization returns the Flux Kustomization obj in typed form, as it
+// is applied: kustomize-controller drops its status and creation timestamp
+// before applying it (kustomization_controller.go:912; fluxcd/pkg/ssa v0.83.0
+// normalize/normalize.go:155-162), so neither can keep it from being read.
 func typedKustomization(obj client.Object) (*kustv1.Kustomization, error) {
 	if k, ok := obj.(*kustv1.Kustomization); ok {
 		return k, nil
 	}
-	raw, err := json.Marshal(obj)
+	content, err := writtenContent(obj)
 	if err == nil {
-		k := &kustv1.Kustomization{}
-		if err = json.Unmarshal(raw, k); err == nil {
-			return k, nil
+		delete(content, "status")
+		if metadata, ok := content["metadata"].(map[string]any); ok {
+			delete(metadata, "creationTimestamp")
+		}
+		var raw []byte
+		if raw, err = json.Marshal(content); err == nil {
+			k := &kustv1.Kustomization{}
+			if err = json.Unmarshal(raw, k); err == nil {
+				return k, nil
+			}
 		}
 	}
 	return nil, errors.Wrapf(err, "read Flux Kustomization %q in typed form", crKey(obj.GetNamespace(), obj.GetName()))

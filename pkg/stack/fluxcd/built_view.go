@@ -45,10 +45,11 @@ import (
 // fails the same way, and what the Kustomization applies cannot be read.
 //
 // Every Flux Kustomization a result holds is read as it is held there, under
-// its identity as built. One two writers write with different graph-relevant
-// fields (graphFields) is refused: both apply it, and they keep overwriting
-// each other. One no result holds is read as the tree holds it. An object a
-// health check names is looked up in the results too (objectWriter).
+// its identity as built. One two writers apply with different graph-relevant
+// fields (graphFields) is refused: they keep overwriting each other. A copy
+// an apply skips is neither compared nor read (applies). One no result holds
+// is read as the tree holds it. An object a health check names is looked up
+// in the results too (objectWriter).
 type builtView struct {
 	t *kustomizationTree
 	// writers lists the writers' keys in the order they were found, "" first;
@@ -254,9 +255,10 @@ var graphFields = []string{
 	"patches", "components", "namePrefix", "nameSuffix", "targetNamespace", "postBuild", "commonMetadata",
 }
 
-// agree refuses a Flux Kustomization two writers write with different
+// agree refuses a Flux Kustomization two writers apply with different
 // graphFields: each applies its own, so the cluster holds whichever applied
-// last, and neither is what the checks could judge.
+// last, and neither is what the checks could judge. A copy its writer's apply
+// skips (applies) overwrites nothing.
 func (v *builtView) agree() error {
 	var keys []string
 	for _, w := range v.writers {
@@ -267,7 +269,10 @@ func (v *builtView) agree() error {
 		}
 	}
 	for _, key := range keys {
-		occ := v.occurrences[key]
+		occ := slices.DeleteFunc(slices.Clone(v.occurrences[key]), func(o occurrence) bool { return !v.applies(o) })
+		if len(occ) < 2 {
+			continue
+		}
 		first, err := specFields(occ[0].obj)
 		if err != nil {
 			return err
@@ -329,11 +334,21 @@ func (v *builtView) isMember(key string) bool {
 	return v.t.byKey[key] != nil
 }
 
-// spec returns the Flux Kustomization with key as the results hold it, or,
-// when none does, as the tree holds it; nil when neither holds it. One the
-// results hold that cannot be read in typed form is an error for a member,
-// and nil for another: its writer's apply fails, a stall and no cycle
-// (go-kure/kure#1094 A4).
+// judged reports whether checkTreeOrder refuses a cycle through the
+// Kustomization with key: a member, or one a build makes under an identity
+// the tree holds no Kustomization by (a name prefix or suffix, a target
+// namespace, a patch or a substitution changed it). That one may be a member
+// under its built identity, and the tree cannot tell whose it is.
+func (v *builtView) judged(key string) bool {
+	return v.isMember(key) || len(v.occurrences[key]) > 0 && v.t.otherObjs[key] == nil
+}
+
+// spec returns the Flux Kustomization with key as the results hold it, the
+// first copy an apply does not skip (applies), or the first when every apply
+// skips it; when no result holds it, as the tree holds it; nil when neither
+// holds it. One the results hold that cannot be read in typed form is an
+// error for a member, and nil for another: its writer's apply fails, a stall
+// and no cycle (go-kure/kure#1094 A4).
 func (v *builtView) spec(key string) (*kustv1.Kustomization, error) {
 	if k, ok := v.specs[key]; ok {
 		return k, v.specErrs[key]
@@ -342,7 +357,11 @@ func (v *builtView) spec(key string) (*kustv1.Kustomization, error) {
 	var err error
 	switch occ := v.occurrences[key]; {
 	case len(occ) > 0:
-		k, err = typedKustomization(occ[0].obj)
+		read := occ[0]
+		if i := slices.IndexFunc(occ, v.applies); i >= 0 {
+			read = occ[i]
+		}
+		k, err = typedKustomization(read.obj)
 		if err != nil && !v.isMember(key) {
 			k, err = nil, nil
 		}
@@ -443,24 +462,32 @@ func (v *builtView) memberIndex(key string) int {
 // some other apply may still create unmarked (the bootstrap applies what it
 // reaches without w's commonMetadata).
 func (v *builtView) unskipped(w string, keys []string) []string {
-	k := v.writerSpec[w]
 	var out []string
 	for _, key := range keys {
-		var labels, annotations map[string]string
-		for _, o := range v.occurrences[key] {
-			if o.writer == w {
-				labels, annotations = o.obj.GetLabels(), o.obj.GetAnnotations()
-				break
-			}
+		o := occurrence{writer: w}
+		if i := slices.IndexFunc(v.occurrences[key], func(o occurrence) bool { return o.writer == w }); i >= 0 {
+			o = v.occurrences[key][i]
 		}
-		if k != nil && k.Spec.CommonMetadata != nil {
-			labels, annotations = setOver(labels, k.Spec.CommonMetadata.Labels), setOver(annotations, k.Spec.CommonMetadata.Annotations)
-		}
-		if !excludedFromApply(labels) && !excludedFromApply(annotations) {
+		if v.applies(o) {
 			out = append(out, key)
 		}
 	}
 	return out
+}
+
+// applies reports whether the apply of o's writer writes o's object: it
+// skips one whose mark (excludedFromApply), with the writer's
+// spec.commonMetadata set over it, says so (fluxcd/pkg/ssa v0.83.0
+// manager_apply.go:695-697). An occurrence with no object is applied.
+func (v *builtView) applies(o occurrence) bool {
+	var labels, annotations map[string]string
+	if o.obj != nil {
+		labels, annotations = o.obj.GetLabels(), o.obj.GetAnnotations()
+	}
+	if k := v.writerSpec[o.writer]; k != nil && k.Spec.CommonMetadata != nil {
+		labels, annotations = setOver(labels, k.Spec.CommonMetadata.Labels), setOver(annotations, k.Spec.CommonMetadata.Annotations)
+	}
+	return !excludedFromApply(labels) && !excludedFromApply(annotations)
 }
 
 // specDeps returns k's spec.dependsOn as keys, an entry without namespace in

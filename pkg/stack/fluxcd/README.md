@@ -375,11 +375,16 @@ writes it. kure builds each writer as kustomize-controller does: its `spec.patch
 local config dropped, its generators run, then its `spec.postBuild` substitution, and a writer is
 built from its spec as its own writer's result holds it. Three cases are refused, each naming the
 Kustomization: a build that fails, as the controller's apply would; a Kustomization two writers
-write with a different `dependsOn`, `wait`, `healthChecks`, `healthCheckExprs`, `path`,
+apply with a different `dependsOn`, `wait`, `healthChecks`, `healthCheckExprs`, `path`,
 `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata` or transform, which both keep
-overwriting; and, with `spec.postBuild.substituteFrom`, a
+overwriting (a copy whose apply skips it, `kustomize.toolkit.fluxcd.io/ssa: Ignore` or
+`kustomize.toolkit.fluxcd.io/reconcile: disabled` on it or in its writer's `spec.commonMetadata`,
+is neither compared nor read); and, with `spec.postBuild.substituteFrom`, a
 variable that a Flux Kustomization of the build, or any object's `apiVersion` or kind, references
-and `spec.postBuild.substitute` does not set, since its value is read from the cluster.
+and `spec.postBuild.substitute` does not set, since its value is read from the cluster. An object
+is a Flux Kustomization by the `apiVersion` and kind the inline values make. A Kustomization is
+read as it is applied: kustomize-controller drops its `status` and `metadata.creationTimestamp`
+first, so neither keeps it from being read.
 
 kure adds the existence wait only when the object's writer is certain: exactly one writer other
 than the Flux bootstrap applies an object matching it by group, kind, namespace and name as built
@@ -431,8 +436,11 @@ application emits, or the caller writes, is followed as a placed one is, with or
 `UmbrellasDoNotWait`, read from its writer's result: its `dependsOn`, `wait` and health checks are
 judged, so a tree can be refused for a cycle through one. One that cannot be read in typed form
 even there (a variable no `postBuild` sets) adds no wait: its writer's apply fails, a stall,
-which the checks do not judge. A cycle made only of Kustomizations the integration did not place
-is their author's, and is admitted.
+which the checks do not judge. A cycle made only of Kustomizations the integration did not place,
+under the names the tree holds them by, is their author's, and is admitted. A Kustomization a
+build writes under a name the tree holds no Kustomization by (a member renamed by a name prefix,
+for one) may be a member, and the tree cannot tell whose it is: it is judged as the
+integration's, and a cycle through it is refused.
 
 A `dependsOn` with a `readyExpr`, on any Kustomization, waits for the dependency's `Ready`. With
 kustomize-controller's `AdditiveCELDependencyCheck` feature gate off, its default
@@ -1663,8 +1671,8 @@ A build holds the objects of its directory and of the directories its `kustomiza
 |---|---|
 | with a `Target` | the bundle's own Kustomization and every per-layout Kustomization of the bundle. Kustomize applies it to what the target selects in that build, and to nothing where it selects nothing |
 | without a `Target`, strategic-merge | the Kustomizations of the bundle, its own among them, whose build holds every object the patch names, and no other. Objects are compared as kustomize compares them: group, version, kind, name and namespace, a document without a namespace naming the object in `default` |
-| without a `Target`, strategic-merge, after an entry of `Bundle.Patches` that is not a plain strategic-merge patch | the bundle's own Kustomization, and besides the per-layout Kustomizations whose build holds every object the patch names. Never refused; see "After an entry that is not a plain strategic-merge patch" below |
-| without a `Target`, not a plain strategic-merge patch (a JSON6902 patch, a patch with one of kustomize's build annotations, or one that can remove its object: a top-level `$patch: delete`, or `config.kubernetes.io/local-config` with any value but `"false"`) | the bundle's own Kustomization only, and never refused. This is a limit: it is not read, so there is no object to place it by. Kustomize refuses a JSON6902 patch without a target wherever it is |
+| without a `Target`, strategic-merge, after an entry of `Bundle.Patches` that is not a plain strategic-merge patch | the bundle's own Kustomization, and besides the per-layout Kustomizations whose build holds every object the patch names. No placement check refuses it, but a build it fails is refused; see "After an entry that is not a plain strategic-merge patch" below |
+| without a `Target`, not a plain strategic-merge patch (a JSON6902 patch, a patch with one of kustomize's build annotations, or one that can remove its object: a top-level `$patch: delete`, or `config.kubernetes.io/local-config` with any value but `"false"`) | the bundle's own Kustomization only, and no placement check refuses it. This is a limit: it is not read, so there is no object to place it by. Kustomize refuses a JSON6902 patch without a target wherever it is, and the integration refuses the build that fails |
 
 Each Kustomization keeps the order of `Bundle.Patches` among the patches it takes.
 
@@ -1685,9 +1693,9 @@ A tree that built on the cluster before is not refused, and its bundle's own Kus
 - kustomize reads its build annotations from the text of a patch as it reads its own: `internal.config.kubernetes.io/allowNameChange` and `allowKindChange` let a strategic-merge patch change the name or the kind of the object it is merged into, and the `previousNames`, `previousNamespaces` and `previousKinds` annotations give a document the identity it names its object by;
 - a document with a top-level `$patch: delete` removes its object from the build, and so does one that gives it `config.kubernetes.io/local-config` with any value but `"false"`: kustomize drops every object with that annotation once its patches have run. A document counts by what it carries, since what the merge leaves is not read: one that sets the annotation to null counts as well, and so does one whose `annotations` also carry `$patch: delete`, which removes them and leaves the object. Where the object removed is a per-layout Kustomization, the objects of its build are no longer applied, so a later untargeted patch placed by object on that Kustomization alone would never run.
 
-kure does not read what such an entry does, so each one counts, one that changes no identity included. The entry itself is written where it was before go-kure/kure#1021 and is never refused: with a `Target` on the bundle's own Kustomization and on every per-layout one, without one on the bundle's own only. An untargeted strategic-merge patch that comes after it in `Bundle.Patches` is not placed by object and never refused either: it stays on the bundle's own Kustomization, where every patch was before, and is written besides on each per-layout Kustomization whose build holds every object it names as generated. A bundle that renames an object of its own directory and then patches it, by the new name or the old, renders its own Kustomization byte for byte as before.
+kure does not read what such an entry does, so each one counts, one that changes no identity included. The entry itself is written where it was before go-kure/kure#1021 and no placement check refuses it: with a `Target` on the bundle's own Kustomization and on every per-layout one, without one on the bundle's own only. An untargeted strategic-merge patch that comes after it in `Bundle.Patches` is not placed by object and no placement check refuses it either: it stays on the bundle's own Kustomization, where every patch was before, and is written besides on each per-layout Kustomization whose build holds every object it names as generated. A bundle that renames an object of its own directory and then patches it, by the new name or the old, renders its own Kustomization byte for byte as before.
 
-This is a limit. Three cases are as they were before go-kure/kure#1021: the build of the bundle's own Kustomization fails on the cluster with `no resource matches strategic merge patch`, and the integration refuses nothing.
+This is a limit. In three cases the build of the bundle's own Kustomization fails with `no resource matches strategic merge patch`. Before go-kure/kure#1094 it failed on the cluster; the integration now builds each Kustomization as kustomize-controller does and refuses that build, naming the Kustomization (see [One Kustomization per directory](#one-kustomization-per-directory)).
 
 - A later untargeted patch names an object only a layout builds. It is on that layout's Kustomization, and on the bundle's own, which does not build the object. Put the untargeted patch before the entry in `Bundle.Patches`, or give it a `Target`.
 - A later untargeted patch names the name the entry gives an object of a layout. The entry, when it has a target, is on that layout's Kustomization and renames the object there; the untargeted patch is not, since that build does not hold the new name as generated. Give the patch a `Target` that selects the new name: it is then written on every Kustomization and applied where the object is.
