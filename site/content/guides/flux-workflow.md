@@ -925,7 +925,9 @@ With or without the setting, every integration also judges the order of the
 Kustomizations of the tree, on each later integration too, each read as
 kustomize-controller builds its writer: patches, components, name prefix and
 suffix, target namespace and postBuild substitution applied. A build that
-fails, and a Kustomization two builds write differently, are refused. One
+fails, a Kustomization two builds write differently, a placed one no apply
+creates, and a placed one a build applies on another cluster or from another
+Source, are refused. One
 without `wait` that health-checks any other object waits for the Kustomization
 that applies it, whatever its expression says, when that writer is certain,
 and a cycle through them is refused. An object a controller, or a

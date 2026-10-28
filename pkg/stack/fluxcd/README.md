@@ -393,7 +393,7 @@ A copy whose apply skips it,
 `kustomize.toolkit.fluxcd.io/ssa: Ignore` or `kustomize.toolkit.fluxcd.io/reconcile: disabled` on
 it or in its writer's `spec.commonMetadata`, overwrites nothing and creates nothing: the
 Kustomization is read from the first copy an apply does not skip, and is created by a writer that
-applies it. A member every apply skips is still read, from its first copy. Five cases are refused,
+applies it. A member every apply skips is still read, from its first copy. Seven cases are refused,
 each naming the Kustomization: a build that fails, as the controller's apply would; a build kure
 does not read, which Flux may build and apply, when it reads a kustomization file setting
 `openapi`, naming the file, since kustomize would keep its schema for every later build and kure
@@ -401,10 +401,15 @@ does not reset it, or when another use of kustomize in the process has set a sch
 the built-in one, naming it; a
 Kustomization two writers apply with a different `dependsOn`, `wait`, `healthChecks`,
 `healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata` or
-transform, which both keep overwriting; a member built from what no apply creates, a skipped
+transform (`ignoreMissingComponents` included, which decides whether a missing component fails
+the build), which both keep overwriting; a member built from what no apply creates, a skipped
 copy, the first its writers' results showed, or its spec as the tree holds it, where no result
 held it yet, when the first copy that is applied differs in those fields, since what it applies
-cannot then be read; and, with `spec.postBuild.substituteFrom`, a
+cannot then be read; a member built from its spec as the tree holds it that no apply creates
+once every writer is known (a parent's patch deleted or renamed it), since nothing applies what
+it builds; a member a build applies with `spec.kubeConfig`, or with another Source than its
+spec in the tree names, since it then applies on another cluster or another Source's directory;
+and, with `spec.postBuild.substituteFrom`, a
 variable that a Flux Kustomization of the build, or any object's `apiVersion` or kind, references
 and `spec.postBuild.substitute` does not set, since its value is read from the cluster. An object
 is a Flux Kustomization by the `apiVersion` and kind the inline values make, each value with
@@ -426,9 +431,13 @@ add none, so a cycle through them passes:
   writer that transforms nothing, or that of a Kustomization whose build is not the tree's) whose
   name, or that name and a dash, begins the checked name, as kustomize appends a content hash; a
   transformed build's generated names are read as built;
-- a Secret whose name holds, under any prefix or suffix, the name of a `secretGenerator` entry with
-  `behavior: merge` in a component's or a hand-written kustomization file: the merged Secret's
-  hash depends on the kustomize version that builds it;
+- a Secret whose name is that of a `secretGenerator` entry with `behavior: merge` in a
+  component's or a hand-written kustomization file, or that name, a dash and a kustomize content
+  hash (10 characters of `bcdfghkmt2456789`): the merged Secret's hash depends on the kustomize
+  version that builds it. A name prefix or suffix is not read, so a merged Secret under one keeps
+  its writer certain, which errs towards refusing (go-kure/kure#1171); a literal Secret with
+  that name, or that name and a hash, stays uncertain, which drops an edge through it and errs
+  towards admitting;
 - an object whose identity may change at apply, whatever it names, unless only the writer's own
   result holds it: `$` left after substitution or `ENC[` (SOPS) in its `apiVersion`, kind,
   namespace or name, or a namespace or name a `substituteFrom` variable sets. Another apply may
@@ -440,9 +449,12 @@ add none, so a cycle through them passes:
   skip it;
 - a ServiceAccount `default` or a ConfigMap `kube-root-ca.crt`, which Kubernetes creates in every
   namespace; this list is closed;
-- a match the Flux bootstrap applies, or two writers apply;
+- a match the Flux bootstrap applies, or two writers apply; with two writers that both wait for
+  the checking Kustomization the tree cannot become Ready, and is still admitted, which errs
+  towards admitting (go-kure/kure#1172);
 - a Kustomization on this cluster whose `spec.path` is a directory of the tree but whose build is
-  not the tree's (another Source): it may apply a match, read as its directory holds it, or write
+  not the tree's (another Source), read from its first copy an apply does not skip (one every
+  apply skips applies nothing): it may apply a match, read as its directory holds it, or write
   the object under another identity: with `spec.components`; with `spec.patches`, when its
   directory holds any object or `configMapGenerator` entry (a patch may change a kind, or keep an
   object marked `config.kubernetes.io/local-config`); or with a name prefix or suffix or a target

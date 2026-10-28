@@ -267,9 +267,13 @@ func TestBuiltView_TheOnlyApplyCreatesAndBuilds(t *testing.T) {
 // the tree is refused. The control is the same tree with hand-written's copy
 // of web as the tree holds it: it is admitted.
 func TestBuiltView_AMemberNoBuildHoldsIsComparedWithItsAppliedCopy(t *testing.T) {
+	// Without hw the tree is read only for shop's and platform's paths, and
+	// shop keeps web: a tree where nothing creates web is refused.
 	tree := func(hw *kustv1.Kustomization) *stack.Cluster {
 		shop := umbrellaOf("shop", srBundle("web", cmApp("web-app")))
-		shop.Patches = []stack.Patch{{Patch: deleteKust("web"), Target: &stack.PatchSelector{Kind: "Kustomization", Name: "web"}}}
+		if hw != nil {
+			shop.Patches = []stack.Patch{{Patch: deleteKust("web"), Target: &stack.PatchSelector{Kind: "Kustomization", Name: "web"}}}
+		}
 		app := cmApp("platform-app")
 		if hw != nil {
 			app = objApp("platform-app", hw)
@@ -340,6 +344,161 @@ func TestBuiltView_ABuildThatReadsOpenAPIIsRefused(t *testing.T) {
 				want := `Flux Kustomization "flux-system/hand-written"`
 				if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "is not read") || strings.Contains(err.Error(), "never applies") || !strings.Contains(err.Error(), "extra/kustomization.yaml, which sets openapi") {
 					t.Fatalf("got %v, want %s not read (not a failed build) for a build that reads extra/kustomization.yaml, which sets openapi", err, want)
+				}
+			})
+		}
+	}
+}
+
+// TestBuiltView_ACopyAnotherBuildAppliesIsBuilt: platform's application
+// emits h, which carries kustomize.toolkit.fluxcd.io/ssa Ignore, so
+// platform's apply skips it, and z-builder, which builds platform's
+// directory with a patch removing that annotation: z-builder's apply alone
+// creates h, and h is built from z-builder's copy, though platform's skipped
+// one was known first. h waits for platform, which its build of the
+// directory holding platform writes, and platform waits for z-builder, which
+// waits for h: the cycle is refused. Without z-builder's patch every apply
+// skips h, nothing waits for it, and the tree is admitted.
+func TestBuiltView_ACopyAnotherBuildAppliesIsBuilt(t *testing.T) {
+	for name, unskipped := range map[string]bool{"z-builder applies h": true, "every apply skips h": false} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				h := handWritten("h")
+				h.Spec.Path, h.Spec.Wait = webDirectory(t, placement), true
+				h.Annotations = map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "Ignore"}
+				z := handWritten("z-builder")
+				z.Spec.Path, z.Spec.Wait = platformDirectory(t, placement), true
+				if unskipped {
+					z.Spec.Patches = []kustomize.Patch{{
+						Patch:  "- op: remove\n  path: /metadata/annotations/kustomize.toolkit.fluxcd.io~1ssa\n",
+						Target: &kustomize.Selector{Kind: "Kustomization", Name: "h"},
+					}}
+				}
+				platform := srBundle("platform", objApp("platform-app", h, z))
+				platform.Wait = boolPtr(true)
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(platform, false), withPlacement(nodeOnly, placement))
+				if !unskipped {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
+				if err == nil || !strings.Contains(err.Error(), "can never all become Ready") || !strings.Contains(err.Error(), "ready flux-system/h -> ready flux-system/platform") {
+					t.Fatalf("got %v, want the cycle through h's wait refused", err)
+				}
+			})
+		}
+	}
+}
+
+// shopTree is demo -> shop, an umbrella whose one child is web, with patch,
+// when set, on shop's copy of web.
+func shopTree(patch string) *stack.Cluster {
+	shop := umbrellaOf("shop", srBundle("web", cmApp("web-app")))
+	if patch != "" {
+		shop.Patches = []stack.Patch{{Patch: patch, Target: &stack.PatchSelector{Kind: "Kustomization", Name: "web"}}}
+	}
+	shopNode := &stack.Node{Name: "shop", Bundle: shop}
+	root := &stack.Node{Name: "demo", Children: []*stack.Node{shopNode}}
+	shopNode.SetParent(root)
+	return &stack.Cluster{Name: "demo", Node: root}
+}
+
+// TestBuiltView_AMemberAppliedElsewhereIsRefused: shop's patch gives its copy
+// of web, the one its apply creates, a spec.kubeConfig or another Source.
+// web then applies on another cluster, or another Source's directory, not
+// what its directory in the tree holds, and the tree is refused, naming web
+// and the field. A patch that changes neither is admitted.
+func TestBuiltView_AMemberAppliedElsewhereIsRefused(t *testing.T) {
+	for name, c := range map[string]struct{ patch, refused string }{
+		"kubeConfig": {patch: "- op: add\n  path: /spec/kubeConfig\n  value:\n    secretRef:\n      name: remote-kubeconfig\n", refused: `Flux Kustomization "flux-system/web" is applied by the build of Flux Kustomization "flux-system/shop" with spec.kubeConfig`},
+		"sourceRef":  {patch: "- op: replace\n  path: /spec/sourceRef/name\n  value: other-repo\n", refused: `Flux Kustomization "flux-system/web" is applied by the build of Flux Kustomization "flux-system/shop" with spec.sourceRef GitRepository flux-system/other-repo`},
+		"force":      {patch: "- op: add\n  path: /spec/force\n  value: true\n"},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(shopTree(c.patch), withPlacement(nodeOnly, placement))
+				if c.refused == "" {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
+				if err == nil || !strings.Contains(err.Error(), c.refused) {
+					t.Fatalf("got %v, want %s", err, c.refused)
+				}
+			})
+		}
+	}
+}
+
+// TestBuiltView_AMemberMovedOutOfTheTreeIsReadAsApplied: shop's patch moves
+// its copy of web to a spec.path that is no directory of the tree. web is
+// read from that copy, which builds nothing of the tree, and not built again
+// from its spec as the tree holds it, so nothing disagrees and the tree is
+// admitted.
+func TestBuiltView_AMemberMovedOutOfTheTreeIsReadAsApplied(t *testing.T) {
+	for _, placement := range integratedPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(shopTree("- op: replace\n  path: /spec/path\n  value: ./outside\n"), withPlacement(nodeOnly, placement))
+			if err != nil {
+				t.Fatalf("got %v, want the tree admitted", err)
+			}
+		})
+	}
+}
+
+// TestBuiltView_AMemberNoApplyCreatesIsRefused: shop's patch deletes web from
+// shop's build, and no other build holds it, so no apply creates web: what
+// its spec as the tree holds it builds is applied by nothing, and the tree is
+// refused, naming web. Without the patch shop creates web and the tree is
+// admitted.
+func TestBuiltView_AMemberNoApplyCreatesIsRefused(t *testing.T) {
+	for name, patch := range map[string]string{"deleted": deleteKust("web"), "kept": ""} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(shopTree(patch), withPlacement(nodeOnly, placement))
+				if patch == "" {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
+				const refused = `Flux Kustomization "flux-system/web" is created by no apply`
+				if err == nil || !strings.Contains(err.Error(), refused) {
+					t.Fatalf("got %v, want %s", err, refused)
+				}
+			})
+		}
+	}
+}
+
+// TestBuiltView_IgnoreMissingComponentsIsCompared: hand-written builds web's
+// directory with a patch setting web's spec.ignoreMissingComponents, which
+// decides whether Flux drops a component it cannot find or fails the build:
+// both writers apply web with different specs and the tree is refused, naming
+// the field. Without the patch both copies agree and the tree is admitted.
+func TestBuiltView_IgnoreMissingComponentsIsCompared(t *testing.T) {
+	for name, patched := range map[string]bool{"set": true, "not set": false} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				k := handWritten("hand-written")
+				k.Spec.Path = webDirectory(t, placement)
+				if patched {
+					k.Spec.Patches = []kustomize.Patch{{
+						Patch:  "- op: add\n  path: /spec/ignoreMissingComponents\n  value: true\n",
+						Target: &kustomize.Selector{Kind: "Kustomization", Name: "web"},
+					}}
+				}
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(srBundle("platform", objApp("platform-app", k)), false), withPlacement(nodeOnly, placement))
+				if !patched {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
+				if err == nil || !strings.Contains(err.Error(), `Flux Kustomization "flux-system/web" is written by`) || !strings.Contains(err.Error(), "spec.ignoreMissingComponents") {
+					t.Fatalf("got %v, want the two writers of web refused on spec.ignoreMissingComponents", err)
 				}
 			})
 		}
