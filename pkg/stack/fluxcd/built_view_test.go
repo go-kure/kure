@@ -310,6 +310,41 @@ func TestBuiltView_AMemberNoBuildHoldsIsComparedWithItsAppliedCopy(t *testing.T)
 	}
 }
 
+// TestBuiltView_ABuildThatReadsOpenAPIIsRefused: hand-written builds web's
+// directory with a component that a layout extra file writes. A component
+// setting openapi would set kustomize's global schema for every later build
+// in the process, and Flux isolates each build only by resetting that schema,
+// which kure does not do: the build is refused, naming hand-written and the
+// file. The control is the same component without openapi: it is admitted.
+func TestBuiltView_ABuildThatReadsOpenAPIIsRefused(t *testing.T) {
+	for name, openAPI := range map[string]string{"sets openapi": "openapi:\n  version: v1.21.2\n", "no openapi": ""} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				k := handWritten("hand-written")
+				k.Spec.Path, k.Spec.Components = webDirectory(t, placement), []string{"extra"}
+				cluster := noWaitCluster(srBundle("platform", objApp("platform-app", k)), false)
+				rules := withPlacement(nodeOnly, placement)
+				ml := mustWalk(t, cluster, rules)
+				l := layoutAtPath(t, ml, k.Spec.Path)
+				l.ExtraFiles = append(l.ExtraFiles,
+					layout.ExtraFile{Name: "extra/kustomization.yaml", Content: []byte("apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\n" + openAPI + "resources:\n- added.yaml\n")},
+					layout.ExtraFile{Name: "extra/added.yaml", Content: []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: added\n  namespace: default\n")})
+				err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, cluster, rules)
+				if openAPI == "" {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
+				want := `Flux Kustomization "flux-system/hand-written"`
+				if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "extra/kustomization.yaml, which sets openapi") {
+					t.Fatalf("got %v, want %s refused for a build that reads extra/kustomization.yaml, which sets openapi", err, want)
+				}
+			})
+		}
+	}
+}
+
 // platformDirectory is the spec.path of platform in noWaitCluster.
 func platformDirectory(t *testing.T, placement layout.FluxPlacement) string {
 	t.Helper()

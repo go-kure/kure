@@ -373,12 +373,17 @@ whose `spec.path` is a directory of the tree and whose Source is that of the Kus
 writes it. kure builds each writer as kustomize-controller does: its `spec.patches`,
 `spec.components`, `spec.namePrefix`, `spec.nameSuffix` and `spec.targetNamespace` applied, its
 local config dropped, its generators run, then its `spec.postBuild` substitution, and a writer is
-built from its spec as its own writer's result holds it. A copy whose apply skips it,
+built from its spec as its own writer's result holds it. The build uses Flux's kustomize options
+but not Flux's reset of kustomize's global OpenAPI schema around each build: that reset writes a
+schema every other use of kustomize in the process reads, so two integrations, or one beside any
+other kustomize build, would race. A copy whose apply skips it,
 `kustomize.toolkit.fluxcd.io/ssa: Ignore` or `kustomize.toolkit.fluxcd.io/reconcile: disabled` on
 it or in its writer's `spec.commonMetadata`, overwrites nothing and creates nothing: the
 Kustomization is read from the first copy an apply does not skip, and is created by a writer that
-applies it. A member every apply skips is still read, from its first copy. Four cases are refused,
-each naming the Kustomization: a build that fails, as the controller's apply would; a
+applies it. A member every apply skips is still read, from its first copy. Five cases are refused,
+each naming the Kustomization: a build that fails, as the controller's apply would; a build that
+reads a kustomization file setting `openapi`, naming the file, since kustomize would keep its
+schema for every later build and kure does not reset it; a
 Kustomization two writers apply with a different `dependsOn`, `wait`, `healthChecks`,
 `healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata` or
 transform, which both keep overwriting; a member built from what no apply creates, a skipped
@@ -1517,11 +1522,16 @@ build makes it, its own `wait` included. What they still leave out:
   tree stalls whatever kure reads, so the read may refuse such a tree but never admits a deadlock.
 - **`readyExpr`.** Read as a wait for `Ready` (see [One Kustomization per
   directory](#one-kustomization-per-directory)).
+- **`openapi`.** A build that reads a kustomization file setting `openapi` is refused, not read:
+  kustomize-controller isolates its schema by resetting kustomize's global one around each build,
+  which kure does not do (see [One Kustomization per
+  directory](#one-kustomization-per-directory)). Drop the field.
 
-A tree refused for one of these integrates once the dependency or health check that closes the
-reported chain is dropped, or names another Kustomization. The "umbrellas do not wait" rewrite
-and `UmbrellaTerminals` still read the tree as it holds it, so a local-config Kustomization a
-patched build may keep, and that cannot be read in typed form, is still refused there.
+A tree refused for a cycle through one of these integrates once the dependency or health check
+that closes the reported chain is dropped, or names another Kustomization. The "umbrellas do not
+wait" rewrite and `UmbrellaTerminals` still read the tree as it holds it, so a local-config
+Kustomization a patched build may keep, and that cannot be read in typed form, is still refused
+there.
 
 The rules apply to the Kustomizations the call generates. One kept from an earlier integration
 is not rewritten; it is refused when it breaks R1 (with `ErrUmbrellaWait`, for `wait` or any
