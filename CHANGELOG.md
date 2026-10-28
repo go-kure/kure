@@ -16,6 +16,33 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-beta.21] - 2026-10-28
+
+### Build
+
+- Update dependency hugo to v0.169.0
+- Build with the kustomize kustomize-controller pins
+- Update dependency external-secrets/external-secrets to v2.14.0
+- Hold kube-openapi on structured-merge-diff v6 for external-secrets v2.14
+- Update module golang.org/x/net to v0.62.0 [security]
+
+### Documentation
+
+- Say the kustomize build check runs in kure's tests
+- Qualify the object-level skip mark by commonMetadata overrides
+- Name Flux's commonMetadata step without its function name
+- Note that a widening can require a replace in consumers
+
+### Fixed
+
+- Regenerate the flux-operator bootstrap outputs after a re-vendor
+- Restore unvalidated bootstrap outputs on any exit
+- Stop the regeneration before restoring on a cancel
+- End the whole regeneration group once go exits
+- Regenerate the bootstrap outputs with GOWORK=off
+- Read skipped objects and self health checks as Flux does
+- Drop a self health check on a Kustomization written without namespace
+
 ## [0.2.0-beta.20] - 2026-10-27
 
 ### Breaking
