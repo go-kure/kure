@@ -43,7 +43,7 @@ import (
 // a spec.path is a directory of that tree, as the source of the tree's
 // Kustomizations holds it. merged lists, once each, the names of the
 // secretGenerator entries with behavior merge in the kustomization files its
-// builds read (openAPIGuard).
+// builds load as one (openAPIGuard.merged).
 type treeBuilds struct {
 	root    *layout.ManifestLayout
 	dir     string
@@ -136,7 +136,7 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	}
 	guard := &openAPIGuard{FileSystem: fsys}
 	rm, err := kustomizeBuild(guard, dir)
-	for _, n := range guard.merged {
+	for _, n := range guard.merged() {
 		if !slices.Contains(b.merged, n) {
 			b.merged = append(b.merged, n)
 		}
@@ -188,24 +188,41 @@ func kustomizeBuild(fsys filesys.FileSystem, dir string) (rm resmap.ResMap, err 
 // the field of every kustomization it loads (krusty/kustomizer.go:79-88,
 // internal/target/kusttarget.go:511-520). kustomize reads a kustomization
 // file it cannot load as one that is absent, so the build's own error does
-// not name it; build reports sets instead. It also records in merged the
-// names of the secretGenerator entries with behavior merge in each
-// kustomization file the build reads, a component's included, and in no
-// other: a file no build reads merges nothing. A file is a kustomization file
-// by its name, so a generator's data file of that name that sets openapi is
-// refused too, and its merge entries are recorded, though kustomize reads it
-// only as data.
+// not name it; build reports sets instead. A file is a kustomization file by
+// its name, so a generator's data file of that name that sets openapi is
+// refused too, though kustomize reads it only as data.
+//
+// It also records which reads load a kustomization (merged). kustomize loads
+// a directory's kustomization by reading every kustomization file name in it
+// and takes the one that exists (api internal/target/kusttarget.go:101-121);
+// with no load restriction a missing name reaches ReadFile too
+// (internal/loader/loadrestrictions.go:32-35). A generator reads its data
+// file once.
 type openAPIGuard struct {
 	filesys.FileSystem
-	sets   string
-	merged []string
+	sets string
+	// read holds, per directory, the kustomization file names a read asked
+	// for in it, and found those that exist; merges lists each file found
+	// with the names of its secretGenerator entries with behavior merge.
+	read, found map[string]map[string]bool
+	merges      []fileMerges
+}
+
+type fileMerges struct {
+	file  string
+	names []string
 }
 
 func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 	b, err := g.FileSystem.ReadFile(name)
-	if err != nil || !slices.Contains(konfig.RecognizedKustomizationFileNames(), filepath.Base(name)) {
+	if !slices.Contains(konfig.RecognizedKustomizationFileNames(), filepath.Base(name)) {
 		return b, err
 	}
+	g.read = markRead(g.read, name)
+	if err != nil {
+		return b, err
+	}
+	g.found = markRead(g.found, name)
 	var k kusttypes.Kustomization
 	if yaml.Unmarshal(b, &k) == nil {
 		if len(k.OpenAPI) > 0 {
@@ -214,13 +231,46 @@ func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 			}
 			return nil, errors.Errorf("%s sets openapi", name)
 		}
+		f := fileMerges{file: name}
 		for _, gen := range k.SecretGenerator {
 			if gen.Behavior == kusttypes.BehaviorMerge.String() {
-				g.merged = append(g.merged, gen.Name)
+				f.names = append(f.names, gen.Name)
 			}
 		}
+		g.merges = append(g.merges, f)
 	}
 	return b, nil
+}
+
+// merged lists the names of the secretGenerator entries with behavior merge
+// in the kustomization files the build loaded as one, a component's
+// included: a file in a directory where every kustomization file name was
+// read and exactly one exists. A file only a generator reads as data, or one
+// no build reads, merges nothing. A directory holding two kustomization files
+// is no kustomization a build can load (kusttarget.go:118-120), so files
+// read there are data.
+func (g *openAPIGuard) merged() []string {
+	var out []string
+	for _, f := range g.merges {
+		dir := filepath.Dir(f.file)
+		if len(g.read[dir]) == len(konfig.RecognizedKustomizationFileNames()) && len(g.found[dir]) == 1 {
+			out = append(out, f.names...)
+		}
+	}
+	return out
+}
+
+// markRead adds name's base to the names m holds for its directory.
+func markRead(m map[string]map[string]bool, name string) map[string]map[string]bool {
+	if m == nil {
+		m = map[string]map[string]bool{}
+	}
+	dir := filepath.Dir(name)
+	if m[dir] == nil {
+		m[dir] = map[string]bool{}
+	}
+	m[dir][filepath.Base(name)] = true
+	return m
 }
 
 // replaceFile writes content to name and returns what puts back the file as

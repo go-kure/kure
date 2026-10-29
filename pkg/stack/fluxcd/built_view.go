@@ -70,8 +70,8 @@ type builtView struct {
 	// sources are what the object index reads (objectIndex), on the first
 	// health check on an object; objectsErr is the error of that read.
 	// mergedSecrets lists the names of the secretGenerator entries with
-	// behavior merge in the kustomization files the builds kure runs read
-	// (treeBuilds.merged), a component's included. A merged Secret's content
+	// behavior merge in the kustomization files the builds kure runs load as
+	// one (treeBuilds.merged), a component's included. A merged Secret's content
 	// hash, and so its name, depends on the kustomize version that builds it
 	// (kustomize v0.21.2 normalises stringData before the merge and
 	// kustomize-controller v1.10.1's v0.21.1 does not, api
