@@ -9,8 +9,10 @@ import (
 	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/internal/built"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
@@ -69,22 +71,9 @@ type builtView struct {
 	specErrs  map[string]error
 	// sources are what the object index reads (objectIndex), on the first
 	// health check on an object; objectsErr is the error of that read.
-	// mergedSecrets lists the names of the secretGenerator entries with
-	// behavior merge in the kustomization files the builds kure runs load as
-	// one (treeBuilds.merged), a component's included. A merged Secret's content
-	// hash, and so its name, depends on the kustomize version that builds it
-	// (kustomize v0.21.2 normalises stringData before the merge and
-	// kustomize-controller v1.10.1's v0.21.1 does not, api
-	// resmap/reswrangler.go:591-597), so a module building kure with another
-	// version may read another name than the controller applies. A build read
-	// as the tree holds it (heldBuild) reads none: the kustomization.yaml kure
-	// writes lists only the layout's resource files and child directories,
-	// and an extra file takes no kustomization file name of its layout's
-	// directory.
-	sources       []objectSource
-	mergedSecrets []string
-	objectsRead   bool
-	objectsErr    error
+	sources     []objectSource
+	objectsRead bool
+	objectsErr  error
 }
 
 // occurrence is a Flux Kustomization as one writer's result holds it.
@@ -248,6 +237,7 @@ func (v *builtView) local(key string) *kustv1.Kustomization {
 // directory of the tree builds nothing of it, and is no writer.
 func (v *builtView) add(builds *treeBuilds, key string, k *kustv1.Kustomization) error {
 	var objs []client.Object
+	var merged []bool
 	var err error
 	switch {
 	case k == nil:
@@ -259,8 +249,7 @@ func (v *builtView) add(builds *treeBuilds, key string, k *kustv1.Kustomization)
 		if _, err := builds.tree(); err != nil {
 			return err
 		}
-		objs, err = builds.build(k)
-		v.mergedSecrets = builds.merged
+		objs, merged, err = builds.build(k)
 	default:
 		objs, err = heldBuild(v.t.layoutAt[path.Clean(k.Spec.Path)])
 	}
@@ -282,6 +271,10 @@ func (v *builtView) add(builds *treeBuilds, key string, k *kustv1.Kustomization)
 	} else if res, err = substituteBuild(k, objs); err != nil {
 		return err
 	}
+	// substituteBuild returns one result for each object, in order.
+	for i := range res {
+		res[i].merged = i < len(merged) && merged[i]
+	}
 	v.writers = append(v.writers, key)
 	v.writerSpec[key] = k
 	v.results[key] = res
@@ -295,11 +288,35 @@ func (v *builtView) add(builds *treeBuilds, key string, k *kustv1.Kustomization)
 }
 
 // heldBuild returns what the directories a kustomize build of l includes
-// hold, as the build holds them (buildScope, builtItems).
+// hold, as the build holds them (buildScope, builtItems), each resource that
+// is no List read as the tree's writers write it to its file
+// (writtenObject). The writers clean only the top-level object of a resource
+// (kio.EncodeObjectsToYAML), so a List's items are written as they marshal,
+// which is how builtItems reads them. A tree built as kustomize-controller
+// builds it is read from the files layout.WriteToDisk writes (treeBuilds),
+// so every object the view reads is in the one form Flux reads: a field the
+// writers strip moves nothing at apply.
 func heldBuild(l *layout.ManifestLayout) ([]client.Object, error) {
 	var out []client.Object
 	for _, b := range buildScope(l) {
-		objs, err := builtItems(b)
+		written := *b
+		written.Resources = make([]client.Object, 0, len(b.Resources))
+		for _, r := range b.Resources {
+			if r == nil {
+				continue
+			}
+			items, err := built.Objects(r)
+			if err != nil {
+				return nil, errors.Wrapf(err, "layout %q: read list items", b.FullRepoPath())
+			}
+			if len(items) == 1 && items[0].Object == runtime.Object(r) {
+				if r, err = writtenObject(r); err != nil {
+					return nil, errors.Wrapf(err, "layout %q", b.FullRepoPath())
+				}
+			}
+			written.Resources = append(written.Resources, r)
+		}
+		objs, err := builtItems(&written)
 		if err != nil {
 			return nil, err
 		}
@@ -324,10 +341,14 @@ func (v *builtView) heldKeys(w string) []string {
 }
 
 // graphFields are the fields of a Flux Kustomization the reconcile-order
-// checks read, or that decide what its build makes.
+// checks read, or that decide what its build makes: images among them, which
+// Flux's generator writes into the build (fluxcd/pkg/kustomize v1.44.0
+// kustomize_generator.go:296-331), where an image transformer may rewrite any field a
+// component's configuration names.
 var graphFields = []string{
 	"dependsOn", "healthChecks", "healthCheckExprs", "wait", "path", "sourceRef", "kubeConfig",
 	"patches", "components", "ignoreMissingComponents", "namePrefix", "nameSuffix", "targetNamespace", "postBuild", "commonMetadata",
+	"images",
 }
 
 // agree refuses a Flux Kustomization two writers apply with different

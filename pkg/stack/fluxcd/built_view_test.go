@@ -510,6 +510,39 @@ func TestBuiltView_IgnoreMissingComponentsIsCompared(t *testing.T) {
 	}
 }
 
+// TestBuiltView_ImagesAreCompared: hand-written builds web's directory with a
+// patch setting web's spec.images, which Flux's generator writes into web's
+// build, where an image transformer may rewrite any field a component's
+// configuration names, a dependsOn included: both writers apply web with
+// different specs and the tree is refused, naming the field. Without the
+// patch both copies agree and the tree is admitted.
+func TestBuiltView_ImagesAreCompared(t *testing.T) {
+	for name, patched := range map[string]bool{"set": true, "not set": false} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				k := handWritten("hand-written")
+				k.Spec.Path = webDirectory(t, placement)
+				if patched {
+					k.Spec.Patches = []kustomize.Patch{{
+						Patch:  "- op: add\n  path: /spec/images\n  value:\n  - name: safe\n    newName: m\n",
+						Target: &kustomize.Selector{Kind: "Kustomization", Name: "web"},
+					}}
+				}
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(srBundle("platform", objApp("platform-app", k)), false), withPlacement(nodeOnly, placement))
+				if !patched {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
+				if err == nil || !strings.Contains(err.Error(), `Flux Kustomization "flux-system/web" is written by`) || !strings.Contains(err.Error(), "spec.images") {
+					t.Fatalf("got %v, want the two writers of web refused on spec.images", err)
+				}
+			})
+		}
+	}
+}
+
 // platformDirectory is the spec.path of platform in noWaitCluster.
 func platformDirectory(t *testing.T, placement layout.FluxPlacement) string {
 	t.Helper()
