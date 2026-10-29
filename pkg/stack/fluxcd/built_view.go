@@ -29,8 +29,10 @@ import (
 // a directory of the tree; and every other one that some writer writes, on
 // this cluster (no spec.kubeConfig), whose spec.path is a directory of the
 // tree and whose spec.sourceRef names the Source of the writer that writes it
-// (writer), as readsLocalBuild reads one. Each writer's result is what its
-// apply writes:
+// (writer), as readsLocalBuild reads one. Where a member is created by no
+// apply, a second view also reads as a writer one the bootstrap writes, on
+// the Source of a member whose build reads its directory (rescued,
+// newBuiltViews). Each writer's result is what its apply writes:
 //
 //   - the bootstrap's, and that of a writer that transforms nothing
 //     (transformsBuild) and substitutes nothing, is what its directories hold
@@ -59,6 +61,11 @@ type builtView struct {
 	// dependsOn whose readyExpr is exactly "true" waits only for the
 	// dependency to exist (specDeps), in every graph built from this view.
 	existenceOnly bool
+	// rescue makes local read a Kustomization the Flux bootstrap writes as a
+	// writer (rescued); uncreated lists, without it, the members find
+	// would refuse as created by no apply (newBuiltViews).
+	rescue    bool
+	uncreated []string
 	// writers lists the writers' keys in the order they were found, "" first;
 	// writerSpec holds the spec each was built from (nil for the bootstrap),
 	// and results what its build made.
@@ -93,13 +100,49 @@ type builtCopy struct {
 	held bool
 }
 
-// newBuiltView builds every writer of the tree t indexes and reads their
-// results. The builds run here, in a directory removed before it returns.
-// existenceOnly is ResourceGenerator.AdditiveCELDependencyCheckOff.
-func newBuiltView(t *kustomizationTree, existenceOnly bool) (*builtView, error) {
-	v := &builtView{
+// newBuiltViews builds every writer of the tree t indexes and reads their
+// results, in one view or two; the reconcile-order checks judge every view
+// they return, in order, and refuse on the first refusal of either. The
+// builds run here, in a directory removed before it returns. existenceOnly
+// is ResourceGenerator.AdditiveCELDependencyCheckOff.
+//
+// The first view reads the tree as a writer reads it everywhere else. Where
+// it finds a member created by no apply, a second is built that also reads
+// each Kustomization the Flux bootstrap writes whose build a member's shows
+// (rescued), and that one refuses a member still created by no apply. The
+// second view is no refinement of the first: reading another writer can
+// change which writer is certain to write an object, so every refusal of the
+// first stands, and the only verdict the second changes is that refusal.
+func newBuiltViews(t *kustomizationTree, existenceOnly bool) ([]*builtView, error) {
+	builds := newTreeBuilds(t.root)
+	defer builds.close()
+	a := newBuiltView(t, existenceOnly, false)
+	if err := a.find(builds); err != nil {
+		return nil, err
+	}
+	views := []*builtView{a}
+	if len(a.uncreated) > 0 {
+		b := newBuiltView(t, existenceOnly, true)
+		if err := b.find(builds); err != nil {
+			return nil, err
+		}
+		views = append(views, b)
+	}
+	for _, v := range views {
+		if err := v.agree(); err != nil {
+			return nil, err
+		}
+	}
+	return views, nil
+}
+
+// newBuiltView returns an empty view of the tree t indexes; rescue is
+// whether it reads the Kustomizations rescued accepts as writers.
+func newBuiltView(t *kustomizationTree, existenceOnly, rescue bool) *builtView {
+	return &builtView{
 		t:             t,
 		existenceOnly: existenceOnly,
+		rescue:        rescue,
 		writerSpec:    map[string]*kustv1.Kustomization{},
 		results:       map[string][]substituted{},
 		occurrences:   map[string][]occurrence{},
@@ -107,15 +150,6 @@ func newBuiltView(t *kustomizationTree, existenceOnly bool) (*builtView, error) 
 		specs:         map[string]*kustv1.Kustomization{},
 		specErrs:      map[string]error{},
 	}
-	builds := newTreeBuilds(t.root)
-	defer builds.close()
-	if err := v.find(builds); err != nil {
-		return nil, err
-	}
-	if err := v.agree(); err != nil {
-		return nil, err
-	}
-	return v, nil
 }
 
 // find runs the builds of every writer: the bootstrap's, then the members'
@@ -128,8 +162,10 @@ func newBuiltView(t *kustomizationTree, existenceOnly bool) (*builtView, error) 
 // find refuses a member built from a copy on another cluster or Source
 // (onThisTree), and one built from its spec as the tree holds it that no
 // apply creates once every writer is known: nothing applies what it builds.
-// A member's writer is a member or the bootstrap, so every member's result is
-// known before another's locality is read (local).
+// The first view records such a member in uncreated instead, and the second
+// refuses it (newBuiltViews). A member's writer is a member or the
+// bootstrap, so every member's result is known before another's locality is
+// read (local).
 func (v *builtView) find(builds *treeBuilds) error {
 	if err := v.add(builds, "", nil); err != nil {
 		return err
@@ -190,9 +226,76 @@ func (v *builtView) find(builds *treeBuilds) error {
 		if !v.builtFrom[key].held || slices.ContainsFunc(v.occurrences[key], func(o occurrence) bool { return o.writer != key && v.applies(o) }) {
 			continue
 		}
-		return errors.Errorf("Flux Kustomization %q is created by no apply: no build holds a copy of it that its apply does not skip, so it never exists, and what it was built from, its spec as the tree holds it, is applied by nothing: let a build create it, or drop it from the tree", key)
+		if !v.rescue {
+			v.uncreated = append(v.uncreated, key)
+			continue
+		}
+		return errors.Errorf("Flux Kustomization %q is created by no apply: no build holds a copy of it that its apply does not skip, so it never exists, and what it was built from, its spec as the tree holds it, is applied by nothing%s: let a build create it, or drop it from the tree", key, v.unreadBootstrapWriters(key))
 	}
 	return nil
+}
+
+// unreadBootstrapWriters names, for a refusal of the member with key as
+// created by no apply, each Kustomization the Flux bootstrap writes that is
+// not read as a writer, whose spec.path is a directory of the tree whose
+// build reads the directory hosting key's CR: it may create the member, but
+// kure reads its build only where rescued accepts it. "" when there is none.
+func (v *builtView) unreadBootstrapWriters(key string) string {
+	host := v.t.hostOf[key]
+	var out []string
+	for _, held := range v.heldKeys("") {
+		if _, built := v.writerSpec[held]; built || v.isMember(held) {
+			continue
+		}
+		i := slices.IndexFunc(v.occurrences[held], func(o occurrence) bool { return o.writer == "" && v.applies(o) })
+		if i < 0 {
+			continue
+		}
+		k, err := typedKustomization(v.occurrences[held][i].obj)
+		if err != nil {
+			continue
+		}
+		if l := v.t.layoutAt[path.Clean(k.Spec.Path)]; l == nil || !slices.Contains(buildScope(l), host) {
+			continue
+		}
+		out = append(out, fmt.Sprintf("; %s, which the Flux bootstrap applies, may create it, but kure reads its build only on the Source of a member whose build reads that directory (it names %s)", held, sourceRefKey(k.Spec.SourceRef, k.Namespace)))
+	}
+	return strings.Join(out, "")
+}
+
+// rescued returns, for the Kustomization with key that is no member, the
+// copy the Flux bootstrap's result holds when the bootstrap applies it and
+// its build is the tree's as a member's build shows it: it is typed, on
+// this cluster, and some member names the same Source and builds a directory
+// whose build reads its spec.path's. That member reads the directory from
+// that Source, so the Kustomization builds what the tree holds there, as
+// local reads one a member writes; the bootstrap's own Source is not needed.
+// Only the second view reads it (newBuiltViews).
+func (v *builtView) rescued(key string) (*kustv1.Kustomization, occurrence) {
+	i := slices.IndexFunc(v.occurrences[key], func(o occurrence) bool { return o.writer == "" && v.applies(o) })
+	if i < 0 {
+		return nil, occurrence{}
+	}
+	from := v.occurrences[key][i]
+	k, err := typedKustomization(from.obj)
+	if err != nil || k.Spec.KubeConfig != nil {
+		return nil, occurrence{}
+	}
+	dir := v.t.layoutAt[path.Clean(k.Spec.Path)]
+	if dir == nil {
+		return nil, occurrence{}
+	}
+	src := sourceRefKey(k.Spec.SourceRef, k.Namespace)
+	for _, m := range v.t.kusts {
+		ms := v.writerSpec[crKey(m.Namespace, m.Name)]
+		if ms == nil || sourceRefKey(ms.Spec.SourceRef, ms.Namespace) != src {
+			continue
+		}
+		if l := v.t.layoutAt[path.Clean(ms.Spec.Path)]; l != nil && slices.Contains(buildScope(l), dir) {
+			return k, from
+		}
+	}
+	return nil, occurrence{}
 }
 
 // onThisTree refuses the member with key when k, the copy of it the apply of
@@ -213,13 +316,21 @@ func (v *builtView) onThisTree(key string, k *kustv1.Kustomization, w string) er
 // local returns, for the Kustomization with key that is no member, the spec
 // its writer's result holds when its build is the tree's: it is on this
 // cluster, a writer other than the bootstrap writes it, and its
-// spec.sourceRef names that writer's Source (sourceRefKey). nil otherwise,
+// spec.sourceRef names that writer's Source (sourceRefKey); in the second
+// view also one the bootstrap writes that rescued accepts. nil otherwise,
 // also when that spec cannot be read in typed form: its writer's apply then
 // fails (go-kure/kure#1094 A4).
 func (v *builtView) local(key string) *kustv1.Kustomization {
 	w := v.writer(key, false)
 	if w == "" {
-		return nil
+		if !v.rescue {
+			return nil
+		}
+		k, from := v.rescued(key)
+		if k != nil {
+			v.builtFrom[key] = builtCopy{occurrence: from}
+		}
+		return k
 	}
 	var k *kustv1.Kustomization
 	var from occurrence

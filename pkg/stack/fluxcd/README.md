@@ -370,7 +370,12 @@ Every Kustomization and object is read as its writer's build makes it (go-kure/k
 writer is a Kustomization whose build is the tree's: the Flux bootstrap, each one the integration
 placed or kept, and each other one written into the tree on this cluster (no `spec.kubeConfig`),
 whose `spec.path` is a directory of the tree and whose Source is that of the Kustomization that
-writes it. kure builds each writer as kustomize-controller does: its `spec.patches`,
+writes it, or, for one the Flux bootstrap writes, the Source of a member whose build reads its
+directory. kure reads that last kind only where the tree would otherwise hold a member no apply
+creates, in a second view: every check runs over the first view and then the second, and a
+refusal of either refuses the tree, so the only verdict it changes is that one
+(go-kure/kure#1174). The tree as held (`UmbrellasDoNotWait`, `UmbrellaTerminals`) still reads a
+Kustomization the bootstrap writes as building nothing. kure builds each writer as kustomize-controller does: its `spec.patches`,
 `spec.components`, `spec.namePrefix`, `spec.nameSuffix` and `spec.targetNamespace` applied, its
 local config dropped, its generators run, then its `spec.postBuild` substitution, and a writer is
 built from its spec as its own writer's result holds it. The build uses Flux's kustomize options
@@ -429,7 +434,8 @@ built from what no apply creates, a skipped copy, the first its writers' results
 spec as the tree holds it, where no result held it yet, when the first copy that is applied
 differs in those fields, since what it applies cannot then be read; a member built from its spec as the tree holds it that no apply creates
 once every writer is known (a parent's patch deleted or renamed it), since nothing applies what
-it builds; a member a build applies with `spec.kubeConfig`, or with another Source than its
+it builds, naming each Kustomization the bootstrap applies that may create it but whose build kure
+does not read; a member a build applies with `spec.kubeConfig`, or with another Source than its
 spec in the tree names, since it then applies on another cluster or another Source's directory;
 and, with `spec.postBuild.substituteFrom`, a
 variable that a Flux Kustomization of the build, or any object's `apiVersion` or kind, references

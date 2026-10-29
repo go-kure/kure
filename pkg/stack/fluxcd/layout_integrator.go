@@ -613,24 +613,31 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) erro
 // writer, or, with several, whether every one of them waits for the checker,
 // and the other Kustomizations of the tree too, each read from its writer's
 // result; checkReconcileOrder runs first so its refusals keep their chains.
+// Both run over each view newBuiltViews returns, and the first refusal of
+// either view refuses the tree.
 func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string]bool, existenceOnly bool) error {
 	t, err := indexKustomizationTree(root, generatedMembers(generated))
 	if err != nil {
 		return err
 	}
-	v, err := newBuiltView(t, existenceOnly)
+	views, err := newBuiltViews(t, existenceOnly)
 	if err != nil {
 		return err
 	}
-	kusts, err := v.members()
-	if err != nil {
-		return err
+	for _, v := range views {
+		kusts, err := v.members()
+		if err != nil {
+			return err
+		}
+		applied := func(key string) []string { return v.unskipped(key, v.applied(key)) }
+		if err := checkReconcileOrder(kusts, v.creator, applied, existenceOnly); err != nil {
+			return err
+		}
+		if err := v.checkTreeOrder(); err != nil {
+			return err
+		}
 	}
-	applied := func(key string) []string { return v.unskipped(key, v.applied(key)) }
-	if err := checkReconcileOrder(kusts, v.creator, applied, existenceOnly); err != nil {
-		return err
-	}
-	return v.checkTreeOrder()
+	return nil
 }
 
 // buildDirectories returns, in pre-order, the layouts whose directories a
