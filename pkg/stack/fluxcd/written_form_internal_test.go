@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"encoding/json"
+	stderrors "errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -142,21 +143,42 @@ func canonicalJSON(t *testing.T, content map[string]any) string {
 // tree without the merge entries does not make, identity and content both.
 // The cases move the merged Secret every way a build can: the generator's
 // namespace, none, another of two same-named Secrets, no content hash, an
-// overlay's name suffix and namespace, and a component.
+// overlay's name suffix and namespace, and a component. Each also pins that
+// a merged Secret is read as hashed exactly where kustomize appends a hash:
+// into a generated Secret, unless its options say not, and never into a
+// Secret a file holds, whatever shape its name has. A probe that cannot
+// tell, a mark copied onto another object or a marked file a generator
+// reads as data, does not read the build.
 func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 	const kustomization = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\n"
-	secret := func(namespace string) string {
-		return "---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: creds\n  namespace: " + namespace + "\ndata:\n  base: dg==\n"
+	named := func(name, namespace string) string {
+		return "---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: " + name + "\n  namespace: " + namespace + "\ndata:\n  base: dg==\n"
 	}
-	merge := func(extra string) string {
-		return "secretGenerator:\n- name: creds\n" + extra + "  behavior: merge\n  literals:\n  - k=v\n"
+	secret := func(namespace string) string { return named("creds", namespace) }
+	mergeNamed := func(name, extra string) string {
+		return "secretGenerator:\n- name: " + name + "\n" + extra + "  behavior: merge\n  literals:\n  - k=v\n"
 	}
+	merge := func(extra string) string { return mergeNamed("creds", extra) }
 	both := secret("default") + secret("blue")
 	base := kustomization + "resources:\n- secrets.yaml\n#MERGE\n"
+	unhashed := "  options:\n    disableNameSuffixHash: true\n"
 	cases := map[string]struct {
 		files        map[string]string
 		merge, build string
+		// hashed: kustomize appends a hash to the merged Secret's name;
+		// unread: the probe does not read the build.
+		hashed, unread bool
 	}{
+		"into a generated Secret": {
+			files: map[string]string{"base/kustomization.yaml": kustomization + "secretGenerator:\n- name: creds\n  namespace: blue\n  literals:\n  - a=b\n",
+				"overlay/kustomization.yaml": kustomization + "resources:\n- ../base\n#MERGE\n"},
+			merge: merge("  namespace: blue\n"), build: "overlay", hashed: true,
+		},
+		"into a generated Secret, without a content hash": {
+			files: map[string]string{"base/kustomization.yaml": kustomization + "secretGenerator:\n- name: creds\n  namespace: blue\n  literals:\n  - a=b\n" + unhashed,
+				"overlay/kustomization.yaml": kustomization + "resources:\n- ../base\n#MERGE\n"},
+			merge: merge("  namespace: blue\n" + unhashed), build: "overlay",
+		},
 		"in its namespace": {
 			files: map[string]string{"base/secrets.yaml": both, "base/kustomization.yaml": base},
 			merge: merge("  namespace: default\n"), build: "base",
@@ -171,7 +193,34 @@ func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 		},
 		"without a content hash": {
 			files: map[string]string{"base/secrets.yaml": both, "base/kustomization.yaml": base},
-			merge: merge("  namespace: blue\n  options:\n    disableNameSuffixHash: true\n"), build: "base",
+			merge: merge("  namespace: blue\n" + unhashed), build: "base",
+		},
+		"under a literal name of a hash's shape": {
+			files: map[string]string{"base/secrets.yaml": named("web-bcdfghkmt2", "default") + named("web-2456789bcd", "default"), "base/kustomization.yaml": base},
+			merge: mergeNamed("web-bcdfghkmt2", "  namespace: default\n"), build: "base",
+		},
+		"beside a Secret carrying the annotation": {
+			files: map[string]string{"base/secrets.yaml": both + "---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: ready\n  namespace: default\n  annotations:\n    " + mergeProbe + ": \"false\"\ndata:\n  base: dg==\n",
+				"base/kustomization.yaml": base},
+			merge: merge("  namespace: blue\n"), build: "base",
+		},
+		"with a replacement copying its annotations": {
+			files: map[string]string{"base/secrets.yaml": secret("default") + named("ready", "default") +
+				"---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: creds\n  namespace: blue\n  annotations:\n    x: y\ndata:\n  base: dg==\n",
+				"base/kustomization.yaml": base + "replacements:\n- source:\n    kind: Secret\n    name: creds\n    namespace: blue\n    fieldPath: metadata.annotations\n  targets:\n  - select:\n      kind: Secret\n      name: ready\n    fieldPaths:\n    - metadata.annotations\n    options:\n      create: true\n"},
+			merge: merge("  namespace: blue\n  options:\n    annotations:\n      a: b\n"), build: "base", unread: true,
+		},
+		"beside a generator reading a kustomization file as data": {
+			files: map[string]string{"base/secrets.yaml": both,
+				"base/kustomization.yaml":      base + "configMapGenerator:\n- name: data\n  files:\n  - data/kustomization.yaml\n",
+				"base/data/kustomization.yaml": mergeNamed("other", "")},
+			merge: merge("  namespace: blue\n"), build: "base", unread: true,
+		},
+		"beside an unhashed generator reading a kustomization file as data": {
+			files: map[string]string{"base/secrets.yaml": both,
+				"base/kustomization.yaml":      base + "configMapGenerator:\n- name: data\n  options:\n    disableNameSuffixHash: true\n  files:\n  - data/kustomization.yaml\n",
+				"base/data/kustomization.yaml": mergeNamed("other", "")},
+			merge: merge("  namespace: blue\n"), build: "base", unread: true,
 		},
 		"under an overlay's name suffix": {
 			files: map[string]string{"base/secrets.yaml": both, "base/kustomization.yaml": base,
@@ -239,13 +288,30 @@ func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 				t.Fatal("the merge changes nothing: the case tests nothing")
 			}
 			marked, err := probeMerges(filesys.MakeFsOnDisk(), dir, rm)
+			if tc.unread {
+				var u unreadBuild
+				if !stderrors.As(err, &u) {
+					t.Fatalf("probeMerges: got %v, want the build not read", err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("probeMerges: %v", err)
 			}
 			var got []string
 			for i, res := range rm.Resources() {
-				if marked[i] {
-					got = append(got, res.CurId().String())
+				if !marked[i].merged {
+					if marked[i].hashed {
+						t.Errorf("%s is read as hashed, not merged", res.CurId())
+					}
+					continue
+				}
+				got = append(got, res.CurId().String())
+				if marked[i].hashed != tc.hashed {
+					t.Errorf("%s is read as hashed %v, kustomize hashes it %v", res.CurId(), marked[i].hashed, tc.hashed)
+				}
+				if name := res.GetName(); tc.hashed && (len(name) < 11 || name[len(name)-11] != '-' || !contentHash(name[len(name)-10:])) {
+					t.Errorf("%s: the case expects a hashed name", res.CurId())
 				}
 			}
 			slices.Sort(got)
@@ -257,26 +323,30 @@ func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 	}
 }
 
-// A merged Secret kure's build names web-<hash> may be applied under any
-// content hash, as another kustomize version hashes it; its name before the
-// hash is the build's, so another name, or the same with no hash, is
-// another Secret. One built with no hash is matched by that name only.
+// A merged Secret kure's build names web-<hash>, kustomize having hashed it,
+// may be applied under any content hash, as another kustomize version hashes
+// it; its name before the hash is the build's, so another name, or the same
+// with no hash, is another Secret. One built with no hash is matched by that
+// name only, a literal suffix of a hash's shape included.
 func TestMergedName_AnyContentHash(t *testing.T) {
 	for _, c := range []struct {
 		name, built string
+		hashed      bool
 		want        bool
 	}{
-		{"web-5bt2m8fkgh", "web-5bt2m8fkgh", true},
-		{"web-ghk2m8t4bd", "web-5bt2m8fkgh", true},
-		{"web", "web-5bt2m8fkgh", false},
-		{"webx-ghk2m8t4bd", "web-5bt2m8fkgh", false},
-		{"web-foo", "web-5bt2m8fkgh", false},
-		{"web-ghk2m8t4ba", "web-5bt2m8fkgh", false},
-		{"web", "web", true},
-		{"web-ghk2m8t4bd", "web", false},
+		{"web-5bt2m8fkgh", "web-5bt2m8fkgh", true, true},
+		{"web-ghk2m8t4bd", "web-5bt2m8fkgh", true, true},
+		{"web", "web-5bt2m8fkgh", true, false},
+		{"webx-ghk2m8t4bd", "web-5bt2m8fkgh", true, false},
+		{"web-foo", "web-5bt2m8fkgh", true, false},
+		{"web-ghk2m8t4ba", "web-5bt2m8fkgh", true, false},
+		{"web", "web", false, true},
+		{"web-ghk2m8t4bd", "web", false, false},
+		{"web-5bt2m8fkgh", "web-5bt2m8fkgh", false, true},
+		{"web-ghk2m8t4bd", "web-5bt2m8fkgh", false, false},
 	} {
-		if got := mergedName(c.name, c.built); got != c.want {
-			t.Errorf("mergedName(%q, %q) = %v, want %v", c.name, c.built, got, c.want)
+		if got := mergedName(c.name, c.built, c.hashed); got != c.want {
+			t.Errorf("mergedName(%q, %q, hashed %v) = %v, want %v", c.name, c.built, c.hashed, got, c.want)
 		}
 	}
 }

@@ -543,33 +543,40 @@ func TestBuiltObjects_GeneratedNameIsRead(t *testing.T) {
 // its target namespace, creds is the literal Secret b-longer writes, and the
 // tree is refused. So it is when a configMapGenerator only reads the
 // component's file as data, also when it reads every kustomization file name
-// of that directory as data. A component that is also read as data still
-// merges. A merge into blue/creds, which b-longer also writes, leaves
-// default/creds the literal Secret b-longer writes: its writer is certain and
-// the tree is refused.
+// of that directory as data. A component that is also read as data merges,
+// but kure's probe of which Secret it merges into changes that data, so the
+// build is not read. A merge into blue/creds, which b-longer also writes,
+// leaves default/creds the literal Secret b-longer writes: its writer is
+// certain and the tree is refused. A merge into the literal
+// web-bcdfghkmt2, whose name kustomize does not hash, leaves the literal
+// web-2456789bcd b-longer also writes with a certain writer, though both
+// end in what looks like a content hash, and the tree is refused.
 func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 	creds := unstructuredObj("v1", "Secret", "default", "creds")
 	creds.Object["data"] = map[string]any{"base": "dg=="}
 	const merge = "- name: creds\n  namespace: default\n  behavior: merge\n  literals:\n  - k=v\n"
 	cases := map[string]struct {
 		generator, prefix, suffix, literal, targetNamespace string
-		unused, dataFile, everyName, refused                bool
-		// blue, if set, has b-longer also write blue/creds, and checked the
-		// exact name a health-checks in default.
+		unused, dataFile, everyName, refused, unread        bool
+		// blue, if set, has b-longer also write blue/creds; checked, if
+		// set, is the exact name a health-checks in default.
 		blue    bool
 		checked string
+		// literals are more Secrets b-longer writes in default.
+		literals []string
 	}{
-		"merge in another namespace":     {generator: strings.Replace(merge, "namespace: default", "namespace: blue", 1), blue: true, checked: "creds", refused: true},
-		"merge":                          {generator: merge, prefix: "creds"},
-		"merge, name suffix x":           {generator: merge, prefix: "credsx", suffix: "x"},
-		"create":                         {generator: "- name: extra\n  namespace: default\n  literals:\n  - k=v\n", prefix: "extra-", refused: true},
-		"merge, literal credsx":          {generator: merge, prefix: "credsx", literal: "credsx", refused: true},
-		"merge, literal creds-foo":       {generator: merge, prefix: "creds-foo", literal: "creds-foo", refused: true},
-		"merge, component unused":        {generator: merge, prefix: "creds", unused: true, refused: true},
-		"merge, component unused, built": {generator: merge, prefix: "creds", unused: true, targetNamespace: "default", refused: true},
-		"merge, read only as data":       {generator: merge, prefix: "creds", unused: true, dataFile: true, targetNamespace: "default", refused: true},
-		"merge, component also data":     {generator: merge, prefix: "creds", dataFile: true},
-		"merge, every name read as data": {generator: merge, prefix: "creds", unused: true, dataFile: true, everyName: true, targetNamespace: "default", refused: true},
+		"merge in another namespace":      {generator: strings.Replace(merge, "namespace: default", "namespace: blue", 1), blue: true, checked: "creds", refused: true},
+		"merge, literal hash-shaped name": {generator: strings.Replace(merge, "name: creds", "name: web-bcdfghkmt2", 1), literals: []string{"web-bcdfghkmt2", "web-2456789bcd"}, checked: "web-2456789bcd", refused: true},
+		"merge":                           {generator: merge, prefix: "creds"},
+		"merge, name suffix x":            {generator: merge, prefix: "credsx", suffix: "x"},
+		"create":                          {generator: "- name: extra\n  namespace: default\n  literals:\n  - k=v\n", prefix: "extra-", refused: true},
+		"merge, literal credsx":           {generator: merge, prefix: "credsx", literal: "credsx", refused: true},
+		"merge, literal creds-foo":        {generator: merge, prefix: "creds-foo", literal: "creds-foo", refused: true},
+		"merge, component unused":         {generator: merge, prefix: "creds", unused: true, refused: true},
+		"merge, component unused, built":  {generator: merge, prefix: "creds", unused: true, targetNamespace: "default", refused: true},
+		"merge, read only as data":        {generator: merge, prefix: "creds", unused: true, dataFile: true, targetNamespace: "default", refused: true},
+		"merge, component also data":      {generator: merge, prefix: "creds", dataFile: true, unread: true},
+		"merge, every name read as data":  {generator: merge, prefix: "creds", unused: true, dataFile: true, everyName: true, targetNamespace: "default", refused: true},
 	}
 	for name, tc := range cases {
 		for _, placement := range integratedPlacements {
@@ -578,6 +585,11 @@ func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 				if tc.literal != "" {
 					objs = append(objs, unstructuredObj("v1", "Secret", "default", tc.literal))
 				}
+				for _, n := range tc.literals {
+					literal := creds.DeepCopy()
+					literal.SetName(n)
+					objs = append(objs, literal)
+				}
 				name := func(ml *layout.ManifestLayout, b *kustv1.Kustomization) string {
 					return builtName(t, builtNames(t, ml, b, "Secret"), tc.prefix)
 				}
@@ -585,6 +597,8 @@ func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 					blue := creds.DeepCopy()
 					blue.SetNamespace("blue")
 					objs = append(objs, blue)
+				}
+				if tc.checked != "" {
 					name = func(*layout.ManifestLayout, *kustv1.Kustomization) string { return tc.checked }
 				}
 				err := keptPairChecking(t, placement, objs, "Secret", name,
@@ -609,6 +623,12 @@ func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 						b.Spec.NameSuffix = tc.suffix
 						b.Spec.TargetNamespace = tc.targetNamespace
 					})
+				if tc.unread {
+					if err == nil || !strings.Contains(err.Error(), "is not read") || !strings.Contains(err.Error(), "which Secret a merge changes cannot be read") {
+						t.Fatalf("got %v, want b-longer's build not read", err)
+					}
+					return
+				}
 				if tc.refused && (err == nil || !strings.Contains(err.Error(), "can never all become Ready")) {
 					t.Fatalf("got %v, want the cycle through a's health check refused", err)
 				}
@@ -625,8 +645,11 @@ func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 // "&t " and ALIAS to "*t" make the kind an alias of a's value, which the
 // cluster may set to Kustomization: offline child is a ConfigMap, at apply it
 // may be a Flux Kustomization, so its type cannot be read from the tree, and
-// the tree is refused, naming the kind; the same through its apiVersion. With
-// TYPE set inline too, or a kind written literally, or a kind that references
+// the tree is refused, naming the kind; the same through its apiVersion. The
+// alias may come from the text the inline values make rather than from one
+// of them: a kind ${EMPTY:=*t}, ${EMPTY}*t or ${V/a/*t}, with EMPTY "" and V
+// "a", is *t as Flux substitutes it, and is refused too. With TYPE set inline
+// too, or a kind written literally, or a kind that references
 // no variable left to the cluster, child is what kure substitutes, and the
 // tree is admitted.
 func TestBuiltObjects_AliasedTypeIsRefused(t *testing.T) {
@@ -641,6 +664,12 @@ func TestBuiltObjects_AliasedTypeIsRefused(t *testing.T) {
 			inline: anchor, wantErr: "in its kind"},
 		"apiVersion aliased to a cluster value": {apiVersion: "${ALIAS}", kind: "Kustomization", a: "${ANCHOR}${API:=v1}",
 			inline: anchor, wantErr: "in its apiVersion"},
+		"kind aliased by a variable's default": {apiVersion: "kustomize.toolkit.fluxcd.io/v1", kind: "${EMPTY:=*t}", a: "${ANCHOR}${TYPE:=ConfigMap}",
+			inline: map[string]string{"ANCHOR": "&t ", "EMPTY": ""}, wantErr: "in its kind"},
+		"kind aliased by the text around a variable": {apiVersion: "kustomize.toolkit.fluxcd.io/v1", kind: "${EMPTY}*t", a: "${ANCHOR}${TYPE:=ConfigMap}",
+			inline: map[string]string{"ANCHOR": "&t ", "EMPTY": ""}, wantErr: "in its kind"},
+		"kind aliased by a replacement": {apiVersion: "kustomize.toolkit.fluxcd.io/v1", kind: "${V/a/*t}", a: "${ANCHOR}${TYPE:=ConfigMap}",
+			inline: map[string]string{"ANCHOR": "&t ", "V": "a"}, wantErr: "in its kind"},
 		"kind aliased to an inline value": {apiVersion: "kustomize.toolkit.fluxcd.io/v1", kind: "${ALIAS}", a: "${ANCHOR}${TYPE:=ConfigMap}",
 			inline: map[string]string{"ANCHOR": "&t ", "ALIAS": "*t", "TYPE": "ConfigMap"}},
 		"kind written beside a cluster value": {apiVersion: "kustomize.toolkit.fluxcd.io/v1", kind: "ConfigMap", a: "${ANCHOR}${TYPE:=ConfigMap}",
