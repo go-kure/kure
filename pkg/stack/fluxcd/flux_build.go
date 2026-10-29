@@ -223,6 +223,9 @@ type openAPIGuard struct {
 	read, found map[string]map[string]bool
 	merges      []string
 	unmodelled  []unmodelledFile
+	// mergeReads counts, per file holding a secretGenerator entry with
+	// behavior merge, the reads of it, each of which the probe marks.
+	mergeReads map[string]int
 }
 
 // unmodelledFile is a kustomization file holding field, a field the merge
@@ -255,6 +258,12 @@ func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 		})
 		if merges || len(k.Generators) > 0 {
 			g.merges = append(g.merges, name)
+		}
+		if merges {
+			if g.mergeReads == nil {
+				g.mergeReads = map[string]int{}
+			}
+			g.mergeReads[name]++
 		}
 		if merges && g.probe != nil {
 			return g.probe.mark(name, b)
@@ -291,6 +300,20 @@ func (g *openAPIGuard) unmodelledLoaded() (unmodelledFile, bool) {
 		}
 	}
 	return unmodelledFile{}, false
+}
+
+// readOtherwise returns the first file holding a secretGenerator entry with
+// behavior merge that the build read other than once, as a kustomization it
+// loads, if any. Each read of such a file is marked (mergeMarker), so a read
+// as a patch or a resource, or a second read, issues a mark no merge sets,
+// which a patch can carry onto a Secret no merge changed.
+func (g *openAPIGuard) readOtherwise() (string, bool) {
+	for _, file := range slices.Sorted(maps.Keys(g.mergeReads)) {
+		if g.mergeReads[file] != 1 || !g.loaded(file) {
+			return file, true
+		}
+	}
+	return "", false
 }
 
 // modelledFields are the top-level fields of a kustomization file the merge
@@ -416,7 +439,9 @@ type mergeMark struct{ merged, hashed bool }
 // not read at all, as a value copied from one object into another can move a
 // mark off the Secret it marked, or carry the added literal into a name, and
 // leave both comparisons equal, and a generator kure does not read can
-// merge unseen. dir is built a third
+// merge unseen; nor is one that reads a file holding a merge other than
+// once, as a kustomization it loads (readOtherwise), as such a read issues
+// a mark no merge sets, which a patch can carry. dir is built a third
 // time with a literal added to each entry, under a key holding the nonce: the
 // merged Secret's name changes only where kustomize appends a hash of its
 // content, which kure reads from that build rather than predicts (a merge
@@ -511,13 +536,22 @@ func probeBuild(fsys filesys.FileSystem, dir string, marker *mergeMarker) (resma
 		return nil, unreadBuild{errors.Wrap(err, "its build with each secretGenerator entry with behavior merge marked fails, so which Secret a merge changes cannot be read")}
 	}
 	if u, ok := guard.unmodelledLoaded(); ok {
-		rel, err := filepath.Rel(dir, u.file)
-		if err != nil {
-			rel = u.file
-		}
-		return nil, unreadBuild{errors.Errorf("its build may merge into a Secret and loads %s, whose %s kure does not model, so which Secret a merge changes cannot be read", filepath.ToSlash(rel), u.field)}
+		return nil, unreadBuild{errors.Errorf("its build may merge into a Secret and loads %s, whose %s kure does not model, so which Secret a merge changes cannot be read", relFile(dir, u.file), u.field)}
+	}
+	if file, ok := guard.readOtherwise(); ok {
+		return nil, unreadBuild{errors.Errorf("its build reads %s, which merges into a Secret, other than once as a kustomization it loads, so which Secret a merge changes cannot be read", relFile(dir, file))}
 	}
 	return rm, nil
+}
+
+// relFile is file relative to dir, with forward slashes; file where it has
+// none.
+func relFile(dir, file string) string {
+	rel, err := filepath.Rel(dir, file)
+	if err != nil {
+		return file
+	}
+	return filepath.ToSlash(rel)
 }
 
 // probeDiffers is the unreadBuild of a probe build that differs from the

@@ -476,7 +476,10 @@ add none, so a cycle through them passes:
   any other field is not read: `replacements` and `vars` may copy a value from one object into
   another, so the annotation could leave the Secret it marks, or the literal reach a name,
   unseen. A `generators` entry may itself merge into a Secret (a builtin `SecretGenerator` with
-  `behavior: merge`), so a build loading one counts as one that merges. A literal Secret beside
+  `behavior: merge`), so a build loading one counts as one that merges. Nor is a build read that
+  reads a file holding such a merge other than once, as a kustomization it loads (a patch or
+  resource reading that file, or a second read): kure annotates every read, and a patch could
+  carry the annotation of a read that merges nothing onto another Secret. A literal Secret beside
   it, of another namespace or name, keeps its writer certain;
 - an object whose identity may change at apply, whatever it names, unless only the writer's own
   result holds it: `$` left after substitution or `ENC[` (SOPS) in its `apiVersion`, kind,
