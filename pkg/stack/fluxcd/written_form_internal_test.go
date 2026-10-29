@@ -411,6 +411,66 @@ func TestOpenAPIGuard_GeneratorsEntryMayMerge(t *testing.T) {
 	}
 }
 
+// A file holding a merge that the probe build reads other than once, as a
+// kustomization it loads, is marked on a read that merges nothing: a patch
+// reading it can move that mark onto a Secret no merge changed, and remove
+// what else it carried, so both comparisons stay equal. The probe does not
+// read such a build.
+func TestProbeMerges_MarkedFileReadOtherwise(t *testing.T) {
+	const (
+		secrets = "---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: creds\n  namespace: default\ndata:\n  base: dg==\n" +
+			"---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: ready\n  namespace: default\ndata:\n  base: dg==\n"
+		merge = "secretGenerator:\n- name: creds\n  namespace: default\n  behavior: merge\n  options:\n    annotations:\n      a: b\n  literals:\n  - k=v\n"
+	)
+	// patches reads path as a patch of ready, then copies that file's
+	// annotations, and with them its mark, onto ready and removes the rest.
+	patches := func(path string) string {
+		return "patches:\n- path: " + path + "\n  target:\n    kind: Secret\n    name: ready\n" +
+			"- target:\n    kind: Secret\n    name: ready\n  patch: |-\n" +
+			"    - op: copy\n      from: /secretGenerator/0/options/annotations\n      path: /metadata/annotations\n" +
+			"    - op: remove\n      path: /secretGenerator\n"
+	}
+	for name, files := range map[string]map[string]string{
+		"a data file read as a patch only": {
+			"base/secrets.yaml":         secrets,
+			"base/kustomization.yaml":   "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n- secrets.yaml\n" + merge + patches("p/kustomization.yaml"),
+			"base/p/kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nmetadata:\n  name: p\n" + merge,
+		},
+		"a component read again as a patch": {
+			"base/secrets.yaml":       secrets,
+			"base/kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n- secrets.yaml\ncomponents:\n- ../c\n" + patches("../c/kustomization.yaml"),
+			"c/kustomization.yaml":    "apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\nmetadata:\n  name: c\n" + merge,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			for f, content := range files {
+				p := filepath.Join(dir, filepath.FromSlash(f))
+				if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			kustomizeschema.Parse()
+			base := filepath.Join(dir, "base")
+			rm, err := kustomizeBuild(filesys.MakeFsOnDisk(), base)
+			if err != nil {
+				t.Fatalf("build: %v", err)
+			}
+			if a := rm.Resources()[1].GetAnnotations(); rm.Resources()[1].GetName() != "ready" || a["a"] != "b" {
+				t.Fatalf("the patches do not copy the annotations onto ready (%v): the case tests nothing", a)
+			}
+			marks, err := probeMerges(filesys.MakeFsOnDisk(), base, rm)
+			var u unreadBuild
+			if !stderrors.As(err, &u) || !strings.Contains(err.Error(), "other than once") {
+				t.Fatalf("probeMerges: got %v, marks %v, want the build not read", err, marks)
+			}
+		})
+	}
+}
+
 // A mark is only one the probe issued: its nonce, "-" and the number of an
 // entry it marked, written as it writes it.
 func TestMergeMarker_ValueIsAnIssuedMark(t *testing.T) {
