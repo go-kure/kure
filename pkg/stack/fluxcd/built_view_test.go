@@ -9,6 +9,7 @@ import (
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"github.com/fluxcd/pkg/apis/kustomize"
+	metaapi "github.com/fluxcd/pkg/apis/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -668,4 +669,221 @@ func platformDirectory(t *testing.T, placement layout.FluxPlacement) string {
 		t.Fatalf("without the setting: %v", err)
 	}
 	return findKept(off, "platform").Spec.Path
+}
+
+// shopDirectory is shop's spec.path in shopTree, read from an integration
+// without the patch.
+func shopDirectory(t *testing.T, placement layout.FluxPlacement) string {
+	t.Helper()
+	ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(shopTree(""), withPlacement(nodeOnly, placement))
+	if err != nil {
+		t.Fatalf("without the patch: %v", err)
+	}
+	return findKept(ml, "shop").Spec.Path
+}
+
+// rescueTree integrates c with rescue, a Kustomization the Flux bootstrap
+// applies (go-kure/kure#1174): no dependsOn, on shop's Source, building
+// shop's directory, added to the root layout and edited by edit.
+func rescueTree(t *testing.T, c *stack.Cluster, placement layout.FluxPlacement, edit func(r *kustv1.Kustomization)) error {
+	t.Helper()
+	r := handWritten("rescue")
+	r.Spec.Path = shopDirectory(t, placement)
+	if edit != nil {
+		edit(r)
+	}
+	return integrateWalked(t, c, placement, func(ml *layout.ManifestLayout) {
+		ml.Resources = append(ml.Resources, r)
+	})
+}
+
+// TestBuiltView_ABootstrapWrittenKustomizationCreatesAMember: shop deletes
+// web from its build, and rescue, which the Flux bootstrap applies, builds
+// shop's directory without that patch, so its apply creates web. rescue is on
+// shop's Source and shop's build reads that directory, so kure reads
+// rescue's build as the tree's and the tree is admitted (go-kure/kure#1174).
+func TestBuiltView_ABootstrapWrittenKustomizationCreatesAMember(t *testing.T) {
+	for _, placement := range integratedPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			if err := rescueTree(t, shopTree(deleteKust("web")), placement, nil); err != nil {
+				t.Fatalf("got %v, want the tree admitted", err)
+			}
+		})
+	}
+}
+
+// TestBuiltView_AnUnreadBootstrapWrittenKustomizationIsNamed: a
+// Kustomization the Flux bootstrap applies is read as a writer only on the
+// Source of a member whose build reads its directory, and only on this
+// cluster. rescue on a Source no member names, or on one only a member that
+// does not read the directory names, and rescue with spec.kubeConfig, are not
+// read: web is still created by no apply, and the refusal names rescue.
+func TestBuiltView_AnUnreadBootstrapWrittenKustomizationIsNamed(t *testing.T) {
+	otherRepo := func(r *kustv1.Kustomization) { r.Spec.SourceRef.Name = "other-repo" }
+	withOther := func() *stack.Cluster {
+		c := shopTree(deleteKust("web"))
+		other := srBundle("other", cmApp("other-app"))
+		other.SourceRef = &stack.SourceRef{Kind: "GitRepository", Name: "other-repo", Namespace: "flux-system"}
+		n := &stack.Node{Name: "other", Bundle: other}
+		n.SetParent(c.Node)
+		c.Node.Children = append(c.Node.Children, n)
+		return c
+	}
+	for name, c := range map[string]struct {
+		build func() *stack.Cluster
+		edit  func(r *kustv1.Kustomization)
+	}{
+		"another Source": {build: func() *stack.Cluster { return shopTree(deleteKust("web")) }, edit: otherRepo},
+		"kubeConfig": {build: func() *stack.Cluster { return shopTree(deleteKust("web")) }, edit: func(r *kustv1.Kustomization) {
+			r.Spec.KubeConfig = &metaapi.KubeConfigReference{SecretRef: &metaapi.SecretKeyReference{Name: "remote"}}
+		}},
+		"a member's Source, not its build": {build: withOther, edit: otherRepo},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				err := rescueTree(t, c.build(), placement, c.edit)
+				for _, want := range []string{`Flux Kustomization "flux-system/web" is created by no apply`, `flux-system/rescue, which the Flux bootstrap applies, may create it`} {
+					if err == nil || !strings.Contains(err.Error(), want) {
+						t.Fatalf("got %v, want %s", err, want)
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestBuiltView_ABootstrapWrittenCreatorIsJudged: rescue, the only apply that
+// creates web, depends on web. web's apply waits for rescue's, which waits
+// for web to become Ready: the creator is read, not assumed, and the cycle
+// through it is refused.
+func TestBuiltView_ABootstrapWrittenCreatorIsJudged(t *testing.T) {
+	for _, placement := range integratedPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			err := rescueTree(t, shopTree(deleteKust("web")), placement, func(r *kustv1.Kustomization) {
+				r.Spec.DependsOn = []kustv1.DependencyReference{{Name: "web"}}
+			})
+			if err == nil || !strings.Contains(err.Error(), "apply flux-system/rescue") {
+				t.Fatalf("got %v, want the cycle through rescue's apply refused", err)
+			}
+		})
+	}
+}
+
+// otherRepo is a second Source, beside testSR's.
+func otherRepo() *stack.SourceRef {
+	return &stack.SourceRef{Kind: "GitRepository", Name: "other-repo", Namespace: "flux-system"}
+}
+
+// secondViewTree integrates demo -> {shop, a, b[, d]} with the Kustomizations
+// walked adds, under go-kure/kure#1174's second view. a, on testSR's Source,
+// holds ConfigMap c, deletes it from its build and health-checks it; b, on
+// other-repo, holds ConfigMap b-cm; d, also on other-repo, holds d-cm; shop
+// deletes web, which rescue-shop, applied by the Flux bootstrap, creates, so
+// the second view is built. patches holds each member's patches by name.
+// walked receives the layout tree and a's, b's and d's directories.
+func secondViewTree(t *testing.T, placement layout.FluxPlacement, withD bool, patches map[string][]stack.Patch, walked func(ml, a, b, d *layout.ManifestLayout)) error {
+	t.Helper()
+	a := srBundle("a", objApp("a-app", unstructuredObj("v1", "ConfigMap", "default", "c")))
+	a.HealthChecks = []stack.HealthCheck{{APIVersion: "v1", Kind: "ConfigMap", Namespace: "default", Name: "c"}}
+	b := srBundle("b", objApp("b-app", unstructuredObj("v1", "ConfigMap", "default", "b-cm")))
+	b.SourceRef = otherRepo()
+	c := shopTree(deleteKust("web"))
+	members := []*stack.Bundle{a, b}
+	if withD {
+		d := srBundle("d", objApp("d-app", unstructuredObj("v1", "ConfigMap", "default", "d-cm")))
+		d.SourceRef = otherRepo()
+		members = append(members, d)
+	}
+	for _, m := range members {
+		m.Patches = patches[m.Name]
+		n := &stack.Node{Name: m.Name, Bundle: m}
+		n.SetParent(c.Node)
+		c.Node.Children = append(c.Node.Children, n)
+	}
+	rescue := handWritten("rescue-shop")
+	rescue.Spec.Path = shopDirectory(t, placement)
+	return integrateWalked(t, c, placement, func(ml *layout.ManifestLayout) {
+		ml.Resources = append(ml.Resources, rescue)
+		var d *layout.ManifestLayout
+		if withD {
+			d = findLayout(ml, "d-cm")
+		}
+		walked(ml, findLayout(ml, "c"), findLayout(ml, "b-cm"), d)
+	})
+}
+
+// in returns k with spec.path the directory of l and spec.sourceRef src.
+func in(k *kustv1.Kustomization, l *layout.ManifestLayout, src *stack.SourceRef) *kustv1.Kustomization {
+	k.Spec.Path = "./" + l.FullRepoPath()
+	k.Spec.SourceRef.Name = src.Name
+	return k
+}
+
+// TestBuiltView_TheSecondViewKeepsTheFirstsRefusals: reading a Kustomization
+// the Flux bootstrap applies as a writer is not monotone, so the second view
+// (go-kure/kure#1174) never replaces the first: each refusal of the first
+// stands. In each tree the first view refuses a cycle through a's health
+// check on c, which the second view does not see:
+//
+//   - rescue, on b's Source with a longer spec.path, wins x's writer from w
+//     and, on another Source than x, leaves x unread, so c's writer is
+//     uncertain;
+//   - the same through r, which rescue's build writes;
+//   - x, every copy of which b's apply skips, is applied by rescue, which
+//     strips the mark, and is then an unread source of c.
+func TestBuiltView_TheSecondViewKeepsTheFirstsRefusals(t *testing.T) {
+	deleteX := []stack.Patch{{Patch: deleteKust("x"), Target: &stack.PatchSelector{Kind: "Kustomization", Name: "x"}}}
+	deleteC := []stack.Patch{{Patch: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: c\n  namespace: default\n$patch: delete\n", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "c"}}}
+	for name, c := range map[string]struct {
+		withD   bool
+		patches map[string][]stack.Patch
+		walked  func(ml, a, b, d *layout.ManifestLayout)
+		chain   string
+	}{
+		"rescue wins the writer": {
+			patches: map[string][]stack.Patch{"a": deleteC, "b": deleteX},
+			walked: func(ml, a, b, _ *layout.ManifestLayout) {
+				a.Resources = append(a.Resources, in(handWritten("w"), b, testSR()))
+				b.Resources = append(b.Resources, in(handWritten("x", "a"), a, testSR()))
+				rescue := in(handWritten("rescue"), b, otherRepo())
+				rescue.Spec.Path = "./" + rescue.Spec.Path
+				ml.Resources = append(ml.Resources, rescue)
+			},
+			chain: "ready flux-system/a -> apply flux-system/x -> ready flux-system/a",
+		},
+		"a Kustomization rescue writes wins it": {
+			withD:   true,
+			patches: map[string][]stack.Patch{"a": deleteC, "b": deleteX, "d": {{Patch: deleteKust("r"), Target: &stack.PatchSelector{Kind: "Kustomization", Name: "r"}}}},
+			walked: func(ml, a, b, d *layout.ManifestLayout) {
+				a.Resources = append(a.Resources, in(handWritten("w"), b, testSR()))
+				b.Resources = append(b.Resources, in(handWritten("x", "a"), a, testSR()))
+				r := in(handWritten("r"), b, otherRepo())
+				r.Spec.Path = "./" + r.Spec.Path
+				d.Resources = append(d.Resources, r)
+				ml.Resources = append(ml.Resources, in(handWritten("rescue"), d, otherRepo()))
+			},
+			chain: "ready flux-system/a -> apply flux-system/x -> ready flux-system/a",
+		},
+		"a skipped copy becomes unread": {
+			patches: map[string][]stack.Patch{"a": deleteC, "b": {{
+				Patch:  "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: x\n  namespace: flux-system\n  annotations:\n    kustomize.toolkit.fluxcd.io/ssa: Ignore\n",
+				Target: &stack.PatchSelector{Kind: "Kustomization", Name: "x"},
+			}}},
+			walked: func(ml, a, b, _ *layout.ManifestLayout) {
+				a.Resources = append(a.Resources, in(handWritten("w", "a"), a, testSR()))
+				b.Resources = append(b.Resources, in(handWritten("x", "a"), a, testSR()))
+				ml.Resources = append(ml.Resources, in(handWritten("rescue"), b, otherRepo()))
+			},
+			chain: "ready flux-system/a -> apply flux-system/w -> ready flux-system/a",
+		},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				err := secondViewTree(t, placement, c.withD, c.patches, c.walked)
+				if err == nil || !strings.Contains(err.Error(), c.chain) {
+					t.Fatalf("got %v, want the cycle %s refused", err, c.chain)
+				}
+			})
+		}
+	}
 }

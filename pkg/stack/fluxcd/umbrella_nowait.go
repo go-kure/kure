@@ -171,8 +171,7 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 
 	// rewritten lists every dependsOn edge R3 writes onto a terminal leaf, so
 	// that the graph after the rewrite can be checked for a cycle it closes.
-	type edge struct{ from, umbrella, to string }
-	var rewritten []edge
+	var rewritten []rewrittenDep
 	for _, k := range t.kusts {
 		key := crKey(k.Namespace, k.Name)
 		created := p.created[key]
@@ -203,7 +202,7 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 			for _, term := range terms {
 				// Checked also when an earlier entry already names the
 				// leaf: that entry was the caller's, judged by no check.
-				rewritten = append(rewritten, edge{from: key, umbrella: target, to: term})
+				rewritten = append(rewritten, rewrittenDep{from: key, umbrella: target, to: term})
 				if seen[term] {
 					continue
 				}
@@ -235,10 +234,27 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	if len(rewritten) == 0 {
 		return nil
 	}
-	v, err := newBuiltView(t, p.gen.AdditiveCELDependencyCheckOff)
+	// Each view newBuiltViews returns is checked, and the first refusal of
+	// either refuses the rewrite.
+	views, err := newBuiltViews(t, p.gen.AdditiveCELDependencyCheckOff)
 	if err != nil {
 		return p.laterPatchRefusal(root, err)
 	}
+	for _, v := range views {
+		if err := v.checkRewritten(rewritten); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rewrittenDep is a dependsOn entry the rewrite writes onto a terminal leaf:
+// from depends on umbrella, written as one on its leaf to.
+type rewrittenDep struct{ from, umbrella, to string }
+
+// checkRewritten refuses the first of the rewritten dependsOn entries that
+// closes a cycle in v's graph.
+func (v *builtView) checkRewritten(rewritten []rewrittenDep) error {
 	for _, e := range rewritten {
 		chain, err := v.orderPath("ready "+e.to, "apply "+e.from)
 		if err != nil {

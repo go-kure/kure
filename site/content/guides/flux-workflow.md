@@ -928,7 +928,8 @@ Kustomizations of the tree, on each later integration too, each read as
 kustomize-controller builds its writer: patches, components, name prefix and
 suffix, target namespace and postBuild substitution applied. A build that
 fails, a Kustomization two builds write differently, a placed one no apply
-creates, and a placed one a build applies on another cluster or from another
+creates (a Kustomization the Flux bootstrap applies counts as an apply only on
+the Source of a member whose build reads its directory), and a placed one a build applies on another cluster or from another
 Source, are refused. So is a build kure cannot read as Flux does, naming the
 file: one that reads a remote reference (a Git base or an `http(s)` URL; an
 integration never fetches, so vendor the base into the tree or reference it
