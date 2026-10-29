@@ -95,7 +95,8 @@ var fluxBuildMu sync.Mutex
 // build returns the objects k's build makes, in the order kustomize emits
 // them, each as the unstructured object the build holds, and, where a
 // kustomization file the build loads as one has a secretGenerator entry with
-// behavior merge (openAPIGuard.merged), which of them such a merge changed
+// behavior merge or a generators entry (openAPIGuard.merged), which of them
+// such a merge changed
 // and whether their names were hashed (probeMerges). It is
 // kustomize-controller's build, kustomize with fluxcd/pkg/kustomize's Build
 // options under one lock, but for SOPS decryption, which reads keys from the
@@ -216,16 +217,17 @@ type openAPIGuard struct {
 	probe *mergeMarker
 	// read holds, per directory, the kustomization file names a read asked
 	// for in it, and found those that exist; merges lists each file found
-	// that holds a secretGenerator entry with behavior merge, and copies
-	// each file found that may copy a value (valueCopy).
+	// that holds a secretGenerator entry with behavior merge or a generators
+	// entry, which may merge unseen, and unmodelled each file found with a
+	// field the merge probe does not model (unmodelledField).
 	read, found map[string]map[string]bool
 	merges      []string
-	copies      []valueCopy
+	unmodelled  []unmodelledFile
 }
 
-// valueCopy is a kustomization file that may copy a value of one object into
-// another (copiesValues): what names the field.
-type valueCopy struct{ file, what string }
+// unmodelledFile is a kustomization file holding field, a field the merge
+// probe does not model (unmodelledField).
+type unmodelledFile struct{ file, field string }
 
 func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 	b, err := g.FileSystem.ReadFile(name)
@@ -245,24 +247,26 @@ func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 			}
 			return nil, errors.Errorf("%s sets openapi", name)
 		}
-		if what := copiesValues(&k); what != "" {
-			g.copies = append(g.copies, valueCopy{file: name, what: what})
+		if field := unmodelledField(&k); field != "" {
+			g.unmodelled = append(g.unmodelled, unmodelledFile{file: name, field: field})
 		}
-		if slices.ContainsFunc(k.SecretGenerator, func(gen kusttypes.SecretArgs) bool {
+		merges := slices.ContainsFunc(k.SecretGenerator, func(gen kusttypes.SecretArgs) bool {
 			return gen.Behavior == kusttypes.BehaviorMerge.String()
-		}) {
+		})
+		if merges || len(k.Generators) > 0 {
 			g.merges = append(g.merges, name)
-			if g.probe != nil {
-				return g.probe.mark(name, b)
-			}
+		}
+		if merges && g.probe != nil {
+			return g.probe.mark(name, b)
 		}
 	}
 	return b, nil
 }
 
 // merged reports whether a kustomization file the build loaded as one, a
-// component's included, holds a secretGenerator entry with behavior merge:
-// a file in a directory where every kustomization file name was read and
+// component's included, holds a secretGenerator entry with behavior merge,
+// or a generators entry, which may merge unseen (unmodelledField): a file in
+// a directory where every kustomization file name was read and
 // exactly one exists. A file only a generator reads as data, or one no build
 // reads, merges nothing. A directory holding two kustomization files is no
 // kustomization a build can load (kusttarget.go:118-120), so files read
@@ -278,26 +282,29 @@ func (g *openAPIGuard) loaded(file string) bool {
 	return len(g.read[dir]) == len(konfig.RecognizedKustomizationFileNames()) && len(g.found[dir]) == 1
 }
 
-// copied returns the first kustomization file the build loaded that may copy
-// a value of one object into another (copiesValues), if any.
-func (g *openAPIGuard) copied() (valueCopy, bool) {
-	for _, c := range g.copies {
-		if g.loaded(c.file) {
-			return c, true
+// unmodelledLoaded returns the first kustomization file the build loaded
+// with a field the merge probe does not model (unmodelledField), if any.
+func (g *openAPIGuard) unmodelledLoaded() (unmodelledFile, bool) {
+	for _, u := range g.unmodelled {
+		if g.loaded(u.file) {
+			return u, true
 		}
 	}
-	return valueCopy{}, false
+	return unmodelledFile{}, false
 }
 
-// copiesValues names the field of k that may copy a value of one object into
-// another: replacements and vars, which copy by design, and a transformers
-// or validators entry, a plugin kure does not read; "" for none. A merge's
-// mark copied so may leave the object it marked and land on another, or
-// change a name, and still read as one mark on one object (probeMerges). A
-// patch writes only inside the object it selects, and every other field
-// writes a value its file holds, so a mark they move or drop changes what
-// the marked build makes, which probeMerges compares.
-func copiesValues(k *kusttypes.Kustomization) string {
+// unmodelledField names the field of k the merge probe does not model; ""
+// for none. The probe fails closed: it reads which Secret a merge changed
+// only from a build whose every field it models, and leaves any other build
+// with a merge unread. Not modelled are replacements and vars, which copy a
+// value of one object into another by design, so a merge's mark may leave
+// the object it marked, or reach a name, and still read as one mark on one
+// object; transformers and validators entries, plugins kure does not read;
+// and generators entries, which may merge into a Secret unseen. A patch
+// writes only inside the object it selects, and every other field writes a
+// value its file holds, so a mark they move or drop changes what the marked
+// build makes, which probeMerges compares.
+func unmodelledField(k *kusttypes.Kustomization) string {
 	switch {
 	case len(k.Replacements) > 0:
 		return "replacements"
@@ -307,6 +314,8 @@ func copiesValues(k *kusttypes.Kustomization) string {
 		return "transformers"
 	case len(k.Validators) > 0:
 		return "validators"
+	case len(k.Generators) > 0:
+		return "generators"
 	}
 	return ""
 }
@@ -391,10 +400,12 @@ type mergeMark struct{ merged, hashed bool }
 // for the marks, which no part of a content hash reads (api
 // hasher/hasher.go:133-146), and each mark must be one this probe issued, on
 // one object at most: a patch moving a mark, or a generator reading a marked
-// file as data, is seen there. A build loading a kustomization file that may
-// copy a value of one object into another (copiesValues) is not read at all:
-// such a copy can move a mark off the Secret it marked, or carry the added
-// literal into a name, and leave both comparisons equal. dir is built a third
+// file as data, is seen there. The probe fails closed: a build loading a
+// kustomization file with a field it does not model (unmodelledField) is
+// not read at all, as a value copied from one object into another can move a
+// mark off the Secret it marked, or carry the added literal into a name, and
+// leave both comparisons equal, and a generator kure does not read can
+// merge unseen. dir is built a third
 // time with a literal added to each entry, under a key holding the nonce: the
 // merged Secret's name changes only where kustomize appends a hash of its
 // content, which kure reads from that build rather than predicts (a merge
@@ -488,12 +499,12 @@ func probeBuild(fsys filesys.FileSystem, dir string, marker *mergeMarker) (resma
 	if err != nil {
 		return nil, unreadBuild{errors.Wrap(err, "its build with each secretGenerator entry with behavior merge marked fails, so which Secret a merge changes cannot be read")}
 	}
-	if c, ok := guard.copied(); ok {
-		rel, err := filepath.Rel(dir, c.file)
+	if u, ok := guard.unmodelledLoaded(); ok {
+		rel, err := filepath.Rel(dir, u.file)
 		if err != nil {
-			rel = c.file
+			rel = u.file
 		}
-		return nil, unreadBuild{errors.Errorf("its build loads %s, whose %s may carry a merge's mark to another object or into a name, so which Secret a merge changes cannot be read", filepath.ToSlash(rel), c.what)}
+		return nil, unreadBuild{errors.Errorf("its build may merge into a Secret and loads %s, whose %s kure does not model, so which Secret a merge changes cannot be read", filepath.ToSlash(rel), u.field)}
 	}
 	return rm, nil
 }

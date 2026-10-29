@@ -398,8 +398,9 @@ each naming the Kustomization: a build that fails, as the controller's apply wou
 does not read, which Flux may build and apply, when it reads a kustomization file setting
 `openapi`, naming the file, since kustomize would keep its schema for every later build and kure
 does not reset it, or when another use of kustomize in the process has set a schema other than
-the built-in one, naming it, or when it loads a `secretGenerator` entry with `behavior: merge`
-and kure cannot read which Secret the merge changes (see the merged Secret below); a
+the built-in one, naming it, or when it loads a `secretGenerator` entry with `behavior: merge`,
+or a `generators` entry, and kure cannot read which Secret the merge changes (see the merged
+Secret below); a
 Kustomization two writers apply with a different `dependsOn`, `wait`, `healthChecks`,
 `healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata`, `images`
 (which Flux's generator writes into the build) or transform (`ignoreMissingComponents` included,
@@ -465,11 +466,15 @@ add none, so a cycle through them passes:
   kustomize hashes it (a merge into a Secret a file holds keeps that name, whatever its shape).
   Where the annotated build makes other objects than the build, or puts one entry's annotation on
   two objects (a patch that copies annotations, a component file a generator also reads as data),
-  which Secret a merge changed cannot be read, and the build is not read. Nor is a build that
-  merges so and loads a kustomization file with `replacements`, `vars`, `transformers` or
-  `validators`: these may copy a value from one object into another, so the annotation could
-  leave the Secret it marks, or the literal reach a name, unseen. A literal Secret beside it, of
-  another namespace or name, keeps its writer certain;
+  which Secret a merge changed cannot be read, and the build is not read. This reading fails
+  closed: kure reads which Secret a merge changed only from a build whose every field it models,
+  and does not model more of kustomize to read one it does not. A build that merges so and loads
+  a kustomization file with `replacements`, `vars`, `transformers`, `validators` or `generators`
+  is not read: the first four may copy a value from one object into another, so the annotation
+  could leave the Secret it marks, or the literal reach a name, unseen, and a `generators` entry
+  may itself merge into a Secret (a builtin `SecretGenerator` with `behavior: merge`), so a build
+  loading one counts as one that merges. A literal Secret beside it, of another namespace or name,
+  keeps its writer certain;
 - an object whose identity may change at apply, whatever it names, unless only the writer's own
   result holds it: `$` left after substitution or `ENC[` (SOPS) in its `apiVersion`, kind,
   namespace or name, or a namespace or name a `substituteFrom` variable sets. Another apply may
