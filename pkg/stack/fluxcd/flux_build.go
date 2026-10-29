@@ -2,17 +2,12 @@ package fluxcd
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"maps"
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -93,11 +88,7 @@ func (b *treeBuilds) tree() (string, error) {
 var fluxBuildMu sync.Mutex
 
 // build returns the objects k's build makes, in the order kustomize emits
-// them, each as the unstructured object the build holds, and, where a
-// kustomization file the build loads as one has a secretGenerator entry with
-// behavior merge or a generators entry (openAPIGuard.merged), which of them
-// such a merge changed
-// and whether their names were hashed (probeMerges). It is
+// them, each as the unstructured object the build holds. It is
 // kustomize-controller's build, kustomize with fluxcd/pkg/kustomize's Build
 // options under one lock, but for SOPS decryption, which reads keys from the
 // cluster, and for that Build's reset of kustomize's global OpenAPI schema
@@ -108,68 +99,68 @@ var fluxBuildMu sync.Mutex
 // the build is not read, with an unreadBuild, when another use of kustomize
 // in the process set the schema, or when the build reads a kustomization
 // file that sets openapi (a component a layout's extra files write may),
-// which openAPIGuard refuses before kustomize reads its fields. Like the
-// controller it refuses a built object without an apiVersion, kind or name
-// (kustomization_controller.go:855-859).
-func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, []mergeMark, error) {
+// which openAPIGuard refuses before kustomize reads its fields. Nor is a
+// build that loads, as a kustomization, a file that may merge into a Secret
+// (openAPIGuard.merged): kustomize hashes a merged Secret's name over its
+// merged content, a hash that differs between kustomize versions, and kure
+// does not read which Secret a merge changes, or under which name
+// (go-kure/kure#1181). Like the controller it refuses a built object without
+// an apiVersion, kind or name (kustomization_controller.go:855-859).
+func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	tree, err := b.tree()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	dir := filepath.Join(tree, filepath.FromSlash(path.Clean(k.Spec.Path)))
 	if rel, err := filepath.Rel(tree, dir); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return nil, nil, errors.Errorf("spec.path %q is outside the tree", k.Spec.Path)
+		return nil, errors.Errorf("spec.path %q is outside the tree", k.Spec.Path)
 	}
 	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(k)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "convert the Kustomization to unstructured")
+		return nil, errors.Wrap(err, "convert the Kustomization to unstructured")
 	}
 	kustomizeschema.Parse()
 	fluxBuildMu.Lock()
 	defer fluxBuildMu.Unlock()
 	if v, ok := kustomizeschema.BuiltIn(); !ok {
-		return nil, nil, unreadBuild{errors.Errorf("kustomize's OpenAPI schema in this process is %q, not its built-in one: another use of kustomize set it, and kustomize-controller builds with the built-in schema, so kure cannot build it as Flux does", v)}
+		return nil, unreadBuild{errors.Errorf("kustomize's OpenAPI schema in this process is %q, not its built-in one: another use of kustomize set it, and kustomize-controller builds with the built-in schema, so kure cannot build it as Flux does", v)}
 	}
 	manifest, kfile, _, err := fluxkustomize.NewGenerator(tree, unstructured.Unstructured{Object: content}).GenerateManifest(dir)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "generate the kustomization.yaml of its spec.path")
+		return nil, errors.Wrap(err, "generate the kustomization.yaml of its spec.path")
 	}
 	restore, err := replaceFile(kfile, manifest)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer restore()
 	fsys, err := securefs.MakeFsOnDiskSecure(tree)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "open the tree")
+		return nil, errors.Wrap(err, "open the tree")
 	}
 	guard := &openAPIGuard{FileSystem: fsys}
 	rm, err := kustomizeBuild(guard, dir)
 	if guard.sets != "" {
-		rel, _ := filepath.Rel(tree, guard.sets)
-		return nil, nil, unreadBuild{errors.Errorf("its build reads %s, which sets openapi: kustomize would keep that schema for every later build in the process, and kure, which does not reset it around each build as kustomize-controller does, cannot build it as Flux does; drop the field", filepath.ToSlash(rel))}
+		return nil, unreadBuild{errors.Errorf("its build reads %s, which sets openapi: kustomize would keep that schema for every later build in the process, and kure, which does not reset it around each build as kustomize-controller does, cannot build it as Flux does; drop the field", relFile(tree, guard.sets))}
 	}
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "kustomize build failed")
+		return nil, errors.Wrap(err, "kustomize build failed")
 	}
-	var merged []mergeMark
-	if guard.merged() {
-		if merged, err = probeMerges(fsys, dir, rm); err != nil {
-			return nil, nil, err
-		}
+	if file, ok := guard.merged(); ok {
+		return nil, unreadBuild{errors.Errorf("its build loads %s, which may merge into a Secret (a secretGenerator entry with behavior merge, or a generators entry): kure does not read which Secret a merge changes, or under which name", relFile(tree, file))}
 	}
 	objs := make([]client.Object, 0, rm.Size())
 	for _, res := range rm.Resources() {
 		if res.GetName() == "" || res.GetKind() == "" || res.GetApiVersion() == "" {
-			return nil, nil, errors.Errorf("failed to decode Kubernetes apiVersion, kind and name from: %v", res.String())
+			return nil, errors.Errorf("failed to decode Kubernetes apiVersion, kind and name from: %v", res.String())
 		}
 		m, err := res.Map()
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "read a built object")
+			return nil, errors.Wrap(err, "read a built object")
 		}
 		objs = append(objs, &unstructured.Unstructured{Object: m})
 	}
-	return objs, merged, nil
+	return objs, nil
 }
 
 // unreadBuild is a build kure does not read, not one that fails: Flux may
@@ -208,30 +199,28 @@ func kustomizeBuild(fsys filesys.FileSystem, dir string) (rm resmap.ResMap, err 
 // with no load restriction a missing name reaches ReadFile too
 // (internal/loader/loadrestrictions.go:32-35). A generator reads its data
 // file once.
-//
-// With probe set, it returns a kustomization file holding a secretGenerator
-// entry with behavior merge with that entry marked (mergeMarker, probeMerges).
 type openAPIGuard struct {
 	filesys.FileSystem
-	sets  string
-	probe *mergeMarker
+	sets string
 	// read holds, per directory, the kustomization file names a read asked
 	// for in it, and found those that exist; merges lists each file found
-	// that holds a secretGenerator entry with behavior merge or a generators
-	// entry, which may merge unseen, and unmodelled each file found with a
-	// field the merge probe does not model (unmodelledField).
+	// that may merge into a Secret (ReadFile).
 	read, found map[string]map[string]bool
 	merges      []string
-	unmodelled  []unmodelledFile
-	// mergeReads counts, per file holding a secretGenerator entry with
-	// behavior merge, the reads of it, each of which the probe marks.
-	mergeReads map[string]int
 }
 
-// unmodelledFile is a kustomization file holding field, a field the merge
-// probe does not model (unmodelledField).
-type unmodelledFile struct{ file, field string }
-
+// ReadFile reads name from the tree. A kustomization file setting openapi is
+// refused (openAPIGuard). One that may merge into a Secret is recorded in
+// merges: it holds a secretGenerator entry with behavior merge, or a
+// generators entry, whose generator may merge too, or kure cannot decode it.
+// The decode is kustomize's own, sigs.k8s.io/yaml into its Kustomization type
+// (api types/kustomization.go:340-355: YAML to JSON, then encoding/json, which
+// matches keys in any case), without the strictness that refuses an unknown
+// field; so a file kustomize loads decodes here to the values kustomize reads
+// (aliases, merge keys and the last of duplicate keys included), and
+// kustomize compares the behavior exactly
+// (types/generationbehavior.go:35-46), as here. A file that does not decode
+// is counted as merging, so that no merge is missed.
 func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 	b, err := g.FileSystem.ReadFile(name)
 	if !slices.Contains(konfig.RecognizedKustomizationFileNames(), filepath.Base(name)) {
@@ -243,45 +232,36 @@ func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 	}
 	g.found = markRead(g.found, name)
 	var k kusttypes.Kustomization
-	if yaml.Unmarshal(b, &k) == nil {
-		if len(k.OpenAPI) > 0 {
-			if g.sets == "" {
-				g.sets = name
-			}
-			return nil, errors.Errorf("%s sets openapi", name)
+	decoded := yaml.Unmarshal(b, &k) == nil
+	if decoded && len(k.OpenAPI) > 0 {
+		if g.sets == "" {
+			g.sets = name
 		}
-		if field := unmodelledField(b); field != "" {
-			g.unmodelled = append(g.unmodelled, unmodelledFile{file: name, field: field})
-		}
-		merges := slices.ContainsFunc(k.SecretGenerator, func(gen kusttypes.SecretArgs) bool {
-			return gen.Behavior == kusttypes.BehaviorMerge.String()
-		})
-		if merges || len(k.Generators) > 0 {
-			g.merges = append(g.merges, name)
-		}
-		if merges {
-			if g.mergeReads == nil {
-				g.mergeReads = map[string]int{}
-			}
-			g.mergeReads[name]++
-		}
-		if merges && g.probe != nil {
-			return g.probe.mark(name, b)
-		}
+		return nil, errors.Errorf("%s sets openapi", name)
+	}
+	merges := !decoded || slices.ContainsFunc(k.SecretGenerator, func(gen kusttypes.SecretArgs) bool {
+		return gen.Behavior == kusttypes.BehaviorMerge.String()
+	})
+	if merges || len(k.Generators) > 0 {
+		g.merges = append(g.merges, name)
 	}
 	return b, nil
 }
 
-// merged reports whether a kustomization file the build loaded as one, a
-// component's included, holds a secretGenerator entry with behavior merge,
-// or a generators entry, which may merge unseen: a file in a directory where
-// every kustomization file name was read and exactly one exists. A file only
-// a generator reads as data, or one no build
-// reads, merges nothing. A directory holding two kustomization files is no
+// merged returns the first kustomization file the build loaded as one, a
+// component's included, that may merge into a Secret (ReadFile): a file in a
+// directory where every kustomization file name was read and exactly one
+// exists. A file only a generator reads as data, or one no build reads,
+// merges nothing. A directory holding two kustomization files is no
 // kustomization a build can load (kusttarget.go:118-120), so files read
 // there are data.
-func (g *openAPIGuard) merged() bool {
-	return slices.ContainsFunc(g.merges, g.loaded)
+func (g *openAPIGuard) merged() (string, bool) {
+	for _, file := range g.merges {
+		if g.loaded(file) {
+			return file, true
+		}
+	}
+	return "", false
 }
 
 // loaded reports whether the build loaded file, which it read, as a
@@ -289,258 +269,6 @@ func (g *openAPIGuard) merged() bool {
 func (g *openAPIGuard) loaded(file string) bool {
 	dir := filepath.Dir(file)
 	return len(g.read[dir]) == len(konfig.RecognizedKustomizationFileNames()) && len(g.found[dir]) == 1
-}
-
-// unmodelledLoaded returns the first kustomization file the build loaded
-// with a field the merge probe does not model (unmodelledField), if any.
-func (g *openAPIGuard) unmodelledLoaded() (unmodelledFile, bool) {
-	for _, u := range g.unmodelled {
-		if g.loaded(u.file) {
-			return u, true
-		}
-	}
-	return unmodelledFile{}, false
-}
-
-// readOtherwise returns the first file holding a secretGenerator entry with
-// behavior merge that the build read other than once, as a kustomization it
-// loads, if any. Each read of such a file is marked (mergeMarker), so a read
-// as a patch or a resource, or a second read, issues a mark no merge sets,
-// which the build may carry onto a Secret no merge changed.
-func (g *openAPIGuard) readOtherwise() (string, bool) {
-	for _, file := range slices.Sorted(maps.Keys(g.mergeReads)) {
-		if g.mergeReads[file] != 1 || !g.loaded(file) {
-			return file, true
-		}
-	}
-	return "", false
-}
-
-// modelledFields are the top-level fields of a kustomization file the merge
-// probe models: each writes only values its file holds, so none moves or
-// drops a mark unseen. openapi is refused before (openAPIGuard).
-var modelledFields = map[string]bool{
-	"apiVersion": true, "kind": true, "metadata": true,
-	"resources": true, "bases": true, "components": true,
-	"namespace": true, "namePrefix": true, "nameSuffix": true,
-	"commonLabels": true, "labels": true, "commonAnnotations": true,
-	"images": true, "replicas": true,
-	"configMapGenerator": true, "secretGenerator": true, "generatorOptions": true,
-}
-
-// unmodelledField names the first top-level field of the kustomization file
-// b holds that the merge probe does not model (modelledFields); "" for none.
-// The probe fails closed: it reads which Secret a merge changed only from a
-// build whose every field it models, and leaves any other build with a merge
-// unread rather than model more of kustomize. Among the fields left out:
-// replacements and vars copy a value of one object into another, so a
-// merge's mark may leave the object it marked, or reach a name, and still
-// read as one mark on one object; patches, patchesStrategicMerge and
-// patchesJson6902 write into the object they select what a file holds or a
-// patch copies, which may be a mark; transformers, validators and generators
-// entries are plugins kure does not read, and a generators entry may merge
-// into a Secret unseen.
-func unmodelledField(b []byte) string {
-	var fields map[string]any
-	if err := yaml.Unmarshal(b, &fields); err != nil {
-		return "content"
-	}
-	for _, field := range slices.Sorted(maps.Keys(fields)) {
-		if !modelledFields[field] {
-			return field
-		}
-	}
-	return ""
-}
-
-// mergeProbe is the annotation probeMerges marks merged Secrets with, and
-// mergeProbeKey the start of the literal key it adds to find which of them
-// kustomize hashes.
-const (
-	mergeProbe    = "kure.go-kure.github.io/merge-probe"
-	mergeProbeKey = "kure.go-kure.github.io.merge-probe-"
-)
-
-// mergeMarker marks the secretGenerator entries with behavior merge of the
-// kustomization files one build reads (openAPIGuard.probe): each entry, in
-// the order the build reads them, with the mergeProbe annotation set to nonce,
-// "-" and its number, a value no file of the tree holds; with data set, each
-// with a literal too, under mergeProbeKey and nonce, a key no file of the tree
-// holds, which changes the content of the Secret it merges into and nothing a
-// file reads.
-type mergeMarker struct {
-	nonce string
-	data  bool
-	n     int
-}
-
-// mark returns the kustomization file name holds, b, with each
-// secretGenerator entry with behavior merge marked, the rest of the file as
-// it is.
-func (m *mergeMarker) mark(name string, b []byte) ([]byte, error) {
-	node, err := kyaml.Parse(string(b))
-	if err != nil {
-		return nil, errors.Wrapf(err, "read %s", name)
-	}
-	gens, err := node.Pipe(kyaml.Lookup("secretGenerator"))
-	if err != nil {
-		return nil, errors.Wrapf(err, "read the secretGenerator entries of %s", name)
-	}
-	if gens == nil {
-		// Under a key kustomize reads in another case, unmarked: its
-		// Secrets keep their writers certain, which errs towards refusing.
-		return b, nil
-	}
-	entries, err := gens.Elements()
-	if err != nil {
-		return nil, errors.Wrapf(err, "read the secretGenerator entries of %s", name)
-	}
-	for _, gen := range entries {
-		if behavior := gen.Field("behavior"); behavior == nil || kyaml.GetValue(behavior.Value) != kusttypes.BehaviorMerge.String() {
-			continue
-		}
-		value := fmt.Sprintf("%s-%d", m.nonce, m.n)
-		m.n++
-		if err := gen.PipeE(kyaml.LookupCreate(kyaml.MappingNode, "options", "annotations"), kyaml.SetField(mergeProbe, kyaml.NewStringRNode(value))); err != nil {
-			return nil, errors.Wrapf(err, "mark a secretGenerator entry of %s", name)
-		}
-		if m.data {
-			if err := gen.PipeE(kyaml.LookupCreate(kyaml.SequenceNode, "literals"), kyaml.Append(kyaml.NewStringRNode(mergeProbeKey+m.nonce+"="+m.nonce).YNode())); err != nil {
-				return nil, errors.Wrapf(err, "mark a secretGenerator entry of %s", name)
-			}
-		}
-	}
-	out, err := node.String()
-	if err != nil {
-		return nil, errors.Wrapf(err, "write %s", name)
-	}
-	return []byte(out), nil
-}
-
-// mergeMark is what probeMerges reads of one object of a build: whether a
-// secretGenerator entry with behavior merge changed it, and whether kustomize
-// appended a content hash to its name.
-type mergeMark struct{ merged, hashed bool }
-
-// probeMerges returns, for each object of rm, the result of a build of dir
-// from fsys, whether a secretGenerator entry with behavior merge changed it,
-// and whether kustomize hashed its name. kustomize answers both. dir is built
-// again with each such entry marked (mergeMarker): a merge keeps the
-// generator's annotations on the Secret it merges into (api
-// resmap/reswrangler.go:583-594), through every later transformer, so an
-// object holding one entry's mark is one a merge changed, under the namespace
-// and name the build gives it. That build must be rm, object for object, but
-// for the marks, which no part of a content hash reads (api
-// hasher/hasher.go:133-146), and each mark must be one this probe issued, on
-// one object at most: a generator reading a marked file as data is seen
-// there. The probe fails closed: a build loading a kustomization file with
-// a field it does not model (unmodelledField), a patch among them, is not
-// read at all, as a value copied from one object into another, or a patch
-// writing what a file holds, can move a mark off the Secret it marked, or
-// carry the added literal into a name, and leave both comparisons equal,
-// and a generator kure does not read can merge unseen; nor is one that
-// reads a file holding a merge other than once, as a kustomization it loads
-// (readOtherwise), as such a read issues a mark no merge sets. dir is built a third
-// time with a literal added to each entry, under a key holding the nonce: the
-// merged Secret's name changes only where kustomize appends a hash of its
-// content, which kure reads from that build rather than predicts (a merge
-// into a Secret a file holds keeps its name, one into a generated Secret is
-// hashed unless its options say not). Where a build fails, or differs so,
-// which of rm's Secrets a merge changed cannot be read, and the build is not
-// read (unreadBuild).
-func probeMerges(fsys filesys.FileSystem, dir string, rm resmap.ResMap) ([]mergeMark, error) {
-	nonce := make([]byte, 8)
-	if _, err := rand.Read(nonce); err != nil {
-		return nil, errors.Wrap(err, "make a merge probe")
-	}
-	marker := &mergeMarker{nonce: hex.EncodeToString(nonce)}
-	marked, err := probeBuild(fsys, dir, marker)
-	if err != nil {
-		return nil, err
-	}
-	built, got := rm.Resources(), marked.Resources()
-	if len(got) != len(built) {
-		return nil, probeDiffers("makes %d objects, not %d", len(got), len(built))
-	}
-	marks := make([]mergeMark, len(built))
-	at := map[string]int{}
-	for i, res := range got {
-		m, err := res.Map()
-		if err != nil {
-			return nil, errors.Wrap(err, "read a built object")
-		}
-		if value, ok := marker.value(res); ok {
-			if _, twice := at[value]; twice {
-				return nil, probeDiffers("puts one merge's mark on two objects, %s among them", res.CurId())
-			}
-			at[value] = i
-			marks[i].merged = true
-			unstructured.RemoveNestedField(m, "metadata", "annotations", mergeProbe)
-			if annotations, _, _ := unstructured.NestedMap(m, "metadata", "annotations"); len(annotations) == 0 {
-				unstructured.RemoveNestedField(m, "metadata", "annotations")
-			}
-		}
-		want, err := built[i].Map()
-		if err != nil {
-			return nil, errors.Wrap(err, "read a built object")
-		}
-		if res.CurId() != built[i].CurId() || !reflect.DeepEqual(m, want) {
-			return nil, probeDiffers("makes %s where it makes %s", res.CurId(), built[i].CurId())
-		}
-	}
-	if len(at) == 0 {
-		return marks, nil
-	}
-	data, err := probeBuild(fsys, dir, &mergeMarker{nonce: marker.nonce, data: true})
-	if err != nil {
-		return nil, err
-	}
-	seen := map[string]bool{}
-	for _, res := range data.Resources() {
-		value, ok := marker.value(res)
-		if !ok {
-			continue
-		}
-		i, found := at[value]
-		if !found || seen[value] {
-			return nil, probeDiffers("with a literal added to each merge marks %s otherwise", res.CurId())
-		}
-		seen[value] = true
-		marks[i].hashed = res.GetName() != got[i].GetName()
-	}
-	if len(seen) != len(at) {
-		return nil, probeDiffers("with a literal added to each merge marks %d objects, not %d", len(seen), len(at))
-	}
-	return marks, nil
-}
-
-// value returns the mark m set on res, if any: a value no file of the tree
-// holds, so another value of the annotation is none.
-func (m *mergeMarker) value(res *resource.Resource) (string, bool) {
-	value, ok := res.GetAnnotations()[mergeProbe]
-	n, marked := strings.CutPrefix(value, m.nonce+"-")
-	i, err := strconv.Atoi(n)
-	return value, ok && marked && err == nil && i >= 0 && i < m.n && strconv.Itoa(i) == n
-}
-
-// probeBuild builds dir from fsys with marker marking the merges
-// (probeMerges).
-func probeBuild(fsys filesys.FileSystem, dir string, marker *mergeMarker) (resmap.ResMap, error) {
-	guard := &openAPIGuard{FileSystem: fsys, probe: marker}
-	rm, err := kustomizeBuild(guard, dir)
-	if err == nil && guard.sets != "" {
-		err = errors.Errorf("%s sets openapi", guard.sets)
-	}
-	if err != nil {
-		return nil, unreadBuild{errors.Wrap(err, "its build with each secretGenerator entry with behavior merge marked fails, so which Secret a merge changes cannot be read")}
-	}
-	if u, ok := guard.unmodelledLoaded(); ok {
-		return nil, unreadBuild{errors.Errorf("its build may merge into a Secret and loads %s, whose %s kure does not model, so which Secret a merge changes cannot be read", relFile(dir, u.file), u.field)}
-	}
-	if file, ok := guard.readOtherwise(); ok {
-		return nil, unreadBuild{errors.Errorf("its build reads %s, which merges into a Secret, other than once as a kustomization it loads, so which Secret a merge changes cannot be read", relFile(dir, file))}
-	}
-	return rm, nil
 }
 
 // relFile is file relative to dir, with forward slashes; file where it has
@@ -551,12 +279,6 @@ func relFile(dir, file string) string {
 		return file
 	}
 	return filepath.ToSlash(rel)
-}
-
-// probeDiffers is the unreadBuild of a probe build that differs from the
-// build beyond its marks.
-func probeDiffers(format string, args ...any) error {
-	return unreadBuild{errors.Errorf("its build with each secretGenerator entry with behavior merge marked "+format+", so which Secret a merge changes cannot be read", args...)}
 }
 
 // markRead adds name's base to the names m holds for its directory.
@@ -601,10 +323,6 @@ type substituted struct {
 	obj                               client.Object
 	unknownIdentity                   bool
 	writtenLabels, writtenAnnotations writtenSkip
-	// merge says whether a secretGenerator merge changed the object in the
-	// build, and whether its name was hashed (treeBuilds.build);
-	// builtView.add sets it.
-	merge mergeMark
 }
 
 // substituteBuild runs k's postBuild substitution over objs, the objects its
