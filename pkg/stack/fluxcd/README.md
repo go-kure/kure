@@ -398,14 +398,15 @@ each naming the Kustomization: a build that fails, as the controller's apply wou
 does not read, which Flux may build and apply, when it reads a kustomization file setting
 `openapi`, naming the file, since kustomize would keep its schema for every later build and kure
 does not reset it, or when another use of kustomize in the process has set a schema other than
-the built-in one, naming it; a
+the built-in one, naming it, or when it loads a `secretGenerator` entry with `behavior: merge`
+and kure cannot read which Secret the merge changes (see the merged Secret below); a
 Kustomization two writers apply with a different `dependsOn`, `wait`, `healthChecks`,
-`healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata` or
-transform (`ignoreMissingComponents` included, which decides whether a missing component fails
-the build), which both keep overwriting; a member built from what no apply creates, a skipped
-copy, the first its writers' results showed, or its spec as the tree holds it, where no result
-held it yet, when the first copy that is applied differs in those fields, since what it applies
-cannot then be read; a member built from its spec as the tree holds it that no apply creates
+`healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata`, `images`
+(which Flux's generator writes into the build) or transform (`ignoreMissingComponents` included,
+which decides whether a missing component fails the build), which both keep overwriting; a member
+built from what no apply creates, a skipped copy, the first its writers' results showed, or its
+spec as the tree holds it, where no result held it yet, when the first copy that is applied
+differs in those fields, since what it applies cannot then be read; a member built from its spec as the tree holds it that no apply creates
 once every writer is known (a parent's patch deleted or renamed it), since nothing applies what
 it builds; a member a build applies with `spec.kubeConfig`, or with another Source than its
 spec in the tree names, since it then applies on another cluster or another Source's directory;
@@ -415,9 +416,16 @@ and `spec.postBuild.substitute` does not set, since its value is read from the c
 too, any variable in a key at an object's top level, which Flux may make its `apiVersion`, kind or
 metadata, and an inline value with a line break YAML reads but Flux keeps (a carriage return,
 U+0085, U+2028 or U+2029) that an object references, which may move a value the cluster sets
-anywhere in it. An object is a Flux Kustomization by the `apiVersion` and kind the inline values
-make, each value with every newline removed, as Flux removes it before substituting. A value read
-from the cluster is assumed to be plain text that keeps the structure Flux substitutes it into: one
+anywhere in it; and with it, an `apiVersion` or kind referencing a variable
+`spec.postBuild.substitute` sets to more than a name (letters, digits, `.`, `/`, `_` and `-`, bare
+or inside one pair of quotes), on an object that references a variable it does not set, since such
+a value (an alias, an open quote) may move a value the cluster sets into it. An object is a Flux
+Kustomization by the `apiVersion` and kind the inline values make, each value with every newline
+removed, as Flux removes it before substituting. Every object is read as the tree's writers write
+it to its file: they drop server fields, the `kubectl.kubernetes.io/last-applied-configuration`
+annotation, a null creation timestamp and an empty status from each resource's top-level object
+(a List's items are written as they are), so none of these reaches Flux, and none is read. A
+value read from the cluster is assumed to be plain text that keeps the structure Flux substitutes it into: one
 holding YAML syntax (a line break, a quote, a comment, `: ` in a key) can change any field at
 apply, which no offline reading sees, as main's reading of the object as written does not either.
 Three inputs are read in a way that may refuse a tree Flux converges, never admit a deadlock: an
@@ -443,15 +451,16 @@ add none, so a cycle through them passes:
   writer that transforms nothing, or that of a Kustomization whose build is not the tree's) whose
   name, or that name and a dash, begins the checked name, as kustomize appends a content hash; a
   transformed build's generated names are read as built;
-- a Secret whose name is that of a `secretGenerator` entry with `behavior: merge` in a
-  component's or a hand-written kustomization file a build loads as a kustomization (a file no
-  build reads, or one a generator reads only as data, merges nothing), or that name, a dash and
-  a kustomize content hash (10 characters of `bcdfghkmt2456789`): the merged Secret's hash
-  depends on the kustomize version that builds it. A name prefix or suffix is not read, so a
-  merged Secret under one keeps its writer certain, which errs towards refusing
-  (go-kure/kure#1171); a literal Secret with
-  that name, or that name and a hash, stays uncertain, which drops an edge through it and errs
-  towards admitting;
+- a Secret that a `secretGenerator` entry with `behavior: merge` changed in a build, in a
+  component's or a hand-written kustomization file it loads as a kustomization (a file no build
+  reads, or one a generator reads only as data, merges nothing), matched in the namespace the
+  build applies it in, by its built name, or that name with another kustomize content hash
+  (10 characters of `bcdfghkmt2456789`) in place of its own: the merged Secret's hash depends on
+  the kustomize version that builds it. kustomize itself says which Secret a merge changed:
+  kure builds the directory again with each such entry annotated, and a merge keeps that
+  annotation, under every namespace, prefix and suffix the build gives the Secret
+  (go-kure/kure#1171). A literal Secret beside it, of another namespace or name, keeps its
+  writer certain;
 - an object whose identity may change at apply, whatever it names, unless only the writer's own
   result holds it: `$` left after substitution or `ENC[` (SOPS) in its `apiVersion`, kind,
   namespace or name, or a namespace or name a `substituteFrom` variable sets. Another apply may

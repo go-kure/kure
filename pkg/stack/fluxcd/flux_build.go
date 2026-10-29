@@ -17,6 +17,7 @@ import (
 	securefs "github.com/fluxcd/pkg/kustomize/filesys"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	utiljson "k8s.io/apimachinery/pkg/util/json"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/konfig"
 	"sigs.k8s.io/kustomize/api/krusty"
@@ -25,10 +26,12 @@ import (
 	"sigs.k8s.io/kustomize/api/resource"
 	kusttypes "sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
+	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
 	"sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/internal/kustomizeschema"
 	"github.com/go-kure/kure/pkg/errors"
+	kio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
@@ -41,15 +44,12 @@ import (
 // v1.44.0 kustomize_generator.go:661-711). The tree is written once, on the
 // first build, by WriteToDisk into a temporary directory that close removes;
 // a spec.path is a directory of that tree, as the source of the tree's
-// Kustomizations holds it. merged lists, once each, the names of the
-// secretGenerator entries with behavior merge in the kustomization files its
-// builds load as one (openAPIGuard.merged).
+// Kustomizations holds it.
 type treeBuilds struct {
 	root    *layout.ManifestLayout
 	dir     string
 	err     error
 	written bool
-	merged  []string
 }
 
 func newTreeBuilds(root *layout.ManifestLayout) *treeBuilds {
@@ -88,7 +88,10 @@ func (b *treeBuilds) tree() (string, error) {
 var fluxBuildMu sync.Mutex
 
 // build returns the objects k's build makes, in the order kustomize emits
-// them, each as the unstructured object the build holds. It is
+// them, each as the unstructured object the build holds, and, where a
+// kustomization file the build loads as one has a secretGenerator entry with
+// behavior merge (openAPIGuard.merged), which of them such a merge changed
+// (probeMerges). It is
 // kustomize-controller's build, kustomize with fluxcd/pkg/kustomize's Build
 // options under one lock, but for SOPS decryption, which reads keys from the
 // cluster, and for that Build's reset of kustomize's global OpenAPI schema
@@ -102,64 +105,65 @@ var fluxBuildMu sync.Mutex
 // which openAPIGuard refuses before kustomize reads its fields. Like the
 // controller it refuses a built object without an apiVersion, kind or name
 // (kustomization_controller.go:855-859).
-func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
+func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, []bool, error) {
 	tree, err := b.tree()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	dir := filepath.Join(tree, filepath.FromSlash(path.Clean(k.Spec.Path)))
 	if rel, err := filepath.Rel(tree, dir); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return nil, errors.Errorf("spec.path %q is outside the tree", k.Spec.Path)
+		return nil, nil, errors.Errorf("spec.path %q is outside the tree", k.Spec.Path)
 	}
 	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(k)
 	if err != nil {
-		return nil, errors.Wrap(err, "convert the Kustomization to unstructured")
+		return nil, nil, errors.Wrap(err, "convert the Kustomization to unstructured")
 	}
 	kustomizeschema.Parse()
 	fluxBuildMu.Lock()
 	defer fluxBuildMu.Unlock()
 	if v, ok := kustomizeschema.BuiltIn(); !ok {
-		return nil, unreadBuild{errors.Errorf("kustomize's OpenAPI schema in this process is %q, not its built-in one: another use of kustomize set it, and kustomize-controller builds with the built-in schema, so kure cannot build it as Flux does", v)}
+		return nil, nil, unreadBuild{errors.Errorf("kustomize's OpenAPI schema in this process is %q, not its built-in one: another use of kustomize set it, and kustomize-controller builds with the built-in schema, so kure cannot build it as Flux does", v)}
 	}
 	manifest, kfile, _, err := fluxkustomize.NewGenerator(tree, unstructured.Unstructured{Object: content}).GenerateManifest(dir)
 	if err != nil {
-		return nil, errors.Wrap(err, "generate the kustomization.yaml of its spec.path")
+		return nil, nil, errors.Wrap(err, "generate the kustomization.yaml of its spec.path")
 	}
 	restore, err := replaceFile(kfile, manifest)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer restore()
 	fsys, err := securefs.MakeFsOnDiskSecure(tree)
 	if err != nil {
-		return nil, errors.Wrap(err, "open the tree")
+		return nil, nil, errors.Wrap(err, "open the tree")
 	}
 	guard := &openAPIGuard{FileSystem: fsys}
 	rm, err := kustomizeBuild(guard, dir)
-	for _, n := range guard.merged() {
-		if !slices.Contains(b.merged, n) {
-			b.merged = append(b.merged, n)
-		}
-	}
 	if guard.sets != "" {
 		rel, _ := filepath.Rel(tree, guard.sets)
-		return nil, unreadBuild{errors.Errorf("its build reads %s, which sets openapi: kustomize would keep that schema for every later build in the process, and kure, which does not reset it around each build as kustomize-controller does, cannot build it as Flux does; drop the field", filepath.ToSlash(rel))}
+		return nil, nil, unreadBuild{errors.Errorf("its build reads %s, which sets openapi: kustomize would keep that schema for every later build in the process, and kure, which does not reset it around each build as kustomize-controller does, cannot build it as Flux does; drop the field", filepath.ToSlash(rel))}
 	}
 	if err != nil {
-		return nil, errors.Wrap(err, "kustomize build failed")
+		return nil, nil, errors.Wrap(err, "kustomize build failed")
+	}
+	var merged []bool
+	if guard.merged() {
+		if merged, err = probeMerges(fsys, dir, rm); err != nil {
+			return nil, nil, err
+		}
 	}
 	objs := make([]client.Object, 0, rm.Size())
 	for _, res := range rm.Resources() {
 		if res.GetName() == "" || res.GetKind() == "" || res.GetApiVersion() == "" {
-			return nil, errors.Errorf("failed to decode Kubernetes apiVersion, kind and name from: %v", res.String())
+			return nil, nil, errors.Errorf("failed to decode Kubernetes apiVersion, kind and name from: %v", res.String())
 		}
 		m, err := res.Map()
 		if err != nil {
-			return nil, errors.Wrap(err, "read a built object")
+			return nil, nil, errors.Wrap(err, "read a built object")
 		}
 		objs = append(objs, &unstructured.Unstructured{Object: m})
 	}
-	return objs, nil
+	return objs, merged, nil
 }
 
 // unreadBuild is a build kure does not read, not one that fails: Flux may
@@ -198,19 +202,19 @@ func kustomizeBuild(fsys filesys.FileSystem, dir string) (rm resmap.ResMap, err 
 // with no load restriction a missing name reaches ReadFile too
 // (internal/loader/loadrestrictions.go:32-35). A generator reads its data
 // file once.
+//
+// With probe set, it returns a kustomization file holding a secretGenerator
+// entry with behavior merge with the mergeProbe annotation added to that
+// entry's options (probeMerges).
 type openAPIGuard struct {
 	filesys.FileSystem
-	sets string
+	sets  string
+	probe bool
 	// read holds, per directory, the kustomization file names a read asked
 	// for in it, and found those that exist; merges lists each file found
-	// with the names of its secretGenerator entries with behavior merge.
+	// that holds a secretGenerator entry with behavior merge.
 	read, found map[string]map[string]bool
-	merges      []fileMerges
-}
-
-type fileMerges struct {
-	file  string
-	names []string
+	merges      []string
 }
 
 func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
@@ -231,33 +235,104 @@ func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 			}
 			return nil, errors.Errorf("%s sets openapi", name)
 		}
-		f := fileMerges{file: name}
-		for _, gen := range k.SecretGenerator {
-			if gen.Behavior == kusttypes.BehaviorMerge.String() {
-				f.names = append(f.names, gen.Name)
+		if slices.ContainsFunc(k.SecretGenerator, func(gen kusttypes.SecretArgs) bool {
+			return gen.Behavior == kusttypes.BehaviorMerge.String()
+		}) {
+			g.merges = append(g.merges, name)
+			if g.probe {
+				return markMerges(name, b)
 			}
 		}
-		g.merges = append(g.merges, f)
 	}
 	return b, nil
 }
 
-// merged lists the names of the secretGenerator entries with behavior merge
-// in the kustomization files the build loaded as one, a component's
-// included: a file in a directory where every kustomization file name was
-// read and exactly one exists. A file only a generator reads as data, or one
-// no build reads, merges nothing. A directory holding two kustomization files
-// is no kustomization a build can load (kusttarget.go:118-120), so files
-// read there are data.
-func (g *openAPIGuard) merged() []string {
-	var out []string
-	for _, f := range g.merges {
-		dir := filepath.Dir(f.file)
-		if len(g.read[dir]) == len(konfig.RecognizedKustomizationFileNames()) && len(g.found[dir]) == 1 {
-			out = append(out, f.names...)
+// merged reports whether a kustomization file the build loaded as one, a
+// component's included, holds a secretGenerator entry with behavior merge:
+// a file in a directory where every kustomization file name was read and
+// exactly one exists. A file only a generator reads as data, or one no build
+// reads, merges nothing. A directory holding two kustomization files is no
+// kustomization a build can load (kusttarget.go:118-120), so files read
+// there are data.
+func (g *openAPIGuard) merged() bool {
+	return slices.ContainsFunc(g.merges, func(file string) bool {
+		dir := filepath.Dir(file)
+		return len(g.read[dir]) == len(konfig.RecognizedKustomizationFileNames()) && len(g.found[dir]) == 1
+	})
+}
+
+// mergeProbe is the annotation probeMerges marks merged Secrets with.
+const mergeProbe = "kure.go-kure.github.io/merge-probe"
+
+// markMerges returns the kustomization file name holds, b, with mergeProbe
+// set in the options.annotations of each secretGenerator entry with behavior
+// merge, the rest of the file as it is.
+func markMerges(name string, b []byte) ([]byte, error) {
+	node, err := kyaml.Parse(string(b))
+	if err != nil {
+		return nil, errors.Wrapf(err, "read %s", name)
+	}
+	gens, err := node.Pipe(kyaml.Lookup("secretGenerator"))
+	if err != nil {
+		return nil, errors.Wrapf(err, "read the secretGenerator entries of %s", name)
+	}
+	if gens == nil {
+		// Under a key kustomize reads in another case, unmarked: its
+		// Secrets keep their writers certain, which errs towards refusing.
+		return b, nil
+	}
+	entries, err := gens.Elements()
+	if err != nil {
+		return nil, errors.Wrapf(err, "read the secretGenerator entries of %s", name)
+	}
+	for _, gen := range entries {
+		if behavior := gen.Field("behavior"); behavior == nil || kyaml.GetValue(behavior.Value) != kusttypes.BehaviorMerge.String() {
+			continue
+		}
+		if err := gen.PipeE(kyaml.LookupCreate(kyaml.MappingNode, "options", "annotations"), kyaml.SetField(mergeProbe, kyaml.NewStringRNode("true"))); err != nil {
+			return nil, errors.Wrapf(err, "mark a secretGenerator entry of %s", name)
 		}
 	}
-	return out
+	out, err := node.String()
+	if err != nil {
+		return nil, errors.Wrapf(err, "write %s", name)
+	}
+	return []byte(out), nil
+}
+
+// probeMerges returns, for each object of rm, the result of a build of dir
+// from fsys, whether a secretGenerator entry with behavior merge changed it.
+// kustomize answers it: dir is built again with each such entry marked
+// (markMerges), and a merge keeps the generator's annotations on the Secret
+// it merges into (api resmap/reswrangler.go:585-596), through every later
+// transformer, so the marked objects are those it changed, under the
+// namespace and name the build gives them. An annotation is no part of a
+// Secret's content hash (api hasher/hasher.go:133-146), so each marked
+// object has its identity in rm. Where one has not, or the marked build
+// fails, which of rm's Secrets a merge changed cannot be read, and the build
+// is not read (unreadBuild).
+func probeMerges(fsys filesys.FileSystem, dir string, rm resmap.ResMap) ([]bool, error) {
+	guard := &openAPIGuard{FileSystem: fsys, probe: true}
+	marked, err := kustomizeBuild(guard, dir)
+	if err == nil && guard.sets != "" {
+		err = errors.Errorf("%s sets openapi", guard.sets)
+	}
+	if err != nil {
+		return nil, unreadBuild{errors.Wrap(err, "its build with each secretGenerator entry with behavior merge marked fails, so which Secret a merge changes cannot be read")}
+	}
+	built := rm.Resources()
+	merged := make([]bool, len(built))
+	for _, res := range marked.Resources() {
+		if _, ok := res.GetAnnotations()[mergeProbe]; !ok {
+			continue
+		}
+		i := slices.IndexFunc(built, func(b *resource.Resource) bool { return b.CurId() == res.CurId() })
+		if i < 0 {
+			return nil, unreadBuild{errors.Errorf("a secretGenerator entry with behavior merge changes %s, which its build without the mark does not make, so which Secret a merge changes cannot be read", res.CurId())}
+		}
+		merged[i] = true
+	}
+	return merged, nil
 }
 
 // markRead adds name's base to the names m holds for its directory.
@@ -302,6 +377,9 @@ type substituted struct {
 	obj                               client.Object
 	unknownIdentity                   bool
 	writtenLabels, writtenAnnotations writtenSkip
+	// merged marks a Secret a secretGenerator merge changed in the build
+	// (treeBuilds.build); builtView.add sets it.
+	merged bool
 }
 
 // substituteBuild runs k's postBuild substitution over objs, the objects its
@@ -320,7 +398,10 @@ type substituted struct {
 //   - in a Flux Kustomization, or in any object's apiVersion or kind (the
 //     object may then be a Flux Kustomization), it is refused, naming the
 //     variable: what that Kustomization waits for cannot be read
-//     (go-kure/kure#1094, Q2);
+//     (go-kure/kure#1094, Q2); so is an apiVersion or kind referencing a
+//     variable inline sets to more than a name, on an object referencing one
+//     it does not, which an inline alias or open quote may move there
+//     (refuseUnknownType);
 //   - in another object's namespace or name it leaves that object's identity
 //     unknown (unknownIdentity);
 //   - in any key at an object's top level, or in an inline value with a line
@@ -339,7 +420,9 @@ type substituted struct {
 //     apply, whatever the cluster's value (a substring of an inline quote
 //     with a cluster-set length, say).
 //
-// Without a postBuild objs is returned as it is.
+// objs are as the tree's writers write them to the files Flux reads: built
+// from those files, or read through writtenObject (heldBuild). Without a
+// postBuild objs is returned as it is.
 func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substituted, error) {
 	out := make([]substituted, 0, len(objs))
 	if k.Spec.PostBuild == nil {
@@ -493,8 +576,20 @@ func skipAsWritten(metadata map[string]string) writtenSkip {
 // refuseUnknownType applies substituteBuild's rule for a variable written's
 // apiVersion or kind references and inline does not set, under k's
 // substituteFrom: an error naming it, since the object may then be a Flux
-// Kustomization.
+// Kustomization. So it is for one inline sets to more than a name
+// (plainToken) where the object references a variable inline does not set
+// anywhere: such a value may carry YAML, an alias of an anchor on a value the
+// cluster sets, or an open quote, that moves that value into the apiVersion
+// or kind at apply.
 func refuseUnknownType(k *kustv1.Kustomization, written *resource.Resource, inline map[string]string) error {
+	text, err := written.AsYAML()
+	if err != nil {
+		return errors.Wrap(err, "read the object")
+	}
+	objectVars, err := unknownVars(string(text), inline)
+	if err != nil {
+		return err
+	}
 	for _, f := range []struct{ where, value string }{{"its apiVersion", written.GetApiVersion()}, {"its kind", written.GetKind()}} {
 		vars, err := unknownVars(f.value, inline)
 		if err != nil {
@@ -503,8 +598,46 @@ func refuseUnknownType(k *kustv1.Kustomization, written *resource.Resource, inli
 		if len(vars) > 0 {
 			return refuseUnknown(k, written, f.where, vars)
 		}
+		if len(objectVars) == 0 {
+			continue
+		}
+		set, err := referencedVars(f.value, inline)
+		if err != nil {
+			return err
+		}
+		var structural []string
+		for _, name := range set {
+			if !plainToken(inline[name]) {
+				structural = append(structural, name)
+			}
+		}
+		if len(structural) > 0 {
+			return errors.Errorf("Flux Kustomization %q (spec.path %q) substitutes with spec.postBuild.substituteFrom, and %s %q of its build references %s in %s, which spec.postBuild.substitute sets to more than a name, and %s elsewhere, which it does not set: YAML in the inline value (an alias, an open quote) may move a value the cluster sets into %s at apply, so the object may be a Flux Kustomization and what it waits for cannot be read from the tree; set %s to a name, or write %s without a variable",
+				k.Name, k.Spec.Path, written.GetKind(), written.GetName(), quoteAll(structural), f.where, quoteAll(objectVars), f.where, quoteAll(structural), f.where)
+		}
 	}
 	return nil
+}
+
+// plainToken reports whether an inline value, with the newlines Flux removes
+// before it substitutes (kustomize_varsub.go:155), is a name: letters,
+// digits, '.', '/', '_' and '-' only, bare or wholly inside one pair of
+// single or double quotes. Such a value is one complete YAML scalar: it holds
+// no alias, anchor, tag, flow or block indicator, escape or unclosed quote,
+// so it cannot reach past the text it is substituted into.
+func plainToken(v string) bool {
+	v = strings.ReplaceAll(v, "\n", "")
+	if len(v) >= 2 && (v[0] == '\'' || v[0] == '"') && v[len(v)-1] == v[0] {
+		v = v[1 : len(v)-1]
+	}
+	for _, r := range v {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', strings.ContainsRune("./_-", r):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // yamlBreaks are the line breaks YAML reads (go.yaml.in/yaml/v2 v2.4.4
@@ -650,6 +783,33 @@ func unknownVars(text string, inline map[string]string) ([]string, error) {
 // Kustomization's, of any version.
 func isFluxKustomizationType(apiVersion, kind string) bool {
 	return kind == "Kustomization" && apiGroup(apiVersion) == kustv1.GroupVersion.Group
+}
+
+// writtenObject returns obj as the tree's writers write it to its file and
+// kustomize reads it back: encoded as layout.WriteToDisk encodes it
+// (kio.EncodeObjectsToYAML, which strips server fields, the
+// kubectl.kubernetes.io/last-applied-configuration annotation, a null
+// creationTimestamp and an empty status, nested template metadata included),
+// and parsed with kyaml, the parser kustomize reads a resource file with. A
+// field the writers strip never reaches Flux, so nothing reads it.
+func writtenObject(obj client.Object) (client.Object, error) {
+	data, err := kio.EncodeObjectsToYAML([]*client.Object{&obj})
+	if err != nil {
+		return nil, errors.Wrapf(err, "write %s %q", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+	}
+	node, err := kyaml.Parse(string(data))
+	if err != nil {
+		return nil, errors.Wrapf(err, "read %s %q as written", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+	}
+	text, err := node.MarshalJSON()
+	if err != nil {
+		return nil, errors.Wrapf(err, "read %s %q as written", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+	}
+	var content map[string]any
+	if err := utiljson.Unmarshal(text, &content); err != nil {
+		return nil, errors.Wrapf(err, "read %s %q as written", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+	}
+	return &unstructured.Unstructured{Object: content}, nil
 }
 
 // writtenContent returns obj as the writers write it: an unstructured

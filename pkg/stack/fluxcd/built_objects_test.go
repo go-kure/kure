@@ -147,6 +147,12 @@ func TestBuiltObjects_SubstitutedIdentityIsRead(t *testing.T) {
 // its kind; a metadata key the cluster may set, which may become its
 // annotations, reads no skip beside it, a written one does. An inline key <<
 // merging a skip is a key holding a $, and reads none.
+//
+// Without a substituteFrom the object is read as Flux substitutes it, from
+// the file kure writes: an inline carriage return in an annotation moves a
+// skip into the annotations, and the writer stays uncertain, but not from the
+// kubectl.kubernetes.io/last-applied-configuration annotation, which the
+// writer strips, so Flux never sees it and the cycle is refused.
 func TestBuiltObjects_SubstitutedSkipIsRead(t *testing.T) {
 	const ssa, reconcile = "kustomize.toolkit.fluxcd.io/ssa", "kustomize.toolkit.fluxcd.io/reconcile"
 	fromCluster := []stack.SubstituteRef{{Kind: "ConfigMap", Name: "vars"}}
@@ -239,6 +245,10 @@ func TestBuiltObjects_SubstitutedSkipIsRead(t *testing.T) {
 			postBuild: &stack.PostBuild{Substitute: map[string]string{"KEY": "<<", "VALUE": "{" + ssa + ": Ignore}"}, SubstituteFrom: fromCluster}, refused: true},
 		"ssa nested default unused, read from the cluster": {value: "${SKIP:=${FALLBACK:=Override}}",
 			postBuild: &stack.PostBuild{Substitute: map[string]string{"SKIP": "Ignore"}, SubstituteFrom: fromCluster}, refused: true},
+		"ssa set inline across a carriage return in an annotation the writer keeps": {key: "example.com/note", value: "${PAYLOAD}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"PAYLOAD": "x\r    " + ssa + ": Ignore"}}},
+		"ssa set inline across a carriage return in an annotation the writer strips": {key: "kubectl.kubernetes.io/last-applied-configuration", value: "${PAYLOAD}",
+			postBuild: &stack.PostBuild{Substitute: map[string]string{"PAYLOAD": "x\r    " + ssa + ": Ignore"}}, refused: true},
 	}
 	for name, tc := range cases {
 		for _, placement := range append(slices.Clone(integratedPlacements), layout.FluxSeparate) {
@@ -455,6 +465,15 @@ func TestBuiltObjects_AnotherSourceIsReadAsItsAppliedCopy(t *testing.T) {
 // b-longer's build makes under a name starting with prefix, and re-integrates.
 func keptPair(t *testing.T, placement layout.FluxPlacement, bObjs []client.Object, kind, prefix string, edit func(l *layout.ManifestLayout, b *kustv1.Kustomization)) error {
 	t.Helper()
+	return keptPairChecking(t, placement, bObjs, kind, func(ml *layout.ManifestLayout, b *kustv1.Kustomization) string {
+		return builtName(t, builtNames(t, ml, b, kind), prefix)
+	}, edit)
+}
+
+// keptPairChecking is keptPair with the checked object's name given by name,
+// from the edited tree and b-longer's kept Kustomization.
+func keptPairChecking(t *testing.T, placement layout.FluxPlacement, bObjs []client.Object, kind string, name func(ml *layout.ManifestLayout, b *kustv1.Kustomization) string, edit func(l *layout.ManifestLayout, b *kustv1.Kustomization)) error {
+	t.Helper()
 	c := pairCluster(stack.HealthCheck{}, []client.Object{unstructuredObj("v1", "ConfigMap", "default", "a-cm")}, bObjs)
 	c.Node.Children[0].Bundle.HealthChecks = nil
 	rules := withPlacement(nodeOnly, placement)
@@ -472,7 +491,7 @@ func keptPair(t *testing.T, placement layout.FluxPlacement, bObjs []client.Objec
 		t.Fatal("no layout holds b-cm")
 	}
 	edit(l, b)
-	checks("v1", kind, "default", builtName(t, builtNames(t, ml, b, kind), prefix))(a)
+	checks("v1", kind, "default", name(ml, b))(a)
 	return fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
 }
 
@@ -516,16 +535,18 @@ func TestBuiltObjects_GeneratedNameIsRead(t *testing.T) {
 // hash that depends on the kustomize version (go-kure/kure#1094 §7), so the
 // writer stays uncertain; a generator creating another Secret, extra, keeps
 // the edge certain and the cycle is refused. So does a literal Secret
-// b-longer also writes, credsx or creds-foo, whose name is neither creds nor
-// creds and a content hash. A name suffix is not read: the merged Secret
-// built as credsx under nameSuffix x keeps its writer certain too, and the
-// tree is refused. A component no build reads merges nothing: with
+// b-longer also writes, credsx or creds-foo, which no merge changes. The
+// merged Secret built as credsx under nameSuffix x is read under the name
+// the build gives it (go-kure/kure#1171), so its writer stays uncertain. A
+// component no build reads merges nothing: with
 // b-longer's spec.components empty, read as the tree holds it or built for
 // its target namespace, creds is the literal Secret b-longer writes, and the
 // tree is refused. So it is when a configMapGenerator only reads the
 // component's file as data, also when it reads every kustomization file name
 // of that directory as data. A component that is also read as data still
-// merges.
+// merges. A merge into blue/creds, which b-longer also writes, leaves
+// default/creds the literal Secret b-longer writes: its writer is certain and
+// the tree is refused.
 func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 	creds := unstructuredObj("v1", "Secret", "default", "creds")
 	creds.Object["data"] = map[string]any{"base": "dg=="}
@@ -533,9 +554,14 @@ func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 	cases := map[string]struct {
 		generator, prefix, suffix, literal, targetNamespace string
 		unused, dataFile, everyName, refused                bool
+		// blue, if set, has b-longer also write blue/creds, and checked the
+		// exact name a health-checks in default.
+		blue    bool
+		checked string
 	}{
+		"merge in another namespace":     {generator: strings.Replace(merge, "namespace: default", "namespace: blue", 1), blue: true, checked: "creds", refused: true},
 		"merge":                          {generator: merge, prefix: "creds"},
-		"merge, name suffix x":           {generator: merge, prefix: "credsx", suffix: "x", refused: true},
+		"merge, name suffix x":           {generator: merge, prefix: "credsx", suffix: "x"},
 		"create":                         {generator: "- name: extra\n  namespace: default\n  literals:\n  - k=v\n", prefix: "extra-", refused: true},
 		"merge, literal credsx":          {generator: merge, prefix: "credsx", literal: "credsx", refused: true},
 		"merge, literal creds-foo":       {generator: merge, prefix: "creds-foo", literal: "creds-foo", refused: true},
@@ -552,7 +578,16 @@ func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 				if tc.literal != "" {
 					objs = append(objs, unstructuredObj("v1", "Secret", "default", tc.literal))
 				}
-				err := keptPair(t, placement, objs, "Secret", tc.prefix,
+				name := func(ml *layout.ManifestLayout, b *kustv1.Kustomization) string {
+					return builtName(t, builtNames(t, ml, b, "Secret"), tc.prefix)
+				}
+				if tc.blue {
+					blue := creds.DeepCopy()
+					blue.SetNamespace("blue")
+					objs = append(objs, blue)
+					name = func(*layout.ManifestLayout, *kustv1.Kustomization) string { return tc.checked }
+				}
+				err := keptPairChecking(t, placement, objs, "Secret", name,
 					func(l *layout.ManifestLayout, b *kustv1.Kustomization) {
 						l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{
 							Name:    "component/kustomization.yaml",
@@ -579,6 +614,56 @@ func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 				}
 				if !tc.refused && err != nil {
 					t.Fatalf("got %v, want the tree admitted", err)
+				}
+			})
+		}
+	}
+}
+
+// b-longer applies child, written with kind ${ALIAS} and a field a:
+// ${ANCHOR}${TYPE:=ConfigMap}, under a substituteFrom. ANCHOR set inline to
+// "&t " and ALIAS to "*t" make the kind an alias of a's value, which the
+// cluster may set to Kustomization: offline child is a ConfigMap, at apply it
+// may be a Flux Kustomization, so its type cannot be read from the tree, and
+// the tree is refused, naming the kind; the same through its apiVersion. With
+// TYPE set inline too, or a kind written literally, or a kind that references
+// no variable left to the cluster, child is what kure substitutes, and the
+// tree is admitted.
+func TestBuiltObjects_AliasedTypeIsRefused(t *testing.T) {
+	fromCluster := []stack.SubstituteRef{{Kind: "ConfigMap", Name: "vars"}}
+	anchor := map[string]string{"ANCHOR": "&t ", "ALIAS": "*t"}
+	cases := map[string]struct {
+		apiVersion, kind, a string
+		inline              map[string]string
+		wantErr             string
+	}{
+		"kind aliased to a cluster value": {apiVersion: "kustomize.toolkit.fluxcd.io/v1", kind: "${ALIAS}", a: "${ANCHOR}${TYPE:=ConfigMap}",
+			inline: anchor, wantErr: "in its kind"},
+		"apiVersion aliased to a cluster value": {apiVersion: "${ALIAS}", kind: "Kustomization", a: "${ANCHOR}${API:=v1}",
+			inline: anchor, wantErr: "in its apiVersion"},
+		"kind aliased to an inline value": {apiVersion: "kustomize.toolkit.fluxcd.io/v1", kind: "${ALIAS}", a: "${ANCHOR}${TYPE:=ConfigMap}",
+			inline: map[string]string{"ANCHOR": "&t ", "ALIAS": "*t", "TYPE": "ConfigMap"}},
+		"kind written beside a cluster value": {apiVersion: "kustomize.toolkit.fluxcd.io/v1", kind: "ConfigMap", a: "${ANCHOR}${TYPE:=ConfigMap}",
+			inline: anchor},
+	}
+	for name, tc := range cases {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				child := unstructuredObj(tc.apiVersion, tc.kind, "default", "child")
+				child.Object["a"] = tc.a
+				c := pairCluster(stack.HealthCheck{APIVersion: "v1", Kind: "ConfigMap", Namespace: "red", Name: "ready"},
+					[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "a-cm")},
+					[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "b-cm"), child})
+				c.Node.Children[1].Bundle.PostBuild = &stack.PostBuild{Substitute: tc.inline, SubstituteFrom: fromCluster}
+				err := integrateWalked(t, c, placement, nil)
+				if tc.wantErr == "" {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
+				if err == nil || !strings.Contains(err.Error(), `Flux Kustomization "b-longer"`) || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("got %v, want child refused %s", err, tc.wantErr)
 				}
 			})
 		}

@@ -459,7 +459,9 @@ func TestLayoutKustomization_CallerPlacedUnderTheOldName(t *testing.T) {
 		unit := root.Children[0]
 		app := unit.Children[0]
 		app.KustomizationName = name
+		// With its TypeMeta set, as the writers write a kind only from it.
 		placed = &kustv1.Kustomization{}
+		placed.APIVersion, placed.Kind = kustv1.GroupVersion.String(), kustv1.KustomizationKind
 		placed.Name = "myapp"
 		placed.Namespace = "flux-system"
 		placed.Spec.Path = app.FullRepoPath()
