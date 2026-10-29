@@ -17,7 +17,10 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/kustomize/api/provider"
+	kusttypes "sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
+	"sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/internal/kustomizeschema"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -146,15 +149,19 @@ func canonicalJSON(t *testing.T, content map[string]any) string {
 // overlay's name suffix and namespace, and a component. Each also pins that
 // a merged Secret is read as hashed exactly where kustomize appends a hash:
 // into a generated Secret, unless its options say not, and never into a
-// Secret a file holds, whatever shape its name has. A probe that cannot
-// tell, a mark copied onto another object or a marked file a generator
-// reads as data, does not read the build.
+// Secret a file holds, whatever shape its name has, a patch copying a data key
+// into it included. A probe that cannot tell, a build whose replacements may
+// move a mark, or a marked file a generator reads as data, does not read the
+// build.
 func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 	const kustomization = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\n"
 	named := func(name, namespace string) string {
 		return "---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: " + name + "\n  namespace: " + namespace + "\ndata:\n  base: dg==\n"
 	}
 	secret := func(namespace string) string { return named("creds", namespace) }
+	annotated := func(name, namespace string) string {
+		return "---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: " + name + "\n  namespace: " + namespace + "\n  annotations:\n    a: b\ndata:\n  base: dg==\n"
+	}
 	mergeNamed := func(name, extra string) string {
 		return "secretGenerator:\n- name: " + name + "\n" + extra + "  behavior: merge\n  literals:\n  - k=v\n"
 	}
@@ -166,8 +173,10 @@ func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 		files        map[string]string
 		merge, build string
 		// hashed: kustomize appends a hash to the merged Secret's name;
-		// unread: the probe does not read the build.
+		// unread: the probe does not read the build, its error holding
+		// reason.
 		hashed, unread bool
+		reason         string
 	}{
 		"into a generated Secret": {
 			files: map[string]string{"base/kustomization.yaml": kustomization + "secretGenerator:\n- name: creds\n  namespace: blue\n  literals:\n  - a=b\n",
@@ -208,7 +217,25 @@ func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 			files: map[string]string{"base/secrets.yaml": secret("default") + named("ready", "default") +
 				"---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: creds\n  namespace: blue\n  annotations:\n    x: y\ndata:\n  base: dg==\n",
 				"base/kustomization.yaml": base + "replacements:\n- source:\n    kind: Secret\n    name: creds\n    namespace: blue\n    fieldPath: metadata.annotations\n  targets:\n  - select:\n      kind: Secret\n      name: ready\n    fieldPaths:\n    - metadata.annotations\n    options:\n      create: true\n"},
-			merge: merge("  namespace: blue\n  options:\n    annotations:\n      a: b\n"), build: "base", unread: true,
+			merge: merge("  namespace: blue\n  options:\n    annotations:\n      a: b\n"), build: "base", unread: true, reason: "whose replacements",
+		},
+		// The mark leaves creds for ready and clean's annotations take its
+		// place: one mark on one object, and the marked build the build but
+		// for it, yet on a Secret the merge did not change.
+		"with replacements moving its mark to another Secret": {
+			files: map[string]string{"base/secrets.yaml": annotated("creds", "blue") + annotated("ready", "default") + annotated("clean", "default"),
+				"base/kustomization.yaml": base + "replacements:\n" +
+					"- source:\n    kind: Secret\n    name: creds\n    fieldPath: metadata.annotations\n  targets:\n  - select:\n      kind: Secret\n      name: ready\n    fieldPaths:\n    - metadata.annotations\n" +
+					"- source:\n    kind: Secret\n    name: clean\n    fieldPath: metadata.annotations\n  targets:\n  - select:\n      kind: Secret\n      name: creds\n    fieldPaths:\n    - metadata.annotations\n"},
+			merge: merge("  namespace: blue\n"), build: "base", unread: true, reason: "whose replacements",
+		},
+		// A patch copies a data key the file holds into the name: the probe's
+		// literal, under a key no file holds, leaves it and the name as they
+		// are, so the unhashed Secret is not read as hashed.
+		"with a patch copying a data key into its name": {
+			files: map[string]string{"base/secrets.yaml": "---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: web\n  namespace: default\ndata:\n  " + mergeProbeKey + ": webxwebx\n",
+				"base/kustomization.yaml": base + "patches:\n- target:\n    kind: Secret\n    name: web\n  patch: |-\n    - op: copy\n      from: /data/" + mergeProbeKey + "\n      path: /metadata/name\n"},
+			merge: mergeNamed("web", "  namespace: default\n"), build: "base",
 		},
 		"beside a generator reading a kustomization file as data": {
 			files: map[string]string{"base/secrets.yaml": both,
@@ -290,8 +317,8 @@ func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 			marked, err := probeMerges(filesys.MakeFsOnDisk(), dir, rm)
 			if tc.unread {
 				var u unreadBuild
-				if !stderrors.As(err, &u) {
-					t.Fatalf("probeMerges: got %v, want the build not read", err)
+				if !stderrors.As(err, &u) || !strings.Contains(err.Error(), tc.reason) {
+					t.Fatalf("probeMerges: got %v, want the build not read, for %q", err, tc.reason)
 				}
 				return
 			}
@@ -320,6 +347,49 @@ func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 				t.Errorf("probeMerges marks %v, kustomize merges %v", got, want)
 			}
 		})
+	}
+}
+
+// A kustomization file that may copy a value of one object into another is
+// named by the field that does; a patch or a field that writes the values its
+// file holds copies none.
+func TestCopiesValues(t *testing.T) {
+	for file, want := range map[string]string{
+		"replacements:\n- source:\n    kind: Secret\n    name: a\n  targets:\n  - select:\n      name: b\n": "replacements",
+		"vars:\n- name: V\n  objref:\n    kind: Secret\n    name: a\n    apiVersion: v1\n":                  "vars",
+		"transformers:\n- t.yaml\n": "transformers",
+		"validators:\n- v.yaml\n":   "validators",
+		"patches:\n- target:\n    kind: Secret\n  patch: |-\n    - op: copy\n      from: /data/a\n      path: /data/b\n": "",
+		"commonAnnotations:\n  a: b\nnamePrefix: x-\n":                                                                   "",
+	} {
+		var k kusttypes.Kustomization
+		if err := yaml.Unmarshal([]byte(file), &k); err != nil {
+			t.Fatal(err)
+		}
+		if got := copiesValues(&k); got != want {
+			t.Errorf("copiesValues(%q) = %q, want %q", file, got, want)
+		}
+	}
+}
+
+// A mark is only one the probe issued: its nonce, "-" and the number of an
+// entry it marked, written as it writes it.
+func TestMergeMarker_ValueIsAnIssuedMark(t *testing.T) {
+	m := &mergeMarker{nonce: "n0", n: 2}
+	for value, want := range map[string]bool{
+		"n0-0": true, "n0-1": true,
+		"n0-2": false, "n0--1": false, "n0-01": false, "n0-+1": false, "n0-": false, "n0-x": false, "n1-0": false, "": false,
+	} {
+		res, err := provider.NewDefaultDepProvider().GetResourceFactory().FromMap(map[string]any{
+			"apiVersion": "v1", "kind": "Secret",
+			"metadata": map[string]any{"name": "s", "annotations": map[string]any{mergeProbe: value}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, got := m.value(res); got != want {
+			t.Errorf("value of %q: got %v, want %v", value, got, want)
+		}
 	}
 }
 

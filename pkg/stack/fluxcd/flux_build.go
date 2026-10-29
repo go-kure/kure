@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -215,10 +216,16 @@ type openAPIGuard struct {
 	probe *mergeMarker
 	// read holds, per directory, the kustomization file names a read asked
 	// for in it, and found those that exist; merges lists each file found
-	// that holds a secretGenerator entry with behavior merge.
+	// that holds a secretGenerator entry with behavior merge, and copies
+	// each file found that may copy a value (valueCopy).
 	read, found map[string]map[string]bool
 	merges      []string
+	copies      []valueCopy
 }
+
+// valueCopy is a kustomization file that may copy a value of one object into
+// another (copiesValues): what names the field.
+type valueCopy struct{ file, what string }
 
 func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 	b, err := g.FileSystem.ReadFile(name)
@@ -237,6 +244,9 @@ func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 				g.sets = name
 			}
 			return nil, errors.Errorf("%s sets openapi", name)
+		}
+		if what := copiesValues(&k); what != "" {
+			g.copies = append(g.copies, valueCopy{file: name, what: what})
 		}
 		if slices.ContainsFunc(k.SecretGenerator, func(gen kusttypes.SecretArgs) bool {
 			return gen.Behavior == kusttypes.BehaviorMerge.String()
@@ -258,26 +268,64 @@ func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 // kustomization a build can load (kusttarget.go:118-120), so files read
 // there are data.
 func (g *openAPIGuard) merged() bool {
-	return slices.ContainsFunc(g.merges, func(file string) bool {
-		dir := filepath.Dir(file)
-		return len(g.read[dir]) == len(konfig.RecognizedKustomizationFileNames()) && len(g.found[dir]) == 1
-	})
+	return slices.ContainsFunc(g.merges, g.loaded)
+}
+
+// loaded reports whether the build loaded file, which it read, as a
+// kustomization (merged).
+func (g *openAPIGuard) loaded(file string) bool {
+	dir := filepath.Dir(file)
+	return len(g.read[dir]) == len(konfig.RecognizedKustomizationFileNames()) && len(g.found[dir]) == 1
+}
+
+// copied returns the first kustomization file the build loaded that may copy
+// a value of one object into another (copiesValues), if any.
+func (g *openAPIGuard) copied() (valueCopy, bool) {
+	for _, c := range g.copies {
+		if g.loaded(c.file) {
+			return c, true
+		}
+	}
+	return valueCopy{}, false
+}
+
+// copiesValues names the field of k that may copy a value of one object into
+// another: replacements and vars, which copy by design, and a transformers
+// or validators entry, a plugin kure does not read; "" for none. A merge's
+// mark copied so may leave the object it marked and land on another, or
+// change a name, and still read as one mark on one object (probeMerges). A
+// patch writes only inside the object it selects, and every other field
+// writes a value its file holds, so a mark they move or drop changes what
+// the marked build makes, which probeMerges compares.
+func copiesValues(k *kusttypes.Kustomization) string {
+	switch {
+	case len(k.Replacements) > 0:
+		return "replacements"
+	case len(k.Vars) > 0: //nolint:staticcheck // SA1019: kustomize still runs vars
+		return "vars"
+	case len(k.Transformers) > 0:
+		return "transformers"
+	case len(k.Validators) > 0:
+		return "validators"
+	}
+	return ""
 }
 
 // mergeProbe is the annotation probeMerges marks merged Secrets with, and
-// mergeProbeKey the literal key it adds to find which of them kustomize
-// hashes.
+// mergeProbeKey the start of the literal key it adds to find which of them
+// kustomize hashes.
 const (
 	mergeProbe    = "kure.go-kure.github.io/merge-probe"
-	mergeProbeKey = "kure.go-kure.github.io.merge-probe"
+	mergeProbeKey = "kure.go-kure.github.io.merge-probe-"
 )
 
 // mergeMarker marks the secretGenerator entries with behavior merge of the
 // kustomization files one build reads (openAPIGuard.probe): each entry, in
 // the order the build reads them, with the mergeProbe annotation set to nonce,
 // "-" and its number, a value no file of the tree holds; with data set, each
-// with a literal too, mergeProbeKey set to nonce, which changes the content
-// of the Secret it merges into.
+// with a literal too, under mergeProbeKey and nonce, a key no file of the tree
+// holds, which changes the content of the Secret it merges into and nothing a
+// file reads.
 type mergeMarker struct {
 	nonce string
 	data  bool
@@ -315,7 +363,7 @@ func (m *mergeMarker) mark(name string, b []byte) ([]byte, error) {
 			return nil, errors.Wrapf(err, "mark a secretGenerator entry of %s", name)
 		}
 		if m.data {
-			if err := gen.PipeE(kyaml.LookupCreate(kyaml.SequenceNode, "literals"), kyaml.Append(kyaml.NewStringRNode(mergeProbeKey+"="+m.nonce).YNode())); err != nil {
+			if err := gen.PipeE(kyaml.LookupCreate(kyaml.SequenceNode, "literals"), kyaml.Append(kyaml.NewStringRNode(mergeProbeKey+m.nonce+"="+m.nonce).YNode())); err != nil {
 				return nil, errors.Wrapf(err, "mark a secretGenerator entry of %s", name)
 			}
 		}
@@ -341,15 +389,19 @@ type mergeMark struct{ merged, hashed bool }
 // object holding one entry's mark is one a merge changed, under the namespace
 // and name the build gives it. That build must be rm, object for object, but
 // for the marks, which no part of a content hash reads (api
-// hasher/hasher.go:133-146), and each mark must be on one object at most: a
-// transformer copying annotations, or a generator reading a marked file as
-// data, is seen there. dir is built a third time with a literal added to each
-// entry: the merged Secret's name changes only where kustomize appends a
-// hash of its content, which kure reads from that build rather than predicts
-// (a merge into a Secret a file holds keeps its name, one into a generated
-// Secret is hashed unless its options say not). Where a build fails,
-// or differs so, which of rm's Secrets a merge changed cannot be read, and the
-// build is not read (unreadBuild).
+// hasher/hasher.go:133-146), and each mark must be one this probe issued, on
+// one object at most: a patch moving a mark, or a generator reading a marked
+// file as data, is seen there. A build loading a kustomization file that may
+// copy a value of one object into another (copiesValues) is not read at all:
+// such a copy can move a mark off the Secret it marked, or carry the added
+// literal into a name, and leave both comparisons equal. dir is built a third
+// time with a literal added to each entry, under a key holding the nonce: the
+// merged Secret's name changes only where kustomize appends a hash of its
+// content, which kure reads from that build rather than predicts (a merge
+// into a Secret a file holds keeps its name, one into a generated Secret is
+// hashed unless its options say not). Where a build fails, or differs so,
+// which of rm's Secrets a merge changed cannot be read, and the build is not
+// read (unreadBuild).
 func probeMerges(fsys filesys.FileSystem, dir string, rm resmap.ResMap) ([]mergeMark, error) {
 	nonce := make([]byte, 8)
 	if _, err := rand.Read(nonce); err != nil {
@@ -420,7 +472,9 @@ func probeMerges(fsys filesys.FileSystem, dir string, rm resmap.ResMap) ([]merge
 // holds, so another value of the annotation is none.
 func (m *mergeMarker) value(res *resource.Resource) (string, bool) {
 	value, ok := res.GetAnnotations()[mergeProbe]
-	return value, ok && strings.HasPrefix(value, m.nonce+"-")
+	n, marked := strings.CutPrefix(value, m.nonce+"-")
+	i, err := strconv.Atoi(n)
+	return value, ok && marked && err == nil && i >= 0 && i < m.n && strconv.Itoa(i) == n
 }
 
 // probeBuild builds dir from fsys with marker marking the merges
@@ -433,6 +487,13 @@ func probeBuild(fsys filesys.FileSystem, dir string, marker *mergeMarker) (resma
 	}
 	if err != nil {
 		return nil, unreadBuild{errors.Wrap(err, "its build with each secretGenerator entry with behavior merge marked fails, so which Secret a merge changes cannot be read")}
+	}
+	if c, ok := guard.copied(); ok {
+		rel, err := filepath.Rel(dir, c.file)
+		if err != nil {
+			rel = c.file
+		}
+		return nil, unreadBuild{errors.Errorf("its build loads %s, whose %s may carry a merge's mark to another object or into a name, so which Secret a merge changes cannot be read", filepath.ToSlash(rel), c.what)}
 	}
 	return rm, nil
 }

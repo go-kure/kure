@@ -461,12 +461,15 @@ add none, so a cycle through them passes:
   says which Secret a merge changed: kure builds the directory again with each such entry
   annotated with a value no file holds, and a merge keeps that annotation, under every namespace,
   prefix and suffix the build gives the Secret (go-kure/kure#1171); and once more with a literal
-  added to each entry, which changes the Secret's name only where kustomize hashes it (a merge
-  into a Secret a file holds keeps that name, whatever its shape). Where the annotated build makes
-  other objects than the build, or puts one entry's annotation on two objects (a transformer that
-  copies annotations, a component file a generator also reads as data), which Secret a merge
-  changed cannot be read, and the build is not read. A literal Secret beside it, of another
-  namespace or name, keeps its writer certain;
+  added to each entry, under a key no file holds, which changes the Secret's name only where
+  kustomize hashes it (a merge into a Secret a file holds keeps that name, whatever its shape).
+  Where the annotated build makes other objects than the build, or puts one entry's annotation on
+  two objects (a patch that copies annotations, a component file a generator also reads as data),
+  which Secret a merge changed cannot be read, and the build is not read. Nor is a build that
+  merges so and loads a kustomization file with `replacements`, `vars`, `transformers` or
+  `validators`: these may copy a value from one object into another, so the annotation could
+  leave the Secret it marks, or the literal reach a name, unseen. A literal Secret beside it, of
+  another namespace or name, keeps its writer certain;
 - an object whose identity may change at apply, whatever it names, unless only the writer's own
   result holds it: `$` left after substitution or `ENC[` (SOPS) in its `apiVersion`, kind,
   namespace or name, or a namespace or name a `substituteFrom` variable sets. Another apply may
