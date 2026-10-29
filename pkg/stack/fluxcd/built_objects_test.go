@@ -522,14 +522,17 @@ func TestBuiltObjects_GeneratedNameIsRead(t *testing.T) {
 // tree is refused. A component no build reads merges nothing: with
 // b-longer's spec.components empty, read as the tree holds it or built for
 // its target namespace, creds is the literal Secret b-longer writes, and the
-// tree is refused.
+// tree is refused. So it is when a configMapGenerator only reads the
+// component's file as data, also when it reads every kustomization file name
+// of that directory as data. A component that is also read as data still
+// merges.
 func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 	creds := unstructuredObj("v1", "Secret", "default", "creds")
 	creds.Object["data"] = map[string]any{"base": "dg=="}
 	const merge = "- name: creds\n  namespace: default\n  behavior: merge\n  literals:\n  - k=v\n"
 	cases := map[string]struct {
 		generator, prefix, suffix, literal, targetNamespace string
-		unused, refused                                     bool
+		unused, dataFile, everyName, refused                bool
 	}{
 		"merge":                          {generator: merge, prefix: "creds"},
 		"merge, name suffix x":           {generator: merge, prefix: "credsx", suffix: "x", refused: true},
@@ -538,6 +541,9 @@ func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 		"merge, literal creds-foo":       {generator: merge, prefix: "creds-foo", literal: "creds-foo", refused: true},
 		"merge, component unused":        {generator: merge, prefix: "creds", unused: true, refused: true},
 		"merge, component unused, built": {generator: merge, prefix: "creds", unused: true, targetNamespace: "default", refused: true},
+		"merge, read only as data":       {generator: merge, prefix: "creds", unused: true, dataFile: true, targetNamespace: "default", refused: true},
+		"merge, component also data":     {generator: merge, prefix: "creds", dataFile: true},
+		"merge, every name read as data": {generator: merge, prefix: "creds", unused: true, dataFile: true, everyName: true, targetNamespace: "default", refused: true},
 	}
 	for name, tc := range cases {
 		for _, placement := range integratedPlacements {
@@ -554,6 +560,16 @@ func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 						})
 						if !tc.unused {
 							b.Spec.Components = []string{"component"}
+						}
+						if tc.dataFile {
+							files := []string{"component/kustomization.yaml"}
+							if tc.everyName {
+								for _, n := range []string{"component/kustomization.yml", "component/Kustomization"} {
+									l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: n, Content: []byte("x: y\n")})
+									files = append(files, n)
+								}
+							}
+							l.ConfigMapGenerators = append(l.ConfigMapGenerators, layout.ConfigMapGeneratorSpec{Name: "data", Files: files})
 						}
 						b.Spec.NameSuffix = tc.suffix
 						b.Spec.TargetNamespace = tc.targetNamespace

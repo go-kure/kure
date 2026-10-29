@@ -420,6 +420,11 @@ make, each value with every newline removed, as Flux removes it before substitut
 from the cluster is assumed to be plain text that keeps the structure Flux substitutes it into: one
 holding YAML syntax (a line break, a quote, a comment, `: ` in a key) can change any field at
 apply, which no offline reading sees, as main's reading of the object as written does not either.
+Three inputs are read in a way that may refuse a tree Flux converges, never admit a deadlock: an
+inline YAML anchor and alias that carry a cluster value into an object's name or namespace
+(go-kure/kure#1176); a ConfigMap generated in the directory of a writer whose build only
+substitutes, read unsubstituted (go-kure/kure#1177); and a generator over SOPS-encrypted sources,
+hashed from the ciphertext Flux decrypts first (go-kure/kure#1178).
 A Kustomization is read as it is
 applied: kustomize-controller drops its `status` and `metadata.creationTimestamp` first, so
 neither keeps it from being read.
@@ -439,10 +444,12 @@ add none, so a cycle through them passes:
   name, or that name and a dash, begins the checked name, as kustomize appends a content hash; a
   transformed build's generated names are read as built;
 - a Secret whose name is that of a `secretGenerator` entry with `behavior: merge` in a
-  component's or a hand-written kustomization file, or that name, a dash and a kustomize content
-  hash (10 characters of `bcdfghkmt2456789`): the merged Secret's hash depends on the kustomize
-  version that builds it. A name prefix or suffix is not read, so a merged Secret under one keeps
-  its writer certain, which errs towards refusing (go-kure/kure#1171); a literal Secret with
+  component's or a hand-written kustomization file a build loads as a kustomization (a file no
+  build reads, or one a generator reads only as data, merges nothing), or that name, a dash and
+  a kustomize content hash (10 characters of `bcdfghkmt2456789`): the merged Secret's hash
+  depends on the kustomize version that builds it. A name prefix or suffix is not read, so a
+  merged Secret under one keeps its writer certain, which errs towards refusing
+  (go-kure/kure#1171); a literal Secret with
   that name, or that name and a hash, stays uncertain, which drops an edge through it and errs
   towards admitting;
 - an object whose identity may change at apply, whatever it names, unless only the writer's own
