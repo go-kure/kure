@@ -237,7 +237,7 @@ func (v *builtView) local(key string) *kustv1.Kustomization {
 // directory of the tree builds nothing of it, and is no writer.
 func (v *builtView) add(builds *treeBuilds, key string, k *kustv1.Kustomization) error {
 	var objs []client.Object
-	var merged []bool
+	var merged []mergeMark
 	var err error
 	switch {
 	case k == nil:
@@ -273,7 +273,9 @@ func (v *builtView) add(builds *treeBuilds, key string, k *kustv1.Kustomization)
 	}
 	// substituteBuild returns one result for each object, in order.
 	for i := range res {
-		res[i].merged = i < len(merged) && merged[i]
+		if i < len(merged) {
+			res[i].merge = merged[i]
+		}
 	}
 	v.writers = append(v.writers, key)
 	v.writerSpec[key] = k

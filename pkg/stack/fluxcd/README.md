@@ -416,10 +416,11 @@ and `spec.postBuild.substitute` does not set, since its value is read from the c
 too, any variable in a key at an object's top level, which Flux may make its `apiVersion`, kind or
 metadata, and an inline value with a line break YAML reads but Flux keeps (a carriage return,
 U+0085, U+2028 or U+2029) that an object references, which may move a value the cluster sets
-anywhere in it; and with it, an `apiVersion` or kind referencing a variable
-`spec.postBuild.substitute` sets to more than a name (letters, digits, `.`, `/`, `_` and `-`, bare
+anywhere in it; and with it, an `apiVersion` or kind referencing a variable whose text, as Flux
+substitutes it with `spec.postBuild.substitute`'s values (defaults, replacements and the text
+around the variables included), is more than a name (letters, digits, `.`, `/`, `_` and `-`, bare
 or inside one pair of quotes), on an object that references a variable it does not set, since such
-a value (an alias, an open quote) may move a value the cluster sets into it. An object is a Flux
+a text (an alias, an open quote) may move a value the cluster sets into it. An object is a Flux
 Kustomization by the `apiVersion` and kind the inline values make, each value with every newline
 removed, as Flux removes it before substituting. Every object is read as the tree's writers write
 it to its file: they drop server fields, the `kubectl.kubernetes.io/last-applied-configuration`
@@ -454,13 +455,18 @@ add none, so a cycle through them passes:
 - a Secret that a `secretGenerator` entry with `behavior: merge` changed in a build, in a
   component's or a hand-written kustomization file it loads as a kustomization (a file no build
   reads, or one a generator reads only as data, merges nothing), matched in the namespace the
-  build applies it in, by its built name, or that name with another kustomize content hash
-  (10 characters of `bcdfghkmt2456789`) in place of its own: the merged Secret's hash depends on
-  the kustomize version that builds it. kustomize itself says which Secret a merge changed:
-  kure builds the directory again with each such entry annotated, and a merge keeps that
-  annotation, under every namespace, prefix and suffix the build gives the Secret
-  (go-kure/kure#1171). A literal Secret beside it, of another namespace or name, keeps its
-  writer certain;
+  build applies it in, by its built name, or, where kustomize appended a content hash to that
+  name, that name with another content hash (10 characters of `bcdfghkmt2456789`) in place of its
+  own: the merged Secret's hash depends on the kustomize version that builds it. kustomize itself
+  says which Secret a merge changed: kure builds the directory again with each such entry
+  annotated with a value no file holds, and a merge keeps that annotation, under every namespace,
+  prefix and suffix the build gives the Secret (go-kure/kure#1171); and once more with a literal
+  added to each entry, which changes the Secret's name only where kustomize hashes it (a merge
+  into a Secret a file holds keeps that name, whatever its shape). Where the annotated build makes
+  other objects than the build, or puts one entry's annotation on two objects (a transformer that
+  copies annotations, a component file a generator also reads as data), which Secret a merge
+  changed cannot be read, and the build is not read. A literal Secret beside it, of another
+  namespace or name, keeps its writer certain;
 - an object whose identity may change at apply, whatever it names, unless only the writer's own
   result holds it: `$` left after substitution or `ENC[` (SOPS) in its `apiVersion`, kind,
   namespace or name, or a namespace or name a `substituteFrom` variable sets. Another apply may

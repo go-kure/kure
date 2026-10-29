@@ -45,10 +45,10 @@ type builtObject struct {
 	// one written with "$" or "ENC[" (unresolved), or one a substitution
 	// reads from the cluster (substituted.unknownIdentity).
 	unresolved bool
-	// merged marks a Secret a secretGenerator entry with behavior merge
-	// changed in the build (substituted.merged), whose name hash depends on
-	// the kustomize version.
-	merged bool
+	// merge marks a Secret a secretGenerator entry with behavior merge
+	// changed in the build, and whether kustomize hashed its name
+	// (substituted.merge), a hash that depends on the kustomize version.
+	merge mergeMark
 	// labels and annotations are as applied, but for the skip keys under a
 	// substituteFrom (substituted.writtenLabels, writtenAnnotations), which
 	// they hold as written.
@@ -163,7 +163,7 @@ func readBuiltObject(r substituted) (builtObject, error) {
 	return builtObject{
 		group: apiGroup(apiVersion), kind: kind, namespace: obj.GetNamespace(), name: obj.GetName(),
 		unresolved: r.unknownIdentity || unresolved(apiVersion) || unresolved(kind) || unresolved(obj.GetNamespace()) || unresolved(obj.GetName()),
-		merged:     r.merged,
+		merge:      r.merge,
 		labels:     labels, annotations: annotations,
 	}, nil
 }
@@ -197,7 +197,8 @@ func readBuiltObject(r substituted) (builtObject, error) {
 //   - a configMapGenerator entry an apply read as held runs (heldScope) has a
 //     name the check's starts with, as kustomize appends a content hash, or
 //     one that may change at apply; or a Secret may be one a secretGenerator
-//     merge changed, in its namespace, under any content hash (mergedName);
+//     merge changed, in its namespace, under any content hash where kustomize
+//     hashed its name (mergedName);
 //   - Kubernetes creates the object itself (kubernetesCreated).
 //
 // An object a controller creates, from a HelmRelease's chart, say, or a build
@@ -264,7 +265,7 @@ func (v *builtView) objectWriter(apiVersion, kind, namespace, name string) (stri
 // namespace and name: a configMapGenerator entry of a layout an apply reads
 // as held (objectSource.heldScope), whose name the object's is or starts
 // with, or which may change at apply; or, for a Secret, a Secret of an
-// apply's result that a secretGenerator merge changed (builtObject.merged),
+// apply's result that a secretGenerator merge changed (builtObject.merge),
 // applied in namespace or with none, whose name may be the object's
 // (mergedName), or whose identity may change at apply.
 func (v *builtView) generatorMayName(group, kind, namespace, name string) bool {
@@ -285,8 +286,8 @@ func (v *builtView) generatorMayName(group, kind, namespace, name string) bool {
 	case "Secret":
 		for _, s := range v.sources {
 			for _, o := range s.objects {
-				if o.merged && o.group == "" && o.kind == "Secret" &&
-					(o.unresolved || (o.namespace == "" || o.namespace == namespace) && mergedName(name, o.name)) {
+				if o.merge.merged && o.group == "" && o.kind == "Secret" &&
+					(o.unresolved || (o.namespace == "" || o.namespace == namespace) && mergedName(name, o.name, o.merge.hashed)) {
 					return true
 				}
 			}
@@ -297,26 +298,27 @@ func (v *builtView) generatorMayName(group, kind, namespace, name string) bool {
 
 // mergedName reports whether name may be that of a Secret a secretGenerator
 // merge changed, which kure's build names built: built itself, or, where
-// built ends in "-" and a content hash, the first 10 characters of a hex
-// digest with 0, 1, 3, a and e written g, h, k, m and t (api
-// hasher/hasher.go:28-49), the same name with any content hash. The hash of
-// a merged Secret depends on the kustomize version that builds it (kustomize
-// v0.21.2 normalises stringData before the merge and kustomize-controller
-// v1.10.1's v0.21.1 does not, api resmap/reswrangler.go:591-597), so a module
-// building kure with another version may read another name than the
-// controller applies; its namespace and the rest of its name are the
-// build's, prefixes and suffixes included (probeMerges). A literal Secret
-// named so, credsx or creds-foo beside a merged creds, is no merged Secret
-// and keeps its writer certain. A build read as the tree holds it
-// (heldBuild) merges none: the kustomization.yaml kure writes lists only the
-// layout's resource files and child directories, and an extra file takes no
-// kustomization file name of its layout's directory.
-func mergedName(name, built string) bool {
+// kustomize hashed that name (hashed, probeMerges), so that built ends in "-"
+// and a content hash, the first 10 characters of a hex digest with 0, 1, 3, a
+// and e written g, h, k, m and t (api hasher/hasher.go:28-49), the same name
+// with any content hash. The hash of a merged Secret depends on the kustomize
+// version that builds it (kustomize v0.21.2 normalises stringData before the
+// merge and kustomize-controller v1.10.1's v0.21.1 does not, api
+// resmap/reswrangler.go:591-597), so a module building kure with another
+// version may read another name than the controller applies; its namespace
+// and the rest of its name are the build's, prefixes and suffixes included
+// (probeMerges). A name kustomize did not hash is matched as built, whatever
+// its last 10 characters. A literal Secret named so, webx or web-foo beside a
+// merged web, is no merged Secret and keeps its writer certain. A build read
+// as the tree holds it (heldBuild) merges none: the kustomization.yaml kure
+// writes lists only the layout's resource files and child directories, and
+// an extra file takes no kustomization file name of its layout's directory.
+func mergedName(name, built string, hashed bool) bool {
 	if name == built {
 		return true
 	}
-	i := strings.LastIndex(built, "-")
-	if i < 0 || !contentHash(built[i+1:]) {
+	i := len(built) - 11
+	if !hashed || i < 0 || built[i] != '-' || !contentHash(built[i+1:]) {
 		return false
 	}
 	hash, ok := strings.CutPrefix(name, built[:i+1])

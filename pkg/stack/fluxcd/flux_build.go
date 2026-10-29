@@ -2,11 +2,15 @@ package fluxcd
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -91,7 +95,7 @@ var fluxBuildMu sync.Mutex
 // them, each as the unstructured object the build holds, and, where a
 // kustomization file the build loads as one has a secretGenerator entry with
 // behavior merge (openAPIGuard.merged), which of them such a merge changed
-// (probeMerges). It is
+// and whether their names were hashed (probeMerges). It is
 // kustomize-controller's build, kustomize with fluxcd/pkg/kustomize's Build
 // options under one lock, but for SOPS decryption, which reads keys from the
 // cluster, and for that Build's reset of kustomize's global OpenAPI schema
@@ -105,7 +109,7 @@ var fluxBuildMu sync.Mutex
 // which openAPIGuard refuses before kustomize reads its fields. Like the
 // controller it refuses a built object without an apiVersion, kind or name
 // (kustomization_controller.go:855-859).
-func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, []bool, error) {
+func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, []mergeMark, error) {
 	tree, err := b.tree()
 	if err != nil {
 		return nil, nil, err
@@ -146,7 +150,7 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, []bool, er
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "kustomize build failed")
 	}
-	var merged []bool
+	var merged []mergeMark
 	if guard.merged() {
 		if merged, err = probeMerges(fsys, dir, rm); err != nil {
 			return nil, nil, err
@@ -204,12 +208,11 @@ func kustomizeBuild(fsys filesys.FileSystem, dir string) (rm resmap.ResMap, err 
 // file once.
 //
 // With probe set, it returns a kustomization file holding a secretGenerator
-// entry with behavior merge with the mergeProbe annotation added to that
-// entry's options (probeMerges).
+// entry with behavior merge with that entry marked (mergeMarker, probeMerges).
 type openAPIGuard struct {
 	filesys.FileSystem
 	sets  string
-	probe bool
+	probe *mergeMarker
 	// read holds, per directory, the kustomization file names a read asked
 	// for in it, and found those that exist; merges lists each file found
 	// that holds a secretGenerator entry with behavior merge.
@@ -239,8 +242,8 @@ func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 			return gen.Behavior == kusttypes.BehaviorMerge.String()
 		}) {
 			g.merges = append(g.merges, name)
-			if g.probe {
-				return markMerges(name, b)
+			if g.probe != nil {
+				return g.probe.mark(name, b)
 			}
 		}
 	}
@@ -261,13 +264,30 @@ func (g *openAPIGuard) merged() bool {
 	})
 }
 
-// mergeProbe is the annotation probeMerges marks merged Secrets with.
-const mergeProbe = "kure.go-kure.github.io/merge-probe"
+// mergeProbe is the annotation probeMerges marks merged Secrets with, and
+// mergeProbeKey the literal key it adds to find which of them kustomize
+// hashes.
+const (
+	mergeProbe    = "kure.go-kure.github.io/merge-probe"
+	mergeProbeKey = "kure.go-kure.github.io.merge-probe"
+)
 
-// markMerges returns the kustomization file name holds, b, with mergeProbe
-// set in the options.annotations of each secretGenerator entry with behavior
-// merge, the rest of the file as it is.
-func markMerges(name string, b []byte) ([]byte, error) {
+// mergeMarker marks the secretGenerator entries with behavior merge of the
+// kustomization files one build reads (openAPIGuard.probe): each entry, in
+// the order the build reads them, with the mergeProbe annotation set to nonce,
+// "-" and its number, a value no file of the tree holds; with data set, each
+// with a literal too, mergeProbeKey set to nonce, which changes the content
+// of the Secret it merges into.
+type mergeMarker struct {
+	nonce string
+	data  bool
+	n     int
+}
+
+// mark returns the kustomization file name holds, b, with each
+// secretGenerator entry with behavior merge marked, the rest of the file as
+// it is.
+func (m *mergeMarker) mark(name string, b []byte) ([]byte, error) {
 	node, err := kyaml.Parse(string(b))
 	if err != nil {
 		return nil, errors.Wrapf(err, "read %s", name)
@@ -289,8 +309,15 @@ func markMerges(name string, b []byte) ([]byte, error) {
 		if behavior := gen.Field("behavior"); behavior == nil || kyaml.GetValue(behavior.Value) != kusttypes.BehaviorMerge.String() {
 			continue
 		}
-		if err := gen.PipeE(kyaml.LookupCreate(kyaml.MappingNode, "options", "annotations"), kyaml.SetField(mergeProbe, kyaml.NewStringRNode("true"))); err != nil {
+		value := fmt.Sprintf("%s-%d", m.nonce, m.n)
+		m.n++
+		if err := gen.PipeE(kyaml.LookupCreate(kyaml.MappingNode, "options", "annotations"), kyaml.SetField(mergeProbe, kyaml.NewStringRNode(value))); err != nil {
 			return nil, errors.Wrapf(err, "mark a secretGenerator entry of %s", name)
+		}
+		if m.data {
+			if err := gen.PipeE(kyaml.LookupCreate(kyaml.SequenceNode, "literals"), kyaml.Append(kyaml.NewStringRNode(mergeProbeKey+"="+m.nonce).YNode())); err != nil {
+				return nil, errors.Wrapf(err, "mark a secretGenerator entry of %s", name)
+			}
 		}
 	}
 	out, err := node.String()
@@ -300,39 +327,120 @@ func markMerges(name string, b []byte) ([]byte, error) {
 	return []byte(out), nil
 }
 
+// mergeMark is what probeMerges reads of one object of a build: whether a
+// secretGenerator entry with behavior merge changed it, and whether kustomize
+// appended a content hash to its name.
+type mergeMark struct{ merged, hashed bool }
+
 // probeMerges returns, for each object of rm, the result of a build of dir
-// from fsys, whether a secretGenerator entry with behavior merge changed it.
-// kustomize answers it: dir is built again with each such entry marked
-// (markMerges), and a merge keeps the generator's annotations on the Secret
-// it merges into (api resmap/reswrangler.go:585-596), through every later
-// transformer, so the marked objects are those it changed, under the
-// namespace and name the build gives them. An annotation is no part of a
-// Secret's content hash (api hasher/hasher.go:133-146), so each marked
-// object has its identity in rm. Where one has not, or the marked build
-// fails, which of rm's Secrets a merge changed cannot be read, and the build
-// is not read (unreadBuild).
-func probeMerges(fsys filesys.FileSystem, dir string, rm resmap.ResMap) ([]bool, error) {
-	guard := &openAPIGuard{FileSystem: fsys, probe: true}
-	marked, err := kustomizeBuild(guard, dir)
+// from fsys, whether a secretGenerator entry with behavior merge changed it,
+// and whether kustomize hashed its name. kustomize answers both. dir is built
+// again with each such entry marked (mergeMarker): a merge keeps the
+// generator's annotations on the Secret it merges into (api
+// resmap/reswrangler.go:583-594), through every later transformer, so an
+// object holding one entry's mark is one a merge changed, under the namespace
+// and name the build gives it. That build must be rm, object for object, but
+// for the marks, which no part of a content hash reads (api
+// hasher/hasher.go:133-146), and each mark must be on one object at most: a
+// transformer copying annotations, or a generator reading a marked file as
+// data, is seen there. dir is built a third time with a literal added to each
+// entry: the merged Secret's name changes only where kustomize appends a
+// hash of its content, which kure reads from that build rather than predicts
+// (a merge into a Secret a file holds keeps its name, one into a generated
+// Secret is hashed unless its options say not). Where a build fails,
+// or differs so, which of rm's Secrets a merge changed cannot be read, and the
+// build is not read (unreadBuild).
+func probeMerges(fsys filesys.FileSystem, dir string, rm resmap.ResMap) ([]mergeMark, error) {
+	nonce := make([]byte, 8)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, errors.Wrap(err, "make a merge probe")
+	}
+	marker := &mergeMarker{nonce: hex.EncodeToString(nonce)}
+	marked, err := probeBuild(fsys, dir, marker)
+	if err != nil {
+		return nil, err
+	}
+	built, got := rm.Resources(), marked.Resources()
+	if len(got) != len(built) {
+		return nil, probeDiffers("makes %d objects, not %d", len(got), len(built))
+	}
+	marks := make([]mergeMark, len(built))
+	at := map[string]int{}
+	for i, res := range got {
+		m, err := res.Map()
+		if err != nil {
+			return nil, errors.Wrap(err, "read a built object")
+		}
+		if value, ok := marker.value(res); ok {
+			if _, twice := at[value]; twice {
+				return nil, probeDiffers("puts one merge's mark on two objects, %s among them", res.CurId())
+			}
+			at[value] = i
+			marks[i].merged = true
+			unstructured.RemoveNestedField(m, "metadata", "annotations", mergeProbe)
+			if annotations, _, _ := unstructured.NestedMap(m, "metadata", "annotations"); len(annotations) == 0 {
+				unstructured.RemoveNestedField(m, "metadata", "annotations")
+			}
+		}
+		want, err := built[i].Map()
+		if err != nil {
+			return nil, errors.Wrap(err, "read a built object")
+		}
+		if res.CurId() != built[i].CurId() || !reflect.DeepEqual(m, want) {
+			return nil, probeDiffers("makes %s where it makes %s", res.CurId(), built[i].CurId())
+		}
+	}
+	if len(at) == 0 {
+		return marks, nil
+	}
+	data, err := probeBuild(fsys, dir, &mergeMarker{nonce: marker.nonce, data: true})
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	for _, res := range data.Resources() {
+		value, ok := marker.value(res)
+		if !ok {
+			continue
+		}
+		i, found := at[value]
+		if !found || seen[value] {
+			return nil, probeDiffers("with a literal added to each merge marks %s otherwise", res.CurId())
+		}
+		seen[value] = true
+		marks[i].hashed = res.GetName() != got[i].GetName()
+	}
+	if len(seen) != len(at) {
+		return nil, probeDiffers("with a literal added to each merge marks %d objects, not %d", len(seen), len(at))
+	}
+	return marks, nil
+}
+
+// value returns the mark m set on res, if any: a value no file of the tree
+// holds, so another value of the annotation is none.
+func (m *mergeMarker) value(res *resource.Resource) (string, bool) {
+	value, ok := res.GetAnnotations()[mergeProbe]
+	return value, ok && strings.HasPrefix(value, m.nonce+"-")
+}
+
+// probeBuild builds dir from fsys with marker marking the merges
+// (probeMerges).
+func probeBuild(fsys filesys.FileSystem, dir string, marker *mergeMarker) (resmap.ResMap, error) {
+	guard := &openAPIGuard{FileSystem: fsys, probe: marker}
+	rm, err := kustomizeBuild(guard, dir)
 	if err == nil && guard.sets != "" {
 		err = errors.Errorf("%s sets openapi", guard.sets)
 	}
 	if err != nil {
 		return nil, unreadBuild{errors.Wrap(err, "its build with each secretGenerator entry with behavior merge marked fails, so which Secret a merge changes cannot be read")}
 	}
-	built := rm.Resources()
-	merged := make([]bool, len(built))
-	for _, res := range marked.Resources() {
-		if _, ok := res.GetAnnotations()[mergeProbe]; !ok {
-			continue
-		}
-		i := slices.IndexFunc(built, func(b *resource.Resource) bool { return b.CurId() == res.CurId() })
-		if i < 0 {
-			return nil, unreadBuild{errors.Errorf("a secretGenerator entry with behavior merge changes %s, which its build without the mark does not make, so which Secret a merge changes cannot be read", res.CurId())}
-		}
-		merged[i] = true
-	}
-	return merged, nil
+	return rm, nil
+}
+
+// probeDiffers is the unreadBuild of a probe build that differs from the
+// build beyond its marks.
+func probeDiffers(format string, args ...any) error {
+	return unreadBuild{errors.Errorf("its build with each secretGenerator entry with behavior merge marked "+format+", so which Secret a merge changes cannot be read", args...)}
 }
 
 // markRead adds name's base to the names m holds for its directory.
@@ -377,9 +485,10 @@ type substituted struct {
 	obj                               client.Object
 	unknownIdentity                   bool
 	writtenLabels, writtenAnnotations writtenSkip
-	// merged marks a Secret a secretGenerator merge changed in the build
-	// (treeBuilds.build); builtView.add sets it.
-	merged bool
+	// merge says whether a secretGenerator merge changed the object in the
+	// build, and whether its name was hashed (treeBuilds.build);
+	// builtView.add sets it.
+	merge mergeMark
 }
 
 // substituteBuild runs k's postBuild substitution over objs, the objects its
@@ -576,9 +685,11 @@ func skipAsWritten(metadata map[string]string) writtenSkip {
 // refuseUnknownType applies substituteBuild's rule for a variable written's
 // apiVersion or kind references and inline does not set, under k's
 // substituteFrom: an error naming it, since the object may then be a Flux
-// Kustomization. So it is for one inline sets to more than a name
-// (plainToken) where the object references a variable inline does not set
-// anywhere: such a value may carry YAML, an alias of an anchor on a value the
+// Kustomization. So it is for an apiVersion or kind referencing variables
+// that inline sets, whose text as Flux substitutes it with inline's values
+// (defaults, replacements and the text around them included) is more than a
+// name (plainToken), where the object references a variable inline does not
+// set anywhere: that text may carry YAML, an alias of an anchor on a value the
 // cluster sets, or an open quote, that moves that value into the apiVersion
 // or kind at apply.
 func refuseUnknownType(k *kustv1.Kustomization, written *resource.Resource, inline map[string]string) error {
@@ -605,28 +716,30 @@ func refuseUnknownType(k *kustv1.Kustomization, written *resource.Resource, inli
 		if err != nil {
 			return err
 		}
-		var structural []string
-		for _, name := range set {
-			if !plainToken(inline[name]) {
-				structural = append(structural, name)
-			}
+		if len(set) == 0 {
+			continue
 		}
-		if len(structural) > 0 {
-			return errors.Errorf("Flux Kustomization %q (spec.path %q) substitutes with spec.postBuild.substituteFrom, and %s %q of its build references %s in %s, which spec.postBuild.substitute sets to more than a name, and %s elsewhere, which it does not set: YAML in the inline value (an alias, an open quote) may move a value the cluster sets into %s at apply, so the object may be a Flux Kustomization and what it waits for cannot be read from the tree; set %s to a name, or write %s without a variable",
-				k.Name, k.Spec.Path, written.GetKind(), written.GetName(), quoteAll(structural), f.where, quoteAll(objectVars), f.where, quoteAll(structural), f.where)
+		// As Flux evaluates it, not strict (kustomize_varsub.go:236-242).
+		expanded, err := envsubst.Eval(f.value, func(name string) (string, bool) {
+			return inline[name], true
+		})
+		if err != nil {
+			return errors.Wrap(err, "parse the variables")
+		}
+		if !plainToken(expanded) {
+			return errors.Errorf("Flux Kustomization %q (spec.path %q) substitutes with spec.postBuild.substituteFrom, and %s %q of its build references %s in %s, which spec.postBuild.substitute makes %q, more than a name, and %s elsewhere, which it does not set: YAML in that text (an alias, an open quote) may move a value the cluster sets into %s at apply, so the object may be a Flux Kustomization and what it waits for cannot be read from the tree; make %s a name, or write it without a variable",
+				k.Name, k.Spec.Path, written.GetKind(), written.GetName(), quoteAll(set), f.where, expanded, quoteAll(objectVars), f.where, f.where)
 		}
 	}
 	return nil
 }
 
-// plainToken reports whether an inline value, with the newlines Flux removes
-// before it substitutes (kustomize_varsub.go:155), is a name: letters,
-// digits, '.', '/', '_' and '-' only, bare or wholly inside one pair of
-// single or double quotes. Such a value is one complete YAML scalar: it holds
-// no alias, anchor, tag, flow or block indicator, escape or unclosed quote,
-// so it cannot reach past the text it is substituted into.
+// plainToken reports whether a substituted text is a name: letters, digits,
+// '.', '/', '_' and '-' only, bare or wholly inside one pair of single or
+// double quotes. Such a text is one complete YAML scalar: it holds no alias,
+// anchor, tag, flow or block indicator, escape, line break or unclosed quote,
+// so it cannot reach past the field it is substituted into.
 func plainToken(v string) bool {
-	v = strings.ReplaceAll(v, "\n", "")
 	if len(v) >= 2 && (v[0] == '\'' || v[0] == '"') && v[len(v)-1] == v[0] {
 		v = v[1 : len(v)-1]
 	}
