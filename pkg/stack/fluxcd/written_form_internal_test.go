@@ -18,9 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/provider"
-	kusttypes "sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
-	"sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/internal/kustomizeschema"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -351,23 +349,30 @@ func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 }
 
 // A kustomization file with a field the merge probe does not model is named
-// by that field; a patch or a field that writes the values its file holds is
-// modelled.
+// by that field, whatever it is, a field nobody listed included; a file of
+// modelled fields only (each writes the values its file holds, a patch only
+// inside its object) names none.
 func TestUnmodelledField(t *testing.T) {
+	const head = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n- s.yaml\n"
 	for file, want := range map[string]string{
-		"replacements:\n- source:\n    kind: Secret\n    name: a\n  targets:\n  - select:\n      name: b\n": "replacements",
-		"vars:\n- name: V\n  objref:\n    kind: Secret\n    name: a\n    apiVersion: v1\n":                  "vars",
-		"transformers:\n- t.yaml\n": "transformers",
-		"validators:\n- v.yaml\n":   "validators",
-		"generators:\n- g.yaml\n":   "generators",
-		"patches:\n- target:\n    kind: Secret\n  patch: |-\n    - op: copy\n      from: /data/a\n      path: /data/b\n": "",
-		"commonAnnotations:\n  a: b\nnamePrefix: x-\n":                                                                   "",
+		head + "replacements:\n- source:\n    kind: Secret\n    name: a\n  targets:\n  - select:\n      name: b\n": "replacements",
+		head + "vars:\n- name: V\n  objref:\n    kind: Secret\n    name: a\n    apiVersion: v1\n":                  "vars",
+		head + "transformers:\n- t.yaml\n":     "transformers",
+		head + "validators:\n- v.yaml\n":       "validators",
+		head + "generators:\n- g.yaml\n":       "generators",
+		head + "configurations:\n- c.yaml\n":   "configurations",
+		head + "crds:\n- c.json\n":             "crds",
+		head + "sortOptions:\n  order: fifo\n": "sortOptions",
+		head + "replacements: []\n":            "replacements",
+		"- a\n":                                "content",
+		head + "patches:\n- target:\n    kind: Secret\n  patch: |-\n    - op: copy\n      from: /data/a\n      path: /data/b\n" +
+			"commonAnnotations:\n  a: b\nnamePrefix: x-\nnamespace: n\nsecretGenerator:\n- name: s\n  behavior: merge\n": "",
+		"apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\ncomponents:\n- ../c\nimages:\n- name: a\nlabels:\n- pairs:\n    a: b\n": "",
+		head + "metadata:\n  name: k\nbases:\n- ../b\ncommonLabels:\n  a: b\nreplicas:\n- name: d\n  count: 2\n" +
+			"patchesStrategicMerge:\n- p.yaml\npatchesJson6902:\n- path: j.yaml\n  target:\n    kind: Secret\n    name: s\n" +
+			"configMapGenerator:\n- name: c\n  literals:\n  - a=b\ngeneratorOptions:\n  disableNameSuffixHash: true\n": "",
 	} {
-		var k kusttypes.Kustomization
-		if err := yaml.Unmarshal([]byte(file), &k); err != nil {
-			t.Fatal(err)
-		}
-		if got := unmodelledField(&k); got != want {
+		if got := unmodelledField([]byte(file)); got != want {
 			t.Errorf("unmodelledField(%q) = %q, want %q", file, got, want)
 		}
 	}

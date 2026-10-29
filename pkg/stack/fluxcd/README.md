@@ -467,14 +467,17 @@ add none, so a cycle through them passes:
   Where the annotated build makes other objects than the build, or puts one entry's annotation on
   two objects (a patch that copies annotations, a component file a generator also reads as data),
   which Secret a merge changed cannot be read, and the build is not read. This reading fails
-  closed: kure reads which Secret a merge changed only from a build whose every field it models,
-  and does not model more of kustomize to read one it does not. A build that merges so and loads
-  a kustomization file with `replacements`, `vars`, `transformers`, `validators` or `generators`
-  is not read: the first four may copy a value from one object into another, so the annotation
-  could leave the Secret it marks, or the literal reach a name, unseen, and a `generators` entry
-  may itself merge into a Secret (a builtin `SecretGenerator` with `behavior: merge`), so a build
-  loading one counts as one that merges. A literal Secret beside it, of another namespace or name,
-  keeps its writer certain;
+  closed: kure reads which Secret a merge changed only from a build whose every kustomization
+  file holds only fields it models (`resources`, `bases`, `components`, `namespace`,
+  `namePrefix`, `nameSuffix`, `commonLabels`, `labels`, `commonAnnotations`, `images`,
+  `replicas`, the three patch fields, `configMapGenerator`, `secretGenerator` and
+  `generatorOptions`, besides `apiVersion`, `kind` and `metadata`), and does not model more of
+  kustomize to read one it does not. A build that merges so and loads a kustomization file with
+  any other field is not read: `replacements` and `vars` may copy a value from one object into
+  another, so the annotation could leave the Secret it marks, or the literal reach a name,
+  unseen. A `generators` entry may itself merge into a Secret (a builtin `SecretGenerator` with
+  `behavior: merge`), so a build loading one counts as one that merges. A literal Secret beside
+  it, of another namespace or name, keeps its writer certain;
 - an object whose identity may change at apply, whatever it names, unless only the writer's own
   result holds it: `$` left after substitution or `ENC[` (SOPS) in its `apiVersion`, kind,
   namespace or name, or a namespace or name a `substituteFrom` variable sets. Another apply may
