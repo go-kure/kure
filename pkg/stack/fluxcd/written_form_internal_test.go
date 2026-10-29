@@ -227,13 +227,13 @@ func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 					"- source:\n    kind: Secret\n    name: clean\n    fieldPath: metadata.annotations\n  targets:\n  - select:\n      kind: Secret\n      name: creds\n    fieldPaths:\n    - metadata.annotations\n"},
 			merge: merge("  namespace: blue\n"), build: "base", unread: true, reason: "whose replacements",
 		},
-		// A patch copies a data key the file holds into the name: the probe's
-		// literal, under a key no file holds, leaves it and the name as they
-		// are, so the unhashed Secret is not read as hashed.
+		// A patch copies a data key the file holds into the name: a patch is
+		// not modelled, so the build is not read, whatever the probe's
+		// literal would leave.
 		"with a patch copying a data key into its name": {
 			files: map[string]string{"base/secrets.yaml": "---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: web\n  namespace: default\ndata:\n  " + mergeProbeKey + ": webxwebx\n",
 				"base/kustomization.yaml": base + "patches:\n- target:\n    kind: Secret\n    name: web\n  patch: |-\n    - op: copy\n      from: /data/" + mergeProbeKey + "\n      path: /metadata/name\n"},
-			merge: mergeNamed("web", "  namespace: default\n"), build: "base",
+			merge: mergeNamed("web", "  namespace: default\n"), build: "base", unread: true, reason: "whose patches",
 		},
 		"beside a generator reading a kustomization file as data": {
 			files: map[string]string{"base/secrets.yaml": both,
@@ -365,11 +365,14 @@ func TestUnmodelledField(t *testing.T) {
 		head + "sortOptions:\n  order: fifo\n": "sortOptions",
 		head + "replacements: []\n":            "replacements",
 		"- a\n":                                "content",
-		head + "patches:\n- target:\n    kind: Secret\n  patch: |-\n    - op: copy\n      from: /data/a\n      path: /data/b\n" +
-			"commonAnnotations:\n  a: b\nnamePrefix: x-\nnamespace: n\nsecretGenerator:\n- name: s\n  behavior: merge\n": "",
+		// A patch writes into the object it selects what its file, or
+		// a file it reads, holds: not modelled either.
+		head + "patches:\n- target:\n    kind: Secret\n  patch: |-\n    - op: copy\n      from: /data/a\n      path: /data/b\n": "patches",
+		head + "patchesStrategicMerge:\n- p.yaml\n":                                                                                             "patchesStrategicMerge",
+		head + "patchesJson6902:\n- path: j.yaml\n  target:\n    kind: Secret\n    name: s\n":                                                   "patchesJson6902",
+		head + "commonAnnotations:\n  a: b\nnamePrefix: x-\nnamespace: n\nsecretGenerator:\n- name: s\n  behavior: merge\n":                     "",
 		"apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\ncomponents:\n- ../c\nimages:\n- name: a\nlabels:\n- pairs:\n    a: b\n": "",
 		head + "metadata:\n  name: k\nbases:\n- ../b\ncommonLabels:\n  a: b\nreplicas:\n- name: d\n  count: 2\n" +
-			"patchesStrategicMerge:\n- p.yaml\npatchesJson6902:\n- path: j.yaml\n  target:\n    kind: Secret\n    name: s\n" +
 			"configMapGenerator:\n- name: c\n  literals:\n  - a=b\ngeneratorOptions:\n  disableNameSuffixHash: true\n": "",
 	} {
 		if got := unmodelledField([]byte(file)); got != want {
@@ -415,12 +418,14 @@ func TestOpenAPIGuard_GeneratorsEntryMayMerge(t *testing.T) {
 // kustomization it loads, is marked on a read that merges nothing: a patch
 // reading it can move that mark onto a Secret no merge changed, and remove
 // what else it carried, so both comparisons stay equal. The probe does not
-// read such a build.
+// read such a build: the patch routes for their patches, and a file read
+// again without any patch, as a resource, for that read.
 func TestProbeMerges_MarkedFileReadOtherwise(t *testing.T) {
 	const (
 		secrets = "---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: creds\n  namespace: default\ndata:\n  base: dg==\n" +
 			"---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: ready\n  namespace: default\ndata:\n  base: dg==\n"
-		merge = "secretGenerator:\n- name: creds\n  namespace: default\n  behavior: merge\n  options:\n    annotations:\n      a: b\n  literals:\n  - k=v\n"
+		merge     = "secretGenerator:\n- name: creds\n  namespace: default\n  behavior: merge\n  options:\n    annotations:\n      a: b\n  literals:\n  - k=v\n"
+		component = "apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\nmetadata:\n  name: c\n" + merge
 	)
 	// patches reads path as a patch of ready, then copies that file's
 	// annotations, and with them its mark, onto ready and removes the rest.
@@ -430,21 +435,40 @@ func TestProbeMerges_MarkedFileReadOtherwise(t *testing.T) {
 			"    - op: copy\n      from: /secretGenerator/0/options/annotations\n      path: /metadata/annotations\n" +
 			"    - op: remove\n      path: /secretGenerator\n"
 	}
-	for name, files := range map[string]map[string]string{
+	for name, tc := range map[string]struct {
+		files map[string]string
+		// copied: the build copies the annotations onto ready.
+		copied bool
+		reason string
+	}{
 		"a data file read as a patch only": {
-			"base/secrets.yaml":         secrets,
-			"base/kustomization.yaml":   "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n- secrets.yaml\n" + merge + patches("p/kustomization.yaml"),
-			"base/p/kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nmetadata:\n  name: p\n" + merge,
+			files: map[string]string{
+				"base/secrets.yaml":         secrets,
+				"base/kustomization.yaml":   "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n- secrets.yaml\n" + merge + patches("p/kustomization.yaml"),
+				"base/p/kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nmetadata:\n  name: p\n" + merge,
+			},
+			copied: true, reason: "whose patches",
 		},
 		"a component read again as a patch": {
-			"base/secrets.yaml":       secrets,
-			"base/kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n- secrets.yaml\ncomponents:\n- ../c\n" + patches("../c/kustomization.yaml"),
-			"c/kustomization.yaml":    "apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\nmetadata:\n  name: c\n" + merge,
+			files: map[string]string{
+				"base/secrets.yaml":       secrets,
+				"base/kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n- secrets.yaml\ncomponents:\n- ../c\n" + patches("../c/kustomization.yaml"),
+				"c/kustomization.yaml":    component,
+			},
+			copied: true, reason: "whose patches",
+		},
+		"a component read again as a resource": {
+			files: map[string]string{
+				"base/secrets.yaml":       secrets,
+				"base/kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n- secrets.yaml\n- ../c/kustomization.yaml\ncomponents:\n- ../c\n",
+				"c/kustomization.yaml":    component,
+			},
+			reason: "../c/kustomization.yaml, which merges into a Secret, other than once",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			for f, content := range files {
+			for f, content := range tc.files {
 				p := filepath.Join(dir, filepath.FromSlash(f))
 				if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 					t.Fatal(err)
@@ -459,13 +483,13 @@ func TestProbeMerges_MarkedFileReadOtherwise(t *testing.T) {
 			if err != nil {
 				t.Fatalf("build: %v", err)
 			}
-			if a := rm.Resources()[1].GetAnnotations(); rm.Resources()[1].GetName() != "ready" || a["a"] != "b" {
+			if a := rm.Resources()[1].GetAnnotations(); tc.copied && (rm.Resources()[1].GetName() != "ready" || a["a"] != "b") {
 				t.Fatalf("the patches do not copy the annotations onto ready (%v): the case tests nothing", a)
 			}
 			marks, err := probeMerges(filesys.MakeFsOnDisk(), base, rm)
 			var u unreadBuild
-			if !stderrors.As(err, &u) || !strings.Contains(err.Error(), "other than once") {
-				t.Fatalf("probeMerges: got %v, marks %v, want the build not read", err, marks)
+			if !stderrors.As(err, &u) || !strings.Contains(err.Error(), tc.reason) {
+				t.Fatalf("probeMerges: got %v, marks %v, want the build not read, for %q", err, marks, tc.reason)
 			}
 		})
 	}
