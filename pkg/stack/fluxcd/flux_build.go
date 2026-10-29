@@ -306,7 +306,7 @@ func (g *openAPIGuard) unmodelledLoaded() (unmodelledFile, bool) {
 // behavior merge that the build read other than once, as a kustomization it
 // loads, if any. Each read of such a file is marked (mergeMarker), so a read
 // as a patch or a resource, or a second read, issues a mark no merge sets,
-// which a patch can carry onto a Secret no merge changed.
+// which the build may carry onto a Secret no merge changed.
 func (g *openAPIGuard) readOtherwise() (string, bool) {
 	for _, file := range slices.Sorted(maps.Keys(g.mergeReads)) {
 		if g.mergeReads[file] != 1 || !g.loaded(file) {
@@ -317,17 +317,14 @@ func (g *openAPIGuard) readOtherwise() (string, bool) {
 }
 
 // modelledFields are the top-level fields of a kustomization file the merge
-// probe models: each writes only values its file holds, or, a patch, writes
-// only inside the object it selects, so a mark they move or drop changes what
-// the marked build makes, which probeMerges compares. openapi is refused
-// before (openAPIGuard).
+// probe models: each writes only values its file holds, so none moves or
+// drops a mark unseen. openapi is refused before (openAPIGuard).
 var modelledFields = map[string]bool{
 	"apiVersion": true, "kind": true, "metadata": true,
 	"resources": true, "bases": true, "components": true,
 	"namespace": true, "namePrefix": true, "nameSuffix": true,
 	"commonLabels": true, "labels": true, "commonAnnotations": true,
 	"images": true, "replicas": true,
-	"patches": true, "patchesStrategicMerge": true, "patchesJson6902": true,
 	"configMapGenerator": true, "secretGenerator": true, "generatorOptions": true,
 }
 
@@ -338,7 +335,9 @@ var modelledFields = map[string]bool{
 // unread rather than model more of kustomize. Among the fields left out:
 // replacements and vars copy a value of one object into another, so a
 // merge's mark may leave the object it marked, or reach a name, and still
-// read as one mark on one object; transformers, validators and generators
+// read as one mark on one object; patches, patchesStrategicMerge and
+// patchesJson6902 write into the object they select what a file holds or a
+// patch copies, which may be a mark; transformers, validators and generators
 // entries are plugins kure does not read, and a generators entry may merge
 // into a Secret unseen.
 func unmodelledField(b []byte) string {
@@ -433,15 +432,15 @@ type mergeMark struct{ merged, hashed bool }
 // and name the build gives it. That build must be rm, object for object, but
 // for the marks, which no part of a content hash reads (api
 // hasher/hasher.go:133-146), and each mark must be one this probe issued, on
-// one object at most: a patch moving a mark, or a generator reading a marked
-// file as data, is seen there. The probe fails closed: a build loading a
-// kustomization file with a field it does not model (unmodelledField) is
-// not read at all, as a value copied from one object into another can move a
-// mark off the Secret it marked, or carry the added literal into a name, and
-// leave both comparisons equal, and a generator kure does not read can
-// merge unseen; nor is one that reads a file holding a merge other than
-// once, as a kustomization it loads (readOtherwise), as such a read issues
-// a mark no merge sets, which a patch can carry. dir is built a third
+// one object at most: a generator reading a marked file as data is seen
+// there. The probe fails closed: a build loading a kustomization file with
+// a field it does not model (unmodelledField), a patch among them, is not
+// read at all, as a value copied from one object into another, or a patch
+// writing what a file holds, can move a mark off the Secret it marked, or
+// carry the added literal into a name, and leave both comparisons equal,
+// and a generator kure does not read can merge unseen; nor is one that
+// reads a file holding a merge other than once, as a kustomization it loads
+// (readOtherwise), as such a read issues a mark no merge sets. dir is built a third
 // time with a literal added to each entry, under a key holding the nonce: the
 // merged Secret's name changes only where kustomize appends a hash of its
 // content, which kure reads from that build rather than predicts (a merge

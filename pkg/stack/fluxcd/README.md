@@ -465,21 +465,25 @@ add none, so a cycle through them passes:
   added to each entry, under a key no file holds, which changes the Secret's name only where
   kustomize hashes it (a merge into a Secret a file holds keeps that name, whatever its shape).
   Where the annotated build makes other objects than the build, or puts one entry's annotation on
-  two objects (a patch that copies annotations, a component file a generator also reads as data),
+  two objects (a component file a generator also reads as data),
   which Secret a merge changed cannot be read, and the build is not read. This reading fails
   closed: kure reads which Secret a merge changed only from a build whose every kustomization
   file holds only fields it models (`resources`, `bases`, `components`, `namespace`,
   `namePrefix`, `nameSuffix`, `commonLabels`, `labels`, `commonAnnotations`, `images`,
-  `replicas`, the three patch fields, `configMapGenerator`, `secretGenerator` and
-  `generatorOptions`, besides `apiVersion`, `kind` and `metadata`), and does not model more of
-  kustomize to read one it does not. A build that merges so and loads a kustomization file with
-  any other field is not read: `replacements` and `vars` may copy a value from one object into
-  another, so the annotation could leave the Secret it marks, or the literal reach a name,
-  unseen. A `generators` entry may itself merge into a Secret (a builtin `SecretGenerator` with
-  `behavior: merge`), so a build loading one counts as one that merges. Nor is a build read that
-  reads a file holding such a merge other than once, as a kustomization it loads (a patch or
-  resource reading that file, or a second read): kure annotates every read, and a patch could
-  carry the annotation of a read that merges nothing onto another Secret. A literal Secret beside
+  `replicas`, `configMapGenerator`, `secretGenerator` and `generatorOptions`, besides
+  `apiVersion`, `kind` and `metadata`), each writing only values its file holds, and does not
+  model more of kustomize to read one it does not. A build that merges so and loads a
+  kustomization file with any other field is not read: `replacements` and `vars` may copy a value
+  from one object into another, and a patch (`patches`, `patchesStrategicMerge`,
+  `patchesJson6902`) writes into the object it selects what a file holds or what it copies, so
+  the annotation could leave the Secret it marks, or the literal reach a name, unseen. This
+  refuses conservatively: a tree that merges into a Secret and also patches anything in the same
+  build is not read, even where it converges. A `generators` entry may itself merge into a Secret
+  (a builtin `SecretGenerator` with `behavior: merge`), so a build loading one counts as one that
+  merges. Nor is a build read that reads a file holding such a merge other than once, as a
+  kustomization it loads (a patch or resource reading that file, or a second read): kure
+  annotates every read, and the build could carry the annotation of a read that merges nothing
+  onto another Secret. A literal Secret beside
   it, of another namespace or name, keeps its writer certain;
 - an object whose identity may change at apply, whatever it names, unless only the writer's own
   result holds it: `$` left after substitution or `ENC[` (SOPS) in its `apiVersion`, kind,
