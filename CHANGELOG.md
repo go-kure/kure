@@ -16,6 +16,12 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-beta.22] - 2026-10-29
+
+### Build
+
+- Update kubernetes to v0.37.2
+
 ## [0.2.0-beta.21] - 2026-10-28
 
 ### Build
