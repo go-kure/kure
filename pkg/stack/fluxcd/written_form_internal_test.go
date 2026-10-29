@@ -350,15 +350,16 @@ func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 	}
 }
 
-// A kustomization file that may copy a value of one object into another is
-// named by the field that does; a patch or a field that writes the values its
-// file holds copies none.
-func TestCopiesValues(t *testing.T) {
+// A kustomization file with a field the merge probe does not model is named
+// by that field; a patch or a field that writes the values its file holds is
+// modelled.
+func TestUnmodelledField(t *testing.T) {
 	for file, want := range map[string]string{
 		"replacements:\n- source:\n    kind: Secret\n    name: a\n  targets:\n  - select:\n      name: b\n": "replacements",
 		"vars:\n- name: V\n  objref:\n    kind: Secret\n    name: a\n    apiVersion: v1\n":                  "vars",
 		"transformers:\n- t.yaml\n": "transformers",
 		"validators:\n- v.yaml\n":   "validators",
+		"generators:\n- g.yaml\n":   "generators",
 		"patches:\n- target:\n    kind: Secret\n  patch: |-\n    - op: copy\n      from: /data/a\n      path: /data/b\n": "",
 		"commonAnnotations:\n  a: b\nnamePrefix: x-\n":                                                                   "",
 	} {
@@ -366,9 +367,42 @@ func TestCopiesValues(t *testing.T) {
 		if err := yaml.Unmarshal([]byte(file), &k); err != nil {
 			t.Fatal(err)
 		}
-		if got := copiesValues(&k); got != want {
-			t.Errorf("copiesValues(%q) = %q, want %q", file, got, want)
+		if got := unmodelledField(&k); got != want {
+			t.Errorf("unmodelledField(%q) = %q, want %q", file, got, want)
 		}
+	}
+}
+
+// A builtin SecretGenerator with behavior merge listed under generators
+// merges into a Secret where no secretGenerator field shows it: the build
+// counts as merged, and the probe does not read it.
+func TestOpenAPIGuard_GeneratorsEntryMayMerge(t *testing.T) {
+	dir := t.TempDir()
+	for f, content := range map[string]string{
+		"secrets.yaml":       "apiVersion: v1\nkind: Secret\nmetadata:\n  name: creds\n  namespace: default\ndata:\n  base: dg==\n",
+		"gen.yaml":           "apiVersion: builtin\nkind: SecretGenerator\nmetadata:\n  name: creds\n  namespace: default\nbehavior: merge\nliterals:\n- k=v\n",
+		"kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n- secrets.yaml\ngenerators:\n- gen.yaml\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	kustomizeschema.Parse()
+	guard := &openAPIGuard{FileSystem: filesys.MakeFsOnDisk()}
+	rm, err := kustomizeBuild(guard, dir)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if res := rm.Resources(); len(res) != 1 || res[0].GetDataMap()["k"] == "" {
+		t.Fatalf("the generators entry does not merge into creds: the case tests nothing")
+	}
+	if !guard.merged() {
+		t.Error("a build loading a generators entry is not read as one that may merge")
+	}
+	_, err = probeMerges(filesys.MakeFsOnDisk(), dir, rm)
+	var u unreadBuild
+	if !stderrors.As(err, &u) || !strings.Contains(err.Error(), "whose generators") {
+		t.Errorf("probeMerges: got %v, want the build not read, for its generators", err)
 	}
 }
 
