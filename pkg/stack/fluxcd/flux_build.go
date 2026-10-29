@@ -247,7 +247,7 @@ func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 			}
 			return nil, errors.Errorf("%s sets openapi", name)
 		}
-		if field := unmodelledField(&k); field != "" {
+		if field := unmodelledField(b); field != "" {
 			g.unmodelled = append(g.unmodelled, unmodelledFile{file: name, field: field})
 		}
 		merges := slices.ContainsFunc(k.SecretGenerator, func(gen kusttypes.SecretArgs) bool {
@@ -265,9 +265,9 @@ func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 
 // merged reports whether a kustomization file the build loaded as one, a
 // component's included, holds a secretGenerator entry with behavior merge,
-// or a generators entry, which may merge unseen (unmodelledField): a file in
-// a directory where every kustomization file name was read and
-// exactly one exists. A file only a generator reads as data, or one no build
+// or a generators entry, which may merge unseen: a file in a directory where
+// every kustomization file name was read and exactly one exists. A file only
+// a generator reads as data, or one no build
 // reads, merges nothing. A directory holding two kustomization files is no
 // kustomization a build can load (kusttarget.go:118-120), so files read
 // there are data.
@@ -293,29 +293,40 @@ func (g *openAPIGuard) unmodelledLoaded() (unmodelledFile, bool) {
 	return unmodelledFile{}, false
 }
 
-// unmodelledField names the field of k the merge probe does not model; ""
-// for none. The probe fails closed: it reads which Secret a merge changed
-// only from a build whose every field it models, and leaves any other build
-// with a merge unread. Not modelled are replacements and vars, which copy a
-// value of one object into another by design, so a merge's mark may leave
-// the object it marked, or reach a name, and still read as one mark on one
-// object; transformers and validators entries, plugins kure does not read;
-// and generators entries, which may merge into a Secret unseen. A patch
-// writes only inside the object it selects, and every other field writes a
-// value its file holds, so a mark they move or drop changes what the marked
-// build makes, which probeMerges compares.
-func unmodelledField(k *kusttypes.Kustomization) string {
-	switch {
-	case len(k.Replacements) > 0:
-		return "replacements"
-	case len(k.Vars) > 0: //nolint:staticcheck // SA1019: kustomize still runs vars
-		return "vars"
-	case len(k.Transformers) > 0:
-		return "transformers"
-	case len(k.Validators) > 0:
-		return "validators"
-	case len(k.Generators) > 0:
-		return "generators"
+// modelledFields are the top-level fields of a kustomization file the merge
+// probe models: each writes only values its file holds, or, a patch, writes
+// only inside the object it selects, so a mark they move or drop changes what
+// the marked build makes, which probeMerges compares. openapi is refused
+// before (openAPIGuard).
+var modelledFields = map[string]bool{
+	"apiVersion": true, "kind": true, "metadata": true,
+	"resources": true, "bases": true, "components": true,
+	"namespace": true, "namePrefix": true, "nameSuffix": true,
+	"commonLabels": true, "labels": true, "commonAnnotations": true,
+	"images": true, "replicas": true,
+	"patches": true, "patchesStrategicMerge": true, "patchesJson6902": true,
+	"configMapGenerator": true, "secretGenerator": true, "generatorOptions": true,
+}
+
+// unmodelledField names the first top-level field of the kustomization file
+// b holds that the merge probe does not model (modelledFields); "" for none.
+// The probe fails closed: it reads which Secret a merge changed only from a
+// build whose every field it models, and leaves any other build with a merge
+// unread rather than model more of kustomize. Among the fields left out:
+// replacements and vars copy a value of one object into another, so a
+// merge's mark may leave the object it marked, or reach a name, and still
+// read as one mark on one object; transformers, validators and generators
+// entries are plugins kure does not read, and a generators entry may merge
+// into a Secret unseen.
+func unmodelledField(b []byte) string {
+	var fields map[string]any
+	if err := yaml.Unmarshal(b, &fields); err != nil {
+		return "content"
+	}
+	for _, field := range slices.Sorted(maps.Keys(fields)) {
+		if !modelledFields[field] {
+			return field
+		}
 	}
 	return ""
 }
