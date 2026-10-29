@@ -531,65 +531,47 @@ func TestBuiltObjects_GeneratedNameIsRead(t *testing.T) {
 
 // b-longer writes the Secret default/creds, and a component of its build
 // generates a Secret over it. a health-checks the Secret b-longer's build
-// makes. A generator merging into creds (behavior: merge) gives it a content
-// hash that depends on the kustomize version (go-kure/kure#1094 §7), so the
-// writer stays uncertain; a generator creating another Secret, extra, keeps
-// the edge certain and the cycle is refused. So does a literal Secret
-// b-longer also writes, credsx or creds-foo, which no merge changes. The
-// merged Secret built as credsx under nameSuffix x is read under the name
-// the build gives it (go-kure/kure#1171), so its writer stays uncertain. A
-// component no build reads merges nothing: with
-// b-longer's spec.components empty, read as the tree holds it or built for
-// its target namespace, creds is the literal Secret b-longer writes, and the
-// tree is refused. So it is when a configMapGenerator only reads the
-// component's file as data, also when it reads every kustomization file name
-// of that directory as data. A component that is also read as data merges,
-// but kure's probe of which Secret it merges into changes that data, so the
-// build is not read. A merge into blue/creds, which b-longer also writes,
-// leaves default/creds the literal Secret b-longer writes: its writer is
-// certain and the tree is refused. A merge into the literal
-// web-bcdfghkmt2, whose name kustomize does not hash, leaves the literal
-// web-2456789bcd b-longer also writes with a certain writer, though both
-// end in what looks like a content hash, and the tree is refused.
-func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
+// makes. Which Secret a merge (behavior: merge) changes, and under which
+// name, kure does not read (go-kure/kure#1181): b-longer's build is not read,
+// so the tree is refused naming it, however the merge is spelled (a key in
+// another case) and whatever else the component sets (annotations over the
+// Secret), whichever namespace or name suffix the merge lands under, and
+// also where a configMapGenerator reads the loaded component as data too. A
+// generator creating another Secret, extra, merges nothing: the edge is
+// certain and the cycle is refused. A component no build loads merges
+// nothing either: with b-longer's spec.components empty, read as the tree
+// holds it or built for its target namespace, creds is the literal Secret
+// b-longer writes, and the cycle is refused. So it is when a
+// configMapGenerator only reads the component's file as data, also when it
+// reads every kustomization file name of that directory as data.
+func TestBuiltObjects_MergingBuildIsNotRead(t *testing.T) {
 	creds := unstructuredObj("v1", "Secret", "default", "creds")
 	creds.Object["data"] = map[string]any{"base": "dg=="}
 	const merge = "- name: creds\n  namespace: default\n  behavior: merge\n  literals:\n  - k=v\n"
 	cases := map[string]struct {
-		generator, prefix, suffix, literal, targetNamespace string
-		unused, dataFile, everyName, refused, unread        bool
+		generator, prefix, suffix, targetNamespace   string
+		unused, dataFile, everyName, refused, unread bool
 		// blue, if set, has b-longer also write blue/creds; checked, if
 		// set, is the exact name a health-checks in default.
 		blue    bool
 		checked string
-		// literals are more Secrets b-longer writes in default.
-		literals []string
 	}{
-		"merge in another namespace":      {generator: strings.Replace(merge, "namespace: default", "namespace: blue", 1), blue: true, checked: "creds", refused: true},
-		"merge, literal hash-shaped name": {generator: strings.Replace(merge, "name: creds", "name: web-bcdfghkmt2", 1), literals: []string{"web-bcdfghkmt2", "web-2456789bcd"}, checked: "web-2456789bcd", refused: true},
-		"merge":                           {generator: merge, prefix: "creds"},
-		"merge, name suffix x":            {generator: merge, prefix: "credsx", suffix: "x"},
-		"create":                          {generator: "- name: extra\n  namespace: default\n  literals:\n  - k=v\n", prefix: "extra-", refused: true},
-		"merge, literal credsx":           {generator: merge, prefix: "credsx", literal: "credsx", refused: true},
-		"merge, literal creds-foo":        {generator: merge, prefix: "creds-foo", literal: "creds-foo", refused: true},
-		"merge, component unused":         {generator: merge, prefix: "creds", unused: true, refused: true},
-		"merge, component unused, built":  {generator: merge, prefix: "creds", unused: true, targetNamespace: "default", refused: true},
-		"merge, read only as data":        {generator: merge, prefix: "creds", unused: true, dataFile: true, targetNamespace: "default", refused: true},
-		"merge, component also data":      {generator: merge, prefix: "creds", dataFile: true, unread: true},
-		"merge, every name read as data":  {generator: merge, prefix: "creds", unused: true, dataFile: true, everyName: true, targetNamespace: "default", refused: true},
+		"merge":                          {generator: merge, prefix: "creds", unread: true},
+		"merge, a key in another case":   {generator: strings.Replace(merge, "behavior:", "Behavior:", 1), prefix: "creds", unread: true},
+		"merge, annotations over it":     {generator: merge + "commonAnnotations:\n  kure.go-kure.github.io/merge-probe: fixed\n", prefix: "creds", unread: true},
+		"merge in another namespace":     {generator: strings.Replace(merge, "namespace: default", "namespace: blue", 1), blue: true, checked: "creds", unread: true},
+		"merge, name suffix x":           {generator: merge, prefix: "credsx", suffix: "x", unread: true},
+		"merge, component also data":     {generator: merge, prefix: "creds", dataFile: true, unread: true},
+		"create":                         {generator: "- name: extra\n  namespace: default\n  literals:\n  - k=v\n", prefix: "extra-", refused: true},
+		"merge, component unused":        {generator: merge, prefix: "creds", unused: true, refused: true},
+		"merge, component unused, built": {generator: merge, prefix: "creds", unused: true, targetNamespace: "default", refused: true},
+		"merge, read only as data":       {generator: merge, prefix: "creds", unused: true, dataFile: true, targetNamespace: "default", refused: true},
+		"merge, every name read as data": {generator: merge, prefix: "creds", unused: true, dataFile: true, everyName: true, targetNamespace: "default", refused: true},
 	}
 	for name, tc := range cases {
 		for _, placement := range integratedPlacements {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
 				objs := []client.Object{unstructuredObj("v1", "ConfigMap", "default", "b-cm"), creds.DeepCopy()}
-				if tc.literal != "" {
-					objs = append(objs, unstructuredObj("v1", "Secret", "default", tc.literal))
-				}
-				for _, n := range tc.literals {
-					literal := creds.DeepCopy()
-					literal.SetName(n)
-					objs = append(objs, literal)
-				}
 				name := func(ml *layout.ManifestLayout, b *kustv1.Kustomization) string {
 					return builtName(t, builtNames(t, ml, b, "Secret"), tc.prefix)
 				}
@@ -624,7 +606,7 @@ func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 						b.Spec.TargetNamespace = tc.targetNamespace
 					})
 				if tc.unread {
-					if err == nil || !strings.Contains(err.Error(), "is not read") || !strings.Contains(err.Error(), "which Secret a merge changes cannot be read") {
+					if err == nil || !strings.Contains(err.Error(), "is not read") || !strings.Contains(err.Error(), "component/kustomization.yaml, which may merge into a Secret") {
 						t.Fatalf("got %v, want b-longer's build not read", err)
 					}
 					return

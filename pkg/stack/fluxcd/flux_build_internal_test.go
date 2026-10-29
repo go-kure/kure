@@ -25,7 +25,7 @@ func TestTreeBuilds_SpecPathStaysInTheTree(t *testing.T) {
 			k := &kustv1.Kustomization{}
 			k.Name, k.Namespace = "escape", "flux-system"
 			k.Spec.Path = p
-			_, _, err := b.build(k)
+			_, err := b.build(k)
 			if err == nil || !strings.Contains(err.Error(), "is outside the tree") {
 				t.Fatalf("got %v, want spec.path %q refused as outside the tree", err, p)
 			}

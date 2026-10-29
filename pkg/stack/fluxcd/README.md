@@ -398,9 +398,9 @@ each naming the Kustomization: a build that fails, as the controller's apply wou
 does not read, which Flux may build and apply, when it reads a kustomization file setting
 `openapi`, naming the file, since kustomize would keep its schema for every later build and kure
 does not reset it, or when another use of kustomize in the process has set a schema other than
-the built-in one, naming it, or when it loads a `secretGenerator` entry with `behavior: merge`,
-or a `generators` entry, and kure cannot read which Secret the merge changes (see the merged
-Secret below); a
+the built-in one, naming it, or when it loads, as a kustomization (a component's included), a
+file holding a `secretGenerator` entry with `behavior: merge` or a `generators` entry, naming the
+file (see the merging build below); a
 Kustomization two writers apply with a different `dependsOn`, `wait`, `healthChecks`,
 `healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata`, `images`
 (which Flux's generator writes into the build) or transform (`ignoreMissingComponents` included,
@@ -439,6 +439,18 @@ A Kustomization is read as it is
 applied: kustomize-controller drops its `status` and `metadata.creationTimestamp` first, so
 neither keeps it from being read.
 
+A build that may merge into a Secret is not read. A merge changes a Secret another file writes,
+and kustomize hashes the merged Secret's name over its merged content, a hash that depends on the
+kustomize version (kustomize v0.21.2 normalises `stringData` before the merge, kustomize-controller
+v1.10.1's v0.21.1 does not); kure does not read which Secret a merge changes, or under which name.
+A build may merge when a kustomization file it loads as one (a component's included) holds a
+`secretGenerator` entry with `behavior: merge`, or a `generators` entry, whose generator may merge
+too. kure decodes each such file as kustomize does: keys in any case, YAML anchors, aliases and
+merge keys expanded, and the last of duplicate keys taking effect; a file it cannot decode counts as
+one that merges, so no merge is missed. A file no build reads, or one a generator reads only as
+data, merges nothing. This refuses conservatively: a tree whose build merges into a Secret is
+refused even where Flux converges. go-kure/kure#1181 tracks reading such a build.
+
 kure adds the existence wait only when the object's writer is certain: exactly one writer other
 than the Flux bootstrap applies an object matching it by group, kind, namespace and name as built
 (the version ignored; an empty `apiVersion` is `apps/v1`, as Flux reads it), that apply does not
@@ -453,38 +465,6 @@ add none, so a cycle through them passes:
   writer that transforms nothing, or that of a Kustomization whose build is not the tree's) whose
   name, or that name and a dash, begins the checked name, as kustomize appends a content hash; a
   transformed build's generated names are read as built;
-- a Secret that a `secretGenerator` entry with `behavior: merge` changed in a build, in a
-  component's or a hand-written kustomization file it loads as a kustomization (a file no build
-  reads, or one a generator reads only as data, merges nothing), matched in the namespace the
-  build applies it in, by its built name, or, where kustomize appended a content hash to that
-  name, that name with another content hash (10 characters of `bcdfghkmt2456789`) in place of its
-  own: the merged Secret's hash depends on the kustomize version that builds it. kustomize itself
-  says which Secret a merge changed: kure builds the directory again with each such entry
-  annotated with a value no file holds, and a merge keeps that annotation, under every namespace,
-  prefix and suffix the build gives the Secret (go-kure/kure#1171); and once more with a literal
-  added to each entry, under a key no file holds, which changes the Secret's name only where
-  kustomize hashes it (a merge into a Secret a file holds keeps that name, whatever its shape).
-  Where the annotated build makes other objects than the build, or puts one entry's annotation on
-  two objects (a component file a generator also reads as data),
-  which Secret a merge changed cannot be read, and the build is not read. This reading fails
-  closed: kure reads which Secret a merge changed only from a build whose every kustomization
-  file holds only fields it models (`resources`, `bases`, `components`, `namespace`,
-  `namePrefix`, `nameSuffix`, `commonLabels`, `labels`, `commonAnnotations`, `images`,
-  `replicas`, `configMapGenerator`, `secretGenerator` and `generatorOptions`, besides
-  `apiVersion`, `kind` and `metadata`), each writing only values its file holds, and does not
-  model more of kustomize to read one it does not. A build that merges so and loads a
-  kustomization file with any other field is not read: `replacements` and `vars` may copy a value
-  from one object into another, and a patch (`patches`, `patchesStrategicMerge`,
-  `patchesJson6902`) writes into the object it selects what a file holds or what it copies, so
-  the annotation could leave the Secret it marks, or the literal reach a name, unseen. This
-  refuses conservatively: a tree that merges into a Secret and also patches anything in the same
-  build is not read, even where it converges. A `generators` entry may itself merge into a Secret
-  (a builtin `SecretGenerator` with `behavior: merge`), so a build loading one counts as one that
-  merges. Nor is a build read that reads a file holding such a merge other than once, as a
-  kustomization it loads (a patch or resource reading that file, or a second read): kure
-  annotates every read, and the build could carry the annotation of a read that merges nothing
-  onto another Secret. A literal Secret beside
-  it, of another namespace or name, keeps its writer certain;
 - an object whose identity may change at apply, whatever it names, unless only the writer's own
   result holds it: `$` left after substitution or `ENC[` (SOPS) in its `apiVersion`, kind,
   namespace or name, or a namespace or name a `substituteFrom` variable sets. Another apply may
