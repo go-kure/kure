@@ -67,9 +67,20 @@ type builtView struct {
 	builtFrom map[string]builtCopy
 	specs     map[string]*kustv1.Kustomization
 	specErrs  map[string]error
-	// sources and mergedSecrets are what the object index reads
-	// (objectIndex), on the first health check on an object; objectsErr is
-	// the error of that read.
+	// sources are what the object index reads (objectIndex), on the first
+	// health check on an object; objectsErr is the error of that read.
+	// mergedSecrets lists the names of the secretGenerator entries with
+	// behavior merge in the kustomization files the builds kure runs read
+	// (treeBuilds.merged), a component's included. A merged Secret's content
+	// hash, and so its name, depends on the kustomize version that builds it
+	// (kustomize v0.21.2 normalises stringData before the merge and
+	// kustomize-controller v1.10.1's v0.21.1 does not, api
+	// resmap/reswrangler.go:591-597), so a module building kure with another
+	// version may read another name than the controller applies. A build read
+	// as the tree holds it (heldBuild) reads none: the kustomization.yaml kure
+	// writes lists only the layout's resource files and child directories,
+	// and an extra file takes no kustomization file name of its layout's
+	// directory.
 	sources       []objectSource
 	mergedSecrets []string
 	objectsRead   bool
@@ -249,6 +260,7 @@ func (v *builtView) add(builds *treeBuilds, key string, k *kustv1.Kustomization)
 			return err
 		}
 		objs, err = builds.build(k)
+		v.mergedSecrets = builds.merged
 	default:
 		objs, err = heldBuild(v.t.layoutAt[path.Clean(k.Spec.Path)])
 	}

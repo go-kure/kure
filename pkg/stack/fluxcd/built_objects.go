@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
-	kusttypes "sigs.k8s.io/kustomize/api/types"
-	"sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/internal/built"
 	"github.com/go-kure/kure/pkg/errors"
@@ -53,8 +51,7 @@ type builtObject struct {
 	labels, annotations map[string]string
 }
 
-// objectIndex reads, once, what every source of the tree applies, and the
-// names of the Secrets a generator merges (mergedSecrets).
+// objectIndex reads, once, what every source of the tree applies.
 func (v *builtView) objectIndex() error {
 	if v.objectsRead {
 		return v.objectsErr
@@ -129,7 +126,6 @@ func (v *builtView) readObjects() error {
 		}
 		v.sources = append(v.sources, s)
 	}
-	v.mergedSecrets = mergedSecrets(v.t.root)
 	return nil
 }
 
@@ -165,45 +161,6 @@ func readBuiltObject(r substituted) (builtObject, error) {
 		unresolved: r.unknownIdentity || unresolved(apiVersion) || unresolved(kind) || unresolved(obj.GetNamespace()) || unresolved(obj.GetName()),
 		labels:     labels, annotations: annotations,
 	}, nil
-}
-
-// mergedSecrets lists the names of the secretGenerator entries with
-// behavior merge in the kustomization files the layouts of the tree carry as
-// extra files: a component's or a hand-written kustomization's. A merged
-// Secret's content hash, and so its name, depends on the kustomize version
-// that builds it (kustomize v0.21.2 normalises stringData before the merge
-// and kustomize-controller v1.10.1's v0.21.1 does not, api
-// resmap/reswrangler.go:591-597), so a module building kure with another
-// version may read another name than the controller applies. A file that
-// does not parse is skipped: a build that reads it fails, and is refused.
-func mergedSecrets(root *layout.ManifestLayout) []string {
-	var out []string
-	var walk func(l *layout.ManifestLayout)
-	walk = func(l *layout.ManifestLayout) {
-		for _, f := range l.ExtraFiles {
-			switch path.Base(f.Name) {
-			case "kustomization.yaml", "kustomization.yml", "Kustomization":
-			default:
-				continue
-			}
-			var k kusttypes.Kustomization
-			if err := yaml.Unmarshal(f.Content, &k); err != nil {
-				continue
-			}
-			for _, g := range k.SecretGenerator {
-				if g.Behavior == kusttypes.BehaviorMerge.String() {
-					out = append(out, g.Name)
-				}
-			}
-		}
-		for _, c := range l.Children {
-			if c != nil {
-				walk(c)
-			}
-		}
-	}
-	walk(root)
-	return out
 }
 
 // objectWriter names the writer whose apply writes the object a health check

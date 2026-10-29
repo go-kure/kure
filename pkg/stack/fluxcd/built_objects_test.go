@@ -519,20 +519,25 @@ func TestBuiltObjects_GeneratedNameIsRead(t *testing.T) {
 // b-longer also writes, credsx or creds-foo, whose name is neither creds nor
 // creds and a content hash. A name suffix is not read: the merged Secret
 // built as credsx under nameSuffix x keeps its writer certain too, and the
+// tree is refused. A component no build reads merges nothing: with
+// b-longer's spec.components empty, read as the tree holds it or built for
+// its target namespace, creds is the literal Secret b-longer writes, and the
 // tree is refused.
 func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 	creds := unstructuredObj("v1", "Secret", "default", "creds")
 	creds.Object["data"] = map[string]any{"base": "dg=="}
 	const merge = "- name: creds\n  namespace: default\n  behavior: merge\n  literals:\n  - k=v\n"
 	cases := map[string]struct {
-		generator, prefix, suffix, literal string
-		refused                            bool
+		generator, prefix, suffix, literal, targetNamespace string
+		unused, refused                                     bool
 	}{
-		"merge":                    {generator: merge, prefix: "creds"},
-		"merge, name suffix x":     {generator: merge, prefix: "credsx", suffix: "x", refused: true},
-		"create":                   {generator: "- name: extra\n  namespace: default\n  literals:\n  - k=v\n", prefix: "extra-", refused: true},
-		"merge, literal credsx":    {generator: merge, prefix: "credsx", literal: "credsx", refused: true},
-		"merge, literal creds-foo": {generator: merge, prefix: "creds-foo", literal: "creds-foo", refused: true},
+		"merge":                          {generator: merge, prefix: "creds"},
+		"merge, name suffix x":           {generator: merge, prefix: "credsx", suffix: "x", refused: true},
+		"create":                         {generator: "- name: extra\n  namespace: default\n  literals:\n  - k=v\n", prefix: "extra-", refused: true},
+		"merge, literal credsx":          {generator: merge, prefix: "credsx", literal: "credsx", refused: true},
+		"merge, literal creds-foo":       {generator: merge, prefix: "creds-foo", literal: "creds-foo", refused: true},
+		"merge, component unused":        {generator: merge, prefix: "creds", unused: true, refused: true},
+		"merge, component unused, built": {generator: merge, prefix: "creds", unused: true, targetNamespace: "default", refused: true},
 	}
 	for name, tc := range cases {
 		for _, placement := range integratedPlacements {
@@ -547,8 +552,11 @@ func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 							Name:    "component/kustomization.yaml",
 							Content: []byte("apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\nsecretGenerator:\n" + tc.generator),
 						})
-						b.Spec.Components = []string{"component"}
+						if !tc.unused {
+							b.Spec.Components = []string{"component"}
+						}
 						b.Spec.NameSuffix = tc.suffix
+						b.Spec.TargetNamespace = tc.targetNamespace
 					})
 				if tc.refused && (err == nil || !strings.Contains(err.Error(), "can never all become Ready")) {
 					t.Fatalf("got %v, want the cycle through a's health check refused", err)
@@ -558,5 +566,24 @@ func TestBuiltObjects_MergedGeneratorSecretStaysUncertain(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// b-longer substitutes a variable whose name Flux refuses
+// (kustomize_varsub.go:230-233), so its substitution fails as Flux's does.
+// The refusal names b-longer, whose spec needs the fix, not only the object
+// it was substituting.
+func TestBuiltObjects_FailedSubstitutionNamesTheKustomization(t *testing.T) {
+	for _, placement := range integratedPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			c := pairCluster(stack.HealthCheck{APIVersion: "v1", Kind: "ConfigMap", Namespace: "red", Name: "ready"},
+				[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "a-cm")},
+				[]client.Object{unstructuredObj("v1", "ConfigMap", "red", "ready")})
+			c.Node.Children[1].Bundle.PostBuild = &stack.PostBuild{Substitute: map[string]string{"BAD-NAME": "x"}}
+			err := integrateWalked(t, c, placement, nil)
+			if err == nil || !strings.Contains(err.Error(), `Flux Kustomization "b-longer"`) || !strings.Contains(err.Error(), "var name is invalid") {
+				t.Fatalf("got %v, want the invalid variable refused, naming b-longer", err)
+			}
+		})
 	}
 }

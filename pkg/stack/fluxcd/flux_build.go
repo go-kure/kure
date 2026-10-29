@@ -41,12 +41,15 @@ import (
 // v1.44.0 kustomize_generator.go:661-711). The tree is written once, on the
 // first build, by WriteToDisk into a temporary directory that close removes;
 // a spec.path is a directory of that tree, as the source of the tree's
-// Kustomizations holds it.
+// Kustomizations holds it. merged lists, once each, the names of the
+// secretGenerator entries with behavior merge in the kustomization files its
+// builds read (openAPIGuard).
 type treeBuilds struct {
 	root    *layout.ManifestLayout
 	dir     string
 	err     error
 	written bool
+	merged  []string
 }
 
 func newTreeBuilds(root *layout.ManifestLayout) *treeBuilds {
@@ -133,6 +136,11 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	}
 	guard := &openAPIGuard{FileSystem: fsys}
 	rm, err := kustomizeBuild(guard, dir)
+	for _, n := range guard.merged {
+		if !slices.Contains(b.merged, n) {
+			b.merged = append(b.merged, n)
+		}
+	}
 	if guard.sets != "" {
 		rel, _ := filepath.Rel(tree, guard.sets)
 		return nil, unreadBuild{errors.Errorf("its build reads %s, which sets openapi: kustomize would keep that schema for every later build in the process, and kure, which does not reset it around each build as kustomize-controller does, cannot build it as Flux does; drop the field", filepath.ToSlash(rel))}
@@ -180,12 +188,17 @@ func kustomizeBuild(fsys filesys.FileSystem, dir string) (rm resmap.ResMap, err 
 // the field of every kustomization it loads (krusty/kustomizer.go:79-88,
 // internal/target/kusttarget.go:511-520). kustomize reads a kustomization
 // file it cannot load as one that is absent, so the build's own error does
-// not name it; build reports sets instead. A file is a kustomization file by
-// its name, so a generator's data file of that name that sets openapi is
-// refused too, though kustomize reads it only as data.
+// not name it; build reports sets instead. It also records in merged the
+// names of the secretGenerator entries with behavior merge in each
+// kustomization file the build reads, a component's included, and in no
+// other: a file no build reads merges nothing. A file is a kustomization file
+// by its name, so a generator's data file of that name that sets openapi is
+// refused too, and its merge entries are recorded, though kustomize reads it
+// only as data.
 type openAPIGuard struct {
 	filesys.FileSystem
-	sets string
+	sets   string
+	merged []string
 }
 
 func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
@@ -194,11 +207,18 @@ func (g *openAPIGuard) ReadFile(name string) ([]byte, error) {
 		return b, err
 	}
 	var k kusttypes.Kustomization
-	if yaml.Unmarshal(b, &k) == nil && len(k.OpenAPI) > 0 {
-		if g.sets == "" {
-			g.sets = name
+	if yaml.Unmarshal(b, &k) == nil {
+		if len(k.OpenAPI) > 0 {
+			if g.sets == "" {
+				g.sets = name
+			}
+			return nil, errors.Errorf("%s sets openapi", name)
 		}
-		return nil, errors.Errorf("%s sets openapi", name)
+		for _, gen := range k.SecretGenerator {
+			if gen.Behavior == kusttypes.BehaviorMerge.String() {
+				g.merged = append(g.merged, gen.Name)
+			}
+		}
 	}
 	return b, nil
 }
@@ -345,7 +365,7 @@ func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substitut
 		}
 		res, err = substitute(res)
 		if err != nil {
-			return nil, errors.Wrapf(err, "post build failed for %s %q", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+			return nil, errors.Wrapf(err, "Flux Kustomization %q (spec.path %q): post build failed for %s %q", k.Name, k.Spec.Path, obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
 		}
 		if fromCluster {
 			if unknownIdentity, err = refuseUnknownVars(k, written, res, inline); err != nil {
