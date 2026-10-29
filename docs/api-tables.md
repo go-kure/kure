@@ -82,16 +82,16 @@ for the kinds whose scope the API server defines.
 | `fluxcd.controlplane.io/v1` | `FluxReport` | Namespaced | `marker` | `FluxReport` | `github.com/controlplaneio-fluxcd/flux-operator@v0.62.1` |
 | `fluxcd.controlplane.io/v1` | `ResourceSet` | Namespaced | `marker` | `ResourceSet` | `github.com/controlplaneio-fluxcd/flux-operator@v0.62.1` |
 | `fluxcd.controlplane.io/v1` | `ResourceSetInputProvider` | Namespaced | `marker` | `ResourceSetInputProvider` | `github.com/controlplaneio-fluxcd/flux-operator@v0.62.1` |
-| `gateway.networking.k8s.io/v1` | `BackendTLSPolicy` | Namespaced | `marker` | `BackendTLSPolicy` | `sigs.k8s.io/gateway-api@v1.6.3` |
-| `gateway.networking.k8s.io/v1` | `GRPCRoute` | Namespaced | `marker` | `GRPCRoute` | `sigs.k8s.io/gateway-api@v1.6.3` |
-| `gateway.networking.k8s.io/v1` | `Gateway` | Namespaced | `marker` | `Gateway` | `sigs.k8s.io/gateway-api@v1.6.3` |
-| `gateway.networking.k8s.io/v1` | `GatewayClass` | Cluster | `marker` | `GatewayClass` | `sigs.k8s.io/gateway-api@v1.6.3` |
-| `gateway.networking.k8s.io/v1` | `HTTPRoute` | Namespaced | `marker` | `HTTPRoute` | `sigs.k8s.io/gateway-api@v1.6.3` |
-| `gateway.networking.k8s.io/v1` | `ListenerSet` | Namespaced | `marker` | `ListenerSet` | `sigs.k8s.io/gateway-api@v1.6.3` |
-| `gateway.networking.k8s.io/v1` | `ReferenceGrant` | Namespaced | `marker` | `ReferenceGrant` | `sigs.k8s.io/gateway-api@v1.6.3` |
-| `gateway.networking.k8s.io/v1` | `TCPRoute` | Namespaced | `marker` | `TCPRoute` | `sigs.k8s.io/gateway-api@v1.6.3` |
-| `gateway.networking.k8s.io/v1` | `TLSRoute` | Namespaced | `marker` | `TLSRoute` | `sigs.k8s.io/gateway-api@v1.6.3` |
-| `gateway.networking.k8s.io/v1` | `UDPRoute` | Namespaced | `marker` | `UDPRoute` | `sigs.k8s.io/gateway-api@v1.6.3` |
+| `gateway.networking.k8s.io/v1` | `BackendTLSPolicy` | Namespaced | `marker` | `BackendTLSPolicy` | `sigs.k8s.io/gateway-api@v1.7.0` |
+| `gateway.networking.k8s.io/v1` | `GRPCRoute` | Namespaced | `marker` | `GRPCRoute` | `sigs.k8s.io/gateway-api@v1.7.0` |
+| `gateway.networking.k8s.io/v1` | `Gateway` | Namespaced | `marker` | `Gateway` | `sigs.k8s.io/gateway-api@v1.7.0` |
+| `gateway.networking.k8s.io/v1` | `GatewayClass` | Cluster | `marker` | `GatewayClass` | `sigs.k8s.io/gateway-api@v1.7.0` |
+| `gateway.networking.k8s.io/v1` | `HTTPRoute` | Namespaced | `marker` | `HTTPRoute` | `sigs.k8s.io/gateway-api@v1.7.0` |
+| `gateway.networking.k8s.io/v1` | `ListenerSet` | Namespaced | `marker` | `ListenerSet` | `sigs.k8s.io/gateway-api@v1.7.0` |
+| `gateway.networking.k8s.io/v1` | `ReferenceGrant` | Namespaced | `marker` | `ReferenceGrant` | `sigs.k8s.io/gateway-api@v1.7.0` |
+| `gateway.networking.k8s.io/v1` | `TCPRoute` | Namespaced | `marker` | `TCPRoute` | `sigs.k8s.io/gateway-api@v1.7.0` |
+| `gateway.networking.k8s.io/v1` | `TLSRoute` | Namespaced | `marker` | `TLSRoute` | `sigs.k8s.io/gateway-api@v1.7.0` |
+| `gateway.networking.k8s.io/v1` | `UDPRoute` | Namespaced | `marker` | `UDPRoute` | `sigs.k8s.io/gateway-api@v1.7.0` |
 | `helm.toolkit.fluxcd.io/v2` | `HelmRelease` | Namespaced | `marker` | `HelmRelease` | `github.com/fluxcd/helm-controller/api@v1.7.1` |
 | `image.toolkit.fluxcd.io/v1` | `ImagePolicy` | Namespaced | `marker` | `ImagePolicy` | `github.com/fluxcd/image-reflector-controller/api@v1.3.0` |
 | `image.toolkit.fluxcd.io/v1` | `ImageRepository` | Namespaced | `marker` | `ImageRepository` | `github.com/fluxcd/image-reflector-controller/api@v1.3.0` |
@@ -159,7 +159,7 @@ for the kinds whose scope the API server defines.
 | `volsync.backube/v1alpha1` | `ReplicationDestination` | Namespaced | `marker` | `ReplicationDestination` | `github.com/backube/volsync@v0.16.0` |
 | `volsync.backube/v1alpha1` | `ReplicationSource` | Namespaced | `marker` | `ReplicationSource` | `github.com/backube/volsync@v0.16.0` |
 
-## Field maturity (129)
+## Field maturity (131)
 
 kure neither warns nor filters on any of this: it reports, and a consumer with
 cluster knowledge decides. For built-in types the API server does not reject a
@@ -300,3 +300,5 @@ by a caller.
 | `storage/v1.VolumeAttachmentSource` | `inlineVolumeSpec` | beta | — | `k8s.io/api@v0.37.2` |
 | `apiextensions/v1.CustomResourceDefinitionVersion` | `selectableFields` | stable | `CustomResourceFieldSelectors` | `k8s.io/apiextensions-apiserver@v0.37.2` |
 | `apiextensions/v1.JSONSchemaProps` | `default` | beta | — | `k8s.io/apiextensions-apiserver@v0.37.2` |
+| `apis/v1.GRPCRouteRule` | `sessionPersistence` | deprecated | — | `sigs.k8s.io/gateway-api@v1.7.0` |
+| `apis/v1.HTTPRouteRule` | `sessionPersistence` | deprecated | — | `sigs.k8s.io/gateway-api@v1.7.0` |
