@@ -147,10 +147,10 @@ func canonicalJSON(t *testing.T, content map[string]any) string {
 // overlay's name suffix and namespace, and a component. Each also pins that
 // a merged Secret is read as hashed exactly where kustomize appends a hash:
 // into a generated Secret, unless its options say not, and never into a
-// Secret a file holds, whatever shape its name has, a patch copying a data key
-// into it included. A probe that cannot tell, a build whose replacements may
-// move a mark, or a marked file a generator reads as data, does not read the
-// build.
+// Secret a file holds, whatever shape its name has. A probe that cannot tell,
+// a build whose patches or replacements may move a mark (a patch copying a
+// data key into a name included), or a marked file a generator reads as data,
+// does not read the build.
 func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 	const kustomization = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\n"
 	named := func(name, namespace string) string {
@@ -349,9 +349,9 @@ func TestProbeMerges_MarksWhatKustomizeMerges(t *testing.T) {
 }
 
 // A kustomization file with a field the merge probe does not model is named
-// by that field, whatever it is, a field nobody listed included; a file of
-// modelled fields only (each writes the values its file holds, a patch only
-// inside its object) names none.
+// by that field, whatever it is, a patch field or a field nobody listed
+// included; a file of modelled fields only (each writes the values its file
+// holds) names none.
 func TestUnmodelledField(t *testing.T) {
 	const head = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n- s.yaml\n"
 	for file, want := range map[string]string{
