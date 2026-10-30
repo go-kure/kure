@@ -48,9 +48,10 @@ const noMatch = "no resource matches strategic merge patch %q: no matches for Id
 // laterPatchRefusal returns the refusal of the tree root for err, a check's
 // refusal of it. Where err is the failure of the build of a bundle's own
 // Kustomization that holds a later patch (buildFailure), and the builds show
-// that patch is the entry kustomize stopped at, the refusal names the patch,
-// the entry it comes after and the object kustomize names, with err as its
-// cause. Every other refusal is err.
+// that patch is the entry kustomize stopped at, because the build does not
+// hold an object the patch names, the refusal names the patch, the entry it
+// comes after and that object, with err as its cause. Every other refusal is
+// err, a patch that kustomize refuses for another reason included.
 //
 // The builds run in a directory of their own, written from root as the check
 // wrote it: the build of the copy the check built from, which must fail as
@@ -100,23 +101,38 @@ func (rec ownPatches) refusal(f *buildFailure, err error, build func(*kustv1.Kus
 		if failed.Error() != whole.Error() || cut(lp.at) != nil {
 			return err
 		}
-		return errors.ResourceValidationError("Bundle", rec.bundle, "patches", lp.reason(f.key, whole), err)
+		// Only a patch whose object the build does not hold is what a target
+		// or its place repairs; a patch that fails otherwise, a malformed one,
+		// keeps the generic refusal.
+		id, ok := lp.missing(whole)
+		if !ok {
+			return err
+		}
+		return errors.ResourceValidationError("Bundle", rec.bundle, "patches", lp.reason(f.key, id), err)
 	}
 	return err
 }
 
-// reason words the refusal of lp, which fails the build of the Kustomization
-// with key with buildErr.
-func (lp laterPatch) reason(key string, buildErr error) string {
-	out := fmt.Sprintf("patch %d has no target and fails the build of the bundle's own Kustomization %q, on which it is written because it comes after entry %d, which is not a plain strategic-merge patch",
-		lp.index, key, lp.after)
-	remedy := "give the patch a target that selects its object as the entries before it leave it"
+// missing returns the identity, among those lp names, of the object kustomize
+// says buildErr's build does not hold.
+func (lp laterPatch) missing(buildErr error) (resid.ResId, bool) {
 	for _, id := range lp.ids {
 		if strings.Contains(buildErr.Error(), fmt.Sprintf(noMatch, id.String())) {
-			out += fmt.Sprintf("; that build does not hold %s once the entries before the patch have run", describeID(id))
-			remedy = "give the patch a target that selects the object as the entries before it leave it"
-			break
+			return id, true
 		}
+	}
+	return resid.ResId{}, false
+}
+
+// reason words the refusal of lp, which fails the build of the Kustomization
+// with key because that build does not hold the object id.
+func (lp laterPatch) reason(key string, id resid.ResId) string {
+	out := fmt.Sprintf("patch %d has no target and fails the build of the bundle's own Kustomization %q, on which it is written because it comes after entry %d, which is not a plain strategic-merge patch; that build does not hold %s once the entries before the patch have run",
+		lp.index, key, lp.after, describeID(id))
+	remedy := "give the patch a target that selects the object as the entries before it leave it"
+	if len(lp.ids) > 1 {
+		// kustomize refuses a target on a patch of several documents.
+		remedy = "split the patch into one patch per object, and give each a target that selects its object as the entries before it leave it"
 	}
 	if lp.before {
 		remedy += fmt.Sprintf(", or put it before entry %d", lp.after)
