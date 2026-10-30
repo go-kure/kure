@@ -929,7 +929,11 @@ kustomize-controller builds its writer: patches, components, name prefix and
 suffix, target namespace and postBuild substitution applied. A build that
 fails, a Kustomization two builds write differently, a placed one no apply
 creates, and a placed one a build applies on another cluster or from another
-Source, are refused. One
+Source, are refused. So is a build kure cannot read as Flux does, naming the
+file: one that reads a remote reference (a Git base or an `http(s)` URL; an
+integration never fetches, so vendor the base into the tree or reference it
+through a Flux Source), a kustomization file kure cannot parse, one that sets
+`openapi`, or one that may merge into a Secret. One
 without `wait` that health-checks any other object waits for the Kustomization
 that applies it, whatever its expression says, when that writer is certain,
 and a cycle through them is refused. A copy another apply excludes
