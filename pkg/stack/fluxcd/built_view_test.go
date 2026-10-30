@@ -3,6 +3,7 @@ package fluxcd_test
 import (
 	"fmt"
 	"maps"
+	"path"
 	"slices"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	metaapi "github.com/fluxcd/pkg/apis/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
@@ -749,6 +751,45 @@ func TestBuiltView_AnUnreadBootstrapWrittenKustomizationIsNamed(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestBuiltView_ABootstrapWrittenKustomizationOnAFileIsNotRead: an
+// AppFileSingle child is written as one file into its parent's directory and
+// has no directory of its own, so a Kustomization the Flux bootstrap applies
+// whose spec.path names it builds nothing. shop deletes web and helper from
+// its build; helper, the AppFileSingle child of shop's directory, builds that
+// directory without the patches and so would create web; rescue names
+// helper's path on shop's Source. rescue is neither read as a writer nor named
+// as one that may create web, and web is created by no apply.
+func TestBuiltView_ABootstrapWrittenKustomizationOnAFileIsNotRead(t *testing.T) {
+	for _, placement := range integratedPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			c := shopTree("")
+			c.Node.Children[0].Bundle.Patches = []stack.Patch{
+				{Patch: deleteKust("web"), Target: &stack.PatchSelector{Kind: "Kustomization", Name: "web"}},
+				{Patch: deleteKust("helper"), Target: &stack.PatchSelector{Kind: "Kustomization", Name: "helper"}},
+			}
+			dir := path.Clean(shopDirectory(t, placement))
+			err := integrateWalked(t, c, placement, func(ml *layout.ManifestLayout) {
+				d := layoutAtPath(t, ml, dir)
+				helper := handWritten("helper")
+				helper.Spec.Path = "./" + dir
+				d.Children = append(d.Children, &layout.ManifestLayout{
+					Name: "helper", Namespace: d.FullRepoPath(), ApplicationFileMode: layout.AppFileSingle,
+					Resources: []client.Object{helper},
+				})
+				rescue := handWritten("rescue")
+				rescue.Spec.Path = "./" + dir + "/helper"
+				ml.Resources = append(ml.Resources, rescue)
+			})
+			if want := `Flux Kustomization "flux-system/web" is created by no apply`; err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("got %v, want %s", err, want)
+			}
+			if strings.Contains(err.Error(), "rescue") {
+				t.Fatalf("got %v, want rescue, which names no directory, left unnamed", err)
+			}
+		})
 	}
 }
 

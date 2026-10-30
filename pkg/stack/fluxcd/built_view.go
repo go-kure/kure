@@ -255,12 +255,24 @@ func (v *builtView) unreadBootstrapWriters(key string) string {
 		if err != nil {
 			continue
 		}
-		if l := v.t.layoutAt[path.Clean(k.Spec.Path)]; l == nil || !slices.Contains(buildScope(l), host) {
+		if l := v.t.directoryAt(k.Spec.Path); l == nil || !slices.Contains(buildScope(l), host) {
 			continue
 		}
 		out = append(out, fmt.Sprintf("; %s, which the Flux bootstrap applies, may create it, but kure reads its build only on the Source of a member whose build reads that directory (it names %s)", held, sourceRefKey(k.Spec.SourceRef, k.Namespace)))
 	}
 	return strings.Join(out, "")
+}
+
+// directoryAt returns the layout whose directory is the spec.path p, nil when
+// the tree has none there. An AppFileSingle layout other than the root is
+// written as one file into its Namespace, normally its parent's directory, and
+// has no directory a Kustomization could build: Flux finds no path there.
+func (t *kustomizationTree) directoryAt(p string) *layout.ManifestLayout {
+	l := t.layoutAt[path.Clean(p)]
+	if l == nil || (l != t.root && l.ApplicationFileMode == layout.AppFileSingle) {
+		return nil
+	}
+	return l
 }
 
 // rescued returns, for the Kustomization with key that is no member, the
@@ -281,7 +293,7 @@ func (v *builtView) rescued(key string) (*kustv1.Kustomization, occurrence) {
 	if err != nil || k.Spec.KubeConfig != nil {
 		return nil, occurrence{}
 	}
-	dir := v.t.layoutAt[path.Clean(k.Spec.Path)]
+	dir := v.t.directoryAt(k.Spec.Path)
 	if dir == nil {
 		return nil, occurrence{}
 	}
