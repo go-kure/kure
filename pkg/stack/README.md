@@ -73,9 +73,11 @@ modes, in `flux-operator` mode as a patch on the operator's sync Kustomization; 
 mode's default, `prune: false` in `gotk` mode and the operator's `prune: true` in `flux-operator`
 mode (go-kure/kure#1088). `Labels` are set on the bootstrap source and Kustomization in both
 modes with a `SourceURL`, in `flux-operator` mode as patches on the operator's sync objects; the
-four keys flux-operator stamps itself (`app.kubernetes.io/managed-by`, `app.kubernetes.io/instance`,
-`app.kubernetes.io/version`, `app.kubernetes.io/part-of`) are refused in both modes
-(go-kure/kure#1180). See
+keys a Flux controller stamps on those objects are refused in both modes: flux-operator's
+`app.kubernetes.io/managed-by`, `app.kubernetes.io/instance`, `app.kubernetes.io/version`,
+`app.kubernetes.io/part-of`, `fluxcd.controlplane.io/name` and `fluxcd.controlplane.io/namespace`,
+and kustomize-controller's `kustomize.toolkit.fluxcd.io/name` and
+`kustomize.toolkit.fluxcd.io/namespace` (go-kure/kure#1180). See
 [Flux Engine](/api-reference/flux-engine/) for how each field is emitted.
 
 ### Node

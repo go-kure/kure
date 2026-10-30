@@ -49,9 +49,9 @@ var syncNamed = map[string]bool{"source": true, "kustomization": true, "kustomiz
 // for gotk and true for flux-operator (go-kure/kure#1088). source.labels and
 // kustomization.labels are BootstrapConfig.Labels (go-kure/kure#1180): in
 // flux-operator mode they are read from the objects the patches produce, which
-// models the patches and not the operator's LabelTransformer, so the four keys
-// it adds on top (operatorLabelKeys in the generator) are not part of either
-// column.
+// models the patches and not the operator's LabelTransformer, and neither mode
+// models the controllers' owner labels, so the keys Flux controllers add on top
+// (controllerLabelKeys in the generator) are not part of either column.
 var rootFields = []struct {
 	name string
 	same bool
