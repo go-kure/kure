@@ -944,7 +944,10 @@ once ([health checks on objects](/api-reference/flux-engine/#one-kustomization-p
 A copy another apply excludes
 (`kustomize.toolkit.fluxcd.io/ssa: Ignore` or `reconcile: disabled`) counts for
 no writer, unless it, or that apply's `spec.commonMetadata`, is templated or
-encrypted. An object a controller, or a
+encrypted. So does a Kustomization no build holds when every directory holding
+a copy of it is loaded by some writer's build and by no other Kustomization of
+the tree: each such build deleted it, or wrote it under another name, read as
+that one. An object a controller, or a
 Kustomization outside the tree, also writes is outside what the check models,
 and a tree Flux would converge can then be refused. A Kustomization an
 application emits is followed as a placed one is, and a `dependsOn` with a
