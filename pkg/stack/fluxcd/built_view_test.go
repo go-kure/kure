@@ -793,6 +793,42 @@ func TestBuiltView_ABootstrapWrittenKustomizationOnAFileIsNotRead(t *testing.T) 
 	}
 }
 
+// TestBuiltView_AWriterOnAFileBuildsNothing: the case of
+// TestBuiltView_ABootstrapWrittenKustomizationOnAFileIsNotRead with a writer
+// the tree holds (go-kure/kure#1197). shop deletes web and inner from its
+// build; inner, held by helper, the AppFileSingle child of shop's directory,
+// builds that directory without the patches and so would create web; fake,
+// which shop writes on its own Source, names helper's path. Flux finds no
+// directory there, so fake applies nothing and inner is no writer: web is
+// created by no apply.
+func TestBuiltView_AWriterOnAFileBuildsNothing(t *testing.T) {
+	for _, placement := range integratedPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			c := shopTree("")
+			c.Node.Children[0].Bundle.Patches = []stack.Patch{
+				{Patch: deleteKust("web"), Target: &stack.PatchSelector{Kind: "Kustomization", Name: "web"}},
+				{Patch: deleteKust("inner"), Target: &stack.PatchSelector{Kind: "Kustomization", Name: "inner"}},
+			}
+			dir := path.Clean(shopDirectory(t, placement))
+			err := integrateWalked(t, c, placement, func(ml *layout.ManifestLayout) {
+				d := layoutAtPath(t, ml, dir)
+				inner := handWritten("inner")
+				inner.Spec.Path = "./" + dir
+				d.Children = append(d.Children, &layout.ManifestLayout{
+					Name: "helper", Namespace: d.FullRepoPath(), ApplicationFileMode: layout.AppFileSingle,
+					Resources: []client.Object{inner},
+				})
+				fake := handWritten("fake")
+				fake.Spec.Path = "./" + dir + "/helper"
+				d.Resources = append(d.Resources, fake)
+			})
+			if want := `Flux Kustomization "flux-system/web" is created by no apply`; err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("got %v, want %s", err, want)
+			}
+		})
+	}
+}
+
 // TestBuiltView_ABootstrapWrittenCreatorIsJudged: rescue, the only apply that
 // creates web, depends on web. web's apply waits for rescue's, which waits
 // for web to become Ready: the creator is read, not assumed, and the cycle

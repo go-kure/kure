@@ -1664,7 +1664,10 @@ build applies, only when it reads the Source of the Kustomization whose apply wr
 namespace its own; the Source's identity, so another Source of the same repository, at another
 ref, is another Source) and sets no `spec.kubeConfig`. Such a Kustomization the Flux bootstrap
 writes, one on another Source, and one applying to another cluster build no directory of this
-tree: they add no wait, and are never refused for one. Their `dependsOn` and health checks are
+tree: they add no wait, and are never refused for one. Nor does one whose `spec.path` names an
+`AppFileSingle` layout other than the top of the tree: that layout is one file written into its
+`Namespace`, with no directory of its own, so Flux finds no path there and the Kustomization
+creates, keeps and waits for none of the tree's objects (go-kure/kure#1197). Their `dependsOn` and health checks are
 still judged: such a Kustomization that depends on, or health-checks, one that cannot be Ready
 before it is refused as any other. One that transforms its build (`spec.patches`,
 `spec.components`, `spec.namePrefix`, `spec.nameSuffix` or `spec.targetNamespace`) waits for

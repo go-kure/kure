@@ -570,7 +570,9 @@ func TestReconcileContext_KeptCopyBesideLiveNamesakeWaits(t *testing.T) {
 // in typed form (here spec.dependsOn is a string), refuses the tree as an
 // unreadable other Kustomization does, instead of being read as depending on
 // nothing. Where no build patches what it holds it is not there, and the tree
-// is not refused.
+// is not refused. Nor is it where the patched build's spec.path names a
+// single-file (AppFileSingle) layout: Flux finds no directory there, so that
+// build holds nothing (go-kure/kure#1197).
 func TestReconcileContext_KeptCopyUnreadableIsRefused(t *testing.T) {
 	patch := "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: inner\n  namespace: flux-system\n  annotations:\n    " + localConfigAnnotation + `: "false"` + "\n"
 	build := func(seed string, patched bool) *stack.Cluster {
@@ -595,27 +597,45 @@ func TestReconcileContext_KeptCopyUnreadableIsRefused(t *testing.T) {
 			t.Fatalf("%s: first integration: %v", placement, err)
 		}
 		seed := hostDirectory(t, first, "inner")
-		for name, patched := range map[string]bool{"patch": true, "no patch": false} {
+		for name, c := range map[string]struct{ patched, onFile bool }{
+			"patch":                    {patched: true},
+			"no patch":                 {},
+			"patch, path names a file": {patched: true, onFile: true},
+		} {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
-				ml, err := integrateNoWait(build(seed, patched), nodeOnly, placement)
+				specPath := seed
+				if c.onFile {
+					specPath = path.Join(seed, "helper")
+				}
+				ml, err := integrateNoWait(build(specPath, c.patched), nodeOnly, placement)
 				if err != nil {
 					t.Fatalf("got %v, want the integration accepted", err)
 				}
 				var inner client.Object
+				var host *layout.ManifestLayout
 				var walk func(l *layout.ManifestLayout)
 				walk = func(l *layout.ManifestLayout) {
 					for _, r := range l.Resources {
 						if r.GetName() == "inner" && droppedByBuild(r) {
-							inner = r
+							inner, host = r, l
 						}
 					}
-					for _, c := range l.Children {
-						walk(c)
+					for _, child := range l.Children {
+						walk(child)
 					}
 				}
 				walk(ml)
 				if inner == nil {
 					t.Fatal("no layout holds the local-config inner")
+				}
+				if c.onFile {
+					// inner moves into helper, a single-file child of its
+					// directory, which hand-written's spec.path names.
+					host.Resources = slices.DeleteFunc(host.Resources, func(o client.Object) bool { return o == inner })
+					host.Children = append(host.Children, &layout.ManifestLayout{
+						Name: "helper", Namespace: host.FullRepoPath(), ApplicationFileMode: layout.AppFileSingle,
+						Resources: []client.Object{inner},
+					})
 				}
 				replaceUnstructured(t, ml, inner, func(u *unstructured.Unstructured) {
 					if err := unstructured.SetNestedField(u.Object, "web", "spec", "dependsOn"); err != nil {
@@ -623,7 +643,7 @@ func TestReconcileContext_KeptCopyUnreadableIsRefused(t *testing.T) {
 					}
 				})
 				_, err = fluxstack.UmbrellaTerminals(ml)
-				if !patched {
+				if !c.patched || c.onFile {
 					if err != nil {
 						t.Fatalf("got %v, want the tree accepted: no build may keep inner", err)
 					}

@@ -459,6 +459,61 @@ func TestBuiltObjects_AnotherSourceIsReadAsItsAppliedCopy(t *testing.T) {
 	}
 }
 
+// A Kustomization that is no writer and names a single-file (AppFileSingle)
+// layout builds nothing (go-kure/kure#1197): Flux finds no directory there.
+// helper, an AppFileSingle child of a's directory, holds h-cm, which a's
+// build deletes and h's build of a's directory keeps, so h is its certain
+// writer; b-longer health-checks h-cm and h depends on b-longer, and the cycle
+// is refused. other, on another Source, names helper's path: it applies
+// nothing, so h stays certain and the cycle is still refused.
+func TestBuiltObjects_ANonWriterOnAFileWritesNothing(t *testing.T) {
+	for name, withOther := range map[string]bool{"without other": false, "other names the file": true} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				c := pairCluster(stack.HealthCheck{},
+					[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "a-cm")},
+					[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "b-cm")})
+				a := c.Node.Children[0].Bundle
+				a.HealthChecks = nil
+				a.Patches = []stack.Patch{{
+					Patch:  "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: h-cm\n  namespace: default\n$patch: delete\n",
+					Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "h-cm"},
+				}}
+				b := c.Node.Children[1].Bundle
+				b.DependsOn = nil
+				b.Wait = boolPtr(false)
+				b.HealthChecks = []stack.HealthCheck{{APIVersion: "v1", Kind: "ConfigMap", Namespace: "default", Name: "h-cm"}}
+				rules := withPlacement(nodeOnly, placement)
+				ml, err := layout.WalkCluster(c, rules)
+				if err != nil {
+					t.Fatalf("WalkCluster: %v", err)
+				}
+				dir := findLayout(ml, "a-cm")
+				if dir == nil {
+					t.Fatal("no layout holds a-cm")
+				}
+				dir.Children = append(dir.Children, &layout.ManifestLayout{
+					Name: "helper", Namespace: dir.FullRepoPath(), ApplicationFileMode: layout.AppFileSingle,
+					Resources: []client.Object{unstructuredObj("v1", "ConfigMap", "default", "h-cm")},
+				})
+				h := handWritten("h", "b-longer")
+				h.Spec.Path = "./" + dir.FullRepoPath()
+				dir.Resources = append(dir.Resources, h)
+				if withOther {
+					o := handWritten("other")
+					o.Spec.Path = "./" + dir.FullRepoPath() + "/helper"
+					o.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{Kind: "GitRepository", Name: "other-repo"}
+					dir.Resources = append(dir.Resources, o)
+				}
+				err = fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules)
+				if err == nil || !strings.Contains(err.Error(), "apply flux-system/h") {
+					t.Fatalf("got %v, want the cycle through h refused; tree %s", err, describeKustomizations(ml))
+				}
+			})
+		}
+	}
+}
+
 // keptPair integrates pairCluster with no health check, lets edit change the
 // layout that holds b-cm and b-longer's kept Kustomization, makes a's kept
 // Kustomization health-check the v1 object of kind in default that

@@ -913,7 +913,10 @@ the first two to the one Kustomization it returns, and `GenerateFromLayout`,
 `GenerateFromCluster` and `FluxSeparate` refuse the setting.
 These checks read the `spec.path` of a Kustomization the integration did not
 place as a directory of the tree only when it reads the Source of the
-Kustomization that applies it, on this cluster; a health check on another cluster (`spec.kubeConfig`) waits for no
+Kustomization that applies it, on this cluster. A `spec.path` naming an
+`AppFileSingle` layout below the top of the tree is no directory at all: that
+layout is one file in its `Namespace`, so such a Kustomization builds nothing
+of the tree. A health check on another cluster (`spec.kubeConfig`) waits for no
 readiness here, and a `spec.healthCheckExprs` predicate on Flux Kustomizations
 is read as a readiness wait, whatever it says.
 A `wait` does not wait for a Flux Kustomization its apply skips

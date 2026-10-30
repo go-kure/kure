@@ -247,8 +247,9 @@ func dependencyKey(namespace, entry string) string {
 }
 
 // builds returns the layouts the build of the Kustomization with key reaches,
-// or nil when its spec.path is no layout of the tree, or it is no member and
-// its build is not the tree's (readsLocalBuild).
+// or nil when its spec.path is no directory of the tree (directoryAt: an
+// AppFileSingle layout other than the root is none, go-kure/kure#1197), or it
+// is no member and its build is not the tree's (readsLocalBuild).
 func (t *kustomizationTree) builds(key string) map[*layout.ManifestLayout]bool {
 	if r, ok := t.reached[key]; ok {
 		return r
@@ -259,7 +260,7 @@ func (t *kustomizationTree) builds(key string) map[*layout.ManifestLayout]bool {
 		k = t.otherSpecs[key]
 	}
 	if k != nil {
-		if l := t.layoutAt[path.Clean(k.Spec.Path)]; l != nil {
+		if l := t.directoryAt(k.Spec.Path); l != nil {
 			r = map[*layout.ManifestLayout]bool{}
 			for _, b := range buildDirectories(l) {
 				r[b] = true
