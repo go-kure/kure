@@ -154,6 +154,11 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 			}
 			key := crKey(obj.GetNamespace(), obj.GetName())
 			if t.byKey[key] != nil {
+				// Another copy of a member is no other, but a patch it
+				// carries may rewrite a readyExpr all the same; one that
+				// cannot be read in typed form may carry one.
+				spec, err := typedKustomization(obj)
+				t.patched = t.patched || err != nil || patchesBuild(spec)
 				continue
 			}
 			t.others[l] = append(t.others[l], key)

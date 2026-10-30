@@ -319,15 +319,26 @@ func toReadyWait(name string) kustomize.Patch {
 // rewrite that readyExpr into a Ready wait, and the umbrella pass reads the
 // specs as the tree holds them: once a Kustomization of the tree patches its
 // build, every entry is read as waiting for Ready, and x is no terminal leaf.
+// The patch may also be on another, unrecorded copy of the member a, in a
+// directory indexed after it: that copy is no Kustomization of its own, but
+// its patch counts the same.
 func TestUmbrellaTerminals_PatchedTreeReadsEveryEntryAsReady(t *testing.T) {
-	for _, patched := range []bool{false, true} {
+	for _, patched := range []string{"", "member", "copy of the member"} {
 		root := &layout.ManifestLayout{Name: "demo", Namespace: "clusters"}
 		apps := &layout.ManifestLayout{Name: "apps", Namespace: root.FullRepoPath()}
 		root.Children = []*layout.ManifestLayout{apps}
 		a := handWritten("a")
 		a.Spec.Path = apps.FullRepoPath()
-		if patched {
+		switch patched {
+		case "member":
 			a.Spec.Patches = []kustomize.Patch{toReadyWait("h")}
+		case "copy of the member":
+			more := &layout.ManifestLayout{Name: "more", Namespace: root.FullRepoPath()}
+			copyOfA := handWritten("a")
+			copyOfA.Spec.Path = apps.FullRepoPath()
+			copyOfA.Spec.Patches = []kustomize.Patch{toReadyWait("h")}
+			more.Resources = []client.Object{copyOfA}
+			root.Children = append(root.Children, more)
 		}
 		root.Resources = []client.Object{a}
 		h := handWritten("h", "x")
@@ -338,15 +349,15 @@ func TestUmbrellaTerminals_PatchedTreeReadsEveryEntryAsReady(t *testing.T) {
 			SourceKind: "GitRepository", SourceName: "flux-system",
 		}})
 		want := []string{"flux-system/h"}
-		if !patched {
+		if patched == "" {
 			want = []string{"flux-system/h", "flux-system/x"}
 		}
 		got, err := celGateOffGenerator(true).UmbrellaTerminals(root)
 		if err != nil {
-			t.Fatalf("patched=%v: %v", patched, err)
+			t.Fatalf("patched %q: %v", patched, err)
 		}
 		if !slices.Equal(got["flux-system/a"], want) {
-			t.Errorf("patched=%v: got %v, want flux-system/a -> %v", patched, got, want)
+			t.Errorf("patched %q: got %v, want flux-system/a -> %v", patched, got, want)
 		}
 	}
 }
