@@ -167,12 +167,20 @@ type BootstrapConfig struct {
 	// shared.
 	//
 	// Every key must be a qualified name and every value a label value, as
-	// Kubernetes takes them, and four keys are refused in both modes:
-	// app.kubernetes.io/managed-by, app.kubernetes.io/instance,
-	// app.kubernetes.io/version and app.kubernetes.io/part-of. flux-operator
-	// stamps those on every object it builds, the sync source and
-	// Kustomization included, with a LabelTransformer that runs after the
-	// FluxInstance patches, so a value set here would be overwritten.
+	// Kubernetes takes them, and the keys a Flux controller stamps on these
+	// objects, overwriting a value set here, are refused in both modes:
+	//   - app.kubernetes.io/managed-by, app.kubernetes.io/instance,
+	//     app.kubernetes.io/version and app.kubernetes.io/part-of, which
+	//     flux-operator's LabelTransformer sets on every object it builds
+	//     after the FluxInstance patches;
+	//   - fluxcd.controlplane.io/name and fluxcd.controlplane.io/namespace,
+	//     flux-operator's owner labels on every object it applies;
+	//   - kustomize.toolkit.fluxcd.io/name and
+	//     kustomize.toolkit.fluxcd.io/namespace, kustomize-controller's owner
+	//     labels on every object a Kustomization applies, the gotk source and
+	//     Kustomization included when they are written into the tree the
+	//     bootstrap Kustomization applies.
+	//
 	// Anything else is an error, with or without SourceURL.
 	Labels map[string]string `yaml:"labels,omitempty"`
 

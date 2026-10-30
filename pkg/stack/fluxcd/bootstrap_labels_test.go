@@ -5,6 +5,7 @@ import (
 	"maps"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -234,18 +235,27 @@ func TestBootstrapLabels_NoSourceURL(t *testing.T) {
 	}
 }
 
-// TestBootstrapLabels_Refused: a key flux-operator owns, a key that is not a
-// qualified name and a value that is not a label value are refused in both
-// modes and through both FluxInstance entry points, with or without a
+// controllerStamped are the label keys a Flux controller stamps on the
+// bootstrap source and Kustomization, with the controller the refusal names.
+var controllerStamped = map[string]string{
+	"app.kubernetes.io/managed-by":          "flux-operator's LabelTransformer",
+	"app.kubernetes.io/instance":            "flux-operator's LabelTransformer",
+	"app.kubernetes.io/version":             "flux-operator's LabelTransformer",
+	"app.kubernetes.io/part-of":             "flux-operator's LabelTransformer",
+	"fluxcd.controlplane.io/name":           "flux-operator's owner labels",
+	"fluxcd.controlplane.io/namespace":      "flux-operator's owner labels",
+	"kustomize.toolkit.fluxcd.io/name":      "kustomize-controller's owner labels",
+	"kustomize.toolkit.fluxcd.io/namespace": "kustomize-controller's owner labels",
+}
+
+// TestBootstrapLabels_Refused: a key a Flux controller stamps, a key that is
+// not a qualified name and a value that is not a label value are refused in
+// both modes and through both FluxInstance entry points, with or without a
 // SourceURL, with nothing returned and an error naming the field and the
-// label. A refusal of an operator-owned key names all four.
+// label. A refusal of a controller-stamped key names the controller and every
+// such key.
 func TestBootstrapLabels_Refused(t *testing.T) {
-	reserved := []string{
-		"app.kubernetes.io/managed-by",
-		"app.kubernetes.io/instance",
-		"app.kubernetes.io/version",
-		"app.kubernetes.io/part-of",
-	}
+	reserved := slices.Sorted(maps.Keys(controllerStamped))
 	type refusal struct {
 		labels map[string]string
 		names  []string
@@ -259,9 +269,9 @@ func TestBootstrapLabels_Refused(t *testing.T) {
 		"value starting with a dash": {map[string]string{"team": "-platform"}, []string{"labels", `"team"`}},
 	}
 	for _, key := range reserved {
-		cases["operator key "+key] = refusal{
+		cases["controller key "+key] = refusal{
 			labels: map[string]string{"team": "platform", key: "consumer"},
-			names:  append([]string{"labels", `"` + key + `"`}, reserved...),
+			names:  append([]string{"labels", `"` + key + `"`, "by " + controllerStamped[key]}, reserved...),
 		}
 	}
 	check := func(t *testing.T, got any, err error, names []string) {
@@ -450,6 +460,11 @@ spec:
 // /metadata/labels replaces a map already there, which the last case shows.
 // If this fails after a kustomize bump, the order changed and the labels
 // patches would drop the operator's labels or keep a consumer's value.
+//
+// Only the transformer's four keys are a matter of build order. The owner
+// labels flux-operator and kustomize-controller stamp are set by the
+// controllers after the build, on whatever the build produced, so they are
+// refused (TestBootstrapLabels_Refused) rather than tested here.
 func TestBootstrapLabels_OperatorTransformerRunsLast(t *testing.T) {
 	bg := fluxstack.NewBootstrapGenerator()
 	ns := bg.DefaultNamespace

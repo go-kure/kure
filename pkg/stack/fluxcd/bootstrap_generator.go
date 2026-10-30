@@ -694,36 +694,84 @@ func (bg *BootstrapGenerator) syncPrunePatch(config *stack.BootstrapConfig, prun
 	}
 }
 
-// operatorLabelKeys are the label keys flux-operator stamps on every object it
-// builds, the sync source and Kustomization included: its LabelTransformer
-// (flux-operator v0.62.1 internal/builder/templates.go:371-383, labelsTmpl)
-// sets them with create: true. The builder's kustomization lists that
-// transformer under transformers: (:24-26) and the FluxInstance's
-// spec.kustomize patches under patches: (:56, :164), and kustomize runs the
-// transformers: entries after its builtin patches, so the transformer has the
-// last word on these keys (TestBootstrapLabels_OperatorTransformerRunsLast).
-// BootstrapConfig.Labels refuses them in both modes, so a config means the same
-// in either.
-var operatorLabelKeys = []string{
-	"app.kubernetes.io/managed-by",
-	"app.kubernetes.io/instance",
-	"app.kubernetes.io/version",
-	"app.kubernetes.io/part-of",
+// controllerLabelKeys are the label keys a Flux controller stamps on the
+// bootstrap source and Kustomization, overwriting any value
+// BootstrapConfig.Labels gives them, with the controller that stamps each.
+// They are exact keys, not prefixes: other keys under the same prefixes are
+// not stamped. BootstrapConfig.Labels refuses every one in both modes, so a
+// config means the same in either.
+//
+//   - app.kubernetes.io/managed-by, instance, version and part-of:
+//     flux-operator's LabelTransformer (flux-operator v0.62.1
+//     internal/builder/templates.go:371-383, labelsTmpl) sets them with
+//     create: true on every object it builds, the sync source and
+//     Kustomization included. The builder's kustomization lists that
+//     transformer under transformers: (:24-26) and the FluxInstance's
+//     spec.kustomize patches under patches: (:56, :164), and kustomize runs the
+//     transformers: entries after its builtin patches, so the transformer has
+//     the last word (TestBootstrapLabels_OperatorTransformerRunsLast).
+//   - fluxcd.controlplane.io/name and namespace: flux-operator's owner labels.
+//     After the build its FluxInstance reconciler calls SetOwnerLabels on every
+//     object it applies (internal/controller/fluxinstance_controller.go:484-488,
+//     group fluxcd.controlplane.io from api/v1/groupversion_info.go:17), which
+//     sets <group>/name and <group>/namespace unconditionally (fluxcd/pkg/ssa
+//     v0.83.0 manager.go:66-77) and selects stale objects for garbage
+//     collection by them (fluxinstance_controller.go:571).
+//   - kustomize.toolkit.fluxcd.io/name and namespace: kustomize-controller's
+//     owner labels, set the same way on every object a Kustomization applies
+//     (kustomize-controller v1.10.1 internal/controller/kustomization_controller.go:485-489,
+//     garbage collection :1504). They reach the gotk source and Kustomization
+//     when the consumer writes them into the tree the bootstrap Kustomization
+//     applies, the usual self-managed Flux bootstrap; kure returns the objects
+//     and does not decide where they are written.
+//
+// The owner labels are set after any build, so no ordering decides them; they
+// are refused rather than tested by ordering.
+var controllerLabelKeys = []struct{ key, stampedBy string }{
+	{"app.kubernetes.io/managed-by", "flux-operator's LabelTransformer"},
+	{"app.kubernetes.io/instance", "flux-operator's LabelTransformer"},
+	{"app.kubernetes.io/version", "flux-operator's LabelTransformer"},
+	{"app.kubernetes.io/part-of", "flux-operator's LabelTransformer"},
+	{"fluxcd.controlplane.io/name", "flux-operator's owner labels"},
+	{"fluxcd.controlplane.io/namespace", "flux-operator's owner labels"},
+	{"kustomize.toolkit.fluxcd.io/name", "kustomize-controller's owner labels"},
+	{"kustomize.toolkit.fluxcd.io/namespace", "kustomize-controller's owner labels"},
+}
+
+// controllerLabelStamper returns the controller that stamps key
+// (controllerLabelKeys), and "" for a key no Flux controller stamps.
+func controllerLabelStamper(key string) string {
+	for _, k := range controllerLabelKeys {
+		if k.key == key {
+			return k.stampedBy
+		}
+	}
+	return ""
+}
+
+// controllerLabelList names every key of controllerLabelKeys with the
+// controller that stamps it, for an error.
+func controllerLabelList() string {
+	parts := make([]string, len(controllerLabelKeys))
+	for i, k := range controllerLabelKeys {
+		parts[i] = k.key + " (" + k.stampedBy + ")"
+	}
+	return strings.Join(parts, ", ")
 }
 
 // validateBootstrapLabels refuses a BootstrapConfig.Labels the bootstrap
-// source and Kustomization could not carry as given: a key flux-operator owns
-// (operatorLabelKeys), a key that is not a qualified name and a value that is
-// not a label value, as the API server checks them. Keys are checked in sorted
-// order, so the refusal is the same on every run. It runs with or without
-// SourceURL, in both modes. name is the object the error is about.
+// source and Kustomization could not carry as given: a key a Flux controller
+// stamps (controllerLabelKeys), a key that is not a qualified name and a value
+// that is not a label value, as the API server checks them. Keys are checked
+// in sorted order, so the refusal is the same on every run. It runs with or
+// without SourceURL, in both modes. name is the object the error is about.
 func validateBootstrapLabels(config *stack.BootstrapConfig, name string) error {
 	for _, key := range slices.Sorted(maps.Keys(config.Labels)) {
 		value := config.Labels[key]
-		if slices.Contains(operatorLabelKeys, key) {
+		if stamper := controllerLabelStamper(key); stamper != "" {
 			return errors.ResourceValidationError("BootstrapConfig", name, "labels",
-				fmt.Sprintf("label %q is one flux-operator stamps on the objects it builds, overwriting any value set here; "+
-					"the keys it owns, refused in both modes, are %s", key, strings.Join(operatorLabelKeys, ", ")), nil)
+				fmt.Sprintf("label %q is stamped on the bootstrap objects by %s, overwriting any value set here; "+
+					"the keys Flux controllers stamp, refused in both modes, are %s", key, stamper, controllerLabelList()), nil)
 		}
 		if problems := validation.IsQualifiedName(key); len(problems) > 0 {
 			return errors.ResourceValidationError("BootstrapConfig", name, "labels",
@@ -753,8 +801,8 @@ func bootstrapLabels(config *stack.BootstrapConfig) map[string]string {
 // flux-operator generates for the sync, in that order. The sync has no field
 // for labels, and the operator's sync template writes none
 // (internal/builder/templates.go:425-480), so each patch adds the whole map;
-// the operator's LabelTransformer then adds its own keys to it
-// (operatorLabelKeys). The body is written with pkg/io, which keeps every
+// the operator's LabelTransformer, and after the build its owner labels, then
+// add their own keys to it (controllerLabelKeys). The body is written with pkg/io, which keeps every
 // string as written: a value such as "true" or "1.0" stays a string.
 func (bg *BootstrapGenerator) syncLabelsPatches(config *stack.BootstrapConfig) ([]kustomize.Patch, error) {
 	var body kio.Buffer
