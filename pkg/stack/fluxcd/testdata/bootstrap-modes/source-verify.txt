@@ -11,6 +11,7 @@ source.secretRef                  | -                                           
 source.provider                   | -                                            | -
 source.insecure                   | true                                         | true
 source.verify                     | {"matchOIDCIdentity":[{"issuer":"^https://token.actions.githubusercontent.com$","subject":"^https://github.com/example/fleet/.*$"},{"issuer":"^https://accounts.google.com$","subject":"^release@example.com$"}],"provider":"cosign"} | {"matchOIDCIdentity":[{"issuer":"^https://token.actions.githubusercontent.com$","subject":"^https://github.com/example/fleet/.*$"},{"issuer":"^https://accounts.google.com$","subject":"^release@example.com$"}],"provider":"cosign"}
+source.labels                     | -                                            | -
 kustomization                     | Kustomization flux-system/flux-system        | Kustomization flux-system/flux-system
 kustomization.namespace           | flux-system                                  | flux-system
 kustomization.sourceRef           | OCIRepository prod                           | OCIRepository flux-system   <- differs
@@ -19,4 +20,5 @@ kustomization.path                | demo                                        
 kustomization.directory           | demo                                         | demo
 kustomization.prune               | false                                        | true   <- differs
 kustomization.interval            | 1h0m0s                                       | 10m0s   <- differs
+kustomization.labels              | -                                            | -
 patches                           | -                                            | OCIRepository/flux-system: - op: add path: /spec/insecure value: true; OCIRepository/flux-system: - op: add path: /spec/verify value: matchOIDCIdentity: - issuer: ^https://token.actions.githubusercontent.com$ subject: ^https://github.com/example/fleet/.*$ - issuer: ^https://accounts.google.com$ subject: ^release@example.com$ provider: cosign   <- differs

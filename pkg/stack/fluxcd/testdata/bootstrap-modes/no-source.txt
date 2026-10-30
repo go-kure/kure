@@ -11,6 +11,7 @@ source.secretRef                  | -                                           
 source.provider                   | -                                            | -
 source.insecure                   | -                                            | -
 source.verify                     | -                                            | -
+source.labels                     | -                                            | -
 kustomization                     | Kustomization flux-system/flux-system        | -   <- differs
 kustomization.namespace           | flux-system                                  | -   <- differs
 kustomization.sourceRef           | OCIRepository prod                           | -   <- differs
@@ -19,4 +20,5 @@ kustomization.path                | demo                                        
 kustomization.directory           | demo                                         | -   <- differs
 kustomization.prune               | false                                        | -   <- differs
 kustomization.interval            | 1h0m0s                                       | -   <- differs
+kustomization.labels              | -                                            | -
 patches                           | -                                            | -

@@ -11,6 +11,7 @@ source.secretRef                  | -                                           
 source.provider                   | -                                            | -
 source.insecure                   | -                                            | -
 source.verify                     | -                                            | -
+source.labels                     | -                                            | -
 kustomization                     | Kustomization flux-system/flux-system        | Kustomization flux-system/flux-system
 kustomization.namespace           | flux-system                                  | flux-system
 kustomization.sourceRef           | GitRepository prod                           | GitRepository flux-system   <- differs
@@ -19,4 +20,5 @@ kustomization.path                | demo                                        
 kustomization.directory           | demo                                         | demo
 kustomization.prune               | false                                        | true   <- differs
 kustomization.interval            | 1h0m0s                                       | 10m0s   <- differs
+kustomization.labels              | -                                            | -
 patches                           | -                                            | -

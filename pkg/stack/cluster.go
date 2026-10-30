@@ -156,6 +156,26 @@ type BootstrapConfig struct {
 	// prune: true.
 	Prune *bool `yaml:"prune,omitempty"`
 
+	// Labels are set on the bootstrap source and Kustomization in both modes:
+	// metadata.labels on the OCIRepository or GitRepository and the
+	// Kustomization kure emits in gotk mode, and in flux-operator mode two
+	// spec.kustomize patches adding metadata.labels to the source and the
+	// Kustomization the operator generates for the sync. Like SyncName it has
+	// no effect without SourceURL, because no source is emitted then in either
+	// mode; the gotk Kustomization emitted without one carries no labels.
+	// Empty or nil keeps the output as before. The map is copied, not
+	// shared.
+	//
+	// Every key must be a qualified name and every value a label value, as
+	// Kubernetes takes them, and four keys are refused in both modes:
+	// app.kubernetes.io/managed-by, app.kubernetes.io/instance,
+	// app.kubernetes.io/version and app.kubernetes.io/part-of. flux-operator
+	// stamps those on every object it builds, the sync source and
+	// Kustomization included, with a LabelTransformer that runs after the
+	// FluxInstance patches, so a value set here would be overwritten.
+	// Anything else is an error, with or without SourceURL.
+	Labels map[string]string `yaml:"labels,omitempty"`
+
 	// ArgoCD-specific (mock for now)
 	ArgoCDVersion   string `yaml:"argoCDVersion,omitempty"`
 	ArgoCDNamespace string `yaml:"argoCDNamespace,omitempty"`

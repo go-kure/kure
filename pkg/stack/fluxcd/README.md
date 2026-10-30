@@ -1240,6 +1240,39 @@ sync has no prune field. So in flux-operator mode a set `Prune` adds one `spec.k
 that sets `spec.prune` on that Kustomization, matched by group, kind and name, the name chosen as
 for the `SourceInsecure` patch. Without `SourceURL` no sync is generated and `Prune` adds nothing.
 
+### Labels
+
+`BootstrapConfig.Labels` sets labels on the bootstrap source and Kustomization in both modes
+(go-kure/kure#1180). Unset or empty, the output is what it was before it existed.
+
+| Mode | Source (`OCIRepository` or `GitRepository`) | Kustomization |
+|---|---|---|
+| gotk | `metadata.labels` | `metadata.labels` |
+| flux-operator | a `spec.kustomize` patch | a `spec.kustomize` patch |
+
+A `FluxInstance` sync has no labels field, and the operator's sync template writes no labels. So
+in flux-operator mode the labels add two `spec.kustomize` patches, after any other, each adding
+the whole map as `metadata.labels`: one on the sync source, of either kind, and one on the sync
+Kustomization, matched by group, kind and name as the `SourceInsecure` patch is. The map is
+copied, never shared with the config, and its values stay strings as written (`"true"`, `""`).
+
+Like `SyncName`, the labels have no effect without `SourceURL`: no source is emitted then, in
+either mode, and the `gotk` Kustomization emitted without one carries no labels.
+
+flux-operator then stamps its own labels on every object it builds, the sync source and
+Kustomization included: `app.kubernetes.io/managed-by`, `app.kubernetes.io/instance`,
+`app.kubernetes.io/version` and `app.kubernetes.io/part-of`, from a `LabelTransformer` its
+builder lists under `transformers:`, where the `FluxInstance` patches go under `patches:`
+(flux-operator v0.62.1 `internal/builder/templates.go`). kustomize runs the transformers after
+the patches, so the sync objects carry both sets, and a value the patch gave one of those four
+keys would be overwritten. Both `GenerateBootstrap` and `GenerateFluxInstance` refuse, with
+nothing returned, in both modes and with or without `SourceURL`:
+- any of those four keys, so one config means the same in either mode;
+- a key that is not a qualified name, and a value that is not a label value, as the API server
+  checks them.
+
+With several, the error is about the first key in sorted order.
+
 ### Root node name
 
 Without a `ClusterName` the root node's name is the gotk bootstrap Kustomization's `spec.path`

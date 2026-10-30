@@ -35,11 +35,12 @@ both. In flux-operator mode kure emits a FluxInstance, and flux-operator renders
 | Ref selector | Tag, or a semver range, chosen explicitly | Holds: `SourceSemVer` (go-kure/kure#1090); the two modes resolve the same revision (`testdata/bootstrap-modes/oci-semver.txt`) |
 | Prune | An explicit `Prune` reaches the root Kustomization in both modes | Holds since go-kure/kure#1088, by a patch in flux-operator mode. Unset keeps each mode's default (Prune compatibility) |
 | Verification | OCI signature verification, in both modes | Holds: `SourceVerify` (go-kure/kure#1091); the two modes verify alike (`testdata/bootstrap-modes/source-verify.txt`) |
+| Labels | `Labels` on the source (OCI or Git) and the Kustomization in both modes, with `SourceURL`; none without it, as for `SyncName` | Holds (go-kure/kure#1180): `metadata.labels` in gotk mode, two patches in flux-operator mode; the two modes agree (`testdata/bootstrap-modes/labels.txt`, `git-labels.txt`). The keys flux-operator's own `LabelTransformer` stamps after the patches (`app.kubernetes.io/managed-by`, `app.kubernetes.io/instance`, `app.kubernetes.io/version`, `app.kubernetes.io/part-of`; v0.62.1 `internal/builder/templates.go`, under `transformers:`) are refused in both modes; the operator's four are on top of the consumer's in flux-operator mode only |
 
 In flux-operator mode, anything `spec.sync` cannot express reaches the rendered objects as a
 targeted `spec.kustomize.patches` entry: a JSON6902 patch on the sync's source or Kustomization,
 by kind and name. go-kure/kure#1060 already uses this for plain HTTP. One mechanism covers names,
-semver, prune and verification. It is pinned to the flux-operator version whose template the
+semver, prune, verification and labels. It is pinned to the flux-operator version whose template the
 modes test models.
 
 **Selectors.** ASSUMPTION, to be confirmed on go-kure/kure#1068 by the consumer that asked:

@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strconv"
@@ -146,6 +147,9 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 		return nil, err
 	}
 	if err := validateSourceSemVer(config, gotkSourceName(config, rootNode)); err != nil {
+		return nil, err
+	}
+	if err := validateBootstrapLabels(config, gotkSourceName(config, rootNode)); err != nil {
 		return nil, err
 	}
 
@@ -652,14 +656,26 @@ func (bg *BootstrapGenerator) syncObjectName(config *stack.BootstrapConfig) stri
 	return bg.DefaultNamespace
 }
 
-// syncSourceTarget selects the OCIRepository flux-operator generates for the
-// sync (syncObjectName), for a FluxInstance kustomize patch. The operator
-// applies spec.kustomize patches to every object it builds, the sync source
-// included.
+// syncSourceTarget selects the source flux-operator generates for the sync
+// (syncObjectName), for a FluxInstance kustomize patch: an OCIRepository or a
+// GitRepository, the kind resolvedSourceKind names. The operator applies
+// spec.kustomize patches to every object it builds, the sync source included.
+// The OCI-only options (insecure, semver, verify) are refused with a
+// GitRepository source, so their patches always select an OCIRepository.
 func (bg *BootstrapGenerator) syncSourceTarget(config *stack.BootstrapConfig) *kustomize.Selector {
 	return &kustomize.Selector{
 		Group: sourcev1.GroupVersion.Group,
-		Kind:  sourcev1.OCIRepositoryKind,
+		Kind:  resolvedSourceKind(config),
+		Name:  bg.syncObjectName(config),
+	}
+}
+
+// syncKustomizationTarget selects the Kustomization flux-operator generates
+// for the sync (syncObjectName), for a FluxInstance kustomize patch.
+func (bg *BootstrapGenerator) syncKustomizationTarget(config *stack.BootstrapConfig) *kustomize.Selector {
+	return &kustomize.Selector{
+		Group: kustv1.GroupVersion.Group,
+		Kind:  kustv1.KustomizationKind,
 		Name:  bg.syncObjectName(config),
 	}
 }
@@ -673,13 +689,87 @@ func (bg *BootstrapGenerator) syncSourceTarget(config *stack.BootstrapConfig) *k
 // (go-kure/kure#1088).
 func (bg *BootstrapGenerator) syncPrunePatch(config *stack.BootstrapConfig, prune bool) kustomize.Patch {
 	return kustomize.Patch{
-		Patch: fmt.Sprintf("- op: add\n  path: /spec/prune\n  value: %t\n", prune),
-		Target: &kustomize.Selector{
-			Group: kustv1.GroupVersion.Group,
-			Kind:  kustv1.KustomizationKind,
-			Name:  bg.syncObjectName(config),
-		},
+		Patch:  fmt.Sprintf("- op: add\n  path: /spec/prune\n  value: %t\n", prune),
+		Target: bg.syncKustomizationTarget(config),
 	}
+}
+
+// operatorLabelKeys are the label keys flux-operator stamps on every object it
+// builds, the sync source and Kustomization included: its LabelTransformer
+// (flux-operator v0.62.1 internal/builder/templates.go:371-383, labelsTmpl)
+// sets them with create: true. The builder's kustomization lists that
+// transformer under transformers: (:24-26) and the FluxInstance's
+// spec.kustomize patches under patches: (:56, :164), and kustomize runs the
+// transformers: entries after its builtin patches, so the transformer has the
+// last word on these keys (TestBootstrapLabels_OperatorTransformerRunsLast).
+// BootstrapConfig.Labels refuses them in both modes, so a config means the same
+// in either.
+var operatorLabelKeys = []string{
+	"app.kubernetes.io/managed-by",
+	"app.kubernetes.io/instance",
+	"app.kubernetes.io/version",
+	"app.kubernetes.io/part-of",
+}
+
+// validateBootstrapLabels refuses a BootstrapConfig.Labels the bootstrap
+// source and Kustomization could not carry as given: a key flux-operator owns
+// (operatorLabelKeys), a key that is not a qualified name and a value that is
+// not a label value, as the API server checks them. Keys are checked in sorted
+// order, so the refusal is the same on every run. It runs with or without
+// SourceURL, in both modes. name is the object the error is about.
+func validateBootstrapLabels(config *stack.BootstrapConfig, name string) error {
+	for _, key := range slices.Sorted(maps.Keys(config.Labels)) {
+		value := config.Labels[key]
+		if slices.Contains(operatorLabelKeys, key) {
+			return errors.ResourceValidationError("BootstrapConfig", name, "labels",
+				fmt.Sprintf("label %q is one flux-operator stamps on the objects it builds, overwriting any value set here; "+
+					"the keys it owns, refused in both modes, are %s", key, strings.Join(operatorLabelKeys, ", ")), nil)
+		}
+		if problems := validation.IsQualifiedName(key); len(problems) > 0 {
+			return errors.ResourceValidationError("BootstrapConfig", name, "labels",
+				fmt.Sprintf("label key %q is not a valid label key: %s", key, strings.Join(problems, "; ")), nil)
+		}
+		if problems := validation.IsValidLabelValue(value); len(problems) > 0 {
+			return errors.ResourceValidationError("BootstrapConfig", name, "labels",
+				fmt.Sprintf("label %q has value %q, which is not a valid label value: %s", key, value, strings.Join(problems, "; ")), nil)
+		}
+	}
+	return nil
+}
+
+// bootstrapLabels returns the labels the bootstrap source and Kustomization
+// carry: a copy of BootstrapConfig.Labels, so the emitted objects share no map
+// with the config, when there are any and SourceURL is set; nil otherwise,
+// which leaves metadata.labels out.
+func bootstrapLabels(config *stack.BootstrapConfig) map[string]string {
+	if config.SourceURL == "" || len(config.Labels) == 0 {
+		return nil
+	}
+	return maps.Clone(config.Labels)
+}
+
+// syncLabelsPatches returns the FluxInstance kustomize patches that add
+// metadata.labels (bootstrapLabels) to the source and the Kustomization
+// flux-operator generates for the sync, in that order. The sync has no field
+// for labels, and the operator's sync template writes none
+// (internal/builder/templates.go:425-480), so each patch adds the whole map;
+// the operator's LabelTransformer then adds its own keys to it
+// (operatorLabelKeys). The body is written with pkg/io, which keeps every
+// string as written: a value such as "true" or "1.0" stays a string.
+func (bg *BootstrapGenerator) syncLabelsPatches(config *stack.BootstrapConfig) ([]kustomize.Patch, error) {
+	var body kio.Buffer
+	err := body.Marshal([]map[string]any{{
+		"op":    "add",
+		"path":  "/metadata/labels",
+		"value": bootstrapLabels(config),
+	}})
+	if err != nil {
+		return nil, errors.Wrap(err, "marshal the sync labels patch")
+	}
+	return []kustomize.Patch{
+		{Patch: body.String(), Target: bg.syncSourceTarget(config)},
+		{Patch: body.String(), Target: bg.syncKustomizationTarget(config)},
+	}, nil
 }
 
 // syncInsecurePatch returns the FluxInstance kustomize patch that sets
@@ -761,7 +851,8 @@ func (bg *BootstrapGenerator) syncVerifyPatch(config *stack.BootstrapConfig) (ku
 // generateFluxSystemKustomization creates a Kustomization for the flux-system.
 // Its spec.path is dir, the directory bootstrapDir names, "." for the root of
 // the source. Its name is gotkKustomizationName, and its sourceRef names the
-// source generateSource emits (gotkSourceName).
+// source generateSource emits (gotkSourceName). Its labels are bootstrapLabels:
+// none without SourceURL.
 func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.BootstrapConfig, rootNode *stack.Node, dir string) client.Object {
 	kust := &kustv1.Kustomization{
 		TypeMeta: metav1.TypeMeta{
@@ -771,6 +862,7 @@ func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.Boot
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      bg.gotkKustomizationName(config),
 			Namespace: bg.DefaultNamespace,
+			Labels:    bootstrapLabels(config),
 		},
 		Spec: kustv1.KustomizationSpec{
 			Interval: metav1.Duration{Duration: bg.DefaultInterval},
@@ -807,6 +899,7 @@ func (bg *BootstrapGenerator) generateGitSource(config *stack.BootstrapConfig, r
 	}
 
 	gr := pubfluxcd.CreateGitRepository(gotkSourceName(config, rootNode), bg.DefaultNamespace)
+	gr.Labels = bootstrapLabels(config)
 	gr.Spec.URL = config.SourceURL
 	gr.Spec.Interval = metav1.Duration{Duration: bg.DefaultInterval}
 
@@ -838,6 +931,7 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 	}
 
 	or := pubfluxcd.CreateOCIRepository(gotkSourceName(config, rootNode), bg.DefaultNamespace)
+	or.Labels = bootstrapLabels(config)
 	or.Spec.URL = config.SourceURL
 	or.Spec.Interval = &metav1.Duration{Duration: bg.DefaultInterval}
 	pubfluxcd.SetOCIRepositoryReference(or, ref)
@@ -926,6 +1020,9 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 	if err := validateSourceSemVer(config, FluxInstanceName); err != nil {
 		return nil, err
 	}
+	if err := validateBootstrapLabels(config, FluxInstanceName); err != nil {
+		return nil, err
+	}
 
 	// ImagePullSecret is the controller images' pull secret, the one gotk mode
 	// passes to its install options; empty leaves the field out.
@@ -974,6 +1071,13 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 		}
 		if config.Prune != nil {
 			patches = append(patches, bg.syncPrunePatch(config, *config.Prune))
+		}
+		if len(config.Labels) > 0 {
+			ps, err := bg.syncLabelsPatches(config)
+			if err != nil {
+				return nil, err
+			}
+			patches = append(patches, ps...)
 		}
 		if len(patches) > 0 {
 			spec.Kustomize = &fluxv1.Kustomize{Patches: patches}

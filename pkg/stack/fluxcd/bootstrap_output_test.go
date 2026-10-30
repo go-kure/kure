@@ -20,7 +20,8 @@ import (
 // stored under testdata/bootstrap-output, one per mode and source kind. They
 // set no source access option: the files were written before those options
 // existed, and a config that does not set them must keep producing them byte
-// for byte.
+// for byte. The *-labels configs set BootstrapConfig.Labels and nothing else
+// new (go-kure/kure#1180); every other one leaves it unset.
 func bootstrapOutputConfigs() map[string]*stack.BootstrapConfig {
 	config := func(mode, kind, url, ref string) *stack.BootstrapConfig {
 		return &stack.BootstrapConfig{
@@ -38,7 +39,16 @@ func bootstrapOutputConfigs() map[string]*stack.BootstrapConfig {
 	named.SyncName = "fleet"
 	gotkNamed := config(fluxstack.ModeGotk, "OCIRepository", oci, "v1.2.3")
 	gotkNamed.SyncName = "fleet"
+	labelled := func(c *stack.BootstrapConfig) *stack.BootstrapConfig {
+		c.Labels = bootstrapLabelsInput()
+		return c
+	}
 	return map[string]*stack.BootstrapConfig{
+		"gotk-oci-labels":          labelled(config(fluxstack.ModeGotk, "OCIRepository", oci, "v1.2.3")),
+		"gotk-git-labels":          labelled(config(fluxstack.ModeGotk, "GitRepository", git, "main")),
+		"flux-operator-oci-labels": labelled(config(fluxstack.DefaultFluxMode, "OCIRepository", oci, "v1.2.3")),
+		"flux-operator-git-labels": labelled(config(fluxstack.DefaultFluxMode, "GitRepository", git, "main")),
+
 		"gotk-oci":                config(fluxstack.ModeGotk, "OCIRepository", oci, "v1.2.3"),
 		"gotk-oci-named":          gotkNamed,
 		"gotk-oci-default-ref":    config(fluxstack.ModeGotk, "", oci, ""),

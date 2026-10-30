@@ -46,7 +46,12 @@ var syncNamed = map[string]bool{"source": true, "kustomization": true, "kustomiz
 // applies. The others are recorded, so a difference is visible and a change
 // in either mode shows up in the stored file. kustomization.prune must agree
 // when BootstrapConfig.Prune is set; unset keeps each mode's default, false
-// for gotk and true for flux-operator (go-kure/kure#1088).
+// for gotk and true for flux-operator (go-kure/kure#1088). source.labels and
+// kustomization.labels are BootstrapConfig.Labels (go-kure/kure#1180): in
+// flux-operator mode they are read from the objects the patches produce, which
+// models the patches and not the operator's LabelTransformer, so the four keys
+// it adds on top (operatorLabelKeys in the generator) are not part of either
+// column.
 var rootFields = []struct {
 	name string
 	same bool
@@ -63,6 +68,7 @@ var rootFields = []struct {
 	{"source.provider", true},
 	{"source.insecure", true},
 	{"source.verify", true},
+	{"source.labels", true},
 	{"kustomization", false},
 	{"kustomization.namespace", true},
 	{"kustomization.sourceRef", false},
@@ -71,7 +77,27 @@ var rootFields = []struct {
 	{"kustomization.directory", true},
 	{"kustomization.prune", false},
 	{"kustomization.interval", false},
+	{"kustomization.labels", true},
 	{"patches", false},
+}
+
+// labelsText renders an object's labels for the comparison: "" when it has
+// none, its keys sorted otherwise.
+func labelsText(t *testing.T, labels any) string {
+	t.Helper()
+	switch l := labels.(type) {
+	case nil:
+		return ""
+	case map[string]string:
+		if len(l) == 0 {
+			return ""
+		}
+	case map[string]any:
+		if len(l) == 0 {
+			return ""
+		}
+	}
+	return canonicalJSON(t, labels)
 }
 
 func gotkRoot(t *testing.T, objs []client.Object) rootView {
@@ -100,6 +126,7 @@ func gotkRoot(t *testing.T, objs []client.Object) rootView {
 			if o.Spec.Verify != nil {
 				v["source.verify"] = canonicalJSON(t, o.Spec.Verify)
 			}
+			v["source.labels"] = labelsText(t, o.Labels)
 		case *sourcev1.GitRepository:
 			sources++
 			v["source"] = "GitRepository " + o.Namespace + "/" + o.Name
@@ -110,6 +137,7 @@ func gotkRoot(t *testing.T, objs []client.Object) rootView {
 				v["source.ref"], v["source.revision"] = "branch: "+r.Branch, "refs/heads/"+r.Branch
 			}
 			v["source.interval"] = o.Spec.Interval.Duration.String()
+			v["source.labels"] = labelsText(t, o.Labels)
 		case *kustv1.Kustomization:
 			kusts++
 			v["kustomization"] = "Kustomization " + o.Namespace + "/" + o.Name
@@ -121,6 +149,7 @@ func gotkRoot(t *testing.T, objs []client.Object) rootView {
 			v["kustomization.directory"] = path.Clean(o.Spec.Path)
 			v["kustomization.prune"] = fmt.Sprint(o.Spec.Prune)
 			v["kustomization.interval"] = o.Spec.Interval.Duration.String()
+			v["kustomization.labels"] = labelsText(t, o.Labels)
 		}
 	}
 	if sources > 1 || kusts != 1 {
@@ -167,11 +196,14 @@ func operatorRoot(t *testing.T, objs []client.Object) rootView {
 	v["source.kind"] = s.Kind
 	v["source.namespace"] = fi.Namespace
 	v["source.url"] = s.URL
+	// The OCI revision, insecure, verify, prune and the labels are read from
+	// the objects the patches produce, so a patch that does not apply does not
+	// count.
+	source, kust := appliedSync(t, fi, name)
+	spec, _ := source["spec"].(map[string]any)
+	v["source.labels"] = labelsText(t, metadataLabels(source))
 	switch s.Kind {
 	case "OCIRepository":
-		// The revision, insecure and verify are read from the source the
-		// patches produce, so a patch that does not apply does not count.
-		spec := appliedSyncSource(t, fi, name)
 		ref, _ := spec["ref"].(map[string]any)
 		tag, _ := ref["tag"].(string)
 		v["source.ref"], v["source.revision"] = "tag: "+s.Ref, "tag "+tag
@@ -203,59 +235,105 @@ func operatorRoot(t *testing.T, objs []client.Object) rootView {
 	v["kustomization.directory"] = path.Clean(s.Path)
 	// The operator renders prune: true; a FluxInstance patch on the sync
 	// Kustomization's spec.prune overrides it.
-	v["kustomization.prune"] = "true"
-	for _, value := range []string{"true", "false"} {
-		if strings.Contains(v["patches"], "Kustomization/"+name+": - op: add path: /spec/prune value: "+value) {
-			v["kustomization.prune"] = value
-		}
-	}
+	kspec, _ := kust["spec"].(map[string]any)
+	v["kustomization.prune"] = fmt.Sprint(kspec["prune"])
 	v["kustomization.interval"] = "10m0s"
+	v["kustomization.labels"] = labelsText(t, metadataLabels(kust))
 	return v
 }
 
-// appliedSyncSource is the spec of the OCIRepository, named name, that
-// flux-operator creates for fi's sync: the source its sync template writes
-// (templates.go: ref.tag from sync.ref, url) with fi's kustomize patches
-// applied by a kustomize build, as the operator applies them to every object
-// it builds. A patch whose target misses the source leaves it as written.
+// metadataLabels is obj's metadata.labels as a kustomize build reads it back,
+// nil when it has none.
+func metadataLabels(obj map[string]any) any {
+	meta, _ := obj["metadata"].(map[string]any)
+	return meta["labels"]
+}
+
+// appliedSyncSource is the spec of the source, named name, that flux-operator
+// creates for fi's sync, with fi's kustomize patches applied (appliedSync).
 func appliedSyncSource(t *testing.T, fi *fluxv1.FluxInstance, name string) map[string]any {
 	t.Helper()
-	source, err := sigsyaml.Marshal(map[string]any{
-		"apiVersion": sourcev1.GroupVersion.String(),
-		"kind":       sourcev1.OCIRepositoryKind,
-		"metadata":   map[string]any{"name": name, "namespace": fi.Namespace},
-		"spec":       map[string]any{"ref": map[string]any{"tag": fi.Spec.Sync.Ref}, "url": fi.Spec.Sync.URL},
-	})
-	if err != nil {
-		t.Fatalf("marshalling the sync source: %v", err)
+	source, _ := appliedSync(t, fi, name)
+	spec, _ := source["spec"].(map[string]any)
+	return spec
+}
+
+// appliedSync is the source and the Kustomization, both named name, that
+// flux-operator creates for fi's sync: the two objects its sync template
+// writes (templates.go: the source with ref.tag or ref.name from sync.ref and
+// url; the Kustomization with interval 10m0s, path, prune true and a sourceRef
+// by kind and name; neither with labels) with fi's kustomize patches applied
+// by a kustomize build, as the operator applies them to every object it
+// builds. A patch whose target misses an object leaves it as written. The
+// operator's own transformers, its LabelTransformer among them, are not part
+// of this build.
+func appliedSync(t *testing.T, fi *fluxv1.FluxInstance, name string) (source, kustomization map[string]any) {
+	t.Helper()
+	s := fi.Spec.Sync
+	ref := map[string]any{"tag": s.Ref}
+	if s.Kind == sourcev1.GitRepositoryKind {
+		ref = map[string]any{"name": s.Ref}
 	}
-	kustomization := "resources:\n  - source.yaml\n"
+	meta := map[string]any{"name": name, "namespace": fi.Namespace}
+	var sync []byte
+	for _, obj := range []map[string]any{{
+		"apiVersion": sourcev1.GroupVersion.String(),
+		"kind":       s.Kind,
+		"metadata":   meta,
+		"spec":       map[string]any{"ref": ref, "url": s.URL},
+	}, {
+		"apiVersion": kustv1.GroupVersion.String(),
+		"kind":       kustv1.KustomizationKind,
+		"metadata":   meta,
+		"spec": map[string]any{
+			"interval":  "10m0s",
+			"path":      s.Path,
+			"prune":     true,
+			"sourceRef": map[string]any{"kind": s.Kind, "name": name},
+		},
+	}} {
+		doc, err := sigsyaml.Marshal(obj)
+		if err != nil {
+			t.Fatalf("marshalling the sync %s: %v", obj["kind"], err)
+		}
+		sync = append(append(sync, "---\n"...), doc...)
+	}
+	kust := "resources:\n  - sync.yaml\n"
 	if fi.Spec.Kustomize != nil && len(fi.Spec.Kustomize.Patches) > 0 {
 		patches, err := sigsyaml.Marshal(fi.Spec.Kustomize.Patches)
 		if err != nil {
 			t.Fatalf("marshalling the patches: %v", err)
 		}
-		kustomization += "patches:\n" + string(patches)
+		kust += "patches:\n" + string(patches)
 	}
 	fs := filesys.MakeFsInMemory()
-	for file, data := range map[string]string{"source.yaml": string(source), "kustomization.yaml": kustomization} {
+	for file, data := range map[string]string{"sync.yaml": string(sync), "kustomization.yaml": kust} {
 		if err := fs.WriteFile(filepath.Join("/sync", file), []byte(data)); err != nil {
 			t.Fatalf("writing %s: %v", file, err)
 		}
 	}
 	res, err := krusty.MakeKustomizer(krusty.MakeDefaultOptions()).Run(fs, "/sync")
 	if err != nil {
-		t.Fatalf("kustomize build of the sync source: %v", err)
+		t.Fatalf("kustomize build of the sync: %v", err)
 	}
-	if n := len(res.Resources()); n != 1 {
-		t.Fatalf("kustomize build of the sync source gave %d objects, want 1", n)
+	if n := len(res.Resources()); n != 2 {
+		t.Fatalf("kustomize build of the sync gave %d objects, want 2", n)
 	}
-	m, err := res.Resources()[0].Map()
-	if err != nil {
-		t.Fatalf("reading the built sync source: %v", err)
+	for _, r := range res.Resources() {
+		m, err := r.Map()
+		if err != nil {
+			t.Fatalf("reading the built %s: %v", r.CurId(), err)
+		}
+		if r.GetKind() == kustv1.KustomizationKind {
+			kustomization = m
+		} else {
+			source = m
+		}
 	}
-	spec, _ := m["spec"].(map[string]any)
-	return spec
+	if source == nil || kustomization == nil {
+		t.Fatalf("kustomize build of the sync gave no source or no Kustomization")
+	}
+	return source, kustomization
 }
 
 // canonicalJSON renders v as JSON with its object keys sorted, so a typed
@@ -299,7 +377,13 @@ func bootstrapModeConfigs() map[string]*stack.BootstrapConfig {
 		{Issuer: "^https://token.actions.githubusercontent.com$", Subject: "^https://github.com/example/fleet/.*$"},
 		{Issuer: "^https://accounts.google.com$", Subject: "^release@example.com$"},
 	}}
+	labels := config("OCIRepository", oci, "v1.2.3")
+	labels.Labels = bootstrapLabelsInput()
+	gitLabels := config("GitRepository", git, "main")
+	gitLabels.Labels = bootstrapLabelsInput()
 	return map[string]*stack.BootstrapConfig{
+		"labels":          labels,
+		"git-labels":      gitLabels,
 		"oci-tag":         config("OCIRepository", oci, "v1.2.3"),
 		"oci-default-ref": config("", oci, ""),
 		"git-branch":      config("GitRepository", git, "main"),
