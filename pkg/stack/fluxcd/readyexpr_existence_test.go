@@ -271,3 +271,36 @@ func TestReadyExprTrue_KeptDependsOnUmbrella(t *testing.T) {
 		}
 	}
 }
+
+// A Kustomization that is no member is read from every occurrence of its
+// identity: a's build applies h, depending on x, and x; another directory,
+// indexed after, holds a second h without dependencies. h still awaits x, so
+// x is no terminal leaf of a, with or without the setting.
+func TestUmbrellaTerminals_RepeatedNonMemberKeepsEveryDependency(t *testing.T) {
+	root := &layout.ManifestLayout{Name: "demo", Namespace: "clusters"}
+	apps := &layout.ManifestLayout{Name: "apps", Namespace: root.FullRepoPath()}
+	other := &layout.ManifestLayout{Name: "other", Namespace: root.FullRepoPath()}
+	root.Children = []*layout.ManifestLayout{apps, other}
+	a := handWritten("a")
+	a.Spec.Path = apps.FullRepoPath()
+	root.Resources = []client.Object{a}
+	apps.Resources = []client.Object{handWritten("h", "x"), handWritten("x")}
+	other.Resources = []client.Object{handWritten("h")}
+	root.SetFluxKustomizations([]layout.FluxKustomizationRecord{{
+		Namespace: "flux-system", Name: "a", Path: apps.FullRepoPath(),
+		SourceKind: "GitRepository", SourceName: "flux-system",
+	}})
+	want := []string{"flux-system/h"}
+	for name, read := range map[string]func(...*layout.ManifestLayout) (map[string][]string, error){
+		"UmbrellaTerminals":                   fluxstack.UmbrellaTerminals,
+		"ResourceGenerator.UmbrellaTerminals": celGateOffGenerator(true).UmbrellaTerminals,
+	} {
+		got, err := read(root)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !slices.Equal(got["flux-system/a"], want) {
+			t.Errorf("%s = %v, want flux-system/a -> %v", name, got, want)
+		}
+	}
+}
