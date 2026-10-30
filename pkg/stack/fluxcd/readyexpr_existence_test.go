@@ -156,3 +156,104 @@ func TestReadyExprTrue_UmbrellaRewrite(t *testing.T) {
 		}
 	}
 }
+
+// platform's application emits a and b, each depending on the other with
+// "true". Under UmbrellasDoNotWait platform's terminal leaves are the
+// Kustomizations it applies that no other one it applies awaits. Without the
+// setting each awaits the other's Ready, so platform has no terminal leaf
+// (ErrUmbrellaDependency). With it each waits only for the other to exist,
+// which platform's apply creates: both are terminal leaves, and the tree is
+// admitted. In the v1beta2 form the entries have no readyExpr and are refused
+// with the setting too.
+func TestReadyExprTrue_UmbrellaTerminalLeaves(t *testing.T) {
+	for _, off := range []bool{false, true} {
+		for _, placement := range integratedPlacements {
+			for _, form := range kustomizationForms {
+				t.Run(map[bool]string{false: "gate unknown", true: "gate off"}[off]+"/"+string(placement)+"/"+form, func(t *testing.T) {
+					a, b := handWritten("a", "b"), handWritten("b", "a")
+					a.Spec.DependsOn[0].ReadyExpr = "true"
+					b.Spec.DependsOn[0].ReadyExpr = "true"
+					platform := srBundle("platform", formApp("a-app", a, form), formApp("b-app", b, form))
+					g := noWaitGenerator()
+					g.AdditiveCELDependencyCheckOff = off
+					_, err := fluxstack.NewLayoutIntegrator(g).CreateLayoutWithResources(noWaitCluster(platform, true), withPlacement(nodeOnly, placement))
+					if off && form != "v1beta2" {
+						if err != nil {
+							t.Fatalf("got %v, want the tree admitted", err)
+						}
+						return
+					}
+					if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "no terminal leaf") {
+						t.Fatalf("got %v, want platform refused for having no terminal leaf", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+// platform's application emits h, depending on platform with "true". Under
+// UmbrellasDoNotWait platform does not wait, and the integration does not
+// rewrite h. Without the setting h waits for platform's Ready, which comes
+// before what platform applies is Ready: refused (ErrUmbrellaDependency).
+// With it h waits only for platform to exist, which the Flux bootstrap
+// creates and which platform's wait does not change: admitted.
+func TestReadyExprTrue_UnplacedDependsOnUmbrella(t *testing.T) {
+	for _, off := range []bool{false, true} {
+		for _, placement := range integratedPlacements {
+			for _, form := range kustomizationForms {
+				t.Run(map[bool]string{false: "gate unknown", true: "gate off"}[off]+"/"+string(placement)+"/"+form, func(t *testing.T) {
+					h := handWritten("h", "platform")
+					h.Spec.DependsOn[0].ReadyExpr = "true"
+					g := noWaitGenerator()
+					g.AdditiveCELDependencyCheckOff = off
+					_, err := fluxstack.NewLayoutIntegrator(g).CreateLayoutWithResources(noWaitCluster(srBundle("platform", formApp("platform-app", h, form)), false), withPlacement(nodeOnly, placement))
+					if off && form != "v1beta2" {
+						if err != nil {
+							t.Fatalf("got %v, want the tree admitted", err)
+						}
+						return
+					}
+					if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "did not place") {
+						t.Fatalf("got %v, want h's dependsOn on platform refused", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+// The integration keeps web in place of its own, depending on the umbrella
+// platform with "true". A kept Kustomization's dependsOn on an umbrella is not
+// rewritten, so without the setting it is refused (ErrUmbrellaDependency).
+// With it web waits only for platform to exist, which platform's wait does not
+// change: kept as written, and admitted.
+func TestReadyExprTrue_KeptDependsOnUmbrella(t *testing.T) {
+	build := func() *stack.Cluster {
+		return noWaitCluster(srBundle("platform", objApp("platform-app", handWritten("h"))), false)
+	}
+	for _, off := range []bool{false, true} {
+		for _, placement := range integratedPlacements {
+			for _, form := range keptForms {
+				t.Run(map[bool]string{false: "gate unknown", true: "gate off"}[off]+"/"+string(placement)+"/"+form, func(t *testing.T) {
+					rules := withPlacement(nodeOnly, placement)
+					ml, c := keptIn(t, build, rules, "web", form, func(k *kustv1.Kustomization) {
+						k.Spec.DependsOn = []kustv1.DependencyReference{{Name: "platform", ReadyExpr: "true"}}
+					}, nil)
+					g := noWaitGenerator()
+					g.AdditiveCELDependencyCheckOff = off
+					err := fluxstack.NewLayoutIntegrator(g).IntegrateWithLayout(ml, c, rules)
+					if off {
+						if err != nil {
+							t.Fatalf("got %v, want the tree admitted", err)
+						}
+						return
+					}
+					if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "is kept from the tree") {
+						t.Fatalf("got %v, want web's dependsOn on platform refused", err)
+					}
+				})
+			}
+		}
+	}
+}
