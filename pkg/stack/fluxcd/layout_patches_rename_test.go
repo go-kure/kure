@@ -168,7 +168,8 @@ func localKust(name, value string) string {
 // Where that patch is such a later one (at, after the entry after), the
 // refusal names it, its entry and its object (go-kure/kure#1160), with the
 // remedy of putting it before the entry where placement by object would take
-// it (reorder); where kustomize fails on the entry itself it does not.
+// it (reorder) and of one patch per object first for a patch of several
+// documents (split); where kustomize fails on the entry itself it does not.
 func TestLayoutPatches_AfterAnEntryThatIsNotPlain(t *testing.T) {
 	layouts := func(i ...int) map[string][]int {
 		out := map[string][]int{}
@@ -192,6 +193,7 @@ func TestLayoutPatches_AfterAnEntryThatIsNotPlain(t *testing.T) {
 		at, after int
 		object    string
 		reorder   bool
+		split     bool
 	}{
 		"a plain list is placed by object": {
 			patches: []stack.Patch{everyConfigMapMerged("a"), untargeted(cmDoc("pre")), untargeted(cmDoc("web-cm"))},
@@ -211,7 +213,7 @@ func TestLayoutPatches_AfterAnEntryThatIsNotPlain(t *testing.T) {
 		},
 		"two documents whose objects two builds hold: the bundle's own, whose build fails": {
 			patches: []stack.Patch{annotateEveryConfigMap(), untargeted(cmDoc("web-cm"), cmDoc("pre"))},
-			broken:  noPre, at: 1, object: "pre",
+			broken:  noPre, at: 1, object: "pre", split: true,
 		},
 		"two later patches for an object of a layout: the first is named": {
 			patches: []stack.Patch{annotateEveryConfigMap(), untargeted(cmDoc("pre")), untargeted(cmDoc("pre"))},
@@ -279,7 +281,7 @@ func TestLayoutPatches_AfterAnEntryThatIsNotPlain(t *testing.T) {
 					mustNotNameALaterPatch(t, err)
 					return
 				}
-				mustNameALaterPatch(t, err, tc.at, tc.after, tc.object, tc.reorder)
+				mustNameALaterPatchOf(t, err, tc.at, tc.after, tc.object, tc.reorder, tc.split)
 				return
 			}
 			ml := integrated(t, oneBundleCluster(patchShop(nil, tc.patches...)), perLayoutRules())

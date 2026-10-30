@@ -32,8 +32,20 @@ func laterPatchText(at, after int) string {
 // the patch before the entry exactly when reorder is set.
 func mustNameALaterPatch(t *testing.T, err error, at, after int, object string, reorder bool) {
 	t.Helper()
+	mustNameALaterPatchOf(t, err, at, after, object, reorder, false)
+}
+
+// mustNameALaterPatchOf is mustNameALaterPatch for a patch of several
+// documents where split is set: the remedy then splits the patch first, since
+// kustomize refuses a target on a patch of several documents.
+func mustNameALaterPatchOf(t *testing.T, err error, at, after int, object string, reorder, split bool) {
+	t.Helper()
+	remedy := "give the patch a target that selects the object as the entries before it leave it"
+	if split {
+		remedy = "split the patch into one patch per object, and give each a target that selects its object as the entries before it leave it"
+	}
 	mustContainAll(t, err, "validation failed for Bundle", laterPatchText(at, after),
-		fmt.Sprintf(`that build does not hold ConfigMap %q (v1, namespace "default") once the entries before the patch have run: give the patch a target that selects the object as the entries before it leave it`, object),
+		fmt.Sprintf(`that build does not hold ConfigMap %q (v1, namespace "default") once the entries before the patch have run: %s`, object, remedy),
 		`Flux Kustomization "flux-system/shop" (spec.path "`, "does not build as kustomize-controller builds it")
 	if got := strings.Contains(err.Error(), fmt.Sprintf("or put it before entry %d", after)); got != reorder {
 		t.Errorf("offers putting the patch before entry %d: %v, want %v:\n%v", after, got, reorder, err)
@@ -111,6 +123,16 @@ func TestLaterPatchRefusal_OtherFailuresKeepTheGenericRefusal(t *testing.T) {
 		t.Parallel()
 		err := refusalOf(annotateEveryConfigMap(), untargeted(cmDoc("web-cm")), renamePrevious("pre", "renamed"))
 		mustContainAll(t, err, generic)
+		mustNotNameALaterPatch(t, err)
+	})
+
+	t.Run("a later patch kustomize stops at for another reason than a missing object", func(t *testing.T) {
+		t.Parallel()
+		// The build holds web-cm; kustomize refuses the patch's strategy, which
+		// neither a target nor its place repairs.
+		invalid := untargeted("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: web-cm\n  namespace: default\n$patch: invalid\n")
+		err := refusalOf(annotateEveryConfigMap(), invalid)
+		mustContainAll(t, err, generic, "invalid")
 		mustNotNameALaterPatch(t, err)
 	})
 
