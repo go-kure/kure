@@ -1713,6 +1713,10 @@ caller that places its own records them with `SetFluxKustomizations`. A record c
 current one, both read as kure reads identities: the path cleaned, an omitted namespace `default`,
 an omitted Source namespace the Kustomization's own. A Kustomization that two trees
 both hold, and a tree whose objects cannot be read, are refused with `ErrUmbrellaTerminals`.
+It reads every `dependsOn` as the integrator does by default. For trees integrated with
+`AdditiveCELDependencyCheckOff`, call the generator's method `ResourceGenerator.UmbrellaTerminals`
+instead: it reads a `readyExpr` of exactly `"true"` as that integration did, as an existence wait
+that makes no sibling depended on, and so returns the terminal leaves that integration wrote.
 
 ### With `OmitUmbrellaChildHealthChecks`
 
