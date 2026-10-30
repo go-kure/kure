@@ -56,22 +56,25 @@ type kustomizationTree struct {
 	hostOf   map[string]*layout.ManifestLayout
 	layoutAt map[string]*layout.ManifestLayout
 	// others lists, per layout, the keys of the Flux Kustomizations it hosts
-	// that are not members, and otherDeps their spec.dependsOn as keys, read
-	// in typed form (typedKustomization) as their health checks are, so that
-	// a type embedding one, or another API version, counts the same.
-	// otherKeys lists them in depth-first layout order, and otherObjs holds
-	// each object. otherErr is the error of the first that cannot be read in
-	// typed form: UmbrellasDoNotWait and UmbrellaTerminals, which read
-	// otherDeps, refuse the tree with it; the reconcile-order check reads
-	// none and ignores it.
+	// that are not members, whose spec.dependsOn (deps) is read in typed form
+	// (typedKustomization) as their health checks are, so that a type
+	// embedding one, or another API version, counts the same. otherKeys lists
+	// them in depth-first layout order, and otherObjs holds each object.
+	// otherErr is the error of the first that cannot be read in typed form:
+	// UmbrellasDoNotWait and UmbrellaTerminals, which read their dependsOn,
+	// refuse the tree with it; the reconcile-order check reads none and
+	// ignores it.
 	others    map[*layout.ManifestLayout][]string
-	otherDeps map[string][]string
 	otherKeys []string
 	otherObjs map[string]client.Object
 	// otherSpecs holds each other Kustomization in typed form, absent for
 	// one that cannot be read so (otherErr).
 	otherSpecs map[string]*kustv1.Kustomization
 	otherErr   error
+	// existenceOnly is ResourceGenerator.AdditiveCELDependencyCheckOff, set by
+	// UmbrellasDoNotWait before it reads deps: deps then leaves out an entry
+	// that waits only for its dependency to exist.
+	existenceOnly bool
 	// dropped lists, per layout, the keys of the Flux Kustomizations it holds
 	// that a build drops as local config (builtItems), and droppedObjs each
 	// object. They are no member, other or writer here; the reconcile-order
@@ -112,7 +115,6 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 		hostOf:      map[string]*layout.ManifestLayout{},
 		layoutAt:    map[string]*layout.ManifestLayout{},
 		others:      map[*layout.ManifestLayout][]string{},
-		otherDeps:   map[string][]string{},
 		otherObjs:   map[string]client.Object{},
 		otherSpecs:  map[string]*kustv1.Kustomization{},
 		dropped:     map[*layout.ManifestLayout][]string{},
@@ -158,13 +160,6 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 				continue
 			}
 			t.otherSpecs[key] = spec
-			for _, d := range spec.Spec.DependsOn {
-				ns := d.Namespace
-				if ns == "" {
-					ns = obj.GetNamespace()
-				}
-				t.otherDeps[key] = append(t.otherDeps[key], crKey(ns, d.Name))
-			}
 		}
 		items, err := resourceItems(l)
 		if err != nil {
@@ -335,20 +330,26 @@ func (t *kustomizationTree) isUmbrella(key string) bool {
 	return t.byKey[key] != nil && len(t.children(key)) > 0
 }
 
-// deps returns the spec.dependsOn of the Kustomization with key as keys.
+// deps returns, as keys, the entries of the spec.dependsOn of the
+// Kustomization with key that wait for the dependency's Ready. With
+// existenceOnly an entry whose readyExpr is exactly "true" waits only for the
+// dependency to exist (specDeps) and is left out: it proves nothing Ready.
+// A Kustomization that is no member is read in typed form (otherSpecs).
 func (t *kustomizationTree) deps(key string) []string {
-	if k := t.byKey[key]; k != nil {
-		var out []string
-		for _, d := range k.Spec.DependsOn {
-			ns := d.Namespace
-			if ns == "" {
-				ns = k.Namespace
-			}
-			out = append(out, crKey(ns, d.Name))
-		}
-		return out
+	k := t.byKey[key]
+	if k == nil {
+		k = t.otherSpecs[key]
 	}
-	return t.otherDeps[key]
+	if k == nil {
+		return nil
+	}
+	var out []string
+	for _, d := range specDeps(k, t.existenceOnly) {
+		if !d.exist {
+			out = append(out, d.key)
+		}
+	}
+	return out
 }
 
 // mayBeKept reports whether a build that is the tree's and patches what it
@@ -390,7 +391,8 @@ func (t *kustomizationTree) keptDroppedErr() error {
 // in the form R3 writes them: C, and each Kustomization of u's subtree a
 // member's dependsOn names, stand for their terminal leaves when they are
 // umbrellas, and C is depended on when another one's dependsOn awaits all of
-// C's. So a tree the setting already rewrote has the same sets. A dependsOn
+// C's; an entry that waits only for its dependency to exist awaits nothing
+// (deps). So a tree the setting already rewrote has the same sets. A dependsOn
 // of a Kustomization that is no member is not rewritten, so its entries on
 // umbrellas await nothing. A Flux Kustomization
 // that is no member is a leaf: its own subtree is its author's. Entries are

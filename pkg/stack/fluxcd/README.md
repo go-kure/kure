@@ -552,7 +552,9 @@ operator running the default controller sets it to true. kure cannot see the gat
   (`:630-655`), the checks can admit a tree that never becomes Ready.
 - **Where it applies:** Kustomizations kure generates carry no `readyExpr`, so the field changes
   only how Kustomizations an application emits, or a caller keeps, patches or substitutes, are
-  judged, in every check: the members' check, the tree's, and the "umbrellas do not wait" rewrite.
+  judged, in every check: the members' check, the tree's, and the "umbrellas do not wait" rewrite
+  (an existence wait on an umbrella is kept as written, and one between siblings keeps neither
+  from being a terminal leaf).
   No entry point refuses it. A v1beta2 Kustomization's `dependsOn` has no `readyExpr` field, so
   it still waits for `Ready`.
 
@@ -1557,7 +1559,10 @@ instead of nested waits:
   caller's): a Kustomization health check naming an umbrella, on any Kustomization but an
   umbrella, and such a Kustomization's `dependsOn` naming one are refused with
   `ErrUmbrellaDependency` too, since the umbrella does not wait and so is Ready before what it
-  applies. The error names the terminal leaves to name instead.
+  applies. The error names the terminal leaves to name instead. Under
+  `AdditiveCELDependencyCheckOff` an entry whose `readyExpr` is exactly `"true"` waits only for
+  the dependency to exist, so it is none of these: it is kept as written, judged by no rule here,
+  and makes no Kustomization it names depended on when terminal leaves are picked.
 
 These checks read a Flux Kustomization in its context. One the integration places or keeps builds
 the directory of the tree its `spec.path` names. For any other (an application's, or the

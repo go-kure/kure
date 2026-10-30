@@ -94,6 +94,7 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	}
 	t, err := indexKustomizationTree(root, generatedMembers(p.generated))
 	if err == nil {
+		t.existenceOnly = p.gen.AdditiveCELDependencyCheckOff
 		err = t.otherErr
 	}
 	if err == nil {
@@ -161,7 +162,7 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 		if err != nil {
 			return err
 		}
-		for _, d := range append(slices.Clone(t.otherDeps[key]), checkedKustomizations(spec)...) {
+		for _, d := range append(t.deps(key), checkedKustomizations(spec)...) {
 			if terms, umbrella := terminals[d]; umbrella {
 				return errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q (spec.path %q), which this integration did not place, depends on or health-checks %q, which applies Flux Kustomizations: under UmbrellasDoNotWait %q does not wait, so it becomes Ready before what it applies, and the integration does not rewrite a Kustomization it did not place; name its terminal leaves %q instead", key, spec.Spec.Path, d, d, terms)
 			}
@@ -184,7 +185,9 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 			}
 			target := crKey(ns, d.Name)
 			terms, umbrella := terminals[target]
-			if !umbrella {
+			// An entry that waits only for the umbrella to exist
+			// (specDeps) waits for nothing its wait would cover: kept.
+			if !umbrella || (t.existenceOnly && d.ReadyExpr == "true") {
 				if !seen[target] {
 					seen[target] = true
 					deps = append(deps, d)
