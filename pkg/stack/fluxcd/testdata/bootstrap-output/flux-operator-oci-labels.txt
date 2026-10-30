@@ -1,0 +1,50 @@
+=== install bundle: 13 objects, sha256 b67e7d29d77d09f7960bfe7872dcdef9c73d12bbb79b1888354151721dc36cdf ===
+ClusterRole: 4
+ClusterRoleBinding: 1
+CustomResourceDefinition: 4
+Deployment: 1
+Namespace: 1
+Service: 1
+ServiceAccount: 1
+=== generated: 1 objects ===
+apiVersion: fluxcd.controlplane.io/v1
+kind: FluxInstance
+metadata:
+  name: flux
+  namespace: flux-system
+spec:
+  distribution:
+    registry: ghcr.io/fluxcd
+    version: v2.10.0
+  kustomize:
+    patches:
+      - patch: |
+          - op: add
+            path: /metadata/labels
+            value:
+              example.com/empty: ""
+              example.com/flag: "true"
+              example.com/tier: root
+              team: platform
+        target:
+          group: source.toolkit.fluxcd.io
+          kind: OCIRepository
+          name: flux-system
+      - patch: |
+          - op: add
+            path: /metadata/labels
+            value:
+              example.com/empty: ""
+              example.com/flag: "true"
+              example.com/tier: root
+              team: platform
+        target:
+          group: kustomize.toolkit.fluxcd.io
+          kind: Kustomization
+          name: flux-system
+  sync:
+    interval: 1h0m0s
+    kind: OCIRepository
+    path: ./demo
+    ref: v1.2.3
+    url: oci://registry.example.com/fleet

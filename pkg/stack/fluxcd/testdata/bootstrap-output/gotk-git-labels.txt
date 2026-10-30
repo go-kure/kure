@@ -1,0 +1,44 @@
+=== install bundle: 32 objects, sha256 bbb5fcac09cf2842286291292456ca47c2cd53443a8c80fa7a7629a9da99b022 ===
+ClusterRole: 3
+ClusterRoleBinding: 2
+CustomResourceDefinition: 11
+Deployment: 4
+Namespace: 1
+NetworkPolicy: 3
+ResourceQuota: 1
+Service: 3
+ServiceAccount: 4
+=== generated: 2 objects ===
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  labels:
+    example.com/empty: ""
+    example.com/flag: "true"
+    example.com/tier: root
+    team: platform
+  name: flux-system
+  namespace: flux-system
+spec:
+  interval: 1h0m0s
+  path: demo
+  prune: false
+  sourceRef:
+    kind: GitRepository
+    name: prod
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  labels:
+    example.com/empty: ""
+    example.com/flag: "true"
+    example.com/tier: root
+    team: platform
+  name: prod
+  namespace: flux-system
+spec:
+  interval: 1h0m0s
+  ref:
+    branch: main
+  url: https://git.example.com/fleet.git
