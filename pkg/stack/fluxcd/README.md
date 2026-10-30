@@ -532,7 +532,11 @@ passes:
 - a match the Flux bootstrap applies that its apply does not exclude;
 - a Kustomization on this cluster whose `spec.path` is a directory of the tree but whose build is
   not the tree's (another Source), read from its first copy an apply does not skip (one every
-  apply skips applies nothing): it may apply a match it does not exclude, read as its directory
+  apply skips applies nothing). One no result holds is read as the tree holds it, unless every
+  directory holding a copy of it is loaded by some writer's build and by the build of no other
+  Kustomization of the tree: each writer's build then deleted it, or wrote it under another name
+  read as that one, so no apply creates it (go-kure/kure#1183). Otherwise it may apply a match it
+  does not exclude, read as its directory
   holds it, or write
   the object under another identity: with `spec.components`; with `spec.patches`, when its
   directory holds any object or `configMapGenerator` entry (a patch may change a kind, or keep an

@@ -99,8 +99,15 @@ func (v *builtView) readObjects() error {
 			keys = append(keys, key)
 		}
 	}
+	loads := v.applyLoads()
 	for _, key := range keys {
 		if _, ok := v.writerSpec[key]; ok || v.isMember(key) {
+			continue
+		}
+		if len(v.occurrences[key]) == 0 && v.onlyWritersLoad(key, loads) {
+			// Every apply that loads a copy of it is a writer, and no
+			// result holds it: each build deleted it, or applies it under
+			// another identity, read as that key.
 			continue
 		}
 		k, created := v.nonWriterSpec(key)
@@ -132,9 +139,106 @@ func (v *builtView) readObjects() error {
 	return nil
 }
 
+// applyLoads is the set of layouts each kind of apply of a view loads:
+// writers, those some writer's build loads; others, those the build of some
+// Flux Kustomization that is no writer in the view loads. unreadable is true
+// when a copy of such a Kustomization cannot be read in typed form, so what
+// it loads is unknown.
+type applyLoads struct {
+	writers    map[*layout.ManifestLayout]bool
+	others     map[*layout.ManifestLayout]bool
+	unreadable bool
+}
+
+// applyLoads reads, once per readObjects, which layouts the view's applies
+// load. A writer's build is the bootstrap's (the root's build scope) or that
+// of its spec.path where that is a directory of the tree (directoryAt). For a
+// Kustomization that is no writer, every copy counts, applied or not, since
+// any of them may be the one created: each copy a result holds and the one
+// the tree holds.
+func (v *builtView) applyLoads() applyLoads {
+	loads := applyLoads{writers: map[*layout.ManifestLayout]bool{}, others: map[*layout.ManifestLayout]bool{}}
+	mark := func(into map[*layout.ManifestLayout]bool, specPath string) {
+		if l := v.t.directoryAt(specPath); l != nil {
+			for _, b := range buildScope(l) {
+				into[b] = true
+			}
+		}
+	}
+	for _, w := range v.writers {
+		if k := v.writerSpec[w]; k != nil {
+			mark(loads.writers, k.Spec.Path)
+		} else {
+			for _, b := range buildScope(v.t.root) {
+				loads.writers[b] = true
+			}
+		}
+	}
+	other := func(key string) bool {
+		_, w := v.writerSpec[key]
+		return !w
+	}
+	for key, occ := range v.occurrences {
+		if !other(key) {
+			continue
+		}
+		for _, o := range occ {
+			k, err := typedKustomization(o.obj)
+			if err != nil {
+				loads.unreadable = true
+				continue
+			}
+			mark(loads.others, k.Spec.Path)
+		}
+	}
+	for key, k := range v.t.byKey {
+		if other(key) {
+			mark(loads.others, k.Spec.Path)
+		}
+	}
+	for _, key := range v.t.otherKeys {
+		if !other(key) {
+			continue
+		}
+		if k := v.t.otherSpecs[key]; k != nil {
+			mark(loads.others, k.Spec.Path)
+		} else {
+			loads.unreadable = true
+		}
+	}
+	return loads
+}
+
+// onlyWritersLoad reports whether every apply of the tree that may create the
+// Kustomization with key, which is no writer, is a writer's (go-kure/kure#1183):
+// each layout holding a copy of it is loaded by some writer's build, and by
+// the build of no Kustomization of the tree that is no writer in this view,
+// which may apply it as the directory holds it. False when the tree holds no
+// copy of it, or a copy of a Kustomization that is no writer cannot be read.
+// An apply outside the tree is not modelled, as for a member (find) and a
+// health check's object (objectWriters), but a layout no writer loads keeps
+// its copy read as created.
+func (v *builtView) onlyWritersLoad(key string, loads applyLoads) bool {
+	if loads.unreadable {
+		return false
+	}
+	hosted := false
+	for l, keys := range v.t.others {
+		if !slices.Contains(keys, key) {
+			continue
+		}
+		if !loads.writers[l] || loads.others[l] {
+			return false
+		}
+		hosted = true
+	}
+	return hosted
+}
+
 // nonWriterSpec returns the Kustomization with key, which is no writer, in
 // typed form, as the first copy the results hold that an apply does not skip
-// (applies) holds it, else, where no result holds it, as the tree holds it;
+// (applies) holds it, else, where no result holds it, as the tree holds it
+// (readObjects reads no such key when onlyWritersLoad holds for it);
 // nil when it cannot be read so. created is false when the results hold only
 // copies their applies skip: no apply creates it, and it applies nothing.
 func (v *builtView) nonWriterSpec(key string) (k *kustv1.Kustomization, created bool) {
