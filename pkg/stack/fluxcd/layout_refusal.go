@@ -4,7 +4,6 @@ import (
 	stderrors "errors"
 	"fmt"
 	"reflect"
-	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"github.com/fluxcd/pkg/apis/kustomize"
@@ -39,11 +38,12 @@ type laterPatch struct {
 	before bool
 }
 
-// noMatch is kustomize's error for an untargeted strategic-merge patch whose
-// object its build does not hold, the patch's identity quoted (kustomize api
-// v0.21.1 internal/builtins/PatchTransformer.go:117-121), followed by its
-// lookup's error for no object found (resource/reswrangler.go, GetById).
-const noMatch = "no resource matches strategic merge patch %q: no matches for Id "
+// noMatch is kustomize's whole error for an untargeted strategic-merge patch
+// whose object its build does not hold, the patch's identity in each verb
+// (kustomize api v0.21.1 internal/builtins/PatchTransformer.go:117-121, around
+// resmap/reswrangler.go:216-224, GetById, and demandOneMatch's no-match
+// error).
+const noMatch = "no resource matches strategic merge patch %q: no matches for Id %s; failed to find unique target for patch %s"
 
 // laterPatchRefusal returns the refusal of the tree root for err, a check's
 // refusal of it. Where err is the failure of the build of a bundle's own
@@ -114,11 +114,15 @@ func (rec ownPatches) refusal(f *buildFailure, err error, build func(*kustv1.Kus
 }
 
 // missing returns the identity, among those lp names, of the object kustomize
-// says buildErr's build does not hold.
+// says buildErr's build does not hold: some error in buildErr's chain is
+// kustomize's no-match error for it, whole. Its text quoted inside another
+// error, such as an unknown patch strategy, is not that error.
 func (lp laterPatch) missing(buildErr error) (resid.ResId, bool) {
-	for _, id := range lp.ids {
-		if strings.Contains(buildErr.Error(), fmt.Sprintf(noMatch, id.String())) {
-			return id, true
+	for e := buildErr; e != nil; e = stderrors.Unwrap(e) {
+		for _, id := range lp.ids {
+			if e.Error() == fmt.Sprintf(noMatch, id.String(), id.String(), id.String()) {
+				return id, true
+			}
 		}
 	}
 	return resid.ResId{}, false

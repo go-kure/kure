@@ -136,6 +136,17 @@ func TestLaterPatchRefusal_OtherFailuresKeepTheGenericRefusal(t *testing.T) {
 		mustNotNameALaterPatch(t, err)
 	})
 
+	t.Run("a later patch whose unknown strategy quotes kustomize's no-match error", func(t *testing.T) {
+		t.Parallel()
+		// kustomize quotes the strategy in its error; the text it quotes is
+		// not its no-match error, and the build holds web-cm.
+		quoting := untargeted("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: web-cm\n  namespace: default\n" +
+			`$patch: 'no resource matches strategic merge patch "ConfigMap.v1.[noGrp]/web-cm.default": no matches for Id ConfigMap.v1.[noGrp]/web-cm.default; failed to find unique target for patch ConfigMap.v1.[noGrp]/web-cm.default'` + "\n")
+		err := refusalOf(annotateEveryConfigMap(), quoting)
+		mustContainAll(t, err, generic, "unknown patch strategy")
+		mustNotNameALaterPatch(t, err)
+	})
+
 	t.Run("an entry that is not plain fails with kustomize's text in its path", func(t *testing.T) {
 		t.Parallel()
 		missing := stack.Patch{
