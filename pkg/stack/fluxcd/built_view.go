@@ -53,7 +53,9 @@ import (
 // its identity as built. One two writers apply with different graph-relevant
 // fields (graphFields) is refused: they keep overwriting each other. A copy
 // an apply skips is neither compared nor read (applies). One no result holds
-// is read as the tree holds it. An object a health check names is looked up
+// is read as the tree holds it, unless only writers' builds load a copy of it
+// (onlyWritersLoad): each of them then deleted it or wrote it under another
+// identity, so no apply creates it. An object a health check names is looked up
 // in the results too, for each of its writers (objectWriters).
 type builtView struct {
 	t *kustomizationTree
