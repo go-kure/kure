@@ -50,10 +50,12 @@ var (
 // only when readsLocalBuild says so; else its build applies nothing of the
 // tree (go-kure/kure#1062).
 type kustomizationTree struct {
-	root     *layout.ManifestLayout
-	kusts    []*kustv1.Kustomization
-	byKey    map[string]*kustv1.Kustomization
-	hostOf   map[string]*layout.ManifestLayout
+	root   *layout.ManifestLayout
+	kusts  []*kustv1.Kustomization
+	byKey  map[string]*kustv1.Kustomization
+	hostOf map[string]*layout.ManifestLayout
+	// layoutAt maps the path of every layout that has a directory
+	// (hasDirectory) to that layout.
 	layoutAt map[string]*layout.ManifestLayout
 	// others lists, per layout, the keys of the Flux Kustomizations it hosts
 	// that are not members, and otherDeps their spec.dependsOn, every
@@ -151,7 +153,9 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 	}
 	var index func(l *layout.ManifestLayout) error
 	index = func(l *layout.ManifestLayout) error {
-		t.layoutAt[path.Clean(l.FullRepoPath())] = l
+		if hasDirectory(l, root) {
+			t.layoutAt[path.Clean(l.FullRepoPath())] = l
+		}
 		own, err := members(l)
 		if err != nil {
 			return err
