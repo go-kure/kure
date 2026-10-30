@@ -74,6 +74,13 @@ type kustomizationTree struct {
 	// one that cannot be read so (otherErr).
 	otherSpecs map[string]*kustv1.Kustomization
 	otherErr   error
+	// copies holds, per key, every copy of a Flux Kustomization the tree
+	// holds, member or other, that reads in typed form, and copyErr the keys
+	// of which a copy does not. otherSpecs and byKey keep one copy per key;
+	// the reconcile-order check reads every copy's spec.path
+	// (builtView.applyLoads).
+	copies  map[string][]*kustv1.Kustomization
+	copyErr map[string]bool
 	// existenceOnly is ResourceGenerator.AdditiveCELDependencyCheckOff, set by
 	// UmbrellasDoNotWait and ResourceGenerator.UmbrellaTerminals before they
 	// read deps (readExistence): deps then leaves out an entry that waits only
@@ -99,6 +106,16 @@ type kustomizationTree struct {
 	fromRoot       map[*layout.ManifestLayout]bool
 }
 
+// addCopy records a copy of the Flux Kustomization key the tree holds: spec
+// when it reads in typed form, else that one of key's copies does not.
+func (t *kustomizationTree) addCopy(key string, spec *kustv1.Kustomization, err error) {
+	if err != nil {
+		t.copyErr[key] = true
+		return
+	}
+	t.copies[key] = append(t.copies[key], spec)
+}
+
 // memberFilter returns the Flux Kustomizations of l that are members of the
 // index, in typed form. Every other Flux Kustomization of l is indexed as a
 // leaf (kustomizationTree.others).
@@ -118,6 +135,8 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 	t := &kustomizationTree{
 		root:        root,
 		byKey:       map[string]*kustv1.Kustomization{},
+		copies:      map[string][]*kustv1.Kustomization{},
+		copyErr:     map[string]bool{},
 		hostOf:      map[string]*layout.ManifestLayout{},
 		layoutAt:    map[string]*layout.ManifestLayout{},
 		others:      map[*layout.ManifestLayout][]string{},
@@ -141,6 +160,7 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 			key := crKey(k.Namespace, k.Name)
 			t.kusts = append(t.kusts, k)
 			t.byKey[key] = k
+			t.copies[key] = append(t.copies[key], k)
 			t.hostOf[key] = l
 			t.patched = t.patched || patchesBuild(k)
 		}
@@ -159,6 +179,7 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 				// cannot be read in typed form may carry one.
 				spec, err := typedKustomization(obj)
 				t.patched = t.patched || err != nil || patchesBuild(spec)
+				t.addCopy(key, spec, err)
 				continue
 			}
 			t.others[l] = append(t.others[l], key)
@@ -166,6 +187,7 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 			t.otherObjs[key] = obj
 			t.hostOf[key] = l
 			spec, err := typedKustomization(obj)
+			t.addCopy(key, spec, err)
 			if err != nil {
 				if t.otherErr == nil {
 					t.otherErr = err

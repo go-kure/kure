@@ -154,8 +154,8 @@ type applyLoads struct {
 // load. A writer's build is the bootstrap's (the root's build scope) or that
 // of its spec.path where that is a directory of the tree (directoryAt). For a
 // Kustomization that is no writer, every copy counts, applied or not, since
-// any of them may be the one created: each copy a result holds and the one
-// the tree holds.
+// any of them may be the one created: each copy a result holds and each the
+// tree holds (kustomizationTree.copies).
 func (v *builtView) applyLoads() applyLoads {
 	loads := applyLoads{writers: map[*layout.ManifestLayout]bool{}, others: map[*layout.ManifestLayout]bool{}}
 	mark := func(into map[*layout.ManifestLayout]bool, specPath string) {
@@ -191,18 +191,15 @@ func (v *builtView) applyLoads() applyLoads {
 			mark(loads.others, k.Spec.Path)
 		}
 	}
-	for key, k := range v.t.byKey {
+	for key, ks := range v.t.copies {
 		if other(key) {
-			mark(loads.others, k.Spec.Path)
+			for _, k := range ks {
+				mark(loads.others, k.Spec.Path)
+			}
 		}
 	}
-	for _, key := range v.t.otherKeys {
-		if !other(key) {
-			continue
-		}
-		if k := v.t.otherSpecs[key]; k != nil {
-			mark(loads.others, k.Spec.Path)
-		} else {
+	for key, bad := range v.t.copyErr {
+		if bad && other(key) {
 			loads.unreadable = true
 		}
 	}
