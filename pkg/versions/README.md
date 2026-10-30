@@ -100,6 +100,13 @@ in its own `go.mod` (external-secrets v2.14.0 and `k8s.io/kube-openapi`; see
 `docs/dependency-updates.md`). The widening's note in `docs/compatibility.md` records such a
 requirement.
 
+A widening can also change the Go types a caller writes to. kure's builders hand back upstream
+structs, and a module that requires kure builds against at least the dependency version kure
+pins, so a release that removes or retypes a field breaks a caller's assignment to it even when
+kure's own code uses none of them (gateway-api v1.7.0 reshapes the experimental-channel
+`SessionPersistence` and retypes `ForwardBodyConfig.MaxSize`). The widening's note in
+`docs/compatibility.md` names such fields.
+
 An MVS-floor entry (`FloorModule != ""`) moves on a different trigger: its pin tracks
 whichever version `floor_module` itself currently requires, tag or pseudo-version, whether
 or not that's kure's own dependency bump (see `docs/dependency-updates.md`'s "MVS-floor
