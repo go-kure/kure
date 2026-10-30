@@ -2297,9 +2297,18 @@ func sameObject(a, b client.Object) bool {
 
 // comparableContent is obj's unstructured content as sameObject compares it.
 // It converts a copy: for an unstructured object the converter returns the
-// object's own map, which the normalisation below must not touch.
+// object's own map, which the normalisation below must not touch. An
+// unstructured object is copied through its JSON (writtenContent), not with
+// DeepCopyObject: a caller may build its map with a plain int, on which that
+// copy panics (go-kure/kure#1199).
 func comparableContent(obj client.Object) (map[string]any, error) {
-	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj.DeepCopyObject())
+	var content map[string]any
+	var err error
+	if _, ok := obj.(*unstructured.Unstructured); ok {
+		content, err = writtenContent(obj)
+	} else {
+		content, err = runtime.DefaultUnstructuredConverter.ToUnstructured(obj.DeepCopyObject())
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "convert to unstructured")
 	}

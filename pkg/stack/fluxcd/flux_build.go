@@ -675,10 +675,21 @@ func jsonContent(res *resource.Resource) (map[string]any, error) {
 }
 
 // writtenContent returns obj as the writers write it: an unstructured
-// object's map, a typed one's JSON. Both are copies.
+// object's map, a typed one's JSON. Both are copies. The map is copied
+// through its JSON, not with runtime.DeepCopyJSON: a caller may build an
+// unstructured object, or a List's item, with any Go value json marshals,
+// a plain int say, on which DeepCopyJSON panics (go-kure/kure#1199).
 func writtenContent(obj client.Object) (map[string]any, error) {
 	if u, ok := obj.(*unstructured.Unstructured); ok {
-		return runtime.DeepCopyJSON(u.Object), nil
+		data, err := json.Marshal(u.Object)
+		if err != nil {
+			return nil, errors.Wrapf(err, "marshal %s %q", u.GetKind(), u.GetName())
+		}
+		var content map[string]any
+		if err := utiljson.Unmarshal(data, &content); err != nil {
+			return nil, errors.Wrapf(err, "decode %s %q", u.GetKind(), u.GetName())
+		}
+		return content, nil
 	}
 	data, err := json.Marshal(obj)
 	if err != nil {
