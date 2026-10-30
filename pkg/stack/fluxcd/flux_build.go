@@ -156,7 +156,7 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 		if res.GetName() == "" || res.GetKind() == "" || res.GetApiVersion() == "" {
 			return nil, errors.Errorf("failed to decode Kubernetes apiVersion, kind and name from: %v", res.String())
 		}
-		m, err := res.Map()
+		m, err := jsonContent(res)
 		if err != nil {
 			return nil, errors.Wrap(err, "read a built object")
 		}
@@ -346,7 +346,7 @@ func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substitut
 				return nil, err
 			}
 		}
-		m, err := res.Map()
+		m, err := jsonContent(res)
 		if err != nil {
 			return nil, errors.Wrap(err, "read a substituted object")
 		}
@@ -655,6 +655,23 @@ func writtenObject(obj client.Object) (client.Object, error) {
 		return nil, errors.Wrapf(err, "read %s %q as written", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
 	}
 	return &unstructured.Unstructured{Object: content}, nil
+}
+
+// jsonContent returns res's content as JSON decodes it, a number as an int64
+// or a float64, the form every unstructured object kure reads holds. res.Map()
+// is not that form: the YAML decoder behind it holds a number as a Go int,
+// on which runtime.DeepCopyJSON, and so writtenContent, panics
+// (go-kure/kure#1199).
+func jsonContent(res *resource.Resource) (map[string]any, error) {
+	text, err := res.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	var content map[string]any
+	if err := utiljson.Unmarshal(text, &content); err != nil {
+		return nil, err
+	}
+	return content, nil
 }
 
 // writtenContent returns obj as the writers write it: an unstructured
