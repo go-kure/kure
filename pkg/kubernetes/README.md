@@ -474,9 +474,9 @@ Status types are not entered. A kind's status is reported by the cluster and nev
 constructed by a caller, so a gate there says nothing about whether a manifest kure
 builds applies as written — and that is where most of the markers are.
 
-Against the current pins, the walk finds 129 maturity-carrying construction-side
+Against the current pins, the walk finds 131 maturity-carrying construction-side
 fields, of which 43 require a feature gate (42 in `k8s.io/api`, one in
-`k8s.io/apiextensions-apiserver`); 25 are documented alpha, 14 beta and 67
+`k8s.io/apiextensions-apiserver`); 25 are documented alpha, 14 beta and 69
 deprecated, the remaining 23 are gated without a documented stability claim, and 97
 distinct status types are skipped. No CRD module kure pins uses `+featureGate` at
 all. These numbers move with the pins and are not asserted by any test; the pins
