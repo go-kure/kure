@@ -711,8 +711,8 @@ func (bg *BootstrapGenerator) syncPrunePatch(config *stack.BootstrapConfig, prun
 //     transformers: entries after its builtin patches, so the transformer has
 //     the last word (TestBootstrapLabels_OperatorTransformerRunsLast).
 //   - fluxcd.controlplane.io/name and namespace: flux-operator's owner labels.
-//     After the build its FluxInstance reconciler calls SetOwnerLabels on every
-//     object it applies (internal/controller/fluxinstance_controller.go:484-488,
+//     After the build its FluxInstance reconciler has the ssa resource manager
+//     set owner labels on every object it applies (internal/controller/fluxinstance_controller.go:484-488,
 //     group fluxcd.controlplane.io from api/v1/groupversion_info.go:17), which
 //     sets <group>/name and <group>/namespace unconditionally (fluxcd/pkg/ssa
 //     v0.83.0 manager.go:66-77) and selects stale objects for garbage
@@ -802,8 +802,9 @@ func bootstrapLabels(config *stack.BootstrapConfig) map[string]string {
 // for labels, and the operator's sync template writes none
 // (internal/builder/templates.go:425-480), so each patch adds the whole map;
 // the operator's LabelTransformer, and after the build its owner labels, then
-// add their own keys to it (controllerLabelKeys). The body is written with pkg/io, which keeps every
-// string as written: a value such as "true" or "1.0" stays a string.
+// add their own keys to it (controllerLabelKeys). The body is written with
+// pkg/io, which keeps every string as written: a value such as "true" or
+// "1.0" stays a string.
 func (bg *BootstrapGenerator) syncLabelsPatches(config *stack.BootstrapConfig) ([]kustomize.Patch, error) {
 	var body kio.Buffer
 	err := body.Marshal([]map[string]any{{
