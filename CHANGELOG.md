@@ -16,6 +16,24 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-beta.24] - 2026-10-30
+
+### Documentation
+
+- State that a caller's unstructured object holds JSON-typed values
+- State in the Flux workflow guide how a built number is read
+
+### Fixed
+
+- Read no apply in a non-member every writer's build deletes
+- Read every tree copy of a Kustomization that is no writer
+- Read a built object holding an integer as JSON
+- Copy a caller's unstructured object through its JSON
+
+### Maintenance
+
+- Update go-kure/.github digest to 3acdfd8
+
 ## [0.2.0-beta.23] - 2026-10-30
 
 ### Added
