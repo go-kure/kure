@@ -56,15 +56,18 @@ type kustomizationTree struct {
 	hostOf   map[string]*layout.ManifestLayout
 	layoutAt map[string]*layout.ManifestLayout
 	// others lists, per layout, the keys of the Flux Kustomizations it hosts
-	// that are not members, whose spec.dependsOn (deps) is read in typed form
+	// that are not members, and otherDeps their spec.dependsOn, every
+	// occurrence of a key's entries together, read in typed form
 	// (typedKustomization) as their health checks are, so that a type
-	// embedding one, or another API version, counts the same. otherKeys lists
-	// them in depth-first layout order, and otherObjs holds each object.
-	// otherErr is the error of the first that cannot be read in typed form:
-	// UmbrellasDoNotWait and UmbrellaTerminals, which read their dependsOn,
-	// refuse the tree with it; the reconcile-order check reads none and
-	// ignores it.
+	// embedding one, or another API version, counts the same; an entry's exist
+	// marks a readyExpr of exactly "true", which deps reads with
+	// existenceOnly. otherKeys lists them in depth-first layout order, and
+	// otherObjs holds each object. otherErr is the error of the first that
+	// cannot be read in typed form: UmbrellasDoNotWait and UmbrellaTerminals,
+	// which read otherDeps, refuse the tree with it; the reconcile-order check
+	// reads none and ignores it.
 	others    map[*layout.ManifestLayout][]string
+	otherDeps map[string][]depRef
 	otherKeys []string
 	otherObjs map[string]client.Object
 	// otherSpecs holds each other Kustomization in typed form, absent for
@@ -116,6 +119,7 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 		hostOf:      map[string]*layout.ManifestLayout{},
 		layoutAt:    map[string]*layout.ManifestLayout{},
 		others:      map[*layout.ManifestLayout][]string{},
+		otherDeps:   map[string][]depRef{},
 		otherObjs:   map[string]client.Object{},
 		otherSpecs:  map[string]*kustv1.Kustomization{},
 		dropped:     map[*layout.ManifestLayout][]string{},
@@ -161,6 +165,7 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 				continue
 			}
 			t.otherSpecs[key] = spec
+			t.otherDeps[key] = append(t.otherDeps[key], specDeps(spec, true)...)
 		}
 		items, err := resourceItems(l)
 		if err != nil {
@@ -335,18 +340,16 @@ func (t *kustomizationTree) isUmbrella(key string) bool {
 // Kustomization with key that wait for the dependency's Ready. With
 // existenceOnly an entry whose readyExpr is exactly "true" waits only for the
 // dependency to exist (specDeps) and is left out: it proves nothing Ready.
-// A Kustomization that is no member is read in typed form (otherSpecs).
+// A Kustomization that is no member is read from every occurrence of its key
+// (otherDeps).
 func (t *kustomizationTree) deps(key string) []string {
-	k := t.byKey[key]
-	if k == nil {
-		k = t.otherSpecs[key]
-	}
-	if k == nil {
-		return nil
+	refs := t.otherDeps[key]
+	if k := t.byKey[key]; k != nil {
+		refs = specDeps(k, true)
 	}
 	var out []string
-	for _, d := range specDeps(k, t.existenceOnly) {
-		if !d.exist {
+	for _, d := range refs {
+		if !(t.existenceOnly && d.exist) {
 			out = append(out, d.key)
 		}
 	}
