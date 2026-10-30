@@ -543,7 +543,9 @@ func TestBuiltObjects_GeneratedNameIsRead(t *testing.T) {
 // holds it or built for its target namespace, creds is the literal Secret
 // b-longer writes, and the cycle is refused. So it is when a
 // configMapGenerator only reads the component's file as data, also when it
-// reads every kustomization file name of that directory as data.
+// reads every kustomization file name of that directory as data (each one a
+// kustomization kure parses: a file of such a name that does not parse makes
+// the build not read, go-kure/kure#1168).
 func TestBuiltObjects_MergingBuildIsNotRead(t *testing.T) {
 	creds := unstructuredObj("v1", "Secret", "default", "creds")
 	creds.Object["data"] = map[string]any{"base": "dg=="}
@@ -596,7 +598,7 @@ func TestBuiltObjects_MergingBuildIsNotRead(t *testing.T) {
 							files := []string{"component/kustomization.yaml"}
 							if tc.everyName {
 								for _, n := range []string{"component/kustomization.yml", "component/Kustomization"} {
-									l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: n, Content: []byte("x: y\n")})
+									l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: n, Content: []byte("apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\n")})
 									files = append(files, n)
 								}
 							}
