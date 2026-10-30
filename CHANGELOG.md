@@ -16,6 +16,84 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-beta.23] - 2026-10-30
+
+### Added
+
+- Add BootstrapConfig.Labels for the bootstrap source and Kustomization
+- Read a readyExpr of "true" as an existence wait when the CEL gate is off
+- Add ResourceGenerator.UmbrellaTerminals for the CEL-gate setting
+
+### Build
+
+- Update module sigs.k8s.io/gateway-api to v1.7.0
+- Support gateway-api 1.7
+
+### Documentation
+
+- A widening can break a caller's field assignments
+- Complete the gateway-api 1.7 assessment
+- State gateway-api 1.7 retry and precedence semantics
+- Gateway-api 1.7 status-code retries and session names
+- Gateway-api 1.7 cookie defaults and helper reach
+- Gateway-api 1.7 listener filter, routability and cookie support rules
+- Complete the gateway-api 1.7 compatibility note
+- Describe the reconcile-order checks as reading each build
+- Describe the owner-label call without naming the upstream function
+- Cover BootstrapConfig.Labels in the Flux workflow guide and domain model
+- Name a rejected kustomization file among builds not read
+- Name the builds an integration does not read
+
+### Fixed
+
+- Judge the reconcile order on what each Kustomization builds
+- Find a health check's writer in what each build applies
+- Follow a Kustomization the integration did not place without the setting
+- Read each Kustomization as its writer's apply makes it
+- A copy an apply skips neither creates nor builds
+- Compare a member built from the tree's spec with its applied copy
+- Build without Flux's global schema reset
+- Parse kustomize's schema once and refuse one kure cannot build with
+- Parse kustomize's schema again after a reset
+- Read each member and non-member from the copy applied
+- Read skips as written under a substituteFrom
+- Read merged Secrets only from files a build reads
+- Count merges only from files kustomize loads as kustomizations
+- Read held objects as written and merged Secrets as built
+- Read merge marks and hashes as kustomize makes them
+- Refuse a probed build whose transformers copy values
+- Fail closed on a merge the probe cannot model
+- Read a merging build only from modelled kustomization fields
+- Refuse a probe build that reads a merge file other than once
+- Leave a merging build with a patch unread
+- Leave a build that merges into a Secret unread
+- Refuse the labels the Flux controllers stamp on the bootstrap objects
+- Read an existence wait as such in the umbrellas-do-not-wait rewrite
+- Read a repeated non-member's dependsOn from every occurrence again
+- Read every entry as a Ready wait in a patched tree's umbrella pass
+- Count a patch on another copy of a member in the umbrella pass
+- Name the later untargeted patch that fails the bundle's own build
+- Name a later patch only for a missing object; split a patch of several first
+- Match kustomize's no-match error whole, not quoted in another
+- A copy an apply excludes no longer makes a writer uncertain
+- Never fetch a remote reference during an integration
+- Refuse a health check every one of whose writers waits for it
+- Read a bootstrap-applied Kustomization that creates a member
+- Read no file-only layout as a bootstrap creator's directory
+
+### Maintenance
+
+- Update go-kure/.github digest to 96bed39
+
+### Testing
+
+- A Kustomization that is no member can be the certain writer
+- Another Source's transform leaves a health check's writer uncertain
+- A defaulted variable in a namespace finds its writer
+- Cover kustomizeschema in the test binary's own process
+- Describe patches as unmodelled in the probe test comments
+- Give the data files named like a kustomization a content kure parses
+
 ## [0.2.0-beta.22] - 2026-10-29
 
 ### Build
