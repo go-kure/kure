@@ -1707,10 +1707,12 @@ They read each build as kustomize-controller builds it (see [One Kustomization p
 directory](#one-kustomization-per-directory)): a generated Kustomization's patches rewriting a
 child Kustomization's spec, `spec.postBuild` substitution and a build's own transforms are applied
 before anything is read, and a Kustomization a patched build keeps as local config is read as that
-build makes it, its own `wait` included. Each object is read as its JSON, so a number in it, a
-port say, is read like any other field: as a build holds it, before and after substitution, and
-as a caller builds it in Go, a `List` item included, whatever Go type holds the number
-(go-kure/kure#1199). What they still leave out:
+build makes it, its own `wait` included. A built object is read as its JSON, so a number in it,
+a port say, is read like any other field, before and after substitution (go-kure/kure#1199). An
+unstructured object a caller builds in Go must hold JSON-typed values, as apimachinery's
+`Unstructured` requires: an `int64`, not an `int`. kure copies a `List` item and a compared
+Source through its JSON, but other reads still panic on such a value (go-kure/kure#1201). What
+they still leave out:
 
 - **An object a build moves.** A health check on an object's name as its file writes it, where a
   `spec.targetNamespace` or a name prefix or suffix applies it under another, names an object that
