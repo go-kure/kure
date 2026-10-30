@@ -76,9 +76,11 @@ type kustomizationTree struct {
 	otherErr   error
 	// existenceOnly is ResourceGenerator.AdditiveCELDependencyCheckOff, set by
 	// UmbrellasDoNotWait and ResourceGenerator.UmbrellaTerminals before they
-	// read deps: deps then leaves out an entry that waits only for its
-	// dependency to exist.
+	// read deps (readExistence): deps then leaves out an entry that waits only
+	// for its dependency to exist. patched records that a Flux Kustomization
+	// the tree holds, at any occurrence, patches what it builds (patchesBuild).
 	existenceOnly bool
+	patched       bool
 	// dropped lists, per layout, the keys of the Flux Kustomizations it holds
 	// that a build drops as local config (builtItems), and droppedObjs each
 	// object. They are no member, other or writer here; the reconcile-order
@@ -140,6 +142,7 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 			t.kusts = append(t.kusts, k)
 			t.byKey[key] = k
 			t.hostOf[key] = l
+			t.patched = t.patched || patchesBuild(k)
 		}
 		objs, err := builtItems(l)
 		if err != nil {
@@ -166,6 +169,7 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 			}
 			t.otherSpecs[key] = spec
 			t.otherDeps[key] = append(t.otherDeps[key], specDeps(spec, true)...)
+			t.patched = t.patched || patchesBuild(spec)
 		}
 		items, err := resourceItems(l)
 		if err != nil {
@@ -354,6 +358,18 @@ func (t *kustomizationTree) deps(key string) []string {
 		}
 	}
 	return out
+}
+
+// readExistence sets existenceOnly to on, unless the tree holds a Flux
+// Kustomization that patches what it builds (patched). The tree reads every
+// spec as it holds it, and a patch may rewrite a readyExpr held as "true"
+// into one that waits for Ready: read as an existence wait, that entry would
+// be admitted where its apply waits for Ready. With such a patch every entry
+// is read as waiting for Ready, as without the setting, which may refuse an
+// entry the patch makes an existence wait, and admits none the default
+// refuses.
+func (t *kustomizationTree) readExistence(on bool) {
+	t.existenceOnly = on && !t.patched
 }
 
 // mayBeKept reports whether a build that is the tree's and patches what it
@@ -549,7 +565,9 @@ func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, er
 // AdditiveCELDependencyCheckOff, an entry whose readyExpr is exactly "true"
 // waits only for its dependency to exist, so it makes no Kustomization it
 // names depended on, and the terminal leaves are those g's integration
-// writes.
+// writes. As there, a tree holding a Flux Kustomization that sets
+// spec.patches or spec.components is read as without the setting: a patch
+// may rewrite a readyExpr, and the tree is read as held.
 func (g *ResourceGenerator) UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, error) {
 	return umbrellaTerminals(g.AdditiveCELDependencyCheckOff, roots)
 }
@@ -565,7 +583,7 @@ func umbrellaTerminals(existenceOnly bool, roots []*layout.ManifestLayout) (map[
 		}
 		t, err := indexKustomizationTree(root, recordedMembers)
 		if err == nil {
-			t.existenceOnly = existenceOnly
+			t.readExistence(existenceOnly)
 			err = t.otherErr
 		}
 		if err == nil {

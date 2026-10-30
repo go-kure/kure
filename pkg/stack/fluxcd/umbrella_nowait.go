@@ -94,7 +94,7 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	}
 	t, err := indexKustomizationTree(root, generatedMembers(p.generated))
 	if err == nil {
-		t.existenceOnly = p.gen.AdditiveCELDependencyCheckOff
+		t.readExistence(p.gen.AdditiveCELDependencyCheckOff)
 		err = t.otherErr
 	}
 	if err == nil {

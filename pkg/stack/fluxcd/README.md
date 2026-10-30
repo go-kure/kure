@@ -554,7 +554,10 @@ operator running the default controller sets it to true. kure cannot see the gat
   only how Kustomizations an application emits, or a caller keeps, patches or substitutes, are
   judged, in every check: the members' check, the tree's, and the "umbrellas do not wait" rewrite
   (an existence wait on an umbrella is kept as written, and one between siblings keeps neither
-  from being a terminal leaf).
+  from being a terminal leaf). That rewrite reads each Kustomization as the tree holds it, not as
+  a patch applies it: when a Flux Kustomization of the tree sets `spec.patches` or
+  `spec.components`, which may rewrite a `readyExpr`, it reads every entry as waiting for
+  `Ready`, as without the setting, and so does `ResourceGenerator.UmbrellaTerminals`.
   No entry point refuses it. A v1beta2 Kustomization's `dependsOn` has no `readyExpr` field, so
   it still waits for `Ready`.
 
@@ -1562,7 +1565,10 @@ instead of nested waits:
   applies. The error names the terminal leaves to name instead. Under
   `AdditiveCELDependencyCheckOff` an entry whose `readyExpr` is exactly `"true"` waits only for
   the dependency to exist, so it is none of these: it is kept as written, judged by no rule here,
-  and makes no Kustomization it names depended on when terminal leaves are picked.
+  and makes no Kustomization it names depended on when terminal leaves are picked. These rules
+  read each Kustomization as the tree holds it, so once a Flux Kustomization of the tree sets
+  `spec.patches` or `spec.components`, which may rewrite such an expression, they read every entry
+  as waiting for `Ready`, as without the setting.
 
 These checks read a Flux Kustomization in its context. One the integration places or keeps builds
 the directory of the tree its `spec.path` names. For any other (an application's, or the
@@ -1671,7 +1677,8 @@ both hold, and a tree whose objects cannot be read, are refused with `ErrUmbrell
 It reads every `dependsOn` as the integrator does by default. For trees integrated with
 `AdditiveCELDependencyCheckOff`, call the generator's method `ResourceGenerator.UmbrellaTerminals`
 instead: it reads a `readyExpr` of exactly `"true"` as that integration did, as an existence wait
-that makes no sibling depended on, and so returns the terminal leaves that integration wrote.
+that makes no sibling depended on (in a tree with no Kustomization setting `spec.patches` or
+`spec.components`), and so returns the terminal leaves that integration wrote.
 
 ### With `OmitUmbrellaChildHealthChecks`
 

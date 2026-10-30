@@ -304,3 +304,77 @@ func TestUmbrellaTerminals_RepeatedNonMemberKeepsEveryDependency(t *testing.T) {
 		}
 	}
 }
+
+// toReadyWait rewrites the readyExpr of the first dependsOn entry of the Flux
+// Kustomization named name into one that waits for the dependency's Ready.
+func toReadyWait(name string) kustomize.Patch {
+	return kustomize.Patch{
+		Patch:  "- op: replace\n  path: /spec/dependsOn/0/readyExpr\n  value: \"dep.status.conditions.exists(c, c.type == 'Ready' && c.status == 'True')\"\n",
+		Target: &kustomize.Selector{Kind: "Kustomization", Name: name},
+	}
+}
+
+// a's build applies h, depending on x with "true", and x. With the setting
+// h waits only for x to exist, so x is a terminal leaf of a. A patch may
+// rewrite that readyExpr into a Ready wait, and the umbrella pass reads the
+// specs as the tree holds them: once a Kustomization of the tree patches its
+// build, every entry is read as waiting for Ready, and x is no terminal leaf.
+func TestUmbrellaTerminals_PatchedTreeReadsEveryEntryAsReady(t *testing.T) {
+	for _, patched := range []bool{false, true} {
+		root := &layout.ManifestLayout{Name: "demo", Namespace: "clusters"}
+		apps := &layout.ManifestLayout{Name: "apps", Namespace: root.FullRepoPath()}
+		root.Children = []*layout.ManifestLayout{apps}
+		a := handWritten("a")
+		a.Spec.Path = apps.FullRepoPath()
+		if patched {
+			a.Spec.Patches = []kustomize.Patch{toReadyWait("h")}
+		}
+		root.Resources = []client.Object{a}
+		h := handWritten("h", "x")
+		h.Spec.DependsOn[0].ReadyExpr = "true"
+		apps.Resources = []client.Object{h, handWritten("x")}
+		root.SetFluxKustomizations([]layout.FluxKustomizationRecord{{
+			Namespace: "flux-system", Name: "a", Path: apps.FullRepoPath(),
+			SourceKind: "GitRepository", SourceName: "flux-system",
+		}})
+		want := []string{"flux-system/h"}
+		if !patched {
+			want = []string{"flux-system/h", "flux-system/x"}
+		}
+		got, err := celGateOffGenerator(true).UmbrellaTerminals(root)
+		if err != nil {
+			t.Fatalf("patched=%v: %v", patched, err)
+		}
+		if !slices.Equal(got["flux-system/a"], want) {
+			t.Errorf("patched=%v: got %v, want flux-system/a -> %v", patched, got, want)
+		}
+	}
+}
+
+// The integration keeps web in place of its own, depending on the umbrella
+// platform with "true", and patching its build so that its own dependsOn
+// waits for Ready. The umbrella pass reads web as the tree holds it, not as
+// the patch applies it, so with the setting too it reads the entry as a Ready
+// wait on an umbrella, which is not rewritten: refused (ErrUmbrellaDependency).
+func TestReadyExprTrue_PatchedKeptDependsOnUmbrella(t *testing.T) {
+	build := func() *stack.Cluster {
+		return noWaitCluster(srBundle("platform", objApp("platform-app", handWritten("h"))), false)
+	}
+	for _, placement := range integratedPlacements {
+		for _, form := range keptForms {
+			t.Run(string(placement)+"/"+form, func(t *testing.T) {
+				rules := withPlacement(nodeOnly, placement)
+				ml, c := keptIn(t, build, rules, "web", form, func(k *kustv1.Kustomization) {
+					k.Spec.DependsOn = []kustv1.DependencyReference{{Name: "platform", ReadyExpr: "true"}}
+					k.Spec.Patches = []kustomize.Patch{toReadyWait("web")}
+				}, nil)
+				g := noWaitGenerator()
+				g.AdditiveCELDependencyCheckOff = true
+				err := fluxstack.NewLayoutIntegrator(g).IntegrateWithLayout(ml, c, rules)
+				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "is kept from the tree") {
+					t.Fatalf("got %v, want web's dependsOn on platform refused", err)
+				}
+			})
+		}
+	}
+}
