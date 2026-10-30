@@ -118,7 +118,9 @@ func (v *builtView) readObjects() error {
 			v.sources = append(v.sources, objectSource{key: key, unreadable: true})
 			continue
 		}
-		l := v.t.layoutAt[path.Clean(k.Spec.Path)]
+		// A spec.path that is no directory of the tree, a single-file
+		// layout's say, builds nothing of it (go-kure/kure#1197).
+		l := v.t.directoryAt(k.Spec.Path)
 		if k.Spec.KubeConfig != nil || l == nil {
 			continue
 		}

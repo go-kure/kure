@@ -378,15 +378,16 @@ func (f *buildFailure) Unwrap() error { return f.err }
 
 // add runs the build of the writer with key, from its spec k (nil for the
 // bootstrap), and records its result. A Kustomization whose spec.path is no
-// directory of the tree builds nothing of it, and is no writer. A build that
-// fails is refused with a buildFailure.
+// directory of the tree (directoryAt: an AppFileSingle layout other than the
+// root is none) builds nothing of it, and is no writer (go-kure/kure#1197). A
+// build that fails is refused with a buildFailure.
 func (v *builtView) add(builds *treeBuilds, key string, k *kustv1.Kustomization) error {
 	var objs []client.Object
 	var err error
 	switch {
 	case k == nil:
 		objs, err = heldBuild(v.t.root)
-	case v.t.layoutAt[path.Clean(k.Spec.Path)] == nil:
+	case v.t.directoryAt(k.Spec.Path) == nil:
 		return nil
 	case transformsBuild(k):
 		// A tree the writers refuse is no build's failure: nothing applies it.
