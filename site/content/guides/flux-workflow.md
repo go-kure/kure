@@ -926,7 +926,12 @@ the [Flux Engine reference](/api-reference/flux-engine/)).
 With or without the setting, every integration also judges the order of the
 Kustomizations of the tree, on each later integration too, each read as
 kustomize-controller builds its writer: patches, components, name prefix and
-suffix, target namespace and postBuild substitution applied. A build that
+suffix, target namespace and postBuild substitution applied. A built object is
+read as its JSON, so a number in it, a port say, is read like any other field,
+before and after substitution. An unstructured object you build in Go must hold
+JSON-typed values, as apimachinery's `Unstructured` requires: an `int64`, not an
+`int`. kure copies a `List` item and a compared Source through its JSON, but
+other reads still panic on such a value. A build that
 fails, a Kustomization two builds write differently, a placed one no apply
 creates (a Kustomization the Flux bootstrap applies counts as an apply only on
 the Source of a member whose build reads its directory), and a placed one a build applies on another cluster or from another
