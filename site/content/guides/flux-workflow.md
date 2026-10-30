@@ -1389,6 +1389,15 @@ source, because `spec.sync.ref` takes only a tag. Both pull the highest tag insi
 range with a `SourceRef`, with a `GitRepository` source, without `SourceURL`, or one that does not
 parse is refused.
 
+`BootstrapConfig.Labels` puts your own labels on the bootstrap source and Kustomization in both
+modes: `metadata.labels` in `"gotk"` mode, a `spec.kustomize` patch on the operator's sync source
+and Kustomization in `"flux-operator"` mode. Like `SyncName` it has no effect without `SourceURL`.
+The keys a Flux controller stamps on these objects are refused in both modes, because the
+controller would overwrite them: `app.kubernetes.io/managed-by`, `instance`, `version` and
+`part-of`, `fluxcd.controlplane.io/name` and `namespace`, and `kustomize.toolkit.fluxcd.io/name`
+and `namespace`. The [Flux Engine reference](/api-reference/flux-engine) lists which controller
+stamps each.
+
 ## Further Reading
 
 - [Stack](/api-reference/stack) - Domain model reference
