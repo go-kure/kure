@@ -275,12 +275,13 @@ infrastructure:
       - "sigs.k8s.io/yaml"
   gateway-api:
     go_module: "sigs.k8s.io/gateway-api"
-    supported_range: "1.0 - 1.6"
+    supported_range: "1.0 - 1.7"
     notes: |
       Gateway API v1 types (HTTPRoute). Used by pkg/kubernetes HTTPRoute builders.
       Kure generates gateway.networking.k8s.io/v1 resources (GA since v1.0).
       v1.6 is a routine minor with no changes to the imported
       gateway.networking.k8s.io/v1 HTTPRoute type — build + tests pass unchanged.
+      v1.7 (from v1.6.3): kure imports apis/v1 only and its own code uses none of the changed types; build + tests pass unchanged. Every change in apis/v1 is to an experimental-channel field. Caller-visible Go changes: SessionPersistence drops SessionName and CookieConfig for Cookie (CookieConfig gains Name and Path) and Header, so its wire keys move from sessionName/cookieConfig to cookie/header, and HTTPRouteRule.SessionPersistence and GRPCRouteRule.SessionPersistence are deprecated for the Backend resource (GEP-4894); ForwardBodyConfig.MaxSize, inside the ExternalAuth filter, is retyped from uint16 to int32. A caller assigning these fields fails to compile, and its manifests need the v1.7 experimental CRDs. Additive: Filters on Listener and ListenerEntry (ExternalAuth, ExtensionRef), and Routability on GatewaySpecAddress and GatewayStatusAddress.
   kubernetes:
     go_module: "k8s.io/api"
     # k8s.io/* modules are versioned v0.N.x; the range below is in cluster terms (1.N).

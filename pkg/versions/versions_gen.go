@@ -117,9 +117,9 @@ var infrastructure = []Dependency{
 	{
 		Name:           "gateway-api",
 		GoModule:       "sigs.k8s.io/gateway-api",
-		SupportedRange: "1.0 - 1.6",
+		SupportedRange: "1.0 - 1.7",
 		Min:            "1.0",
-		Max:            "1.6",
+		Max:            "1.7",
 		VersionBasis:   "semver",
 		FloorModule:    "",
 	},
