@@ -266,15 +266,21 @@ func (v *builtView) unreadBootstrapWriters(key string) string {
 }
 
 // directoryAt returns the layout whose directory is the spec.path p, nil when
-// the tree has none there. An AppFileSingle layout other than the root is
-// written as one file into its Namespace, normally its parent's directory, and
-// has no directory a Kustomization could build: Flux finds no path there.
+// the tree has none there. layoutAt holds directories only (hasDirectory), so
+// a single-file layout's path names none.
 func (t *kustomizationTree) directoryAt(p string) *layout.ManifestLayout {
-	l := t.layoutAt[path.Clean(p)]
-	if l == nil || (l != t.root && l.ApplicationFileMode == layout.AppFileSingle) {
-		return nil
-	}
-	return l
+	return t.layoutAt[path.Clean(p)]
+}
+
+// hasDirectory reports whether l, a layout of the tree whose top is top, has
+// a directory of its own that a Flux Kustomization's spec.path can name. An
+// AppFileSingle layout other than the top is written as one file into its
+// Namespace, normally its parent's directory, and has none: Flux finds no path
+// there. Each index of layouts by path leaves such a layout out, so that it
+// neither reads as a build nor hides a directory of the same path, which the
+// writers accept beside its file (go-kure/kure#1197).
+func hasDirectory(l, top *layout.ManifestLayout) bool {
+	return l == top || l.ApplicationFileMode != layout.AppFileSingle
 }
 
 // rescued returns, for the Kustomization with key that is no member, the

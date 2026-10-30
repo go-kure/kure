@@ -572,7 +572,8 @@ func TestReconcileContext_KeptCopyBesideLiveNamesakeWaits(t *testing.T) {
 // nothing. Where no build patches what it holds it is not there, and the tree
 // is not refused. Nor is it where the patched build's spec.path names a
 // single-file (AppFileSingle) layout: Flux finds no directory there, so that
-// build holds nothing (go-kure/kure#1197).
+// build holds nothing (go-kure/kure#1197). A single file beside the patched
+// build's directory, of the same path, changes nothing: the tree is refused.
 func TestReconcileContext_KeptCopyUnreadableIsRefused(t *testing.T) {
 	patch := "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: inner\n  namespace: flux-system\n  annotations:\n    " + localConfigAnnotation + `: "false"` + "\n"
 	build := func(seed string, patched bool) *stack.Cluster {
@@ -597,10 +598,11 @@ func TestReconcileContext_KeptCopyUnreadableIsRefused(t *testing.T) {
 			t.Fatalf("%s: first integration: %v", placement, err)
 		}
 		seed := hostDirectory(t, first, "inner")
-		for name, c := range map[string]struct{ patched, onFile bool }{
-			"patch":                    {patched: true},
-			"no patch":                 {},
-			"patch, path names a file": {patched: true, onFile: true},
+		for name, c := range map[string]struct{ patched, onFile, beside bool }{
+			"patch":                          {patched: true},
+			"no patch":                       {},
+			"patch, path names a file":       {patched: true, onFile: true},
+			"patch, a file beside the build": {patched: true, beside: true},
 		} {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
 				specPath := seed
@@ -612,19 +614,19 @@ func TestReconcileContext_KeptCopyUnreadableIsRefused(t *testing.T) {
 					t.Fatalf("got %v, want the integration accepted", err)
 				}
 				var inner client.Object
-				var host *layout.ManifestLayout
-				var walk func(l *layout.ManifestLayout)
-				walk = func(l *layout.ManifestLayout) {
+				var host, parent *layout.ManifestLayout
+				var walk func(l, up *layout.ManifestLayout)
+				walk = func(l, up *layout.ManifestLayout) {
 					for _, r := range l.Resources {
 						if r.GetName() == "inner" && droppedByBuild(r) {
-							inner, host = r, l
+							inner, host, parent = r, l, up
 						}
 					}
 					for _, child := range l.Children {
-						walk(child)
+						walk(child, l)
 					}
 				}
-				walk(ml)
+				walk(ml, nil)
 				if inner == nil {
 					t.Fatal("no layout holds the local-config inner")
 				}
@@ -635,6 +637,18 @@ func TestReconcileContext_KeptCopyUnreadableIsRefused(t *testing.T) {
 					host.Children = append(host.Children, &layout.ManifestLayout{
 						Name: "helper", Namespace: host.FullRepoPath(), ApplicationFileMode: layout.AppFileSingle,
 						Resources: []client.Object{inner},
+					})
+				}
+				if c.beside {
+					// A single file of the same path as inner's directory,
+					// after it in the walk: the writers accept both, and the
+					// file must not hide the directory hand-written builds.
+					if parent == nil {
+						t.Fatal("inner's directory is the top of the tree, want one below it")
+					}
+					parent.Children = append(parent.Children, &layout.ManifestLayout{
+						Name: host.Name, Namespace: parent.FullRepoPath(), ApplicationFileMode: layout.AppFileSingle,
+						Resources: []client.Object{unstructuredObj("v1", "ConfigMap", "default", "beside")},
 					})
 				}
 				replaceUnstructured(t, ml, inner, func(u *unstructured.Unstructured) {
@@ -654,6 +668,63 @@ func TestReconcileContext_KeptCopyUnreadableIsRefused(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// A recorded member whose spec.path names a single-file layout writes nothing
+// of it (go-kure/kure#1197): Flux finds no directory there. demo applies only
+// its own directory (FluxIntegratedPerLayout); m1 builds apps, which lists
+// helper, an AppFileSingle file holding o; o builds apps on m1's Source and its
+// patch keeps inner, a local-config Kustomization that cannot be read in
+// typed form, so the tree is refused. m2, on another Source, names helper's
+// path: it is not o's writer, and the tree is still refused.
+func TestReconcileContext_RecordedMemberOnAFileWritesNothing(t *testing.T) {
+	patch := "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: inner\n  namespace: flux-system\n  annotations:\n    " + localConfigAnnotation + `: "false"` + "\n"
+	for name, withM2 := range map[string]bool{"m1 only": false, "m2 names the file": true} {
+		t.Run(name, func(t *testing.T) {
+			root := &layout.ManifestLayout{Name: "demo", Namespace: "clusters", FluxPlacement: layout.FluxIntegratedPerLayout}
+			apps := &layout.ManifestLayout{Name: "apps", Namespace: root.FullRepoPath()}
+			helper := &layout.ManifestLayout{Name: "helper", Namespace: apps.FullRepoPath(), ApplicationFileMode: layout.AppFileSingle}
+			root.Children = []*layout.ManifestLayout{apps}
+			apps.Children = []*layout.ManifestLayout{helper}
+
+			m1 := handWritten("m1")
+			m1.Spec.Path = apps.FullRepoPath()
+			root.Resources = []client.Object{m1}
+			recs := []layout.FluxKustomizationRecord{{
+				Namespace: "flux-system", Name: "m1", Path: apps.FullRepoPath(),
+				SourceKind: "GitRepository", SourceNamespace: "flux-system", SourceName: "flux-system",
+			}}
+			if withM2 {
+				m2 := handWritten("m2")
+				m2.Spec.Path = helper.FullRepoPath()
+				m2.Spec.SourceRef.Name = "other"
+				root.Resources = append(root.Resources, m2)
+				recs = append(recs, layout.FluxKustomizationRecord{
+					Namespace: "flux-system", Name: "m2", Path: helper.FullRepoPath(),
+					SourceKind: "GitRepository", SourceNamespace: "flux-system", SourceName: "other",
+				})
+			}
+			root.SetFluxKustomizations(recs)
+
+			o := handWritten("o")
+			o.Spec.Path = apps.FullRepoPath()
+			o.Spec.Patches = []kustomize.Patch{{Patch: patch}}
+			helper.Resources = []client.Object{o}
+			dropped := "true"
+			inner := annotateLocalConfig(handWritten("inner"), &dropped)
+			apps.Resources = []client.Object{inner}
+			replaceUnstructured(t, root, inner, func(u *unstructured.Unstructured) {
+				if err := unstructured.SetNestedField(u.Object, "web", "spec", "dependsOn"); err != nil {
+					t.Fatal(err)
+				}
+			})
+
+			_, err := fluxstack.UmbrellaTerminals(root)
+			if !errors.Is(err, fluxstack.ErrUmbrellaTerminals) || !strings.Contains(err.Error(), `read Flux Kustomization "flux-system/inner" in typed form`) {
+				t.Fatalf("got %v, want ErrUmbrellaTerminals naming the unreadable inner", err)
+			}
+		})
 	}
 }
 

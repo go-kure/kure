@@ -562,7 +562,9 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) erro
 	var paths []string
 	var walk func(l *layout.ManifestLayout) error
 	walk = func(l *layout.ManifestLayout) error {
-		layoutAt[path.Clean(l.FullRepoPath())] = l
+		if hasDirectory(l, root) {
+			layoutAt[path.Clean(l.FullRepoPath())] = l
+		}
 		objs, err := builtItems(l)
 		if err != nil {
 			return err
@@ -747,15 +749,18 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout
 	return nil
 }
 
-// indexGenerated maps every layout under top by its directory, and returns in
-// depth-first layout order every Kustomization this pass placed or kept
-// (generated), in typed form whatever form it has (generatedKustomizations).
+// indexGenerated maps every layout under top that has a directory
+// (hasDirectory) by that directory, and returns in depth-first layout order
+// every Kustomization this pass placed or kept (generated), in typed form
+// whatever form it has (generatedKustomizations).
 func (p *integratedPlacement) indexGenerated(top *layout.ManifestLayout) (map[string]*layout.ManifestLayout, []*kustv1.Kustomization, error) {
 	layoutAt := map[string]*layout.ManifestLayout{}
 	var crs []*kustv1.Kustomization
 	var index func(l *layout.ManifestLayout) error
 	index = func(l *layout.ManifestLayout) error {
-		layoutAt[path.Clean(l.FullRepoPath())] = l
+		if hasDirectory(l, top) {
+			layoutAt[path.Clean(l.FullRepoPath())] = l
+		}
 		own, err := generatedKustomizations(l, p.generated)
 		if err != nil {
 			return err
