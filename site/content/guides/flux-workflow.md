@@ -947,7 +947,9 @@ admit a tree that never becomes Ready
 `fluxcd.UmbrellaTerminals` returns each umbrella's terminal leaves, for a
 dependency written from outside the tree, for trees as an integration returned
 them: only a Kustomization the integration recorded, still on the recorded
-path, Source and cluster, counts as an umbrella. The full rules and refusals are in
+path, Source and cluster, counts as an umbrella. For trees integrated with
+`AdditiveCELDependencyCheckOff`, call that generator's `UmbrellaTerminals`
+method, which reads the dependencies as its integration did. The full rules and refusals are in
 the [Flux Engine reference](/api-reference/flux-engine/#with-umbrellasdonotwait).
 
 ### Umbrellas without child health checks

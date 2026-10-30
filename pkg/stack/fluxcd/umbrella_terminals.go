@@ -72,8 +72,9 @@ type kustomizationTree struct {
 	otherSpecs map[string]*kustv1.Kustomization
 	otherErr   error
 	// existenceOnly is ResourceGenerator.AdditiveCELDependencyCheckOff, set by
-	// UmbrellasDoNotWait before it reads deps: deps then leaves out an entry
-	// that waits only for its dependency to exist.
+	// UmbrellasDoNotWait and ResourceGenerator.UmbrellaTerminals before they
+	// read deps: deps then leaves out an entry that waits only for its
+	// dependency to exist.
 	existenceOnly bool
 	// dropped lists, per layout, the keys of the Flux Kustomizations it holds
 	// that a build drops as local config (builtItems), and droppedObjs each
@@ -532,7 +533,27 @@ func (t *kustomizationTree) within(u, d string) bool {
 // terminal leaf and for a tree whose objects cannot be read. The error is a
 // plain wrapped sentinel, not a typed resource error. Nil roots are skipped;
 // no umbrella gives an empty map.
+//
+// It reads every dependsOn as the integrator does by default: for trees
+// integrated with ResourceGenerator.AdditiveCELDependencyCheckOff, call
+// ResourceGenerator.UmbrellaTerminals on that generator instead.
 func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, error) {
+	return umbrellaTerminals(false, roots)
+}
+
+// UmbrellaTerminals is the package function UmbrellaTerminals, with the
+// dependsOn entries read as g's integration reads them: with
+// AdditiveCELDependencyCheckOff, an entry whose readyExpr is exactly "true"
+// waits only for its dependency to exist, so it makes no Kustomization it
+// names depended on, and the terminal leaves are those g's integration
+// writes.
+func (g *ResourceGenerator) UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, error) {
+	return umbrellaTerminals(g.AdditiveCELDependencyCheckOff, roots)
+}
+
+// umbrellaTerminals is UmbrellaTerminals, with existenceOnly as
+// kustomizationTree.existenceOnly.
+func umbrellaTerminals(existenceOnly bool, roots []*layout.ManifestLayout) (map[string][]string, error) {
 	out := map[string][]string{}
 	placedIn := map[string]int{}
 	for i, root := range roots {
@@ -541,6 +562,7 @@ func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, er
 		}
 		t, err := indexKustomizationTree(root, recordedMembers)
 		if err == nil {
+			t.existenceOnly = existenceOnly
 			err = t.otherErr
 		}
 		if err == nil {

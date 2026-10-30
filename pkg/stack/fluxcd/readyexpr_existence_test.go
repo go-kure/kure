@@ -2,6 +2,7 @@ package fluxcd_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -176,10 +177,23 @@ func TestReadyExprTrue_UmbrellaTerminalLeaves(t *testing.T) {
 					platform := srBundle("platform", formApp("a-app", a, form), formApp("b-app", b, form))
 					g := noWaitGenerator()
 					g.AdditiveCELDependencyCheckOff = off
-					_, err := fluxstack.NewLayoutIntegrator(g).CreateLayoutWithResources(noWaitCluster(platform, true), withPlacement(nodeOnly, placement))
+					ml, err := fluxstack.NewLayoutIntegrator(g).CreateLayoutWithResources(noWaitCluster(platform, true), withPlacement(nodeOnly, placement))
 					if off && form != "v1beta2" {
 						if err != nil {
 							t.Fatalf("got %v, want the tree admitted", err)
+						}
+						// The generator's UmbrellaTerminals reads the tree as its
+						// integration did; the package function reads every entry
+						// as a wait for Ready, so platform has no terminal leaf.
+						got, err := g.UmbrellaTerminals(ml)
+						if err != nil {
+							t.Fatalf("generator UmbrellaTerminals: %v", err)
+						}
+						if want := []string{"flux-system/a", "flux-system/b"}; !slices.Equal(got["flux-system/platform"], want) {
+							t.Fatalf("generator UmbrellaTerminals = %v, want platform -> %v", got, want)
+						}
+						if _, err := fluxstack.UmbrellaTerminals(ml); !errors.Is(err, fluxstack.ErrUmbrellaTerminals) || !strings.Contains(err.Error(), "no terminal leaf") {
+							t.Fatalf("UmbrellaTerminals: got %v, want platform refused for having no terminal leaf", err)
 						}
 						return
 					}
