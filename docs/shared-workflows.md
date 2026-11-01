@@ -74,7 +74,7 @@ The default mode, `enforce`, turns each finding into a resolvable review thread:
 New review threads are capped at 5 across the pull request. Threads already open, or about to be
 reopened, count against the cap first and are never held back by it; new findings, most severe
 first, get whatever places remain. So more than 5 threads can be open when earlier ones return.
-New findings past the cap go into one overflow comment.
+New findings past the cap go into an overflow comment.
 
 The check is required on `main` and on `release/*` branches, so a failed review run blocks the
 merge. Separately, the rulesets require every review thread to be resolved before merge.
@@ -321,6 +321,9 @@ PR Review, Claude, the calling repository's CI and its Deploy Docs job run on
 `autops-kube-kure`, a self-hosted Actions Runner Controller scale set with access to in-cluster
 services such as the PR review proxy. The runner image does not include `make` or `envsubst`;
 workflows install what they need or avoid it.
+
+The PR Review Runner Boundary Probe runs on `autops-kube-review`, a second scale set whose nodes allow
+the user namespaces the review boundary needs. No other workflow targets it.
 
 ## Reference
 
