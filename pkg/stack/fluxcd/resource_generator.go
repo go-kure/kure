@@ -116,7 +116,9 @@ type ResourceGenerator struct {
 	// reconcile-order checks then wait for the apply of the Kustomization
 	// that creates the dependency, or for nothing when no Kustomization of
 	// the tree does (the Flux bootstrap, say). Every other expression still
-	// waits for Ready. Set on a cluster whose gate is on, where Flux checks
+	// waits for Ready in those checks. Picking terminal leaves and checking
+	// a node's kept dependsOn count only an entry with no readyExpr as a wait
+	// for Ready, with the field or without. Set on a cluster whose gate is on, where Flux checks
 	// Ready after the expression, the checks can admit a tree that never
 	// becomes Ready. Kustomizations kure generates carry no readyExpr, so it
 	// changes only how Kustomizations an application emits, or a caller

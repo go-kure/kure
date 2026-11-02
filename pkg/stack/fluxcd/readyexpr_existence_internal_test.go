@@ -59,7 +59,8 @@ func TestCheckReconcileOrder_ReadyExprTrue(t *testing.T) {
 
 // TestSpecDeps_ReadyExprLiteral: only a readyExpr of exactly "true" is an
 // existence wait, and only with existenceOnly; Flux evaluates any other text
-// as its own expression, so it keeps the wait for Ready.
+// as its own expression, so it keeps the wait for Ready. Only an entry with no
+// readyExpr at all is plain, one that proves its dependency Ready.
 func TestSpecDeps_ReadyExprLiteral(t *testing.T) {
 	for _, expr := range []string{"true", "", "True", " true", "true ", "true && true", "false"} {
 		for _, existenceOnly := range []bool{false, true} {
@@ -68,7 +69,7 @@ func TestSpecDeps_ReadyExprLiteral(t *testing.T) {
 				Spec:       kustv1.KustomizationSpec{DependsOn: []kustv1.DependencyReference{{Name: "b", ReadyExpr: expr}}},
 			}
 			got := specDeps(k, existenceOnly)
-			want := []depRef{{key: crKey("flux-system", "b"), exist: existenceOnly && expr == "true"}}
+			want := []depRef{{key: crKey("flux-system", "b"), exist: existenceOnly && expr == "true", plain: expr == ""}}
 			if len(got) != 1 || got[0] != want[0] {
 				t.Errorf("readyExpr %q, existenceOnly %v: got %+v, want %+v", expr, existenceOnly, got, want)
 			}

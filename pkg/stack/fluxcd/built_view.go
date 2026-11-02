@@ -767,10 +767,15 @@ func (v *builtView) applies(o occurrence) bool {
 }
 
 // depRef is one entry of a Kustomization's spec.dependsOn: the dependency's
-// key, and whether the entry waits only for the dependency to exist.
+// key, whether the entry waits only for the dependency to exist, and whether
+// it sets no readyExpr (plain). Only a plain entry proves the dependency
+// Ready: with the AdditiveCELDependencyCheck feature gate off, the default,
+// Flux evaluates a readyExpr in place of its own Ready check, so an
+// expression of any kind proves nothing the controller does not evaluate.
 type depRef struct {
 	key   string
 	exist bool
+	plain bool
 }
 
 // node is the node of the reconcile-order graph the entry waits for: "exist
@@ -798,7 +803,7 @@ func specDeps(k *kustv1.Kustomization, existenceOnly bool) []depRef {
 		if ns == "" {
 			ns = k.Namespace
 		}
-		out = append(out, depRef{key: crKey(ns, d.Name), exist: existenceOnly && d.ReadyExpr == "true"})
+		out = append(out, depRef{key: crKey(ns, d.Name), exist: existenceOnly && d.ReadyExpr == "true", plain: d.ReadyExpr == ""})
 	}
 	return out
 }

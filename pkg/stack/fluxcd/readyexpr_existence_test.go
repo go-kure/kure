@@ -160,12 +160,15 @@ func TestReadyExprTrue_UmbrellaRewrite(t *testing.T) {
 
 // platform's application emits a and b, each depending on the other with
 // "true". Under UmbrellasDoNotWait platform's terminal leaves are the
-// Kustomizations it applies that no other one it applies awaits. Without the
-// setting each awaits the other's Ready, so platform has no terminal leaf
-// (ErrUmbrellaDependency). With it each waits only for the other to exist,
-// which platform's apply creates: both are terminal leaves, and the tree is
-// admitted. In the v1beta2 form the entries have no readyExpr and are refused
-// with the setting too.
+// Kustomizations it applies that no other one it applies awaits for Ready.
+// An entry with a readyExpr awaits nothing for Ready (go-kure/kure#1190), so
+// the standalone queries return a and b as leaves whatever the setting. The
+// integration still reads the entries as waits for Ready, as the cycle checks
+// do: without the setting each waits for the other's Ready, so platform has
+// no terminal leaf (ErrUmbrellaDependency). With it each waits only for the
+// other to exist, which platform's apply creates, and the tree is admitted.
+// In the v1beta2 form the entries have no readyExpr and are refused with the
+// setting too.
 func TestReadyExprTrue_UmbrellaTerminalLeaves(t *testing.T) {
 	for _, off := range []bool{false, true} {
 		for _, placement := range integratedPlacements {
@@ -182,18 +185,23 @@ func TestReadyExprTrue_UmbrellaTerminalLeaves(t *testing.T) {
 						if err != nil {
 							t.Fatalf("got %v, want the tree admitted", err)
 						}
-						// The generator's UmbrellaTerminals reads the tree as its
-						// integration did; the package function reads every entry
-						// as a wait for Ready, so platform has no terminal leaf.
+						// Both queries return the leaves: neither runs a cycle
+						// check, and an entry with a readyExpr proves nothing
+						// Ready.
+						want := []string{"flux-system/a", "flux-system/b"}
 						got, err := g.UmbrellaTerminals(ml)
 						if err != nil {
 							t.Fatalf("generator UmbrellaTerminals: %v", err)
 						}
-						if want := []string{"flux-system/a", "flux-system/b"}; !slices.Equal(got["flux-system/platform"], want) {
+						if !slices.Equal(got["flux-system/platform"], want) {
 							t.Fatalf("generator UmbrellaTerminals = %v, want platform -> %v", got, want)
 						}
-						if _, err := fluxstack.UmbrellaTerminals(ml); !errors.Is(err, fluxstack.ErrUmbrellaTerminals) || !strings.Contains(err.Error(), "no terminal leaf") {
-							t.Fatalf("UmbrellaTerminals: got %v, want platform refused for having no terminal leaf", err)
+						got, err = fluxstack.UmbrellaTerminals(ml)
+						if err != nil {
+							t.Fatalf("UmbrellaTerminals: %v", err)
+						}
+						if !slices.Equal(got["flux-system/platform"], want) {
+							t.Fatalf("UmbrellaTerminals = %v, want platform -> %v", got, want)
 						}
 						return
 					}
@@ -316,13 +324,12 @@ func toReadyWait(name string) kustomize.Patch {
 
 // a's build applies h, depending on x with "true", and x. With the setting
 // h waits only for x to exist, so x is a terminal leaf of a. A patch may
-// rewrite that readyExpr into a Ready wait, and the umbrella pass reads the
-// specs as the tree holds them: once a Kustomization of the tree patches its
-// build, every entry is read as waiting for Ready, and x is no terminal leaf.
-// The patch may also be on another, unrecorded copy of the member a, in a
-// directory indexed after it: that copy is no Kustomization of its own, but
-// its patch counts the same.
-func TestUmbrellaTerminals_PatchedTreeReadsEveryEntryAsReady(t *testing.T) {
+// rewrite that readyExpr into another one; no entry with a readyExpr proves x
+// Ready (go-kure/kure#1190), so x is a terminal leaf with or without a patch
+// in the tree, on the member a or on another, unrecorded copy of it in a
+// directory indexed after it. A patch that adds a readyExpr to a plain entry
+// is not seen yet (go-kure/kure#1214).
+func TestUmbrellaTerminals_PatchedTreeKeepsReadyExprEntryAsLeaf(t *testing.T) {
 	for _, patched := range []string{"", "member", "copy of the member"} {
 		root := &layout.ManifestLayout{Name: "demo", Namespace: "clusters"}
 		apps := &layout.ManifestLayout{Name: "apps", Namespace: root.FullRepoPath()}
@@ -348,10 +355,7 @@ func TestUmbrellaTerminals_PatchedTreeReadsEveryEntryAsReady(t *testing.T) {
 			Namespace: "flux-system", Name: "a", Path: apps.FullRepoPath(),
 			SourceKind: "GitRepository", SourceName: "flux-system",
 		}})
-		want := []string{"flux-system/h"}
-		if patched == "" {
-			want = []string{"flux-system/h", "flux-system/x"}
-		}
+		want := []string{"flux-system/h", "flux-system/x"}
 		got, err := celGateOffGenerator(true).UmbrellaTerminals(root)
 		if err != nil {
 			t.Fatalf("patched %q: %v", patched, err)
