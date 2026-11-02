@@ -963,6 +963,18 @@ through a Flux Source), a kustomization file kure cannot parse, one that sets
 `openapi`, or one that may merge into a Secret while the Kustomization sets
 `spec.decryption` or the binary links another kustomize than Flux's (a merge
 otherwise is read as built, under the name kustomize gives the merged Secret).
+So is a build, with `spec.decryption` set, that reads a file holding a SOPS
+marker (`"mac": "ENC[`, `sops_mac=ENC[`, `[sops]` or `mac: ENC[`) or a file
+kure cannot read: Flux decrypts such a file, and the names and namespaces the
+build gives are over what it decrypts to, so kure, which sees only the
+ciphertext, cannot read them. The refusal names the file and covers the whole
+tree, not only that Kustomization, since no object of an unread build is read.
+It is wider than Flux: a marker in a file Flux would not decrypt (another
+format, a `configMapGenerator` source, a comment, a fixture) refuses too. It
+applies only to a Kustomization kure builds, one with `patches`, `components`,
+`namePrefix`, `nameSuffix` or `targetNamespace`, or one with post-build
+substitution over a directory whose layout generates a ConfigMap; to keep such
+a tree, keep the encrypted files out of the Kustomizations kure builds.
 One
 without `wait` that health-checks any other object waits for the Kustomization
 that applies it, whatever its expression says, when that writer is certain,

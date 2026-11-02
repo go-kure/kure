@@ -435,7 +435,9 @@ never fetches, when another use of kustomize in the process has set a schema oth
 built-in one, naming it, or when it loads, as a kustomization (a component's included), a file
 holding a `secretGenerator` entry with `behavior: merge` or a `generators` entry and the
 Kustomization sets `spec.decryption` or the binary links another kustomize than the audited one,
-naming the file (see the merging build below); a
+naming the file (see the merging build below), or when the Kustomization sets `spec.decryption` and
+it reads a file holding a SOPS marker, or one it cannot read, naming the file (see the encrypted
+sources below); a
 Kustomization two writers apply with a different `dependsOn`, `wait`, `healthChecks`,
 `healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata`, `decryption`, `images`
 (which Flux's generator writes into the build) or transform (`ignoreMissingComponents` included,
@@ -515,6 +517,27 @@ can differ. kure reads the module the binary links as Go reports it, the replace
 one, by path and version; a module that imports kure resolves v0.21.2 unless it repeats kure's
 `replace` directives, and its merging builds stay unread. This refuses conservatively: a tree
 whose build merges into a Secret in these cases is refused even where Flux converges.
+
+**Encrypted sources.** With `spec.decryption` set (any provider), Flux decrypts, before it builds,
+the files a `secretGenerator` entry reads and every `patches[].path` file, in the directories of
+`resources` and `components`, whenever a file holds a SOPS marker; it decrypts built Secrets and
+whole-resource SOPS documents after the build. The names and namespaces a build gives are over what
+the files decrypt to: a generator's hash, a `replacements` entry carrying a decrypted value into a
+name or namespace, a `bases` or legacy `env` consumer of a decrypted file, a patch that changes
+generated data. kure reads only the ciphertext, so such a build is not read, naming the file and
+the marker. kure tests every file the build reads for the four marker strings of Flux's formats
+(`"mac": "ENC[`, `sops_mac=ENC[`, `[sops]`, `mac: ENC[`) whatever the file's name, and a file it
+cannot read, other than an absent one, counts as marked. This refuses more than Flux decrypts: a
+marker in any file the build reads, in another format, a `configMapGenerator` source Flux does not
+decrypt, a comment or a fixture, a provider other than `sops`, or a file over 5 MiB, which Flux
+refuses to decrypt, makes the build unread. A build that is not read refuses the whole tree, not only its Kustomization, as for any
+other build kure cannot read: no object of it, of any kind, is read. It applies only to a
+Kustomization kure builds, one with `patches`, `components`, `namePrefix`, `nameSuffix` or
+`targetNamespace`, or one with post-build substitution (`postBuild` with a `substitute`, a
+`substituteFrom` or `substituteStrategy: Always`) over a directory whose layout generates a
+ConfigMap; any other is read as the tree holds it, which holds no `secretGenerator` and no patch
+Flux decrypts. Without `spec.decryption` a marked file refuses nothing. The refusal never
+admits a wrong name.
 
 kure adds the existence wait only when the object's writers are certain: only writers other than
 the Flux bootstrap apply an object matching it by group, kind, namespace and name as built (the

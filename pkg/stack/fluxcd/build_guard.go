@@ -1,8 +1,11 @@
 package fluxcd
 
 import (
+	"bytes"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"net/url"
 	"path/filepath"
@@ -75,6 +78,32 @@ type buildGuard struct {
 	// that may merge into a Secret (kustomization).
 	read, found map[string]map[string]bool
 	merges      []string
+	// decrypting is set when the Kustomization sets spec.decryption
+	// (decrypts): Flux decrypts the files and the objects of its build.
+	decrypting bool
+}
+
+// sopsMarkers are the strings kustomize-controller looks for in a file to
+// decide that SOPS encrypted it: one per format it decrypts, where binary and
+// json share one (internal/decryptor/decryptor.go:113-122, v1.10.1).
+// A file is decrypted when its bytes hold the marker of the format its name
+// gives (decryptor.go:851); a file is checked here for all of them whatever
+// its name, so every file Flux could decrypt is found, and some it would not.
+var sopsMarkers = [][]byte{
+	[]byte(`"mac": "ENC[`),
+	[]byte("sops_mac=ENC["),
+	[]byte("[sops]"),
+	[]byte("mac: ENC["),
+}
+
+// sopsMarked is the first marker b holds, or "".
+func sopsMarked(b []byte) string {
+	for _, m := range sopsMarkers {
+		if bytes.Contains(b, m) {
+			return string(m)
+		}
+	}
+	return ""
 }
 
 func newBuildGuard(fsys filesys.FileSystem, tree string) *buildGuard {
@@ -93,8 +122,40 @@ func (g *buildGuard) ReadFile(name string) ([]byte, error) {
 		g.read = markRead(g.read, name)
 	}
 	if err != nil {
+		// A file kustomize cannot read, other than an absent one, may hold
+		// what Flux decrypts, so its build is not read.
+		if g.decrypting && !stderrors.Is(err, fs.ErrNotExist) && !g.IsDir(name) {
+			g.refuse(name, fmt.Sprintf("which kure cannot read (%v), and the Kustomization sets spec.decryption, so it may hold SOPS data that Flux decrypts before it builds", err))
+		}
 		return b, err
 	}
+	var why string
+	if g.decrypting {
+		if m := sopsMarked(b); m != "" {
+			why = fmt.Sprintf("which holds the SOPS marker %q, and the Kustomization sets spec.decryption: Flux decrypts such a file before it builds, or the object built from it after, and what it builds, a generated name or a replaced name or namespace included, is over what it decrypts to, which kure cannot read", m)
+		}
+	}
+	if why == "" {
+		why = g.checked(name, b, isKustomization)
+	}
+	if why == "" {
+		return b, nil
+	}
+	g.refuse(name, why)
+	return nil, errors.Errorf("%s is not read: %s", name, why)
+}
+
+// refuse records the first file the build reads that kure cannot build as Flux
+// does.
+func (g *buildGuard) refuse(name, why string) {
+	if g.unread == nil {
+		g.unread = errors.Errorf("its build reads %s, %s", g.rel(name), why)
+	}
+}
+
+// checked is the reason a file the build read is refused, from its content, or
+// "".
+func (g *buildGuard) checked(name string, b []byte, isKustomization bool) string {
 	var why string
 	if isKustomization {
 		g.found = markRead(g.found, name)
@@ -103,13 +164,7 @@ func (g *buildGuard) ReadFile(name string) ([]byte, error) {
 	if why == "" && g.configs[filepath.Clean(name)] {
 		why = g.pluginConfigs(b)
 	}
-	if why == "" {
-		return b, nil
-	}
-	if g.unread == nil {
-		g.unread = errors.Errorf("its build reads %s, %s", g.rel(name), why)
-	}
-	return nil, errors.Errorf("%s is not read: %s", name, why)
+	return why
 }
 
 // rel is name as the tree holds it.
