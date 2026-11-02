@@ -1881,17 +1881,23 @@ panic on any other. kure reads such an object as its JSON, so it never panics on
 `GenerateFromLayout`, `GenerateFromCluster` (through it) and `UmbrellaTerminals` first replace the
 `Object` map of each unstructured object in the layouts they are given, a `List`'s items included
 (also the unstructured items of a typed `List`, and of the typed Lists it holds, an unstructured `List`
-among them), that holds another value (an `int`, an `int32`, a
-`[]string`, a `map[string]string`) with the map its JSON decodes to, a number as an `int64` or a
-`float64`. This changes the object the caller passed: its `Object` field holds a new map, and the map
-the caller built is not changed. An object that holds only JSON-typed values is left as it is. A
-value with no JSON form here, a channel, a function or a struct (a pointer to one included) say, a map
-whose keys are not strings, or a value nested deeper than 1000 levels, holding itself through maps and
-slices, or with more than 4 million values, refuses the call with the layout, the object and the field
-named, and replaces no object. The encoder is never run on such a value, so one that holds itself
-through a struct is refused and not followed. A call that refuses later, for another reason, puts every
-`Object` map it replaced back, as long as the caller does not change the tree during the call. What
-they still leave out:
+among them), that holds another value with a copy that holds JSON-typed values. This changes the
+object the caller passed: its `Object` field holds a new map, and the map the caller built is not
+changed. The accepted shapes are a closed list. A `string`, `int64`, `float64`, `bool`, `nil`,
+`json.Number`, `map[string]interface{}` and `[]interface{}` are kept as they are. A Go integer kind
+(`int`, `int8` to `int32`, `uint`, `uint8` to `uint32`, `uintptr`, and a `uint64` up to the largest
+`int64`) becomes an `int64`, so an integer above 2^53 stays exact, and a `float32` becomes a
+`float64`. A named `string`, `bool`, integer or float kind becomes its base type. A map with string
+keys and a slice of any element type (`[]string`, `map[string]string`) are converted element by
+element. Anything else is refused instead of converted: a struct, a pointer, an array, a channel, a
+function, a complex number, a map with other keys, a `uint64` above the largest `int64`, and every type
+with a `MarshalJSON` or `MarshalText` method (`json.RawMessage` and `net.IP` among them). So is a value
+that holds itself through maps and slices, one nested deeper than 1000 levels, and one with more than 4
+million values. A refusal names the layout, the object and the field, and replaces no object. kure never
+marshals a caller's value and never calls a method of it. The cases the issue names (a plain `int`
+in an object, nested in a `sourceRef`, in a `List`'s items, in a `Source` `spec`) all stay accepted. A
+call that refuses later, for another reason, puts every `Object` map it replaced back, as long as the
+caller does not change the tree during the call. What they still leave out:
 
 - **An object a build moves.** A health check on an object's name as its file writes it, where a
   `spec.targetNamespace` or a name prefix or suffix applies it under another, names an object that

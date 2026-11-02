@@ -68,11 +68,12 @@ func NewLayoutIntegrator(generator *ResourceGenerator) *LayoutIntegrator {
 // path is an error.
 //
 // An unstructured object in ml that holds a value apimachinery cannot read,
-// a plain int say, is replaced in place by one that holds what its JSON
-// decodes to, an int64 for it: its Object field is set to a new map, so the
+// a plain int say, is replaced in place by one that holds its JSON typed
+// counterpart, an int64 for it: its Object field is set to a new map, so the
 // object the caller passed changes, and the caller's map does not. An object
-// that holds only JSON typed values is left alone. A value that does not
-// marshal refuses the call, with the object and the field named, and a
+// that holds only JSON typed values is left alone. A value of a shape outside
+// the closed list at jsonContentOf (a struct, a pointer, a type with a
+// marshaler) refuses the call, with the object and the field named, and a
 // refused call puts every Object map back (go-kure/kure#1201).
 func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) (err error) {
 	if err := rules.Validate(); err != nil {

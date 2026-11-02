@@ -10,7 +10,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	utiljson "k8s.io/apimachinery/pkg/util/json"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -231,71 +230,79 @@ func TestNormalizeCallerObjects(t *testing.T) {
 		}
 	})
 
-	t.Run("the object is what the JSON round trip gives, for every plausible Go value", func(t *testing.T) {
+	t.Run("the accepted shapes become their JSON typed counterparts", func(t *testing.T) {
 		type name string
-		values := map[string]any{
-			"RawMessage":      json.RawMessage(`{"enabled":true,"n":3}`),
-			"net.IP":          net.ParseIP("10.0.0.1"),
-			"big whole float": float64(1000000000000000100),
-			"huge float":      1e300,
-			"small float":     1e-9,
-			"float32":         float32(16777216.5),
-			"neg zero":        math.Copysign(0, -1),
-			"Number empty":    json.Number(""),
-			"Number 1.0":      json.Number("1.0"),
-			"Number 1e3":      json.Number("1e3"),
-			"Number big":      json.Number("12345678901234567890"),
-			"uintptr":         uintptr(53),
-			"invalid UTF-8":   "a\xffb\xc3",
-			"named string":    name("x\xff"),
-			"map bad key":     map[string]string{"k\xfe": "v"},
-			"time.Duration":   int64(5),
-			"[]byte":          []byte("hi\xff"),
-			"nested":          []map[string][]int{{"a": {1, 2}}},
-			"[2]int":          [2]int{1, 2},
-		}
-		for label, v := range values {
-			t.Run(label, func(t *testing.T) {
-				u := object(map[string]any{"v": v, "n": 0})
-				data, err := json.Marshal(u.Object)
-				if err != nil {
-					t.Fatal(err)
-				}
-				var want map[string]any
-				if err := utiljson.Unmarshal(data, &want); err != nil {
-					t.Fatal(err)
-				}
-				if err := normalizeForTest(layoutOf(u)); err != nil {
-					t.Fatalf("got %v, want the round trip's result", err)
-				}
-				if !reflect.DeepEqual(u.Object, want) {
-					t.Errorf("got %#v, want %#v", u.Object, want)
-				}
-			})
-		}
-		t.Run("json.Number the encoder rejects is refused", func(t *testing.T) {
-			if err := normalizeForTest(layoutOf(object(map[string]any{"v": json.Number("01"), "n": 0}))); err == nil {
-				t.Error("an invalid number was accepted")
-			}
-		})
-	})
-
-	t.Run("the JSON form of the common Go kinds", func(t *testing.T) {
-		type name string
+		type flag bool
+		type count int
+		type labels map[string]string
+		var anyValue any = int8(-3)
 		u := object(map[string]any{
-			"name": name("x"), "ptr": new(int), "bytes": []byte("hi"), "whole": 2.0, "frac": 0.1,
-			"f32": float32(0.1), "nilMap": map[string]string(nil), "nilSlice": []string(nil),
-			"empty": []string{}, "num": json.Number("7"), "big": uint64(math.MaxUint64),
+			"int": 1, "int8": int8(2), "uint16": uint16(3), "uintptr": uintptr(4), "exact": int(1<<53 + 1),
+			"maxUint64": uint64(math.MaxInt64), "float32": float32(2.5), "float64": 1.5, "whole": 2.0,
+			"name": name("x"), "flag": flag(true), "count": count(5), "labels": labels{"a": "b"},
+			"strings": []string{"a"}, "bytes": []byte{1, 2}, "nested": []map[string][]int{{"a": {1, 2}}},
+			"number": json.Number("7"), "iface": []any{anyValue, nil},
+			"nilMap": map[string]string(nil), "nilSlice": []string(nil), "empty": []string{},
 		})
 		if err := normalizeForTest(layoutOf(u)); err != nil {
 			t.Fatal(err)
 		}
 		want := map[string]any{
-			"name": "x", "ptr": int64(0), "bytes": "aGk=", "whole": int64(2), "frac": 0.1,
-			"f32": 0.1, "nilMap": nil, "nilSlice": nil, "empty": []any{}, "num": int64(7), "big": float64(math.MaxUint64),
+			"int": int64(1), "int8": int64(2), "uint16": int64(3), "uintptr": int64(4), "exact": int64(1<<53 + 1),
+			"maxUint64": int64(math.MaxInt64), "float32": 2.5, "float64": 1.5, "whole": 2.0,
+			"name": "x", "flag": true, "count": int64(5), "labels": map[string]any{"a": "b"},
+			"strings": []any{"a"}, "bytes": []any{int64(1), int64(2)}, "nested": []any{map[string]any{"a": []any{int64(1), int64(2)}}},
+			"number": json.Number("7"), "iface": []any{int64(-3), nil},
+			"nilMap": nil, "nilSlice": nil, "empty": []any{},
 		}
 		if got := u.Object["spec"]; !reflect.DeepEqual(got, want) {
 			t.Errorf("spec = %#v, want %#v", got, want)
+		}
+		if _, err := runtimeSafe(u); err != nil {
+			t.Error(err)
+		}
+	})
+
+	t.Run("everything else is refused with the field named", func(t *testing.T) {
+		type name string
+		values := map[string]any{
+			"json.RawMessage":                 json.RawMessage(`{"a":1}`),
+			"net.IP":                          net.ParseIP("10.0.0.1"),
+			"a named string with a marshaler": marshalingString("x"),
+			"a pointer":                       new(int),
+			"a struct":                        struct{ A int }{1},
+			"an array":                        [2]int{1, 2},
+			"a channel":                       make(chan int),
+			"a function":                      func() {},
+			"a map with int keys":             map[int]string{1: "a"},
+			"a uint64 above int64":            uint64(math.MaxUint64),
+			"a complex":                       complex(1, 2),
+			"a slice of structs":              []struct{ A int }{{1}},
+		}
+		for label, v := range values {
+			t.Run(label, func(t *testing.T) {
+				u := object(map[string]any{"v": v, "n": 0})
+				err := normalizeForTest(layoutOf(u))
+				if err == nil || !strings.Contains(err.Error(), "spec.v") {
+					t.Errorf("got %v, want a refusal naming spec.v", err)
+				}
+				if u.Object["spec"].(map[string]any)["n"] != 0 {
+					t.Error("the refused object was changed")
+				}
+			})
+		}
+	})
+
+	t.Run("a map that marshals itself and holds itself is refused, not recursed", func(t *testing.T) {
+		m := selfMarshalingMap{}
+		m["self"] = m
+		u := object(map[string]any{"v": m, "n": 0})
+		err := normalizeForTest(layoutOf(u))
+		if err == nil || !strings.Contains(err.Error(), "spec.v") || !strings.Contains(err.Error(), "marshals itself") {
+			t.Errorf("got %v, want a refusal naming spec.v and the marshaler", err)
+		}
+		if selfMarshalCalls != 0 {
+			t.Errorf("MarshalJSON was called %d times", selfMarshalCalls)
 		}
 	})
 
@@ -358,3 +365,20 @@ func runtimeSafe(u *unstructured.Unstructured) (c *unstructured.Unstructured, er
 type panicError struct{ v any }
 
 func (p *panicError) Error() string { return "DeepCopy panicked" }
+
+// marshalingString is a named string kind that marshals itself.
+type marshalingString string
+
+func (marshalingString) MarshalJSON() ([]byte, error) { return []byte(`"m"`), nil }
+
+// selfMarshalCalls counts the calls of selfMarshalingMap.MarshalJSON.
+var selfMarshalCalls int
+
+// selfMarshalingMap marshals itself by marshalling a plain copy of itself: held
+// by itself it would recurse without end, as each call starts its own encoder.
+type selfMarshalingMap map[string]any
+
+func (m selfMarshalingMap) MarshalJSON() ([]byte, error) {
+	selfMarshalCalls++
+	return json.Marshal(map[string]any(m))
+}
