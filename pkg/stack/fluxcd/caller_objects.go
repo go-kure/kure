@@ -273,8 +273,9 @@ func (c *converter) convert(v reflect.Value, path string, depth int) (any, error
 		return c.convertMap(v, path, depth)
 	case reflect.Slice:
 		return c.convertSlice(v, path, depth)
+	default:
+		return nil, unsupported(path, v, "")
 	}
-	return nil, unsupported(path, v, "")
 }
 
 func (c *converter) convertMap(v reflect.Value, path string, depth int) (any, error) {
