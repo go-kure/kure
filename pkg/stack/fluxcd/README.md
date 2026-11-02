@@ -396,10 +396,13 @@ its last, and does not read any build of a tree when either differs, naming the 
 difference counts, a CRD schema another use of kustomize registered included, and so does a value
 moved to a field kyaml does not read, such as an extension moved to `ExtraProps`, which marshals
 to the same JSON. A change made and reverted between the two checks is not seen. The check covers
-the definitions kyaml exposes, and every kyaml path that registers a definition leaves an entry
-there. It does not see code that registers a definition and then deletes its entry from
-`openapi.Schema().Definitions` by hand: kyaml keeps its per-resource-type index apart, out of
-reach, and still serves the registered schema. That needs deliberate concealment by code in the
+the definitions kyaml exposes, and the schema kyaml's per-resource-type index serves for every kind
+they declare: the index holds a copy of each definition, apart from the one in the definitions, so
+a write through the schema kyaml returns for a kind changes what a build reads and leaves the
+definitions alone. Every kyaml path that registers a definition leaves an entry there. It does not
+see code that registers a definition and then deletes its entry from
+`openapi.Schema().Definitions` by hand: the index still serves the registered schema, and no
+definition declares its kind any more. That needs deliberate concealment by code in the
 same process, which no in-process check can stop, so it is out of scope. It orders only its own goroutines: another user's concurrent set or reset of the schema
 races with a build (go-kure/kure#1166).
 
@@ -425,7 +428,7 @@ base into the tree, or reference it through a Flux Source.
 concurrent integrations included, do not race each other on it. It refuses a build under a custom
 schema or another built-in version, naming it, and every build of a tree whose schema holds
 definitions other than the built-in ones, such as those kyaml's `AddSchema` and `AddDefinitions` <!-- doc-api-refs:ignore kyaml openapi functions, not kure API -->
-add, checked before the tree's first build and after its last (under 100 ms each). A process that
+add, checked before the tree's first build and after its last (about 0.1 s each). A process that
 registers CRD schemas with kustomize beside an integration therefore gets no reconcile-order
 verdict from it: kure cannot tell such a definition from one that changes how a field merges. It
 cannot order another use of kustomize in the same process: one that sets or resets the schema

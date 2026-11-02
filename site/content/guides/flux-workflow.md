@@ -975,6 +975,14 @@ applies only to a Kustomization kure builds, one with `patches`, `components`,
 `namePrefix`, `nameSuffix` or `targetNamespace`, or one with post-build
 substitution over a directory whose layout generates a ConfigMap; to keep such
 a tree, keep the encrypted files out of the Kustomizations kure builds.
+So is a tree, whole, when kustomize's schema in this process is not its
+built-in one: another use of kustomize set a custom schema, or added or
+changed definitions of it, such as a CRD schema, which can change how a field
+merges and so a verdict either way. kure checks the schema before the first
+build of a tree and again after its last (about 0.1 s each), and refuses every
+build of the tree if either differs, naming the definitions. A process that
+registers CRD schemas with kustomize beside an integration therefore gets no
+reconcile-order verdict from it; run such a use apart from the integration.
 One
 without `wait` that health-checks any other object waits for the Kustomization
 that applies it, whatever its expression says, when that writer is certain,

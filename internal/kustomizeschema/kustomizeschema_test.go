@@ -277,6 +277,33 @@ func TestDefinitions_ANamedTypeValueIsDetected(t *testing.T) {
 	})
 }
 
+// TestDefinitions_AnIndexedSchemaEditIsDetected: the ConfigMap schema kyaml's
+// index by resource type serves, a struct copy apart from the one in
+// Definitions, has its Properties replaced through the pointer
+// openapi.SchemaForResourceType returns. Definitions holds the same
+// definitions as before, so a fingerprint of them alone does not see it, but a
+// patch to a ConfigMap reads the indexed schema.
+func TestDefinitions_AnIndexedSchemaEditIsDetected(t *testing.T) {
+	changedDefinitions(t, "TestDefinitions_AnIndexedSchemaEditIsDetected", func(t *testing.T) {
+		before, err := json.Marshal(openapi.Schema().Definitions)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		rs := openapi.SchemaForResourceType(yaml.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"})
+		if rs == nil || rs.Schema == nil || len(rs.Schema.Properties) == 0 {
+			t.Fatal("kyaml's index holds no ConfigMap schema with properties")
+		}
+		rs.Schema.Properties = nil
+		after, err := json.Marshal(openapi.Schema().Definitions)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if string(before) != string(after) {
+			t.Fatal("the edit changed Definitions: the test no longer shows what a hash of them misses")
+		}
+	})
+}
+
 // TestDefinitions_ARemovedDefinitionIsDetected: a definition deleted from the
 // schema.
 func TestDefinitions_ARemovedDefinitionIsDetected(t *testing.T) {

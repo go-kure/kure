@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"sigs.k8s.io/kustomize/kyaml/openapi"
@@ -136,6 +137,39 @@ func TestTreeBuilds_AVersionChangedAfterTheFirstBuildRefusesTheTree(t *testing.T
 	err := b.finish()
 	if err == nil || !strings.Contains(err.Error(), "not its built-in one") || !strings.Contains(err.Error(), "the schema changed while the tree's builds ran") {
 		t.Fatalf("finish got %v, want the tree refused for a schema set while its builds ran", err)
+	}
+}
+
+// TestTreeBuilds_FinishWaitsForABuildInProgress: another tree's build holds
+// fluxBuildMu and works on kustomize's schema, which kyaml reads without a
+// lock of its own, so finish, which reads that schema, returns only once the
+// build has released it. The wait is bounded, not slept out: a finish that
+// ignores the lock returns at once and fails the first select.
+func TestTreeBuilds_FinishWaitsForABuildInProgress(t *testing.T) {
+	if !inDefinitionsProcess(t, "TestTreeBuilds_FinishWaitsForABuildInProgress") {
+		return
+	}
+	b, k := definitionTree(t)
+	if _, err := b.build(k); err != nil {
+		t.Fatalf("first build: got %v, want it read", err)
+	}
+	fluxBuildMu.Lock()
+	done := make(chan error, 1)
+	go func() { done <- b.finish() }()
+	select {
+	case err := <-done:
+		fluxBuildMu.Unlock()
+		t.Fatalf("finish returned %v while a build held fluxBuildMu, want it to wait", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	fluxBuildMu.Unlock()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("finish got %v once the build was done, want none", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("finish did not return after the build released fluxBuildMu")
 	}
 }
 

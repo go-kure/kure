@@ -17,15 +17,20 @@
 // whether the schema is still the built-in one: BuiltIn reads the version,
 // Definitions the definitions (go-kure/kure#1166). Definitions covers what
 // kyaml exposes in Schema().Definitions, where every registration through
-// kyaml's API leaves an entry. It does not cover code that registers a
-// definition and then deletes its entry by hand: kyaml's index by resource
-// type is unexported, still serves the schema, and hiding a registration that
-// way is deliberate concealment, which no check in the same process can stop.
+// kyaml's API leaves an entry, and the schema kyaml's index by resource type
+// serves for each kind those declare. It does not cover code that registers a
+// definition and then deletes its entry by hand: the index is unexported,
+// still serves the schema, and no definition declares its kind any more.
+// Hiding a registration that way is deliberate concealment, which no check in
+// the same process can stop.
 package kustomizeschema
 
 import (
+	"sort"
+
 	"sigs.k8s.io/kustomize/kyaml/openapi"
 	"sigs.k8s.io/kustomize/kyaml/openapi/kubernetesapi"
+	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
 // builtInDefinitions is Definitions' fingerprint of kustomize's built-in
@@ -37,7 +42,7 @@ import (
 // the definitions, or those types, fails TestDefinitions_BuiltInMatchesThePin,
 // which prints the new value, and the bump's change sets it. A stale pin
 // would refuse every build.
-const builtInDefinitions = "sha256:2c1a479454ccf7295f025e058bf2844292d05eefe187206b84d064b32115b894"
+const builtInDefinitions = "sha256:1315a31aba45abdfb68159c4bc353ce6c6e7f879d33afff846d4537b5bafad64"
 
 // Parse parses kustomize's schema unless it is parsed already; a concurrent
 // caller waits until it is. Once parsed, it costs one lock.
@@ -65,10 +70,93 @@ func BuiltIn() (string, bool) {
 // another field, such as an extension to ExtraProps, which kyaml does not
 // read and which marshals to the same JSON; a definition equal to the
 // built-in one does not. It parses the schema first, as Parse does, and
-// costs a walk of it, under 100 ms for the 623 definitions of kyaml
+// costs a walk of it, about 100 ms for the 623 definitions of kyaml
 // v0.21.1, so a caller asks once per run of builds, not once per build. It
-// does not read the version, so a custom schema is told by BuiltIn.
+// reads the schema kyaml's index by resource type serves for each kind the
+// definitions declare as well, since a write through the schema that
+// openapi.SchemaForResourceType returns changes a build and leaves the
+// definitions alone. It does not read the version, so a custom schema is told
+// by BuiltIn.
 func Definitions() (string, bool) {
-	got := "sha256:" + fingerprint(openapi.Schema().Definitions)
+	kinds, schemas := indexedSchemas()
+	got := "sha256:" + fingerprint(state{Definitions: openapi.Schema().Definitions, Kinds: kinds, Schemas: schemas})
 	return got, got == builtInDefinitions
+}
+
+// state is what Definitions fingerprints: the definitions, and the schemas
+// kyaml's index by resource type serves for the kinds they declare.
+type state struct {
+	Definitions any
+	Kinds       []indexedKind
+	Schemas     []any
+}
+
+// indexedKind is a kind a definition declares, and which of state.Schemas is
+// the schema kyaml serves for it, -1 if the index has none. Registering a
+// definition indexes a struct copy of it, apart from the one in Definitions,
+// and openapi.SchemaForResourceType returns a pointer to that copy, so a write
+// through it (replacing its Properties) changes what a build reads and leaves
+// Definitions as it was. A definition that declares many kinds (an options
+// type has dozens) is indexed once, so its kinds share one entry of Schemas,
+// each a *spec.Schema, which keeps the walk from reading it once per kind.
+type indexedKind struct {
+	APIVersion string
+	Kind       string
+	Schema     int
+}
+
+// gvkExtension is the extension a definition declares its kinds with, a list
+// of maps holding a group, a version and a kind (kyaml openapi.go:586-588).
+const gvkExtension = "x-kubernetes-group-version-kind"
+
+// indexedSchemas returns, for every kind the definitions declare, in a fixed
+// order, which of the returned schemas kyaml's index serves for it; the
+// schemas are the distinct ones, in the order the kinds first name them. A
+// kind is read as kyaml's index reads it (openapi.go:323-365); one it would not
+// index is skipped. A schema the index holds for a kind no definition declares
+// is not read: only code that hides its registration leaves one.
+func indexedSchemas() ([]indexedKind, []any) {
+	kinds := map[yaml.TypeMeta]bool{}
+	for _, d := range openapi.Schema().Definitions {
+		list, _ := d.Extensions[gvkExtension].([]any)
+		for _, e := range list {
+			m, _ := e.(map[string]any)
+			version, vok := m["version"].(string)
+			kind, kok := m["kind"].(string)
+			if !vok || !kok {
+				continue
+			}
+			if group, _ := m["group"].(string); group != "" {
+				version = group + "/" + version
+			}
+			kinds[yaml.TypeMeta{APIVersion: version, Kind: kind}] = true
+		}
+	}
+	sorted := make([]yaml.TypeMeta, 0, len(kinds))
+	for tm := range kinds {
+		sorted = append(sorted, tm)
+	}
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].APIVersion != sorted[j].APIVersion {
+			return sorted[i].APIVersion < sorted[j].APIVersion
+		}
+		return sorted[i].Kind < sorted[j].Kind
+	})
+	out := make([]indexedKind, 0, len(sorted))
+	var schemas []any
+	seen := map[any]int{}
+	for _, tm := range sorted {
+		k := indexedKind{APIVersion: tm.APIVersion, Kind: tm.Kind, Schema: -1}
+		if rs := openapi.SchemaForResourceType(tm); rs != nil && rs.Schema != nil {
+			i, ok := seen[rs.Schema]
+			if !ok {
+				i = len(schemas)
+				seen[rs.Schema] = i
+				schemas = append(schemas, rs.Schema)
+			}
+			k.Schema = i
+		}
+		out = append(out, k)
+	}
+	return out, schemas
 }
