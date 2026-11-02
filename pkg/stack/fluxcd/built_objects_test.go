@@ -330,8 +330,8 @@ func TestBuiltObjects_NonMemberIsTheCertainWriter(t *testing.T) {
 // TestBuiltObjects_NonMemberIsTheCertainWriter: a emits h, whose build of a's
 // directory adds h-cm through a component, and b-longer, without wait,
 // health-checks h-cm; with dependsOnB h depends on b-longer. a also emits
-// each of others.
-func integrateNonMemberWriter(t *testing.T, placement layout.FluxPlacement, dependsOnB bool, others func(dir string) []*kustv1.Kustomization) (*layout.ManifestLayout, error) {
+// each of others; each editA edits a's layout.
+func integrateNonMemberWriter(t *testing.T, placement layout.FluxPlacement, dependsOnB bool, others func(dir string) []*kustv1.Kustomization, editA ...func(a *layout.ManifestLayout)) (*layout.ManifestLayout, error) {
 	t.Helper()
 	c := pairCluster(stack.HealthCheck{},
 		[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "a-cm")},
@@ -352,6 +352,9 @@ func integrateNonMemberWriter(t *testing.T, placement layout.FluxPlacement, depe
 	a := findLayout(ml, "a-cm")
 	if a == nil {
 		t.Fatal("no layout holds a-cm")
+	}
+	for _, edit := range editA {
+		edit(a)
 	}
 	var h *kustv1.Kustomization
 	if dependsOnB {

@@ -456,11 +456,15 @@ annotation, a null creation timestamp and an empty status from each resource's t
 value read from the cluster is assumed to be plain text that keeps the structure Flux substitutes it into: one
 holding YAML syntax (a line break, a quote, a comment, `: ` in a key) can change any field at
 apply, which no offline reading sees, as main's reading of the object as written does not either.
-Three inputs are read in a way that may refuse a tree Flux converges, never admit a deadlock: an
+Two inputs are read in a way that may refuse a tree Flux converges, never admit a deadlock: an
 inline YAML anchor and alias that carry a cluster value into an object's name or namespace
-(go-kure/kure#1176); a ConfigMap generated in the directory of a writer whose build only
-substitutes, read unsubstituted (go-kure/kure#1177); and a generator over SOPS-encrypted sources,
-hashed from the ciphertext Flux decrypts first (go-kure/kure#1178).
+(go-kure/kure#1176); and a generator over SOPS-encrypted sources, hashed from the ciphertext Flux
+decrypts first (go-kure/kure#1178). A writer that substitutes (a `spec.postBuild` with `substitute`,
+`substituteFrom` or `substituteStrategy: Always`) over a directory that generates a ConfigMap is
+built as kustomize-controller builds it, so the ConfigMap is read under its hashed name and
+substituted as the rest are (go-kure/kure#1177). That build is refused as any other is: a tree
+that was admitted with such a writer whose generator kure cannot build (a remote file source, a
+kustomize failure) is now refused, naming the build.
 A Kustomization is read as it is
 applied: kustomize-controller drops its `status` and `metadata.creationTimestamp` first, so
 neither keeps it from being read.
@@ -501,9 +505,10 @@ passes:
 - a check with no namespace, or a matching object written with none that its apply does not
   exclude, a cluster-scoped one included (it may exist before any apply);
 - a `configMapGenerator` entry of a directory read as the tree holds it (the bootstrap's, that of a
-  writer that transforms nothing, or that of a Kustomization whose build is not the tree's) whose
-  name, or that name and a dash, begins the checked name, as kustomize appends a content hash; a
-  transformed build's generated names are read as built;
+  writer that is not built, that is, one that transforms nothing and substitutes nothing over a
+  directory that generates a ConfigMap, or that of a Kustomization whose build is not the tree's)
+  whose name, or that name and a dash, begins the checked name, as kustomize appends a content
+  hash; a built writer's generated names are read as built, substituted;
 - an object whose identity may change at apply, whatever it names, unless only the results of the
   object's writers hold it: `$` left after substitution or `ENC[` (SOPS) in its `apiVersion`, kind,
   namespace or name, or a namespace or name a `substituteFrom` variable sets. Another apply may

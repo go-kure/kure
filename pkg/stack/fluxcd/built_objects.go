@@ -26,8 +26,9 @@ type objectSource struct {
 	spec    *kustv1.Kustomization
 	objects []builtObject
 	// heldScope lists the layouts of an apply read as the tree holds them
-	// (heldBuild): the bootstrap, a writer whose build transforms nothing,
-	// and every Kustomization whose build is not the tree's. Their
+	// (heldBuild): the bootstrap, a writer that is not built
+	// (buildsWithKustomize), and every Kustomization whose build is not the
+	// tree's. Their
 	// configMapGenerator entries are applied under a content hash the read
 	// does not compute. A writer built as kustomize-controller builds it
 	// (treeBuilds) has none: its result holds what its generators make.
@@ -71,8 +72,10 @@ func (v *builtView) readObjects() error {
 		switch {
 		case k == nil:
 			s.heldScope = buildScope(v.t.root)
-		case !transformsBuild(k):
-			s.heldScope = buildScope(v.t.layoutAt[path.Clean(k.Spec.Path)])
+		default:
+			if dir := v.t.layoutAt[path.Clean(k.Spec.Path)]; !buildsWithKustomize(k, dir) {
+				s.heldScope = buildScope(dir)
+			}
 		}
 		for _, r := range v.results[w] {
 			o, err := readBuiltObject(r)
