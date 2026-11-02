@@ -1,6 +1,9 @@
 package kustomizeschema
 
-import "testing"
+import (
+	"runtime/debug"
+	"testing"
+)
 
 type pair struct {
 	A map[string]any
@@ -188,6 +191,83 @@ func TestFingerprint_ASharedPointerOrMapIsNotAnEqualCopy(t *testing.T) {
 	s := []string{"a"}
 	if fingerprint([][]string{s, s}) != fingerprint([][]string{{"a"}, {"a"}}) {
 		t.Error("a shared slice and two equal copies have different fingerprints")
+	}
+}
+
+// TestFingerprint_AKeyThatLeadsBackToItsMapIsACycle: a map key that is no
+// string and reaches the map that holds it is walked once and written as a
+// cycle, not forever. The stack is capped so that a regression fails the test
+// at once, not after a gigabyte.
+func TestFingerprint_AKeyThatLeadsBackToItsMapIsACycle(t *testing.T) {
+	defer debug.SetMaxStack(debug.SetMaxStack(16 << 20))
+	keyed := func(v int) map[any]any {
+		m := map[any]any{}
+		m[&m] = v
+		return m
+	}
+	if a, b := fingerprint(keyed(1)), fingerprint(keyed(1)); a != b {
+		t.Error("a map keyed by a pointer to itself has an unstable fingerprint")
+	}
+	if fingerprint(keyed(1)) == fingerprint(keyed(2)) {
+		t.Error("two such maps holding different values have one fingerprint")
+	}
+}
+
+func localKindInt() any {
+	type N int
+	type T struct{ F N }
+	return T{}
+}
+
+func localKindString() any {
+	type N string
+	type T struct{ F N }
+	return T{}
+}
+
+func localKindIntSlice() any {
+	type N int
+	type T struct{ F []N }
+	return T{}
+}
+
+func localKindStringSlice() any {
+	type N string
+	type T struct{ F []N }
+	return T{}
+}
+
+// TestFingerprint_ReadsTheKindOfANamedType: two types of one package path and
+// name whose underlying kinds differ, behind a field or an element of an
+// unnamed type, have different fingerprints, though their zero values write
+// the same bytes.
+func TestFingerprint_ReadsTheKindOfANamedType(t *testing.T) {
+	if fingerprint(localKindInt()) == fingerprint(localKindString()) {
+		t.Error("a field of a named int and one of a named string have one fingerprint")
+	}
+	if fingerprint(localKindIntSlice()) == fingerprint(localKindStringSlice()) {
+		t.Error("a slice of a named int and one of a named string have one fingerprint")
+	}
+}
+
+// TestFingerprint_NumbersASliceCycleByDepth: two cycles of slices that return
+// to different slices of the path have different fingerprints.
+func TestFingerprint_NumbersASliceCycleByDepth(t *testing.T) {
+	cycle := func(toRoot bool) []any {
+		a, b := []any{nil}, []any{nil}
+		a[0] = b
+		if toRoot {
+			b[0] = a
+		} else {
+			b[0] = b
+		}
+		return a
+	}
+	if fingerprint(cycle(true)) == fingerprint(cycle(false)) {
+		t.Error("a cycle back to the root and one back to the inner slice have one fingerprint")
+	}
+	if fingerprint(cycle(true)) != fingerprint(cycle(true)) {
+		t.Error("a slice cycle has an unstable fingerprint")
 	}
 }
 
