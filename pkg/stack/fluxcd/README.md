@@ -482,9 +482,15 @@ annotation, a null creation timestamp and an empty status from each resource's t
 value read from the cluster is assumed to be plain text that keeps the structure Flux substitutes it into: one
 holding YAML syntax (a line break, a quote, a comment, `: ` in a key) can change any field at
 apply, which no offline reading sees, as main's reading of the object as written does not either.
-Two inputs are read in a way that may refuse a tree Flux converges, never admit a deadlock: an
-inline YAML anchor and alias that carry a cluster value into an object's name or namespace
-(go-kure/kure#1176); and a generator over SOPS-encrypted sources, hashed from the ciphertext Flux
+An object's namespace or name is unknown where a cluster value reaches it through an inline YAML
+anchor and alias in another field, as where it references the variable itself: kure substitutes
+the object again with the variables it references that `spec.postBuild.substitute` does not set
+bound, each to a value of its own, twice, and reads the identity as unknown where either run differs from the
+offline one (go-kure/kure#1176). A value that reaches it only through a form neither run triggers
+(a substring past the length of both) is not seen, and the identity stays certain, which may
+refuse a tree Flux converges and never admits a deadlock.
+One input is read in a way that may refuse a tree Flux converges, never admit a deadlock: a
+generator over SOPS-encrypted sources, hashed from the ciphertext Flux
 decrypts first (go-kure/kure#1178). A writer that substitutes (a `spec.postBuild` with `substitute`,
 `substituteFrom` or `substituteStrategy: Always`) over a directory that generates a ConfigMap is
 built as kustomize-controller builds it, so the ConfigMap is read under its hashed name and

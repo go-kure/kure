@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -249,7 +250,10 @@ type substituted struct {
 //     it does not, which an inline alias or open quote may move there
 //     (refuseUnknownType);
 //   - in another object's namespace or name it leaves that object's identity
-//     unknown (unknownIdentity);
+//     unknown (unknownIdentity); so does a variable elsewhere in the object
+//     that an inline YAML anchor and alias carries into its namespace or
+//     name, which identityMoves sees by substituting the object again with
+//     the variable bound to each of two values and comparing the identity;
 //   - in any key at an object's top level, or in an inline value with a line
 //     break YAML reads that the object references, it is refused: either may
 //     change what the object is at apply (refuseMovedStructure); in any key
@@ -289,10 +293,11 @@ func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substitut
 	}
 	fromCluster := len(k.Spec.PostBuild.SubstituteFrom) > 0
 	always := k.GetSubstituteStrategy() == kustv1.SubstituteStrategyAlways
-	substitute := func(res *resource.Resource) (*resource.Resource, error) {
+	substituteWith := func(kust map[string]any, res *resource.Resource) (*resource.Resource, error) {
 		return fluxkustomize.SubstituteVariables(context.Background(), nil, unstructured.Unstructured{Object: kust}, res,
 			fluxkustomize.SubstituteWithDryRun(true), fluxkustomize.SubstituteWithAlways(always))
 	}
+	substitute := func(res *resource.Resource) (*resource.Resource, error) { return substituteWith(kust, res) }
 	kustomizeschema.Parse()
 	rf := provider.NewDefaultDepProvider().GetResourceFactory()
 	for _, obj := range objs {
@@ -315,6 +320,7 @@ func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substitut
 		unknownIdentity := false
 		var writtenLabels, writtenAnnotations writtenSkip
 		var written *resource.Resource
+		var objectVars []string
 		if fromCluster {
 			if err := refuseUnknownType(k, res, inline); err != nil {
 				return nil, err
@@ -336,8 +342,7 @@ func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substitut
 			if err != nil {
 				return nil, errors.Wrap(err, "read the object")
 			}
-			objectVars, err := unknownVars(string(text), inline)
-			if err != nil {
+			if objectVars, err = unknownVars(string(text), inline); err != nil {
 				return nil, err
 			}
 			if metadataKeyVar || len(objectVars) > 0 {
@@ -353,6 +358,11 @@ func substituteBuild(k *kustv1.Kustomization, objs []client.Object) ([]substitut
 		if fromCluster {
 			if unknownIdentity, err = refuseUnknownVars(k, written, res, inline); err != nil {
 				return nil, err
+			}
+			if !unknownIdentity && len(objectVars) > 0 && !isFluxKustomizationType(res.GetApiVersion(), res.GetKind()) {
+				if unknownIdentity, err = identityMoves(substituteWith, kust, written, res, objectVars); err != nil {
+					return nil, errors.Wrapf(err, "Flux Kustomization %q (spec.path %q): probe the identity of %s %q", k.Name, k.Spec.Path, obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+				}
 			}
 		}
 		m, err := jsonContent(res)
@@ -602,6 +612,57 @@ func refuseUnknownVars(k *kustv1.Kustomization, written, applied *resource.Resou
 			return false, err
 		}
 		if len(vars) > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// probeSentinels are the two values identityMoves binds to the variables the
+// cluster may set, each variable with its index after the value, so that the
+// variables differ from each other and a form that cancels two of them
+// (${A/${B}/x}, say) does not hide a move. The two differ from each other at
+// every position they share and in length, so no substring form of a
+// variable (${VAR:0:1}, say) leaves both equal to what the offline
+// substitution made, whatever default it reads.
+var probeSentinels = [2]string{"kPb9-Q", "xe2_Zw7Lc"}
+
+// identityMoves reports whether the namespace or the name of written, an
+// object as written, moves when the variables vars, which it references and
+// the cluster may set, take a value: it substitutes written again with vars
+// bound, each to a value of its own, to each of probeSentinels, through a copy
+// of kust, and compares the
+// result with baseline, the object as the offline substitution made it. A
+// name and a namespace that reference no such variable cannot move, so
+// refuseUnknownVars has already read them. One that an inline YAML anchor and
+// alias carries a cluster value into through another field moves, which no
+// scan of the two fields sees (go-kure/kure#1176).
+//
+// It only ever reports a move it has seen, so a probe miss (an identity the
+// cluster moves with a value that neither sentinel is, a substring past the
+// sentinels' length, say) leaves the identity certain: the existing reading,
+// which can refuse a tree Flux converges and never admits a deadlock.
+func identityMoves(substitute func(kust map[string]any, res *resource.Resource) (*resource.Resource, error), kust map[string]any, written, baseline *resource.Resource, vars []string) (bool, error) {
+	for _, sentinel := range probeSentinels {
+		probe := runtime.DeepCopyJSON(kust)
+		bound, _, err := unstructured.NestedMap(probe, "spec", "postBuild", "substitute")
+		if err != nil {
+			return false, errors.Wrap(err, "read spec.postBuild.substitute")
+		}
+		if bound == nil {
+			bound = make(map[string]any, len(vars))
+		}
+		for i, name := range vars {
+			bound[name] = sentinel + strconv.Itoa(i)
+		}
+		if err := unstructured.SetNestedMap(probe, bound, "spec", "postBuild", "substitute"); err != nil {
+			return false, errors.Wrap(err, "bind the variables")
+		}
+		got, err := substitute(probe, written.DeepCopy())
+		if err != nil {
+			return false, err
+		}
+		if got.GetNamespace() != baseline.GetNamespace() || got.GetName() != baseline.GetName() {
 			return true, nil
 		}
 	}
