@@ -637,11 +637,12 @@ func (t *kustomizationTree) within(u, d string) bool {
 // wraps ErrUmbrellaTerminals before go-kure/kure#1190.
 //
 // An unstructured object in a root that holds a value apimachinery cannot
-// read, a plain int say, is replaced in place by one that holds what its JSON
-// decodes to, an int64 for it: its Object field is set to a new map, so the
+// read, a plain int say, is replaced in place by one that holds its JSON typed
+// counterpart, an int64 for it: its Object field is set to a new map, so the
 // object the caller passed changes, and the caller's map does not. An object
-// that holds only JSON typed values is left alone. A value that does not
-// marshal gives an error that wraps ErrUmbrellaTerminals, names the object
+// that holds only JSON typed values is left alone. A value of a shape outside
+// the closed list at jsonContentOf (a struct, a pointer, a type with a
+// marshaler) gives an error that wraps ErrUmbrellaTerminals, names the object
 // and the field, and replaces no object. An error after the replacement puts
 // every Object map back (go-kure/kure#1201).
 func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, error) {

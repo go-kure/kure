@@ -230,12 +230,13 @@ func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.L
 // and every such field it sets.
 //
 // An unstructured object in root that holds a value apimachinery cannot read,
-// a plain int say, is replaced in place by one that holds what its JSON
-// decodes to, an int64 for it: its Object field is set to a new map, so the
+// a plain int say, is replaced in place by one that holds its JSON typed
+// counterpart, an int64 for it: its Object field is set to a new map, so the
 // object the caller passed changes, and the caller's map does not. An object
-// that holds only JSON typed values is left alone. A value that does not
-// marshal refuses the call, with the object and the field named, and replaces
-// no object, and a refusal after it puts every Object map back
+// that holds only JSON typed values is left alone. A value of a shape outside
+// the closed list at jsonContentOf (a struct, a pointer, a type with a
+// marshaler) refuses the call, with the object and the field named, and
+// replaces no object, and a refusal after it puts every Object map back
 // (go-kure/kure#1201).
 func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, error) {
 	out, _, err := g.generateFromLayout(root, c)
