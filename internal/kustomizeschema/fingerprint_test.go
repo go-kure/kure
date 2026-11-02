@@ -116,6 +116,81 @@ func TestFingerprint_StopsAtACycle(t *testing.T) {
 	_ = fingerprint(s)
 }
 
+// TestFingerprint_TellsEveryKindApart: a value of each kind the walk reads, in
+// a container that is otherwise equal, moves the fingerprint, as do maps
+// nested in maps, an array's length and a root that holds nothing.
+func TestFingerprint_TellsEveryKindApart(t *testing.T) {
+	ch := make(chan int)
+	for name, tc := range map[string][2]any{
+		"an int8":                {[]int8{1}, []int8{2}},
+		"a negative int":         {[]int{-1}, []int{1}},
+		"a uint":                 {[]uint{1}, []uint{2}},
+		"a float32":              {[]float32{1.5}, []float32{2.5}},
+		"a complex real part":    {[]complex128{1 + 2i}, []complex128{3 + 2i}},
+		"a complex imaginary":    {[]complex128{1 + 2i}, []complex128{1 + 3i}},
+		"a func against nil":     {[]any{func() {}}, []any{(func())(nil)}},
+		"a chan against nil":     {[]any{ch}, []any{(chan int)(nil)}},
+		"a map nested in a map":  {map[string]map[string]int{"a": {"b": 1}}, map[string]map[string]int{"a": {"b": 2}}},
+		"a nil interface":        {[]any{nil}, []any{0}},
+		"a root that holds none": {nil, 0},
+		"an array's length":      {[1]string{"a"}, [2]string{"a", ""}},
+		"a key's type":           {map[any]int{1: 1}, map[any]int{int64(1): 1}},
+	} {
+		if fingerprint(tc[0]) == fingerprint(tc[1]) {
+			t.Errorf("%s: the fingerprints are equal", name)
+		}
+	}
+}
+
+func retypedField() any {
+	type T struct{ X string }
+	return T{"a"}
+}
+
+func retypedFieldType() any {
+	type T struct{ X namedString }
+	return T{"a"}
+}
+
+func renamedField() any {
+	type T struct{ Y string }
+	return T{"a"}
+}
+
+// TestFingerprint_ReadsTheLayoutOfATypeNotItsName: three struct types of one
+// name and one value, whose field differs in its type or its name, have three
+// fingerprints: a library bump that retypes or renames a field of the schema
+// changes it, which the pin test then reports.
+func TestFingerprint_ReadsTheLayoutOfATypeNotItsName(t *testing.T) {
+	a, b, c := fingerprint(retypedField()), fingerprint(retypedFieldType()), fingerprint(renamedField())
+	if a == b || a == c || b == c {
+		t.Errorf("fingerprints %s, %s, %s: want three", a, b, c)
+	}
+}
+
+// TestFingerprint_ASharedPointerOrMapIsNotAnEqualCopy: a pointer or map that
+// two parents share is read once and written as a reference the second time,
+// so the same content in two copies differs from it, the conservative way: a
+// definition replaced by an equal copy that stops being shared is refused,
+// never read as unchanged. Slices carry no such sharing.
+func TestFingerprint_ASharedPointerOrMapIsNotAnEqualCopy(t *testing.T) {
+	p := &node{Name: "x"}
+	if fingerprint([]*node{p, p}) == fingerprint([]*node{{Name: "x"}, {Name: "x"}}) {
+		t.Error("a shared pointer and two equal copies have one fingerprint")
+	}
+	if a, b := fingerprint([]*node{p, p}), fingerprint([]*node{p, p}); a != b {
+		t.Error("a shared pointer has an unstable fingerprint")
+	}
+	m := map[string]int{"a": 1}
+	if fingerprint([]map[string]int{m, m}) == fingerprint([]map[string]int{{"a": 1}, {"a": 1}}) {
+		t.Error("a shared map and two equal copies have one fingerprint")
+	}
+	s := []string{"a"}
+	if fingerprint([][]string{s, s}) != fingerprint([][]string{{"a"}, {"a"}}) {
+		t.Error("a shared slice and two equal copies have different fingerprints")
+	}
+}
+
 // BenchmarkDefinitions is the cost of one Definitions call on the parsed
 // built-in schema, which treeBuilds pays twice per tree.
 func BenchmarkDefinitions(b *testing.B) {

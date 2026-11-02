@@ -1,6 +1,7 @@
 package fluxcd
 
 import (
+	stderrors "errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -119,6 +120,13 @@ func TestTreeBuilds_ADefinitionAddedAfterTheFirstBuildRefusesTheTree(t *testing.
 	if err == nil || !strings.Contains(err.Error(), "not its built-in ones") || !strings.Contains(err.Error(), "while its builds ran") || !strings.Contains(err.Error(), "none of what the tree's builds make is read") {
 		t.Fatalf("finish got %v, want the tree refused for a definition added while its builds ran", err)
 	}
+	var u unreadBuild
+	if !stderrors.As(err, &u) {
+		t.Fatalf("finish got %T, want an unreadBuild: the tree's builds are not read, they did not fail", err)
+	}
+	if !strings.Contains(err.Error(), "built: flux-system/app)") {
+		t.Errorf("finish got %v, want it to name the Kustomization built, once", err)
+	}
 }
 
 // TestTreeBuilds_AVersionChangedAfterTheFirstBuildRefusesTheTree: the version
@@ -137,6 +145,10 @@ func TestTreeBuilds_AVersionChangedAfterTheFirstBuildRefusesTheTree(t *testing.T
 	err := b.finish()
 	if err == nil || !strings.Contains(err.Error(), "not its built-in one") || !strings.Contains(err.Error(), "the schema changed while the tree's builds ran") {
 		t.Fatalf("finish got %v, want the tree refused for a schema set while its builds ran", err)
+	}
+	var u unreadBuild
+	if !stderrors.As(err, &u) || !strings.Contains(err.Error(), "built: flux-system/app)") {
+		t.Errorf("finish got %T %v, want an unreadBuild naming the Kustomization built", err, err)
 	}
 }
 

@@ -42,7 +42,7 @@ import (
 // the definitions, or those types, fails TestDefinitions_BuiltInMatchesThePin,
 // which prints the new value, and the bump's change sets it. A stale pin
 // would refuse every build.
-const builtInDefinitions = "sha256:1315a31aba45abdfb68159c4bc353ce6c6e7f879d33afff846d4537b5bafad64"
+const builtInDefinitions = "sha256:293b16ad12a80ade01e9c4dbc10674e0b76444c8fb078127b59b08b7f2bf9844"
 
 // Parse parses kustomize's schema unless it is parsed already; a concurrent
 // caller waits until it is. Once parsed, it costs one lock.
@@ -63,17 +63,18 @@ func BuiltIn() (string, bool) {
 }
 
 // Definitions returns a fingerprint of the definitions the schema holds now,
-// the SHA-256 of a walk over every field of them, and whether it is the
-// built-in schema's (fingerprint). Any definition added, replaced or edited
+// the SHA-256 of a walk over every field of them and of the schemas kyaml's
+// index serves, and whether it is the built-in schema's (fingerprint). Any
+// definition added, replaced or edited
 // in place (openapi.AddSchema, openapi.AddDefinitions, a write through
 // openapi.Schema()) changes it, and so does one removed, or a value moved to
 // another field, such as an extension to ExtraProps, which kyaml does not
 // read and which marshals to the same JSON; a definition equal to the
 // built-in one does not. It parses the schema first, as Parse does, and
-// costs a walk of it, about 100 ms for the 623 definitions of kyaml
-// v0.21.1, so a caller asks once per run of builds, not once per build. It
-// reads the schema kyaml's index by resource type serves for each kind the
-// definitions declare as well, since a write through the schema that
+// costs a walk of it, about 15 to 25 ms on a quiet host (about 0.1 s under the
+// race detector) for the 623 definitions of kyaml v0.21.1, so a caller asks
+// once per run of builds, not once per build. The index is read for each kind
+// the definitions declare, since a write through the schema that
 // openapi.SchemaForResourceType returns changes a build and leaves the
 // definitions alone. It does not read the version, so a custom schema is told
 // by BuiltIn.
