@@ -988,7 +988,15 @@ admit a tree that never becomes Ready
 ([details](/api-reference/flux-engine/#with-additiveceldependencycheckoff)).
 Picking terminal leaves counts only a `dependsOn` entry with no `readyExpr` as
 a wait for `Ready`, with the setting or without: Flux skips its own readiness
-check for an entry with an expression.
+check for an entry with an expression. The pass reads a `dependsOn` as the tree
+holds it, not as a patch applies it, so when any Kustomization in the tree sets
+`spec.patches` or `spec.components` an entry with no `readyExpr` proves nothing
+either: a patch may add one, directly or by adding patches to another
+Kustomization. The dependency then stays a terminal leaf, so a dependent is
+written onto more leaves, and a kept node Kustomization is refused for a
+dependency it names only that way. Trees without a patch read as before. A `"true"` entry on
+a patched tree is still read as a wait for `Ready`, which can refuse a tree
+Flux would converge.
 `fluxcd.UmbrellaTerminals` returns each umbrella's terminal leaves, for a
 dependency written from outside the tree, for trees as an integration returned
 them: only a Kustomization the integration recorded, still on the recorded
