@@ -3,12 +3,14 @@ package fluxcd
 import (
 	"encoding/json"
 	"math"
+	"net"
 	"reflect"
 	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	utiljson "k8s.io/apimachinery/pkg/util/json"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -227,6 +229,55 @@ func TestNormalizeCallerObjects(t *testing.T) {
 				t.Errorf("%s: got %v, want a refusal for the count", name, err)
 			}
 		}
+	})
+
+	t.Run("the object is what the JSON round trip gives, for every plausible Go value", func(t *testing.T) {
+		type name string
+		values := map[string]any{
+			"RawMessage":      json.RawMessage(`{"enabled":true,"n":3}`),
+			"net.IP":          net.ParseIP("10.0.0.1"),
+			"big whole float": float64(1000000000000000100),
+			"huge float":      1e300,
+			"small float":     1e-9,
+			"float32":         float32(16777216.5),
+			"neg zero":        math.Copysign(0, -1),
+			"Number empty":    json.Number(""),
+			"Number 1.0":      json.Number("1.0"),
+			"Number 1e3":      json.Number("1e3"),
+			"Number big":      json.Number("12345678901234567890"),
+			"uintptr":         uintptr(53),
+			"invalid UTF-8":   "a\xffb\xc3",
+			"named string":    name("x\xff"),
+			"map bad key":     map[string]string{"k\xfe": "v"},
+			"time.Duration":   int64(5),
+			"[]byte":          []byte("hi\xff"),
+			"nested":          []map[string][]int{{"a": {1, 2}}},
+			"[2]int":          [2]int{1, 2},
+		}
+		for label, v := range values {
+			t.Run(label, func(t *testing.T) {
+				u := object(map[string]any{"v": v, "n": 0})
+				data, err := json.Marshal(u.Object)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var want map[string]any
+				if err := utiljson.Unmarshal(data, &want); err != nil {
+					t.Fatal(err)
+				}
+				if err := normalizeForTest(layoutOf(u)); err != nil {
+					t.Fatalf("got %v, want the round trip's result", err)
+				}
+				if !reflect.DeepEqual(u.Object, want) {
+					t.Errorf("got %#v, want %#v", u.Object, want)
+				}
+			})
+		}
+		t.Run("json.Number the encoder rejects is refused", func(t *testing.T) {
+			if err := normalizeForTest(layoutOf(object(map[string]any{"v": json.Number("01"), "n": 0}))); err == nil {
+				t.Error("an invalid number was accepted")
+			}
+		})
 	})
 
 	t.Run("the JSON form of the common Go kinds", func(t *testing.T) {
