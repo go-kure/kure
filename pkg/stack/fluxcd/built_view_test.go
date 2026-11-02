@@ -663,6 +663,153 @@ func TestBuiltView_ImagesAreCompared(t *testing.T) {
 	}
 }
 
+// TestBuiltView_AZeroValueIsNotADifference: hand-written builds web's
+// directory with a patch that sets one of web's spec fields to its zero value
+// (false, an empty list). kustomize-controller applies that copy as it applies
+// web's own, which omits the field, so the two writers agree and the tree is
+// admitted (go-kure/kure#1169). The control sets the field to a value that
+// differs, and the tree is refused naming it.
+func TestBuiltView_AZeroValueIsNotADifference(t *testing.T) {
+	for name, c := range map[string]struct {
+		field, zero, value string
+	}{
+		"ignoreMissingComponents": {"ignoreMissingComponents", "false", "true"},
+		"wait":                    {"wait", "false", "true"},
+		"images":                  {"images", "[]", "[{name: safe, newName: m}]"},
+		"healthChecks":            {"healthChecks", "[]", "[{apiVersion: apps/v1, kind: Deployment, name: web}]"},
+	} {
+		for _, differs := range []bool{false, true} {
+			for _, placement := range integratedPlacements {
+				value := c.zero
+				if differs {
+					value = c.value
+				}
+				t.Run(fmt.Sprintf("%s/differs=%t/%s", name, differs, placement), func(t *testing.T) {
+					k := handWritten("hand-written")
+					k.Spec.Path = webDirectory(t, placement)
+					k.Spec.Patches = []kustomize.Patch{{
+						Patch:  fmt.Sprintf("- op: add\n  path: /spec/%s\n  value: %s\n", c.field, value),
+						Target: &kustomize.Selector{Kind: "Kustomization", Name: "web"},
+					}}
+					_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(srBundle("platform", objApp("platform-app", k)), false), withPlacement(nodeOnly, placement))
+					if !differs {
+						if err != nil {
+							t.Fatalf("got %v, want the tree admitted", err)
+						}
+						return
+					}
+					if err == nil || !strings.Contains(err.Error(), `Flux Kustomization "flux-system/web" is written by`) || !strings.Contains(err.Error(), "spec."+c.field) {
+						t.Fatalf("got %v, want the two writers of web refused on spec.%s", err, c.field)
+					}
+				})
+			}
+		}
+	}
+}
+
+// TestBuiltView_AKeyInAnotherCaseIsNoField: hand-written builds web's
+// directory with a patch that adds wait: false and Wait: true to web's spec,
+// and web's own copy omits wait. A key in another case is no field, for the API
+// server and for kure's typed read alike (TestTypedRead_AKeyInAnotherCaseSetsNothing),
+// so both copies apply with no wait and the tree is admitted. The control adds
+// wait: true, a real difference, and the tree is refused naming spec.wait.
+func TestBuiltView_AKeyInAnotherCaseIsNoField(t *testing.T) {
+	for name, c := range map[string]struct {
+		ops     string
+		refused bool
+	}{
+		"Wait true beside wait false": {ops: "- op: add\n  path: /spec/wait\n  value: false\n- op: add\n  path: /spec/Wait\n  value: true\n"},
+		"Wait true alone":             {ops: "- op: add\n  path: /spec/Wait\n  value: true\n"},
+		"wait true":                   {ops: "- op: add\n  path: /spec/wait\n  value: true\n", refused: true},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				k := handWritten("hand-written")
+				k.Spec.Path = webDirectory(t, placement)
+				k.Spec.Patches = []kustomize.Patch{{
+					Patch:  c.ops,
+					Target: &kustomize.Selector{Kind: "Kustomization", Name: "web"},
+				}}
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(srBundle("platform", objApp("platform-app", k)), false), withPlacement(nodeOnly, placement))
+				if !c.refused {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
+				if err == nil || !strings.Contains(err.Error(), `Flux Kustomization "flux-system/web" is written by`) || !strings.Contains(err.Error(), "spec.wait") {
+					t.Fatalf("got %v, want the two writers of web refused on spec.wait", err)
+				}
+			})
+		}
+	}
+}
+
+// TestBuiltView_ASelfCopyingKustomizationEnds: the application of platform
+// holds a Flux Kustomization named ${X} that builds the directory holding it,
+// and platform substitutes X inline as "h". Its postBuild sets X to next, so
+// each build of the directory holds a Kustomization of a new name when next is
+// "${X}x" (h, hx, hxx, ...), and the walk for writers never finishes unless it
+// is bounded: the tree is refused, naming the Kustomization that may write
+// Kustomizations without end and saying the bound cannot tell it from a chain
+// that converges later (go-kure/kure#1170). When next is "h" or "j" the chain
+// comes back to a copy already built, and the tree is admitted.
+func TestBuiltView_ASelfCopyingKustomizationEnds(t *testing.T) {
+	for name, c := range map[string]struct {
+		next    string
+		refused bool
+	}{
+		"the name grows":     {next: "${X}x", refused: true},
+		"the name is fixed":  {next: "h"},
+		"the name converges": {next: "j"},
+		"the name doubles":   {next: "${X}${X}", refused: true},
+		// The name reaches 13 characters and stays there: the chain
+		// converges, but only after more builds than the bound follows.
+		"the name converges late": {next: "${X:0:12}x", refused: true},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				u := unstructuredObj(kustv1.GroupVersion.String(), "Kustomization", "flux-system", "${X}")
+				for _, f := range []struct {
+					value any
+					path  []string
+				}{
+					{platformDirectory(t, placement), []string{"spec", "path"}},
+					{map[string]any{"kind": "GitRepository", "name": "flux-system"}, []string{"spec", "sourceRef"}},
+					{map[string]any{"X": c.next}, []string{"spec", "postBuild", "substitute"}},
+				} {
+					if err := unstructured.SetNestedField(u.Object, f.value, f.path...); err != nil {
+						t.Fatalf("SetNestedField: %v", err)
+					}
+				}
+				platform := srBundle("platform", objApp("platform-app", u))
+				platform.PostBuild = &stack.PostBuild{Substitute: map[string]string{"X": "h"}}
+				done := make(chan error, 1)
+				go func() {
+					_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(platform, true), withPlacement(nodeOnly, placement))
+					done <- err
+				}()
+				var err error
+				select {
+				case err = <-done:
+				case <-time.After(20 * time.Second):
+					t.Fatal("the integration did not end")
+				}
+				if !c.refused {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
+				const want = "it cannot tell a chain that grows without end from one that converges later"
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Fatalf("got %v, want the tree refused with %q", err, want)
+				}
+			})
+		}
+	}
+}
+
 // platformDirectory is the spec.path of platform in noWaitCluster.
 func platformDirectory(t *testing.T, placement layout.FluxPlacement) string {
 	t.Helper()
