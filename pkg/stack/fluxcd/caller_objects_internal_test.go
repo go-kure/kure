@@ -149,6 +149,41 @@ func TestNormalizeCallerObjects(t *testing.T) {
 		}
 	})
 
+	t.Run("a value nested deeper than the limit is refused, cycle or not", func(t *testing.T) {
+		nest := func(levels int, leaf any) map[string]any {
+			m := map[string]any{"leaf": leaf}
+			for range levels {
+				m = map[string]any{"n": m}
+			}
+			return m
+		}
+		for name, leaf := range map[string]any{"JSON typed": "x", "not JSON typed": 53} {
+			u := object(nest(maxJSONDepth+1, leaf))
+			err := normalizeForTest(layoutOf(u))
+			if err == nil || !strings.Contains(err.Error(), "nested deeper than") {
+				t.Errorf("%s: got %v, want a refusal for the nesting", name, err)
+			}
+		}
+		u := object(nest(100, 53))
+		if err := normalizeForTest(layoutOf(u)); err != nil {
+			t.Errorf("a nesting of 100 levels was refused: %v", err)
+		}
+	})
+
+	t.Run("undo keeps what the caller set after the normalization", func(t *testing.T) {
+		u := object(map[string]any{"n": 53})
+		undo, err := normalizeCallerObjects(layoutOf(u))
+		if err != nil {
+			t.Fatal(err)
+		}
+		later := map[string]any{"apiVersion": "v1", "kind": "ConfigMap"}
+		u.Object = later
+		undo()
+		if reflect.ValueOf(u.Object).Pointer() != reflect.ValueOf(later).Pointer() {
+			t.Error("undo overwrote a map the caller set after the call")
+		}
+	})
+
 	t.Run("undo puts the caller's Object maps back", func(t *testing.T) {
 		u := object(map[string]any{"n": 53})
 		held := u.Object

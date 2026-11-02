@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
@@ -235,5 +237,80 @@ func TestCallerObject_UnmarshalableValueIsRefused(t *testing.T) {
 				t.Errorf("the caller's object was changed: spec.ref.bad = %v", v)
 			}
 		})
+	}
+}
+
+// An unstructured List a typed List holds is the caller's object: it is
+// normalized in place, and not through the temporary wrappers of its items.
+func TestCallerObject_UnstructuredListInTypedListIsReadLikeItsJSON(t *testing.T) {
+	item := func(n any) *unstructured.Unstructured {
+		k := unstructuredObj("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "flux-system", "caller")
+		k.Object["spec"] = map[string]any{
+			"path":      "./elsewhere",
+			"sourceRef": map[string]any{"kind": "GitRepository", "name": "repo", "extra": n},
+		}
+		return k
+	}
+	for _, placement := range append(slices.Clone(integratedPlacements), layout.FluxSeparate) {
+		t.Run(string(placement), func(t *testing.T) {
+			want, panicked := integrateOutcome(t, baseCluster(typedListOf("List", wrapInList(item(int64(53))))), placement)
+			if panicked != nil {
+				t.Fatalf("the int64 baseline panicked: %v", panicked)
+			}
+			got, panicked := integrateOutcome(t, baseCluster(typedListOf("List", wrapInList(item(53)))), placement)
+			if panicked != nil {
+				t.Fatalf("integration panicked: %v", panicked)
+			}
+			if got != want {
+				t.Errorf("got error %q, want the int64 outcome %q", got, want)
+			}
+		})
+	}
+}
+
+// anyItems is a typed object that apimachinery takes for a List and cannot
+// read: its Items field is an interface that holds nothing.
+type anyItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             any `json:"items"`
+}
+
+func (l *anyItems) DeepCopyObject() runtime.Object { c := *l; return &c }
+
+// A typed object whose list items apimachinery cannot read is no reason to
+// panic: the helper uses the same protected discovery as the reads.
+func TestCallerObject_UnreadableTypedListDoesNotPanic(t *testing.T) {
+	l := &anyItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}}
+	l.Name, l.Namespace = "holder", "default"
+	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{l}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("UmbrellaTerminals panicked: %v", r)
+		}
+	}()
+	_, _ = fluxstack.UmbrellaTerminals(ml)
+}
+
+// An item a typed List holds that does not marshal refuses the call, with the
+// object and the field named, as an object of a layout does.
+func TestCallerObject_TypedListItemUnmarshalableValueIsRefused(t *testing.T) {
+	cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
+	cm.Object["spec"] = map[string]any{"bad": make(chan int)}
+	var obj client.Object = typedListOf("List", cm)
+	app := stack.NewApplication("raw", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app)}}
+	ml, err := layout.WalkCluster(c, withPlacement(nodeOnly, layout.FluxSeparate))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = fluxstack.NewResourceGenerator().GenerateFromLayout(ml, c)
+	if err == nil {
+		t.Fatal("GenerateFromLayout accepted an item that does not marshal")
+	}
+	for _, want := range []string{"ConfigMap", "default/cm", "spec.bad"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q", err, want)
+		}
 	}
 }
