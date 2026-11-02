@@ -3,8 +3,10 @@ package fluxcd_test
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -177,6 +179,49 @@ func TestKustomizeSchema_ADefinitionAddedDuringTheBuildsIsNotRead(t *testing.T) 
 	_, err := schemaTree(os.Getenv(webDirEnv), false)
 	if err == nil || !strings.Contains(err.Error(), "not its built-in ones") || !strings.Contains(err.Error(), "while its builds ran") {
 		t.Fatalf("got %v, want the tree refused for a definition added while its builds ran", err)
+	}
+}
+
+// TestKustomizeSchema_ABuildThatFailsOverAnAddedDefinitionIsNotJudged: the
+// definition another use of kustomize adds right after the first check is
+// followed by a build that fails: the component the build loads is gone from
+// the tree's directory, as a build that fails over the definition would fail
+// whatever the cause. A build that failed under changed definitions says
+// nothing of what Flux builds, so the tree is refused for the definition, as
+// finish finds it, and not for a build that Flux cannot make.
+func TestKustomizeSchema_ABuildThatFailsOverAnAddedDefinitionIsNotJudged(t *testing.T) {
+	if os.Getenv(freshProcessEnv) == "" {
+		inFreshProcess(t, "TestKustomizeSchema_ABuildThatFailsOverAnAddedDefinitionIsNotJudged", webDirectory(t, layout.FluxIntegratedPerBundle))
+		return
+	}
+	// The tree is written under the temporary directory, which the seam
+	// searches: a directory of this test's own, so that a tree another run
+	// left in the shared one is not found.
+	t.Setenv("TMPDIR", t.TempDir())
+	restore := fluxstack.SetAfterFirstDefinitionsCheck(func() {
+		added := []byte(`{"swagger":"2.0","info":{"title":"added","version":"v1"},"paths":{},"definitions":{"io.example.v1.Added":{"type":"object"}}}`)
+		if err := openapi.AddSchema(added); err != nil {
+			t.Errorf("add a schema: %v", err)
+		}
+		trees, _ := filepath.Glob(filepath.Join(os.TempDir(), "kure-flux-build-*"))
+		if len(trees) != 1 {
+			t.Errorf("found %d directories of a tree being built, want 1", len(trees))
+			return
+		}
+		_ = filepath.WalkDir(trees[0], func(p string, d fs.DirEntry, err error) error {
+			if err == nil && d.IsDir() && d.Name() == "extra" {
+				if rmErr := os.RemoveAll(p); rmErr != nil {
+					t.Errorf("remove the component: %v", rmErr)
+				}
+				return filepath.SkipDir
+			}
+			return nil
+		})
+	})
+	defer restore()
+	_, err := schemaTree(os.Getenv(webDirEnv), true)
+	if err == nil || !strings.Contains(err.Error(), "not its built-in ones") || !strings.Contains(err.Error(), "while its builds ran") {
+		t.Fatalf("got %v, want the tree refused for a definition added while its builds ran, not for the build that failed over it", err)
 	}
 }
 

@@ -201,7 +201,7 @@ func builtInVersion() error {
 
 // builtInDefinitions checks the definitions of kustomize's schema once per
 // tree, on the first build, and returns that result for every build after it.
-// Hashing them costs under 100 ms, so it is not repeated per build.
+// Hashing them costs about 100 ms, so it is not repeated per build.
 func (b *treeBuilds) builtInDefinitions() error {
 	if !b.definitionsChecked {
 		b.definitionsChecked = true
@@ -223,9 +223,13 @@ var afterFirstDefinitionsCheck = func() {}
 // a definition another use of kustomize added after the first build would
 // have changed the builds after it, and the first check did not see it. A
 // tree that built nothing, or that the first check already refused, has
-// nothing more to refuse.
+// nothing more to refuse. It holds fluxBuildMu, as build does: another tree's
+// build may be working on the schema, and kyaml reads it without a lock of its
+// own. No caller holds the lock.
 func (b *treeBuilds) finish() error {
 	if b.definitionsChecked && b.definitionsErr == nil {
+		fluxBuildMu.Lock()
+		defer fluxBuildMu.Unlock()
 		if err := builtInVersion(); err != nil {
 			return errors.Wrap(err, "the schema changed while the tree's builds ran, so none of what they build is read")
 		}

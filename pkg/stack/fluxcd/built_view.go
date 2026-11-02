@@ -119,6 +119,27 @@ type builtCopy struct {
 func newBuiltViews(t *kustomizationTree, existenceOnly bool) ([]*builtView, error) {
 	builds := newTreeBuilds(t.root)
 	defer builds.close()
+	views, err := findViews(t, builds, existenceOnly)
+	// A definition another use of kustomize added after the first build has
+	// changed the builds after it: no view is judged then, and a build that
+	// failed over such a definition is no verdict on the tree either, so a
+	// refusal here comes before the failure (go-kure/kure#1166).
+	if ferr := builds.finish(); ferr != nil {
+		return nil, ferr
+	}
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range views {
+		if err := v.agree(); err != nil {
+			return nil, err
+		}
+	}
+	return views, nil
+}
+
+// findViews runs the builds of newBuiltViews' one view or two.
+func findViews(t *kustomizationTree, builds *treeBuilds, existenceOnly bool) ([]*builtView, error) {
 	a := newBuiltView(t, existenceOnly, false)
 	if err := a.find(builds); err != nil {
 		return nil, err
@@ -130,16 +151,6 @@ func newBuiltViews(t *kustomizationTree, existenceOnly bool) ([]*builtView, erro
 			return nil, err
 		}
 		views = append(views, b)
-	}
-	// A definition another use of kustomize added after the first build has
-	// changed the builds after it: no view is judged then (go-kure/kure#1166).
-	if err := builds.finish(); err != nil {
-		return nil, err
-	}
-	for _, v := range views {
-		if err := v.agree(); err != nil {
-			return nil, err
-		}
 	}
 	return views, nil
 }
