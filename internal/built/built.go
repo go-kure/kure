@@ -72,6 +72,24 @@ func Objects(r runtime.Object) ([]Object, error) {
 	return objects(Object{Object: r}, map[uintptr]bool{})
 }
 
+// HeldItems returns the unstructured objects the typed List r holds as its
+// own items, the ones Objects returns as they are and not as copies read from
+// a written form: a change to one is a change to r. It returns none for an
+// object Objects refuses, which the caller's own read of r reports.
+func HeldItems(r runtime.Object) []*unstructured.Unstructured {
+	objs, err := Objects(r)
+	if err != nil {
+		return nil
+	}
+	var out []*unstructured.Unstructured
+	for _, o := range objs {
+		if u, ok := o.Object.(*unstructured.Unstructured); ok && !o.Read && u != nil && runtime.Object(u) != r {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
 // objects is Objects for one object. open has the unstructured Lists that are
 // being opened around it, each by the map it holds its content in.
 func objects(obj Object, open map[uintptr]bool) ([]Object, error) {
