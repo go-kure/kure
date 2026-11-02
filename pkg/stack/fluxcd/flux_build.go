@@ -44,11 +44,21 @@ import (
 // first build, by WriteToDisk into a temporary directory that close removes;
 // a spec.path is a directory of that tree, as the source of the tree's
 // Kustomizations holds it.
+//
+// The definitions of kustomize's schema are checked twice per tree, not per
+// build (go-kure/kure#1166): before the first build, and by finish after the
+// last, so a definition added between two builds refuses the tree too. A
+// definition added and removed again between the checks is not seen.
 type treeBuilds struct {
 	root    *layout.ManifestLayout
 	dir     string
 	err     error
 	written bool
+
+	// definitionsChecked is whether the first build checked the definitions
+	// of kustomize's schema, and definitionsErr what it found.
+	definitionsChecked bool
+	definitionsErr     error
 }
 
 func newTreeBuilds(root *layout.ManifestLayout) *treeBuilds {
@@ -97,11 +107,12 @@ var fluxBuildMu sync.Mutex
 // without a lock, so two integrations, or one beside any other use of
 // kustomize, would race. It matters only where the schema is not kustomize's
 // built-in one: the build is not read, with an unreadBuild, when another use
-// of kustomize in the process set the schema, or when the build reads a
-// kustomization file that sets openapi (a component a layout's extra files
-// write may). Nor is a build read that reads a file naming a remote
-// reference, a Git repository or an http(s) URL kustomize-controller fetches,
-// or a file kure cannot check for one. buildGuard refuses both kinds of file
+// of kustomize in the process set the schema or added or changed definitions
+// of it (builtInDefinitions, once per tree, and finish after the last build:
+// go-kure/kure#1166), or when the build reads a kustomization file that sets
+// openapi (a component a layout's extra files write may). Nor is a build read
+// that reads a file naming a remote reference, a Git repository or an http(s)
+// URL kustomize-controller fetches, or a file kure cannot check for one. buildGuard refuses both kinds of file
 // before kustomize reads its fields. Nor is a build read that loads, as a
 // kustomization, a file that may merge into a Secret (buildGuard.merged), when
 // the Kustomization sets spec.decryption or this binary links a kustomize
@@ -131,8 +142,11 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	kustomizeschema.Parse()
 	fluxBuildMu.Lock()
 	defer fluxBuildMu.Unlock()
-	if v, ok := kustomizeschema.BuiltIn(); !ok {
-		return nil, unreadBuild{errors.Errorf("kustomize's OpenAPI schema in this process is %q, not its built-in one: another use of kustomize set it, and kustomize-controller builds with the built-in schema, so kure cannot build it as Flux does", v)}
+	if err := builtInVersion(); err != nil {
+		return nil, unreadBuild{err}
+	}
+	if err := b.builtInDefinitions(); err != nil {
+		return nil, unreadBuild{err}
 	}
 	manifest, kfile, _, err := fluxkustomize.NewGenerator(tree, unstructured.Unstructured{Object: content}).GenerateManifest(dir)
 	if err != nil {
@@ -173,6 +187,67 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 		objs = append(objs, &unstructured.Unstructured{Object: m})
 	}
 	return objs, nil
+}
+
+// builtInVersion is nil when kustomize's schema is its default built-in one,
+// else why a build is not read: kustomize-controller builds with that schema
+// alone.
+func builtInVersion() error {
+	if v, ok := kustomizeschema.BuiltIn(); !ok {
+		return errors.Errorf("kustomize's OpenAPI schema in this process is %q, not its built-in one: another use of kustomize set it, and kustomize-controller builds with the built-in schema, so kure cannot build it as Flux does", v)
+	}
+	return nil
+}
+
+// builtInDefinitions checks the definitions of kustomize's schema once per
+// tree, on the first build, and returns that result for every build after it.
+// Hashing them costs under 100 ms, so it is not repeated per build.
+func (b *treeBuilds) builtInDefinitions() error {
+	if !b.definitionsChecked {
+		b.definitionsChecked = true
+		b.definitionsErr = checkDefinitions("before its first build")
+		if b.definitionsErr == nil {
+			afterFirstDefinitionsCheck()
+		}
+	}
+	return b.definitionsErr
+}
+
+// afterFirstDefinitionsCheck runs once per tree, after the first check of the
+// definitions passed. Nothing runs there but a test, which adds a definition
+// to see finish refuse the tree.
+var afterFirstDefinitionsCheck = func() {}
+
+// finish checks, after the last build of the tree, that the definitions of
+// kustomize's schema are still the built-in ones, and refuses the tree if not:
+// a definition another use of kustomize added after the first build would
+// have changed the builds after it, and the first check did not see it. A
+// tree that built nothing, or that the first check already refused, has
+// nothing more to refuse.
+func (b *treeBuilds) finish() error {
+	if b.definitionsChecked && b.definitionsErr == nil {
+		if err := builtInVersion(); err != nil {
+			return errors.Wrap(err, "the schema changed while the tree's builds ran, so none of what they build is read")
+		}
+		if err := checkDefinitions("while its builds ran"); err != nil {
+			return errors.Wrap(err, "none of what the tree's builds make is read")
+		}
+	}
+	return nil
+}
+
+// checkDefinitions is nil when the definitions of kustomize's schema are the
+// built-in ones. Another use of kustomize in the process may have added or
+// changed some (kyaml's functions that add a schema or definitions, or a write
+// through the schema it returns): that leaves the version alone but can change how a field
+// merges, so a verdict either way, and kustomize-controller builds with the
+// built-in definitions alone. when says at which point of the tree's builds
+// the check ran.
+func checkDefinitions(when string) error {
+	if _, ok := kustomizeschema.Definitions(); !ok {
+		return errors.Errorf("the definitions of kustomize's OpenAPI schema in this process are not its built-in ones: another use of kustomize added or changed some %s, and kustomize-controller builds with the built-in definitions, so kure cannot build it as Flux does", when)
+	}
+	return nil
 }
 
 // unreadBuild is a build kure does not read, not one that fails: Flux may
