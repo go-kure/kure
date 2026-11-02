@@ -1,14 +1,15 @@
 package fluxcd
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"slices"
-	"strings"
+	"strconv"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	utiljson "k8s.io/apimachinery/pkg/util/json"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/internal/built"
@@ -16,22 +17,34 @@ import (
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
-// maxJSONDepth is how deep a value is followed: encoding/json refuses a value
-// nested deeper than 1000 levels as a cycle, and so does kure, before the
-// recursion could overflow the stack.
-const maxJSONDepth = 1000
+const (
+	// maxJSONDepth is how deep a value is followed, as encoding/json counts
+	// a nesting before it takes it for a cycle.
+	maxJSONDepth = 1000
+
+	// maxJSONNodes is how many values are visited in one object. An object
+	// is far smaller (the API server stores 1.5 MiB at most); a larger count
+	// is a value that shares its parts so often that its tree is huge.
+	maxJSONNodes = 1 << 22
+)
 
 // normalizeCallerObjects makes every unstructured object a caller put in the
 // layouts of roots, and of the layouts below them, one kure can read
 // (go-kure/kure#1201). apimachinery requires such an object to hold JSON
 // typed values only, and panics in every Nested* read and in DeepCopy on any
 // other, a plain int say. An object that holds only the types
-// runtime.DeepCopyJSONValue accepts is left as it is. Another is replaced
-// by what its JSON decodes to, an int64 or a float64 for a number: its Object
-// field is set to a new map, and the caller's map is not changed. A value that
-// does not marshal, or is nested deeper than maxJSONDepth, refuses the call,
-// with the layout, the object and the field named, and no object is replaced
-// then.
+// runtime.DeepCopyJSONValue accepts is left as it is. Another is replaced by
+// the object its JSON form holds (jsonContentOf): an int64 or a float64 for a
+// number, a map[string]any for a map[string]string. Its Object field is set
+// to a new map, and the caller's map is not changed.
+//
+// A value that has no JSON form here refuses the call, with the layout, the
+// object and the field named, and no object is replaced then: a channel, a
+// function, a struct (including a pointer to one), a map whose keys are no
+// strings, a value that holds itself, one nested deeper than maxJSONDepth or
+// with more than maxJSONNodes values. The encoder is never run on a value of
+// the caller's: it could not be stopped on one that holds itself through a
+// struct.
 //
 // The objects are those in each layout's Resources, and the unstructured
 // objects a typed List in them holds, directly or through the typed Lists it
@@ -40,8 +53,9 @@ const maxJSONDepth = 1000
 //
 // It returns the function that puts every replaced Object map back, for a
 // call that a later check refuses: a refused call leaves the tree as the
-// caller gave it. An object whose Object the caller has set to another map
-// since is left with that one.
+// caller gave it. The caller does not change the tree during the call: an
+// object whose Object the caller has set to another map since is left with
+// that one, but a change inside the replacement is put back with it.
 func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err error) {
 	type replacement struct {
 		obj          *unstructured.Unstructured
@@ -50,6 +64,9 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 	var replace []replacement
 	seenLayout := map[*layout.ManifestLayout]bool{}
 	seenObject := map[*unstructured.Unstructured]bool{}
+	refuse := func(l *layout.ManifestLayout, u *unstructured.Unstructured, cause error) error {
+		return errors.Wrapf(cause, "layout %q: %s %q", l.FullRepoPath(), u.GetKind(), crKey(u.GetNamespace(), u.GetName()))
+	}
 	var walk func(l *layout.ManifestLayout) error
 	walk = func(l *layout.ManifestLayout) error {
 		if l == nil || seenLayout[l] {
@@ -61,11 +78,8 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 			if err != nil {
 				// Name the object or field that is the cause, when an item is.
 				for _, u := range objs {
-					if jsonTyped(u.Object, 0) {
-						continue
-					}
 					if _, convErr := jsonContentOf(u.Object); convErr != nil {
-						return errors.Wrapf(convErr, "layout %q: %s %q: %s", l.FullRepoPath(), u.GetKind(), crKey(u.GetNamespace(), u.GetName()), unmarshalableField(u.Object))
+						return refuse(l, u, convErr)
 					}
 				}
 				return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
@@ -75,14 +89,13 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 					continue
 				}
 				seenObject[u] = true
-				if jsonTyped(u.Object, 0) {
-					continue
-				}
 				content, err := jsonContentOf(u.Object)
 				if err != nil {
-					return errors.Wrapf(err, "layout %q: %s %q: %s", l.FullRepoPath(), u.GetKind(), crKey(u.GetNamespace(), u.GetName()), unmarshalableField(u.Object))
+					return refuse(l, u, err)
 				}
-				replace = append(replace, replacement{u, u.Object, content})
+				if content != nil {
+					replace = append(replace, replacement{u, u.Object, content})
+				}
 			}
 		}
 		for _, c := range l.Children {
@@ -135,233 +148,224 @@ func callerObjects(r client.Object) ([]*unstructured.Unstructured, error) {
 // jsonTyped reports whether v holds only the types runtime.DeepCopyJSONValue
 // accepts: a string, an int64, a float64, a bool, nil, a json.Number, and a
 // map[string]any or a []any of them, nested no deeper than maxJSONDepth and
-// not holding themselves. A value that is not is not typed here, and is
-// converted or refused (shapeProblem). It must not accept more: a value it
-// calls typed is read as it is, and apimachinery panics on any other.
+// with no more than maxJSONNodes values. A value that is not is not typed
+// here, and is converted or refused (jsonContentOf). It must not accept more:
+// a value it calls typed is read as it is, and apimachinery panics on any
+// other.
 func jsonTyped(v any, depth int) bool {
-	return jsonTypedOpen(v, depth, map[uintptr]bool{})
+	nodes := 0
+	return jsonTypedCount(v, depth, &nodes)
 }
 
-// jsonTypedOpen is jsonTyped with the containers being walked around v, each
-// by the address of its content: one met again holds itself.
-func jsonTypedOpen(v any, depth int, open map[uintptr]bool) bool {
-	if depth > maxJSONDepth {
+func jsonTypedCount(v any, depth int, nodes *int) bool {
+	if *nodes++; depth > maxJSONDepth || *nodes > maxJSONNodes {
 		return false
 	}
 	switch v := v.(type) {
 	case string, int64, float64, bool, nil, json.Number:
 		return true
 	case map[string]any:
-		if len(v) == 0 {
-			return true
-		}
-		id := reflect.ValueOf(v).Pointer()
-		if open[id] {
-			return false
-		}
-		open[id] = true
-		defer delete(open, id)
 		for _, e := range v {
-			if !jsonTypedOpen(e, depth+1, open) {
+			if !jsonTypedCount(e, depth+1, nodes) {
 				return false
 			}
 		}
 		return true
 	case []any:
-		if len(v) == 0 {
-			return true
-		}
-		id := reflect.ValueOf(v).Pointer()
-		if open[id] {
-			return false
-		}
-		open[id] = true
-		defer delete(open, id)
-		return !slices.ContainsFunc(v, func(e any) bool { return !jsonTypedOpen(e, depth+1, open) })
+		return !slices.ContainsFunc(v, func(e any) bool { return !jsonTypedCount(e, depth+1, nodes) })
 	}
 	return false
 }
 
-// jsonContentOf returns m as JSON decodes it: a number is an int64 when it is
-// a whole number that fits one, else a float64. An integer above 2^53 keeps
-// its exact value. It refuses what shapeProblem finds, before the encoder
-// could follow it, and what decodes nested deeper than maxJSONDepth.
+// jsonContentOf returns the object m is, as the JSON it marshals to would
+// decode, or nil for an object that needs no change (jsonTyped). It is built
+// from the Go values directly, and not through encoding/json, so that it
+// ends on every value: a number is an int64 when it is a whole number that
+// fits one, else a float64, and an integer above 2^53 keeps its exact value;
+// a []byte is its base64 string; a nil map or slice is nil. It refuses a
+// value with no JSON form here (normalizeCallerObjects), naming the field.
 func jsonContentOf(m map[string]any) (map[string]any, error) {
-	if _, problem := shapeProblem(m); problem != "" {
-		return nil, errors.New(problem)
+	if jsonTyped(m, 0) {
+		return nil, nil
 	}
-	data, err := json.Marshal(m)
+	c := &converter{open: map[openKey]bool{}}
+	v, err := c.convert(reflect.ValueOf(m), "", 0)
 	if err != nil {
 		return nil, err
 	}
-	var content map[string]any
-	if err := utiljson.Unmarshal(data, &content); err != nil {
-		return nil, err
-	}
-	if nestedTooDeep(content, 0) {
-		return nil, errors.Errorf("decodes nested deeper than %d levels", maxJSONDepth)
-	}
+	content, _ := v.(map[string]any)
 	return content, nil
 }
 
-// nestedTooDeep reports whether v holds a map[string]any or a []any nested
-// deeper than maxJSONDepth. It is for a decoded value, which holds no other
-// type and no cycle.
-func nestedTooDeep(v any, depth int) bool {
-	if depth > maxJSONDepth {
-		return true
-	}
-	switch v := v.(type) {
-	case map[string]any:
-		for _, e := range v {
-			if nestedTooDeep(e, depth+1) {
-				return true
-			}
-		}
-	case []any:
-		return slices.ContainsFunc(v, func(e any) bool { return nestedTooDeep(e, depth+1) })
-	}
-	return false
+// openKey names a map or a slice being converted: a slice by its first
+// element and its length, as two slices of one array are two values.
+type openKey struct {
+	ptr uintptr
+	len int
 }
 
-// shapeProblem looks for what the JSON encoder must not be given: a value
-// nested deeper than maxJSONDepth or one that holds itself. It follows every
-// map, slice, array, pointer and struct field, named types included, and the
-// Object of an *unstructured.Unstructured, whose MarshalJSON starts an
-// encoder of its own. It returns the path of the container where the problem
-// is and the problem, or "" for none.
-func shapeProblem(m map[string]any) (path, problem string) {
-	return walkShape(reflect.ValueOf(m), "", 0, map[uintptr]bool{})
+type converter struct {
+	nodes int
+	open  map[openKey]bool
 }
 
-func walkShape(v reflect.Value, path string, depth int, open map[uintptr]bool) (string, string) {
-	deeper := fmt.Sprintf("holds a value nested deeper than %d levels", maxJSONDepth)
+var jsonNumberType = reflect.TypeFor[json.Number]()
+
+func (c *converter) convert(v reflect.Value, path string, depth int) (any, error) {
+	if c.nodes++; c.nodes > maxJSONNodes {
+		return nil, errors.Errorf("%s holds more than %d values", where(path), maxJSONNodes)
+	}
 	switch v.Kind() {
+	case reflect.Invalid:
+		return nil, nil
 	case reflect.Interface:
 		if v.IsNil() {
-			return "", ""
+			return nil, nil
 		}
-		return walkShape(v.Elem(), path, depth, open)
+		return c.convert(v.Elem(), path, depth)
 	case reflect.Pointer:
 		if v.IsNil() {
-			return "", ""
+			return nil, nil
 		}
-		id := v.Pointer()
-		if open[id] {
-			return path, "holds itself"
+		if v.Elem().Kind() == reflect.Struct {
+			return nil, unsupported(path, v)
 		}
-		open[id] = true
-		defer delete(open, id)
-		if u, ok := v.Interface().(*unstructured.Unstructured); ok {
-			return walkShape(reflect.ValueOf(u.Object), path, depth, open)
+		key := openKey{ptr: v.Pointer()}
+		if c.open[key] {
+			return nil, errors.Errorf("%s holds itself", where(path))
 		}
-		return walkShape(v.Elem(), path, depth, open)
-	case reflect.Map, reflect.Slice:
-		if v.Len() == 0 {
-			return "", ""
+		c.open[key] = true
+		defer delete(c.open, key)
+		return c.convert(v.Elem(), path, depth)
+	case reflect.Bool:
+		return v.Bool(), nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int(), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if u := v.Uint(); u <= math.MaxInt64 {
+			return int64(u), nil
 		}
-		if depth > maxJSONDepth {
-			return path, deeper
+		return float64(v.Uint()), nil
+	case reflect.Float32:
+		// As the shortest decimal for 32 bits, which is what a marshalling writes.
+		f, err := strconv.ParseFloat(strconv.FormatFloat(v.Float(), 'g', -1, 32), 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "%s", where(path))
 		}
-		id := v.Pointer()
-		if open[id] {
-			return path, "holds itself"
-		}
-		open[id] = true
-		defer delete(open, id)
-		if v.Kind() == reflect.Slice {
-			return walkElems(v, path, depth, open)
-		}
-		keys := v.MapKeys()
-		slices.SortFunc(keys, func(a, b reflect.Value) int { return strings.Compare(fmt.Sprint(a), fmt.Sprint(b)) })
-		for _, k := range keys {
-			p := fmt.Sprint(k)
-			if path != "" {
-				p = path + "." + p
+		return number(path, f)
+	case reflect.Float64:
+		return number(path, v.Float())
+	case reflect.String:
+		if v.Type() == jsonNumberType {
+			n := json.Number(v.String())
+			if i, err := n.Int64(); err == nil {
+				return i, nil
 			}
-			if at, problem := walkShape(v.MapIndex(k), p, depth+1, open); problem != "" {
-				return at, problem
+			f, err := n.Float64()
+			if err != nil {
+				return nil, errors.Wrapf(err, "%s holds a json.Number", where(path))
 			}
+			return number(path, f)
 		}
-	case reflect.Array:
-		return walkElems(v, path, depth, open)
-	case reflect.Struct:
-		for i := range v.NumField() {
-			if !v.Type().Field(i).IsExported() {
-				continue
-			}
-			if at, problem := walkShape(v.Field(i), path, depth, open); problem != "" {
-				return at, problem
-			}
-		}
+		return v.String(), nil
+	case reflect.Map:
+		return c.convertMap(v, path, depth)
+	case reflect.Slice, reflect.Array:
+		return c.convertList(v, path, depth)
 	}
-	return "", ""
+	return nil, unsupported(path, v)
 }
 
-func walkElems(v reflect.Value, path string, depth int, open map[uintptr]bool) (string, string) {
+func (c *converter) convertMap(v reflect.Value, path string, depth int) (any, error) {
+	if v.Type().Key().Kind() != reflect.String {
+		return nil, unsupported(path, v)
+	}
+	if v.IsNil() {
+		return nil, nil
+	}
 	if depth > maxJSONDepth {
-		return path, fmt.Sprintf("holds a value nested deeper than %d levels", maxJSONDepth)
+		return nil, errors.Errorf("%s holds a value nested deeper than %d levels", where(path), maxJSONDepth)
 	}
-	for i := range v.Len() {
-		if at, problem := walkShape(v.Index(i), fmt.Sprintf("%s[%d]", path, i), depth+1, open); problem != "" {
-			return at, problem
+	key := openKey{ptr: v.Pointer()}
+	if c.open[key] {
+		return nil, errors.Errorf("%s holds itself", where(path))
+	}
+	c.open[key] = true
+	defer delete(c.open, key)
+	keys := v.MapKeys()
+	slices.SortFunc(keys, func(a, b reflect.Value) int {
+		switch x, y := a.String(), b.String(); {
+		case x < y:
+			return -1
+		case x > y:
+			return 1
 		}
+		return 0
+	})
+	out := make(map[string]any, len(keys))
+	for _, k := range keys {
+		p := k.String()
+		if path != "" {
+			p = path + "." + p
+		}
+		e, err := c.convert(v.MapIndex(k), p, depth+1)
+		if err != nil {
+			return nil, err
+		}
+		out[k.String()] = e
 	}
-	return "", ""
+	return out, nil
 }
 
-// unmarshalableField describes why m cannot be converted: the container that
-// holds itself or is nested too deep, else the first field of m, in key order,
-// whose value json cannot marshal, as "spec.ref.bad holds a chan int, which
-// JSON cannot hold". Another cause, one that names no field, gives "holds a
-// value that JSON cannot hold".
-func unmarshalableField(m map[string]any) string {
-	if path, problem := shapeProblem(m); problem != "" {
-		if path == "" {
-			path = "the object"
+func (c *converter) convertList(v reflect.Value, path string, depth int) (any, error) {
+	if v.Kind() == reflect.Slice {
+		if v.IsNil() {
+			return nil, nil
 		}
-		return fmt.Sprintf("%s %s", path, problem)
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			return base64.StdEncoding.EncodeToString(v.Bytes()), nil
+		}
+		if v.Len() > 0 {
+			key := openKey{ptr: v.Pointer(), len: v.Len()}
+			if c.open[key] {
+				return nil, errors.Errorf("%s holds itself", where(path))
+			}
+			c.open[key] = true
+			defer delete(c.open, key)
+		}
 	}
-	if path, v, ok := firstUnmarshalable(m, ""); ok {
-		return fmt.Sprintf("%s holds a %T, which JSON cannot hold", path, v)
+	if depth > maxJSONDepth {
+		return nil, errors.Errorf("%s holds a value nested deeper than %d levels", where(path), maxJSONDepth)
 	}
-	return "holds a value that JSON cannot hold"
+	out := make([]any, v.Len())
+	for i := range out {
+		e, err := c.convert(v.Index(i), fmt.Sprintf("%s[%d]", path, i), depth+1)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = e
+	}
+	return out, nil
 }
 
-// firstUnmarshalable is for a value shapeProblem found none in.
-func firstUnmarshalable(v any, path string) (string, any, bool) {
-	switch x := v.(type) {
-	case map[string]any:
-		for _, k := range slices.Sorted(mapKeys(x)) {
-			p := k
-			if path != "" {
-				p = path + "." + k
-			}
-			if at, bad, ok := firstUnmarshalable(x[k], p); ok {
-				return at, bad, true
-			}
-		}
-		return "", nil, false
-	case []any:
-		for i, e := range x {
-			if at, bad, ok := firstUnmarshalable(e, fmt.Sprintf("%s[%d]", path, i)); ok {
-				return at, bad, true
-			}
-		}
-		return "", nil, false
+// number is f as JSON decodes it: an int64 for a whole number that fits one.
+func number(path string, f float64) (any, error) {
+	switch {
+	case math.IsNaN(f) || math.IsInf(f, 0):
+		return nil, errors.Errorf("%s holds %v, which JSON cannot hold", where(path), f)
+	case f == math.Trunc(f) && f >= -(1<<63) && f < 1<<63:
+		return int64(f), nil
 	}
-	if _, err := json.Marshal(v); err != nil {
-		return path, v, true
-	}
-	return "", nil, false
+	return f, nil
 }
 
-func mapKeys(m map[string]any) func(yield func(string) bool) {
-	return func(yield func(string) bool) {
-		for k := range m {
-			if !yield(k) {
-				return
-			}
-		}
+func unsupported(path string, v reflect.Value) error {
+	return errors.Errorf("%s holds a %s, which kure cannot read as JSON", where(path), v.Type())
+}
+
+func where(path string) string {
+	if path == "" {
+		return "the object"
 	}
+	return path
 }

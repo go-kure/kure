@@ -185,12 +185,66 @@ func TestNormalizeCallerObjects(t *testing.T) {
 		}
 	})
 
-	t.Run("an object that holds itself through a pointer is refused, not encoded without end", func(t *testing.T) {
+	t.Run("a struct is refused with its field named, and never encoded", func(t *testing.T) {
 		u := object(nil)
 		u.Object["spec"] = map[string]any{"self": u}
 		err := normalizeForTest(layoutOf(u))
-		if err == nil || !strings.Contains(err.Error(), "holds itself") {
-			t.Errorf("got %v, want a refusal naming the cycle", err)
+		if err == nil || !strings.Contains(err.Error(), "spec.self holds a *unstructured.Unstructured") {
+			t.Errorf("got %v, want a refusal naming spec.self", err)
+		}
+	})
+
+	t.Run("a slice that holds a shorter slice of itself is no cycle", func(t *testing.T) {
+		s := make([]any, 3)
+		s[1], s[2] = s[:1], 53
+		u := object(map[string]any{"s": s})
+		if err := normalizeForTest(layoutOf(u)); err != nil {
+			t.Fatalf("got %v, want none", err)
+		}
+		want := []any{nil, []any{nil}, int64(53)}
+		if got := u.Object["spec"].(map[string]any)["s"]; !reflect.DeepEqual(got, want) {
+			t.Errorf("spec.s = %#v, want %#v", got, want)
+		}
+	})
+
+	t.Run("a slice that holds itself is refused", func(t *testing.T) {
+		s := make([]any, 2)
+		s[0], s[1] = 53, s
+		err := normalizeForTest(layoutOf(object(map[string]any{"s": s})))
+		if err == nil || !strings.Contains(err.Error(), "spec.s[1] holds itself") {
+			t.Errorf("got %v, want a refusal naming spec.s[1]", err)
+		}
+	})
+
+	t.Run("values shared 60 levels deep are refused, not walked", func(t *testing.T) {
+		for name, leaf := range map[string]any{"JSON typed": "x", "not JSON typed": 53} {
+			m := map[string]any{"leaf": leaf}
+			for range 60 {
+				m = map[string]any{"a": m, "b": m}
+			}
+			err := normalizeForTest(layoutOf(object(m)))
+			if err == nil || !strings.Contains(err.Error(), "more than") {
+				t.Errorf("%s: got %v, want a refusal for the count", name, err)
+			}
+		}
+	})
+
+	t.Run("the JSON form of the common Go kinds", func(t *testing.T) {
+		type name string
+		u := object(map[string]any{
+			"name": name("x"), "ptr": new(int), "bytes": []byte("hi"), "whole": 2.0, "frac": 0.1,
+			"f32": float32(0.1), "nilMap": map[string]string(nil), "nilSlice": []string(nil),
+			"empty": []string{}, "num": json.Number("7"), "big": uint64(math.MaxUint64),
+		})
+		if err := normalizeForTest(layoutOf(u)); err != nil {
+			t.Fatal(err)
+		}
+		want := map[string]any{
+			"name": "x", "ptr": int64(0), "bytes": "aGk=", "whole": int64(2), "frac": 0.1,
+			"f32": 0.1, "nilMap": nil, "nilSlice": nil, "empty": []any{}, "num": int64(7), "big": float64(math.MaxUint64),
+		}
+		if got := u.Object["spec"]; !reflect.DeepEqual(got, want) {
+			t.Errorf("spec = %#v, want %#v", got, want)
 		}
 	})
 
