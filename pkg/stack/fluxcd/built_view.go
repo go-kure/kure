@@ -218,6 +218,9 @@ func (v *builtView) find(builds *treeBuilds) error {
 			// one every copy known so far skips.
 			if k := v.local(key); k != nil {
 				decided[key] = true
+				if err := v.endless(key, k); err != nil {
+					return err
+				}
 				if err := v.add(builds, key, k); err != nil {
 					return err
 				}
@@ -236,6 +239,39 @@ func (v *builtView) find(builds *treeBuilds) error {
 		return errors.Errorf("Flux Kustomization %q is created by no apply: no build holds a copy of it that its apply does not skip, so it never exists, and what it was built from, its spec as the tree holds it, is applied by nothing%s: let a build create it, or drop it from the tree", key, v.unreadBootstrapWriters(key))
 	}
 	return nil
+}
+
+// maxChainedBuilds is how many writers along one chain of writers may build
+// the same spec.path before find refuses the chain: a chain that has built one
+// directory that often without coming back to a copy already built is taken
+// to grow without end. A chain that converges, however it got there, stops at
+// the copy already built (find skips a key done), after a few builds.
+const maxChainedBuilds = 8
+
+// endless refuses the writer with key, about to be built from k, when it is
+// the maxChainedBuilds'th along its own chain of writers (each built from a
+// copy the one before it holds) to build k's spec.path. A Kustomization that
+// builds the directory holding it can hold, after a substitution, a copy of
+// itself under a new name, and that one another, so the walk for writers would
+// never finish and its memory would grow. The bound cannot tell a chain that
+// would converge after that many builds from one that never does; it refuses
+// both, naming the bound (go-kure/kure#1170).
+func (v *builtView) endless(key string, k *kustv1.Kustomization) error {
+	want := path.Clean(k.Spec.Path)
+	chain := []string{key}
+	seen := map[string]bool{key: true}
+	for w := v.builtFrom[key].writer; w != "" && !seen[w]; w = v.builtFrom[w].writer {
+		seen[w] = true
+		if s := v.writerSpec[w]; s != nil && path.Clean(s.Spec.Path) == want {
+			chain = append(chain, w)
+		}
+	}
+	if len(chain) < maxChainedBuilds {
+		return nil
+	}
+	slices.Reverse(chain)
+	return errors.Errorf("Flux Kustomization %q is the %dth along its chain of writers (%s) to build spec.path %q without coming back to a copy already built: it may write Kustomizations without end, and kure follows at most %d builds of one directory along a chain, so it cannot tell a chain that grows without end from one that converges later, and the writers cannot all be found; let no build write a copy of a Kustomization that builds its own directory under a new identity each time",
+		key, len(chain), strings.Join(chain, " -> "), k.Spec.Path, maxChainedBuilds-1)
 }
 
 // unreadBootstrapWriters names, for a refusal of the member with key as
