@@ -8,6 +8,7 @@ import (
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 
 	"github.com/go-kure/kure/pkg/errors"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 // orderGraph is the graph checkReconcileOrder judges ("ready K" and "apply K"
@@ -226,6 +227,35 @@ func apiGroup(apiVersion string) string {
 func transformsBuild(k *kustv1.Kustomization) bool {
 	return k == nil || len(k.Spec.Patches) > 0 || len(k.Spec.Components) > 0 ||
 		k.Spec.NamePrefix != "" || k.Spec.NameSuffix != "" || k.Spec.TargetNamespace != ""
+}
+
+// buildsWithKustomize reports whether the writer k, whose spec.path is the
+// layout dir, is built as kustomize-controller builds it (treeBuilds) rather
+// than read as the tree holds it (heldBuild): when it transforms its build
+// (transformsBuild), or substitutes (spec.postBuild with a substitute, a
+// substituteFrom or substituteStrategy Always) over a directory (buildScope)
+// that generates a ConfigMap, which the held read leaves out and substitution
+// may rename (go-kure/kure#1177). Only a writer is judged by it: whether a
+// Kustomization whose build is not the tree's may apply an object under
+// another identity stays with transformsBuild (objectSource.mayTransformInto),
+// as a substitution alone does not make it one.
+func buildsWithKustomize(k *kustv1.Kustomization, dir *layout.ManifestLayout) bool {
+	if transformsBuild(k) {
+		return true
+	}
+	pb := k.Spec.PostBuild
+	if pb == nil || len(pb.Substitute) == 0 && len(pb.SubstituteFrom) == 0 && k.GetSubstituteStrategy() != kustv1.SubstituteStrategyAlways {
+		return false
+	}
+	if dir == nil {
+		return false
+	}
+	for _, l := range buildScope(dir) {
+		if len(l.ConfigMapGenerators) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // checkTreeOrder refuses a tree whose Flux Kustomizations can never all become

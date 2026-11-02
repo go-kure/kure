@@ -34,11 +34,12 @@ import (
 // the Source of a member whose build reads its directory (rescued,
 // newBuiltViews). Each writer's result is what its apply writes:
 //
-//   - the bootstrap's, and that of a writer that transforms nothing
-//     (transformsBuild) and substitutes nothing, is what its directories hold
-//     as kustomize builds them (buildScope, builtItems);
+//   - the bootstrap's, and that of a writer that is not built
+//     (buildsWithKustomize), is what its directories hold as kustomize builds
+//     them (buildScope, builtItems);
 //   - a writer with spec.patches, spec.components, a name prefix or suffix or
-//     a target namespace is built as kustomize-controller builds it
+//     a target namespace, or one that substitutes over a directory that
+//     generates a ConfigMap, is built as kustomize-controller builds it
 //     (treeBuilds), its patches applied, its local config dropped and its
 //     objects renamed and moved as the build does;
 //   - a writer's spec.postBuild substitution runs over its result as the
@@ -395,7 +396,7 @@ func (v *builtView) add(builds *treeBuilds, key string, k *kustv1.Kustomization)
 		objs, err = heldBuild(v.t.root)
 	case v.t.directoryAt(k.Spec.Path) == nil:
 		return nil
-	case transformsBuild(k):
+	case buildsWithKustomize(k, v.t.layoutAt[path.Clean(k.Spec.Path)]):
 		// A tree the writers refuse is no build's failure: nothing applies it.
 		if _, err := builds.tree(); err != nil {
 			return err
