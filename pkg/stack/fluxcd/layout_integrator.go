@@ -2553,7 +2553,7 @@ func generatedKustomizations(l *layout.ManifestLayout, generated map[string]bool
 			raw, err := json.Marshal(obj)
 			if err == nil {
 				k = &kustv1.Kustomization{}
-				err = json.Unmarshal(raw, k)
+				err = decodeAsServed(raw, k)
 			}
 			if err != nil {
 				return nil, errors.Wrapf(err, "layout %q: read Flux Kustomization %q in typed form", l.FullRepoPath(), key)

@@ -8,6 +8,7 @@ import (
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	sigsjson "sigs.k8s.io/json"
 
 	"github.com/go-kure/kure/internal/built"
 	"github.com/go-kure/kure/pkg/errors"
@@ -716,12 +717,21 @@ func typedKustomization(obj client.Object) (*kustv1.Kustomization, error) {
 		var raw []byte
 		if raw, err = json.Marshal(content); err == nil {
 			k := &kustv1.Kustomization{}
-			if err = json.Unmarshal(raw, k); err == nil {
+			if err = decodeAsServed(raw, k); err == nil {
 				return k, nil
 			}
 		}
 	}
 	return nil, errors.Wrapf(err, "read Flux Kustomization %q in typed form", crKey(obj.GetNamespace(), obj.GetName()))
+}
+
+// decodeAsServed decodes raw, an object as written, into the typed object
+// into the way the API server reads a custom resource: a field name must match
+// exactly, and a field the type does not have is dropped (pruned). The standard
+// decoder folds case, so a key spelled KubeConfig: or Wait: would set a field
+// for kure that Flux never sees (go-kure/kure#1173).
+func decodeAsServed(raw []byte, into any) error {
+	return sigsjson.UnmarshalCaseSensitivePreserveInts(raw, into)
 }
 
 // awaitedKustomizations returns the Flux Kustomizations whose readiness k's

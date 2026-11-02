@@ -961,7 +961,12 @@ omitted `sourceRef` namespace is the Kustomization's own): the integration is re
 since it would take its source from inside what it applies; and its `dependsOn`, `wait` and health
 checks enter the reconcile-order check (see
 [One Kustomization per directory](#one-kustomization-per-directory)). An unstructured one is read
-through the typed Flux `Kustomization`; one that cannot be read that way (a field of the wrong
+through the typed Flux `Kustomization`, the way the API server reads a custom resource: a key
+matches a field only in its exact spelling, and a key the type does not have is dropped. A key
+written `Wait:` or `KubeConfig:` therefore sets nothing, as it sets nothing for Flux: it adds no
+`wait` edge, and the Kustomization still applies to this cluster (go-kure/kure#1173). If the
+API server rejects such a key instead of pruning it, the apply of that object fails there; the
+integration does not report it. One that cannot be read that way (a field of the wrong
 type, for one) is refused, with an error naming the layout that holds it and its namespace and
 name.
 
