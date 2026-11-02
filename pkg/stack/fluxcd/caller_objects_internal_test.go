@@ -264,7 +264,6 @@ func TestNormalizeCallerObjects(t *testing.T) {
 	})
 
 	t.Run("everything else is refused with the field named", func(t *testing.T) {
-		type name string
 		values := map[string]any{
 			"json.RawMessage":                 json.RawMessage(`{"a":1}`),
 			"net.IP":                          net.ParseIP("10.0.0.1"),
