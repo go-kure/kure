@@ -416,7 +416,7 @@ A copy whose apply skips it,
 `kustomize.toolkit.fluxcd.io/ssa: Ignore` or `kustomize.toolkit.fluxcd.io/reconcile: disabled` on
 it or in its writer's `spec.commonMetadata`, overwrites nothing and creates nothing: the
 Kustomization is read from the first copy an apply does not skip, and is created by a writer that
-applies it. A member every apply skips is still read, from its first copy. Seven cases are refused,
+applies it. A member every apply skips is still read, from its first copy. Eight cases are refused,
 each naming the Kustomization: a build that fails, as the controller's apply would; a build kure
 does not read, which Flux may build and apply, when it reads a kustomization file setting
 `openapi`, naming the file, since kustomize would keep its schema for every later build and kure
@@ -445,6 +445,12 @@ once every writer is known (a parent's patch deleted or renamed it), since nothi
 it builds, naming each Kustomization the bootstrap applies that may create it but whose build kure
 does not read; a member a build applies with `spec.kubeConfig`, or with another Source than its
 spec in the tree names, since it then applies on another cluster or another Source's directory;
+a Kustomization that is the eighth along its own chain of writers (each built from a copy the one
+before wrote) to build one `spec.path`, since a Kustomization that builds the directory holding it
+can write, after a substitution, a copy of itself under a new name, and so on without end, so the
+writers cannot all be found (a chain that comes back to a copy already built stops there and is
+admitted; the bound cannot tell a chain that would converge only after eight builds from one that
+never does, and refuses both);
 and, with `spec.postBuild.substituteFrom`, a
 variable that a Flux Kustomization of the build, or any object's `apiVersion` or kind, references
 and `spec.postBuild.substitute` does not set, since its value is read from the cluster; with it
