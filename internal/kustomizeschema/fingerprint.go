@@ -27,11 +27,11 @@ import (
 // its kind, package path and name, so it never reads as its underlying one:
 // Strategy("merge") is no "merge", and two types of one name whose kinds
 // differ are told apart), and for a struct by each field's name and type; every later
-// use writes the number the definition got. The type of a value that sits in a
-// struct field, a slice or array element, a map key or a map value is the one
-// its container's definition names, so only the value is written there; an
-// interface value is written with the number of its dynamic type, so 1 and 1.0
-// differ. A value moved to another field changes the stream, because a struct
+// use writes the number the definition got. A pointer, interface, struct, map,
+// slice or array value is written with the number of its type wherever it sits,
+// and an interface's dynamic value with the number of its dynamic type, so 1
+// and 1.0 differ; a scalar, func or chan value is written without one, as the
+// definition of the field, element, key or value it sits in names its type. A value moved to another field changes the stream, because a struct
 // writes its fields in the order its definition lists them. A map is walked in
 // key order, its nil and empty forms told apart. A pointer or map met a second
 // time is written as a reference to its first occurrence, so a schema that two

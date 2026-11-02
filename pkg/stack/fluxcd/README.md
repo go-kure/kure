@@ -403,8 +403,13 @@ definitions alone. Every kyaml path that registers a definition leaves an entry 
 see code that registers a definition and then deletes its entry from
 `openapi.Schema().Definitions` by hand: the index still serves the registered schema, and no
 definition declares its kind any more. That needs deliberate concealment by code in the
-same process, which no in-process check can stop, so it is out of scope. It orders only its own goroutines: another user's concurrent set or reset of the schema
-races with a build (go-kure/kure#1166).
+same process, which no in-process check can stop, so it is out of scope. The definitions are not the
+whole of what kyaml keeps from a schema added: it also records, from the schema's paths, which kinds
+are cluster-scoped, and kustomize's namespace filter and name references decide on that. A schema
+added with a path alone for a kind leaves the definitions as they were and still changes a build, so
+each build also asks kyaml, through its public `IsNamespaceScoped`, for the scope of every kind it
+made and is not read when one differs from the built-in schema's. It orders only its own goroutines:
+another user's concurrent set or reset of the schema races with a build (go-kure/kure#1166).
 
 **An integration never fetches; a remote reference is reported as not read.**
 kustomize-controller fetches what a build names remotely: a Git repository in `resources`,
