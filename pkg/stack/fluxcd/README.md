@@ -433,13 +433,14 @@ does not reset it, when it reads a file naming a remote reference, or one kure c
 one, a kustomization file kustomize rejects among them, naming the file, since an integration
 never fetches, when another use of kustomize in the process has set a schema other than the
 built-in one, naming it, or when it loads, as a kustomization (a component's included), a file
-holding a `secretGenerator` entry with `behavior: merge` or a `generators` entry, naming the file
-(see the merging build below); a
+holding a `secretGenerator` entry with `behavior: merge` or a `generators` entry and the
+Kustomization sets `spec.decryption` or the binary links another kustomize than the audited one,
+naming the file (see the merging build below); a
 Kustomization two writers apply with a different `dependsOn`, `wait`, `healthChecks`,
-`healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata`, `images`
+`healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata`, `decryption`, `images`
 (which Flux's generator writes into the build) or transform (`ignoreMissingComponents` included,
 which decides whether a missing component fails the build), which both keep overwriting (a copy
-that sets `wait` or `ignoreMissingComponents` to `false` or `null`, or `dependsOn`, `healthChecks`,
+that sets `wait` or `ignoreMissingComponents` to `false` or `null`, `decryption` to `null`, or `dependsOn`, `healthChecks`,
 `healthCheckExprs`, `patches`, `components` or `images` to an empty list or `null`, agrees with one
 that omits the field, which Flux applies alike; every other compared field and value compares as
 written (a field a later Flux adds is compared only once kure lists it, and as written until its
@@ -492,17 +493,28 @@ A Kustomization is read as it is
 applied: kustomize-controller drops its `status` and `metadata.creationTimestamp` first, so
 neither keeps it from being read.
 
-A build that may merge into a Secret is not read. A merge changes a Secret another file writes,
-and kustomize hashes the merged Secret's name over its merged content, a hash that depends on the
-kustomize version (kustomize v0.21.2 normalises `stringData` before the merge, kustomize-controller
-v1.10.1's v0.21.1 does not); kure does not read which Secret a merge changes, or under which name.
-A build may merge when a kustomization file it loads as one (a component's included) holds a
-`secretGenerator` entry with `behavior: merge`, or a `generators` entry, whose generator may merge
-too. kure decodes each such file as kustomize does: keys in any case, YAML anchors, aliases and
-merge keys expanded, and the last of duplicate keys taking effect; a build that reads a file it
-cannot decode is not read, as above, so no merge is missed. A file no build reads, or one a generator reads only as
-data, merges nothing. This refuses conservatively: a tree whose build merges into a Secret is
-refused even where Flux converges. go-kure/kure#1181 tracks reading such a build.
+A build that merges into a Secret is read as built. A merge changes a Secret another file writes,
+and kustomize hashes the merged Secret's name over its merged content inside the build, so the
+build gives the name Flux computes: the unhashed name for a merge into a literal Secret or one
+whose hash is disabled, the hash of the merged data for a generated one (the name before the merge
+then has no writer). A build may merge when a kustomization file it loads as one (a component's
+included) holds a `secretGenerator` entry with `behavior: merge`, or a `generators` entry, whose
+generator may merge too. kure decodes each such file as kustomize does: keys in any case, YAML
+anchors, aliases and merge keys expanded, and the last of duplicate keys taking effect; a build that
+reads a file it cannot decode is not read, as above, so no merge is missed. A file no build reads,
+or one a generator reads only as data, merges nothing.
+
+Such a build is not read, naming the file and the reason, in two cases kure cannot build as Flux
+does. The Kustomization sets `spec.decryption` (any provider): Flux decrypts sources before the
+build and resources after it, so decrypted data may change the hash, and nothing follows which
+data reaches a name. A copy of the Kustomization that differs from the one built only in
+`decryption` is refused as any other difference between two applied copies is (a null `decryption`
+is none). Or the binary links another kustomize api than the one kustomize-controller v1.10.1
+builds with (v0.21.1): v0.21.2 normalises `stringData` before a merge, v0.21.1 does not, so the hash
+can differ. kure reads the module the binary links as Go reports it, the replacement when there is
+one, by path and version; a module that imports kure resolves v0.21.2 unless it repeats kure's
+`replace` directives, and its merging builds stay unread. This refuses conservatively: a tree
+whose build merges into a Secret in these cases is refused even where Flux converges.
 
 kure adds the existence wait only when the object's writers are certain: only writers other than
 the Flux bootstrap apply an object matching it by group, kind, namespace and name as built (the

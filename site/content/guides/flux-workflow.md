@@ -946,7 +946,8 @@ nothing for Flux. If the API server rejects such a key instead of pruning it,
 the apply of that object fails there, and the integration does not report it.
 A build that
 fails, a Kustomization two builds write differently (`wait` or
-`ignoreMissingComponents` set to `false` or `null`, or a list field such as
+`ignoreMissingComponents` set to `false` or `null`, `decryption` set to `null`,
+or a list field such as
 `dependsOn` or `patches` set to an empty list or `null`, is the field omitted,
 as Flux applies it; any other difference counts, and a key in another case,
 `Wait:` say, is no field and is ignored), the eighth build of one `spec.path`
@@ -959,7 +960,10 @@ Source, are refused. So is a build kure cannot read as Flux does, naming the
 file: one that reads a remote reference (a Git base or an `http(s)` URL; an
 integration never fetches, so vendor the base into the tree or reference it
 through a Flux Source), a kustomization file kure cannot parse, one that sets
-`openapi`, or one that may merge into a Secret. One
+`openapi`, or one that may merge into a Secret while the Kustomization sets
+`spec.decryption` or the binary links another kustomize than Flux's (a merge
+otherwise is read as built, under the name kustomize gives the merged Secret).
+One
 without `wait` that health-checks any other object waits for the Kustomization
 that applies it, whatever its expression says, when that writer is certain,
 and a cycle through them is refused. With several certain writers it waits for

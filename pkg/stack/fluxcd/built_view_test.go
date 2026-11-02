@@ -371,8 +371,8 @@ func TestBuiltView_ABuildThatReadsOpenAPIIsRefused(t *testing.T) {
 // witness shows that nothing ran git or sent a request. The controls run
 // without either: a local resource, admitted, and a standalone
 // ConfigMapGenerator whose singular env kustomize does not read there, which
-// is not read only as a build that may merge into a Secret, as every
-// generators entry is (go-kure/kure#1181), and never for its env.
+// is admitted: the generators entry that may merge into a Secret is read as
+// built (go-kure/kure#1181), and its env is never requested.
 func TestBuiltView_ABuildThatReadsARemoteReferenceIsNotRead(t *testing.T) {
 	const component = "apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\n"
 	const patchTransformer = "apiVersion: builtin\nkind: PatchTransformer\nmetadata:\n  name: remote-patch\npath: %s/p.yaml\ntarget:\n  kind: ConfigMap\n"
@@ -381,9 +381,6 @@ func TestBuiltView_ABuildThatReadsARemoteReferenceIsNotRead(t *testing.T) {
 		files func(w *fluxstack.NetworkWitness) map[string]string
 		file  string // the file the refusal names; "" admits the tree
 		ref   func(w *fluxstack.NetworkWitness) string
-		// merge: the build is not read only as one that may merge into a
-		// Secret, naming no remote reference.
-		merge bool
 	}{
 		{name: "a git base over file", file: "extra/kustomization.yaml",
 			files: func(*fluxstack.NetworkWitness) map[string]string {
@@ -431,7 +428,7 @@ func TestBuiltView_ABuildThatReadsARemoteReferenceIsNotRead(t *testing.T) {
 					"extra/added.yaml":         "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: added\n  namespace: default\n",
 				}
 			}},
-		{name: "control standalone generator env", merge: true,
+		{name: "control standalone generator env",
 			files: func(w *fluxstack.NetworkWitness) map[string]string {
 				return map[string]string{
 					"extra/kustomization.yaml": component + "generators:\n- gen.yaml\n",
@@ -454,12 +451,6 @@ func TestBuiltView_ABuildThatReadsARemoteReferenceIsNotRead(t *testing.T) {
 				}
 				err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, cluster, rules)
 				w.Check(t)
-				if tc.merge {
-					if err == nil || !strings.Contains(err.Error(), "may merge into a Secret") || strings.Contains(err.Error(), "remote reference") || strings.Contains(err.Error(), w.URL) {
-						t.Fatalf("got %v, want the build not read only as one that may merge into a Secret, naming no remote reference", err)
-					}
-					return
-				}
 				if tc.file == "" {
 					if err != nil {
 						t.Fatalf("got %v, want the tree admitted", err)
@@ -678,6 +669,10 @@ func TestBuiltView_AZeroValueIsNotADifference(t *testing.T) {
 		"wait":                    {"wait", "false", "true"},
 		"images":                  {"images", "[]", "[{name: safe, newName: m}]"},
 		"healthChecks":            {"healthChecks", "[]", "[{apiVersion: apps/v1, kind: Deployment, name: web}]"},
+		// null is the only zero value of an object: the API server drops it.
+		// A difference in decryption decides whether a build that merges into
+		// a Secret is read, so two copies differing in it are refused.
+		"decryption": {"decryption", "null", "{provider: sops}"},
 	} {
 		for _, differs := range []bool{false, true} {
 			for _, placement := range integratedPlacements {
