@@ -1874,10 +1874,18 @@ child Kustomization's spec, `spec.postBuild` substitution and a build's own tran
 before anything is read, and a Kustomization a patched build keeps as local config is read as that
 build makes it, its own `wait` included. A built object is read as its JSON, so a number in it,
 a port say, is read like any other field, before and after substitution (go-kure/kure#1199). An
-unstructured object a caller builds in Go must hold JSON-typed values, as apimachinery's
-`Unstructured` requires: an `int64`, not an `int`. kure copies a `List` item and a compared
-Source through its JSON, but other reads still panic on such a value (go-kure/kure#1201). What
-they still leave out:
+unstructured object a caller builds in Go should hold JSON-typed values, as apimachinery's
+`Unstructured` requires: an `int64`, not an `int`, because its `Nested*` reads and `DeepCopy`
+panic on any other. kure reads such an object as its JSON, so it never panics on one
+(go-kure/kure#1201). `IntegrateWithLayout`, `CreateLayoutWithResources` (through it),
+`GenerateFromLayout`, `GenerateFromCluster` (through it) and `UmbrellaTerminals` first replace the
+`Object` map of each unstructured object in the layouts they are given, a `List`'s items included,
+that holds another value (an `int`, an `int32`, a `[]string`, a `map[string]string`) with the map its
+JSON decodes to, a number as an `int64` or a `float64`. This changes the object the caller passed: its
+`Object` field holds a new map, and the map the caller built is not changed. An object that holds
+only JSON-typed values is left as it is. A value that does not marshal, a channel say, refuses the
+call with the layout, the object and the field named, and replaces no object. What they still
+leave out:
 
 - **An object a build moves.** A health check on an object's name as its file writes it, where a
   `spec.targetNamespace` or a name prefix or suffix applies it under another, names an object that

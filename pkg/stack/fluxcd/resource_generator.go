@@ -228,6 +228,14 @@ func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.L
 // settings of a layout's own Kustomization a layout sets
 // (go-kure/kure#1032): the error names the first such layout in pre-order
 // and every such field it sets.
+//
+// An unstructured object in root that holds a value apimachinery cannot read,
+// a plain int say, is replaced in place by one that holds what its JSON
+// decodes to, an int64 for it: its Object field is set to a new map, so the
+// object the caller passed changes, and the caller's map does not. An object
+// that holds only JSON typed values is left alone. A value that does not
+// marshal refuses the call, with the object and the field named, and replaces
+// no object (go-kure/kure#1201).
 func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, error) {
 	out, _, err := g.generateFromLayout(root, c)
 	return out, err
@@ -247,6 +255,9 @@ func (g *ResourceGenerator) generateFromLayout(root *layout.ManifestLayout, c *s
 	}
 	if root == nil || c == nil || c.Node == nil {
 		return nil, nil, nil
+	}
+	if err := normalizeCallerObjects(root); err != nil {
+		return nil, nil, err
 	}
 	ix, err := layout.IndexOrigins(root, c)
 	if err != nil {
