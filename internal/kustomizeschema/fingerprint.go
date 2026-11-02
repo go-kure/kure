@@ -117,6 +117,11 @@ func (w *walker) uvarint(n uint64) { w.buf = binary.AppendUvarint(w.buf, n) }
 
 func (w *walker) varint(n int64) { w.buf = binary.AppendVarint(w.buf, n) }
 
+// count writes a length, a field count or a number, none of which is negative.
+func (w *walker) count(n int) {
+	w.uvarint(uint64(n)) //nolint:gosec // n is a length, count or index: never negative
+}
+
 // str writes s, length-prefixed, so one string cannot run into the next.
 func (w *walker) str(s string) {
 	w.uvarint(uint64(len(s)))
@@ -155,26 +160,27 @@ func typeName(t reflect.Type) string {
 		return "[" + strconv.Itoa(t.Len()) + "]" + typeName(t.Elem())
 	case reflect.Map:
 		return "map[" + typeName(t.Key()) + "]" + typeName(t.Elem())
+	default:
+		return t.String()
 	}
-	return t.String()
 }
 
 // typed writes t: its definition the first time, its number after.
 func (w *walker) typed(t reflect.Type) {
 	if n, ok := w.types[t]; ok {
 		w.byte(tagType)
-		w.uvarint(uint64(n))
+		w.count(n)
 		return
 	}
 	n := len(w.types)
 	w.types[t] = n
 	w.byte(tagDefine)
-	w.uvarint(uint64(n))
-	w.byte(byte(t.Kind()))
+	w.count(n)
+	w.uvarint(uint64(t.Kind())) // a kind is below 128: one byte
 	w.str(typeName(t))
 	switch t.Kind() {
 	case reflect.Struct:
-		w.uvarint(uint64(t.NumField()))
+		w.count(t.NumField())
 		for i := range t.NumField() {
 			f := t.Field(i)
 			w.str(f.Name)
@@ -183,11 +189,12 @@ func (w *walker) typed(t reflect.Type) {
 	case reflect.Pointer, reflect.Slice:
 		w.str(typeName(t.Elem()))
 	case reflect.Array:
-		w.uvarint(uint64(t.Len()))
+		w.count(t.Len())
 		w.str(typeName(t.Elem()))
 	case reflect.Map:
 		w.str(typeName(t.Key()))
 		w.str(typeName(t.Elem()))
+	default: // a scalar, func, chan or interface: its kind and name say all
 	}
 }
 
@@ -215,6 +222,7 @@ func (w *walker) walk(v reflect.Value) {
 	switch v.Kind() {
 	case reflect.Pointer, reflect.Interface, reflect.Struct, reflect.Map, reflect.Slice, reflect.Array:
 		w.typed(v.Type())
+	default: // a scalar, func or chan holds no other value: no type
 	}
 	w.body(v)
 }
@@ -231,7 +239,7 @@ func (w *walker) body(v reflect.Value) {
 		tag, n, first := w.enter(k, true)
 		if !first {
 			w.byte(tag)
-			w.uvarint(uint64(n))
+			w.count(n)
 			return
 		}
 		w.byte(tagPresent)
@@ -259,11 +267,11 @@ func (w *walker) body(v reflect.Value) {
 		tag, n, first := w.enter(k, true)
 		if !first {
 			w.byte(tag)
-			w.uvarint(uint64(n))
+			w.count(n)
 			return
 		}
 		w.byte(tagPresent)
-		w.uvarint(uint64(v.Len()))
+		w.count(v.Len())
 		start := len(w.entries)
 		w.sortedEntries(v)
 		for _, e := range w.entries[start:] {
@@ -282,13 +290,13 @@ func (w *walker) body(v reflect.Value) {
 			tag, n, first := w.enter(k, false)
 			if !first {
 				w.byte(tag)
-				w.uvarint(uint64(n))
+				w.count(n)
 				return
 			}
 			defer delete(w.visiting, k)
 		}
 		w.byte(tagPresent)
-		w.uvarint(uint64(v.Len()))
+		w.count(v.Len())
 		for i := range v.Len() {
 			w.walk(v.Index(i))
 		}
