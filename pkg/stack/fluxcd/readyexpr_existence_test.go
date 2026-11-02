@@ -328,7 +328,9 @@ func toReadyWait(name string) kustomize.Patch {
 // Ready (go-kure/kure#1190), so x is a terminal leaf with or without a patch
 // in the tree, on the member a or on another, unrecorded copy of it in a
 // directory indexed after it. A patch that adds a readyExpr to a plain entry
-// is not seen yet (go-kure/kure#1214).
+// is not read either; a plain entry proves nothing in a tree that holds a patch
+// instead (TestUmbrellaTerminals_PatchedPlainEntryProvesNothing,
+// go-kure/kure#1214).
 func TestUmbrellaTerminals_PatchedTreeKeepsReadyExprEntryAsLeaf(t *testing.T) {
 	for _, patched := range []string{"", "member", "copy of the member"} {
 		root := &layout.ManifestLayout{Name: "demo", Namespace: "clusters"}

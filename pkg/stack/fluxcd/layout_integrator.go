@@ -397,6 +397,11 @@ type integratedPlacement struct {
 	// Kustomizations checkKeptNodeCR found lacking a dependency, for
 	// umbrellasDoNotWait to judge against the terminal sets.
 	keptNodeDeps []keptNodeDependencies
+	// keptNodeProofs holds the kept node Kustomizations checkKeptNodeCR
+	// accepted on a dependency because their held spec.dependsOn has an entry
+	// without a readyExpr for it: keptNodeReadiness judges them once every
+	// patch is placed (go-kure/kure#1214).
+	keptNodeProofs []keptNodeProof
 	// laterPatches maps the namespace/name of a bundle's own Kustomization
 	// that placeBundlePatches wrote a later patch on to what it wrote there:
 	// laterPatchRefusal reads it when a check's build of it fails.
@@ -542,6 +547,9 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	}
 	// Under UmbrellasDoNotWait an umbrella stops waiting and a dependsOn on
 	// it names its terminal leaves; the reconcile-order check judges that.
+	if err := p.keptNodeReadiness(ml); err != nil {
+		return nil, err
+	}
 	if err := p.umbrellasDoNotWait(ml); err != nil {
 		return nil, err
 	}
@@ -2241,6 +2249,10 @@ func (p *integratedPlacement) checkKeptNodeCR(host, child *layout.ManifestLayout
 				exprOnly = append(exprOnly, dep)
 			}
 		}
+	}
+	key := crKey(p.gen.DefaultNamespace, name)
+	if proven := slices.DeleteFunc(slices.Clone(deps), func(dep string) bool { return slices.Contains(missing, dep) }); len(proven) > 0 {
+		p.keptNodeProofs = append(p.keptNodeProofs, keptNodeProof{key: key, layout: host.FullRepoPath(), node: p.nodes.path(nodes[0]), dependsOn: kept.dependsOn, proven: proven})
 	}
 	if len(missing) == 0 {
 		return nil

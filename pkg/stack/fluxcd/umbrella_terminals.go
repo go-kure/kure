@@ -88,7 +88,8 @@ type kustomizationTree struct {
 	// UmbrellasDoNotWait and ResourceGenerator.UmbrellaTerminals before they
 	// read deps (readExistence): deps then leaves out an entry that waits only
 	// for its dependency to exist. patched records that a Flux Kustomization
-	// the tree holds, at any occurrence, patches what it builds (patchesBuild).
+	// the tree holds, at any occurrence, patches what it builds (patchesBuild),
+	// or that a copy cannot be read in typed form and may.
 	existenceOnly bool
 	patched       bool
 	// dropped lists, per layout, the keys of the Flux Kustomizations it holds
@@ -197,6 +198,9 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 				if t.otherErr == nil {
 					t.otherErr = err
 				}
+				// A copy that cannot be read may carry patches, as a member's
+				// other copy does above.
+				t.patched = true
 				continue
 			}
 			t.otherSpecs[key] = spec
@@ -400,10 +404,16 @@ func (t *kustomizationTree) deps(key string) []string {
 // Ready follows its dependency's, and an entry with a readyExpr does not
 // answer it, with the setting or without: where the controller's additive CEL
 // gate is off (its default) it evaluates the expression and skips its own
-// Ready check. It does not depend on existenceOnly or on a patched tree: a
-// patch can only move an entry from plain to carrying a readyExpr, which the
-// held spec does not show (go-kure/kure#1214).
+// Ready check. It does not depend on existenceOnly. A patch can add a
+// readyExpr to an entry the held spec shows plain, and a patch can itself be
+// added by another patch, so where the tree holds any Kustomization that
+// patches what it builds (patched) no entry is counted: that leaves the
+// Kustomizations they name terminal and makes a dependent wait for more
+// leaves, never fewer (go-kure/kure#1214). The patched spec is not read.
 func (t *kustomizationTree) readyDeps(key string) []string {
+	if t.patched {
+		return nil
+	}
 	refs := t.otherDeps[key]
 	if k := t.byKey[key]; k != nil {
 		refs = specDeps(k, true)

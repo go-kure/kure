@@ -613,6 +613,16 @@ a sibling from the leaves, and a dependent could proceed before that sibling is 
 entry is read as a wait for `Ready`, as before, whether or not anything depends on it; the
 standalone `UmbrellaTerminals` queries run no such check.
 
+Both readings take a Kustomization as the tree holds it, not as a patch applies it, and a patch
+may add a `readyExpr` to a plain entry, directly or by adding patches to another Kustomization.
+So when any Kustomization of the tree sets `spec.patches` or `spec.components` (an unreadable copy
+counts as one), no plain entry proves anything: the dependency stays a terminal leaf, so a
+dependent is written onto more leaves, and a kept node Kustomization is refused for a dependency it
+names only by such an entry. kure does not narrow this to the directories a patch builds, as one
+patch can add patches elsewhere. Trees without a patch read as before. The other direction is not handled: a `"true"` entry that
+a patch changes is still read as a wait for `Ready`, and a patch that adds a `Ready` `dependsOn`
+to an umbrella is never rewritten.
+
 #### With `AdditiveCELDependencyCheckOff`
 
 `ResourceGenerator.AdditiveCELDependencyCheckOff` states that every kustomize-controller
@@ -639,7 +649,8 @@ operator running the default controller sets it to true. kure cannot see the gat
   `spec.patches` or `spec.components`, which may rewrite a `readyExpr`, it reads every entry as
   waiting for `Ready` in the checks that look for a cycle, as without the setting. Terminal leaves
   do not depend on it: an entry with a `readyExpr` never makes a sibling depended on, and a patch
-  that adds a `readyExpr` to a plain entry is not seen.
+  that adds a `readyExpr` to a plain entry is not read, so a plain entry proves nothing in a tree
+  that holds a patch (see below).
   No entry point refuses it. A v1beta2 Kustomization's `dependsOn` has no `readyExpr` field, so
   it still waits for `Ready`.
 

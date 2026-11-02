@@ -143,6 +143,11 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 		terminals[key] = terms
 	}
 	for _, c := range p.keptNodeDeps {
+		// An entry without a readyExpr proves no Ready where the tree holds a
+		// patch (go-kure/kure#1214): it names no leaf.
+		if t.patched {
+			c.have = nil
+		}
 		if err := c.check(terminals); err != nil {
 			return err
 		}
@@ -373,6 +378,38 @@ func (t *kustomizationTree) hostWriter(host *layout.ManifestLayout, self string)
 		}
 	}
 	return best
+}
+
+// keptNodeProof is a node's Kustomization kept from the tree (key) that
+// checkKeptNodeCR accepted on the dependencies proven, which its held
+// spec.dependsOn (dependsOn) names with an entry that sets no readyExpr.
+type keptNodeProof struct {
+	key, layout, node string
+	dependsOn, proven []string
+}
+
+// keptNodeReadiness refuses, once every patch is placed, a kept node
+// Kustomization accepted on a dependency by an entry without a readyExpr when
+// the tree holds a patch (patched): the patch may add a readyExpr, to this
+// Kustomization or, by patching another patching Kustomization, to any other,
+// and the controller, with its additive CEL gate off, then evaluates the
+// expression in place of its own Ready check, so the kept one would not wait
+// for the dependency's Ready (go-kure/kure#1214). checkKeptNodeCR runs while
+// the tree is still being placed, before the patches are known.
+func (p *integratedPlacement) keptNodeReadiness(root *layout.ManifestLayout) error {
+	if len(p.keptNodeProofs) == 0 {
+		return nil
+	}
+	t, err := indexKustomizationTree(root, generatedMembers(p.generated))
+	if err != nil {
+		return err
+	}
+	if !t.patched {
+		return nil
+	}
+	c := p.keptNodeProofs[0]
+	return errors.Errorf("layout %q already has Flux Kustomization %q for node %q with spec.dependsOn %q, which names %q only with entries that set no readyExpr, and a patch of a Flux Kustomization in the tree may reach it and add one: with the controller's additive CEL gate off an expression replaces the wait for the dependency's Ready, so the kept Kustomization may not wait for them; remove it, or remove the patch",
+		c.layout, c.key, c.node, c.dependsOn, c.proven)
 }
 
 // keptNodeDependencies is a node's Kustomization kept from the tree whose
