@@ -72,18 +72,24 @@ func NewLayoutIntegrator(generator *ResourceGenerator) *LayoutIntegrator {
 // decodes to, an int64 for it: its Object field is set to a new map, so the
 // object the caller passed changes, and the caller's map does not. An object
 // that holds only JSON typed values is left alone. A value that does not
-// marshal refuses the call, with the object and the field named
-// (go-kure/kure#1201).
-func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) error {
+// marshal refuses the call, with the object and the field named, and a
+// refused call puts every Object map back (go-kure/kure#1201).
+func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) (err error) {
 	if err := rules.Validate(); err != nil {
 		return err
 	}
 	if ml == nil || c == nil || c.Node == nil {
 		return nil
 	}
-	if err := normalizeCallerObjects(ml); err != nil {
+	undoNormalize, err := normalizeCallerObjects(ml)
+	if err != nil {
 		return err
 	}
+	defer func() {
+		if err != nil {
+			undoNormalize()
+		}
+	}()
 
 	rules = normalizeRulesPlacement(rules)
 

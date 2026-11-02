@@ -113,7 +113,9 @@ func TestCallerObject_OtherEntryPointsNormalize(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			s := unstructuredObj("source.toolkit.fluxcd.io/v1", "GitRepository", "flux-system", "repo")
 			s.Object["spec"] = map[string]any{"url": "https://example.invalid/repo", "extra": 53}
-			c := baseCluster(s)
+			var obj client.Object = s
+			app := stack.NewApplication("raw", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app)}}
 			ml, err := layout.WalkCluster(c, withPlacement(nodeOnly, layout.FluxSeparate))
 			if err != nil {
 				t.Fatal(err)
@@ -124,10 +126,73 @@ func TestCallerObject_OtherEntryPointsNormalize(t *testing.T) {
 						t.Errorf("panicked: %v", r)
 					}
 				}()
-				_ = call(ml, c)
+				if err := call(ml, c); err != nil {
+					t.Errorf("got %v, want none", err)
+				}
 			}()
 			if v := s.Object["spec"].(map[string]any)["extra"]; v != int64(53) {
 				t.Errorf("spec.extra = %#v after the call, want int64(53)", v)
+			}
+		})
+	}
+}
+
+// A typed List returns the unstructured items it holds as they are, so those
+// are the caller's objects too.
+func TestCallerObject_TypedListItemIsReadLikeItsJSON(t *testing.T) {
+	item := func(n any) *unstructured.Unstructured {
+		k := unstructuredObj("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "flux-system", "caller")
+		k.Object["spec"] = map[string]any{
+			"path":      "./elsewhere",
+			"sourceRef": map[string]any{"kind": "GitRepository", "name": "repo", "extra": n},
+		}
+		return k
+	}
+	for _, placement := range append(slices.Clone(integratedPlacements), layout.FluxSeparate) {
+		t.Run(string(placement), func(t *testing.T) {
+			want, panicked := integrateOutcome(t, baseCluster(typedListOf("List", item(int64(53)))), placement)
+			if panicked != nil {
+				t.Fatalf("the int64 baseline panicked: %v", panicked)
+			}
+			got, panicked := integrateOutcome(t, baseCluster(typedListOf("List", item(53))), placement)
+			if panicked != nil {
+				t.Fatalf("integration panicked: %v", panicked)
+			}
+			if got != want {
+				t.Errorf("got error %q, want the int64 outcome %q", got, want)
+			}
+		})
+	}
+}
+
+// A call that a later check refuses leaves the caller's objects as they were.
+func TestCallerObject_RefusedCallPutsTheObjectsBack(t *testing.T) {
+	handBuilt := func() (*layout.ManifestLayout, *unstructured.Unstructured, map[string]any) {
+		cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
+		cm.Object["spec"] = map[string]any{"n": 53}
+		return &layout.ManifestLayout{Name: "root", Resources: []client.Object{cm}}, cm, cm.Object
+	}
+	rules := withPlacement(nodeOnly, layout.FluxSeparate)
+	calls := map[string]func(ml *layout.ManifestLayout) error{
+		"IntegrateWithLayout": func(ml *layout.ManifestLayout) error {
+			return fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, baseCluster(), rules)
+		},
+		"GenerateFromLayout": func(ml *layout.ManifestLayout) error {
+			_, err := fluxstack.NewResourceGenerator().GenerateFromLayout(ml, baseCluster())
+			return err
+		},
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			ml, cm, held := handBuilt()
+			if err := call(ml); err == nil {
+				t.Fatal("a hand-built tree was not refused")
+			}
+			if fmt.Sprintf("%p", cm.Object) != fmt.Sprintf("%p", held) {
+				t.Error("the refused call left a new Object map on the caller's object")
+			}
+			if v := cm.Object["spec"].(map[string]any)["n"]; v != 53 {
+				t.Errorf("spec.n = %#v after the refused call, want int 53", v)
 			}
 		})
 	}
