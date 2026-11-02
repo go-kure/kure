@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"github.com/fluxcd/pkg/apis/kustomize"
@@ -703,6 +704,71 @@ func TestBuiltView_AZeroValueIsNotADifference(t *testing.T) {
 					}
 				})
 			}
+		}
+	}
+}
+
+// TestBuiltView_ASelfCopyingKustomizationEnds: the application of platform
+// holds a Flux Kustomization named ${X} that builds the directory holding it,
+// and platform substitutes X inline as "h". Its postBuild sets X to next, so
+// each build of the directory holds a Kustomization of a new name when next is
+// "${X}x" (h, hx, hxx, ...), and the walk for writers never finishes unless it
+// is bounded: the tree is refused, naming the Kustomization that may write
+// Kustomizations without end and saying the bound cannot tell it from a chain
+// that converges later (go-kure/kure#1170). When next is "h" or "j" the chain
+// comes back to a copy already built, and the tree is admitted.
+func TestBuiltView_ASelfCopyingKustomizationEnds(t *testing.T) {
+	for name, c := range map[string]struct {
+		next    string
+		refused bool
+	}{
+		"the name grows":     {next: "${X}x", refused: true},
+		"the name is fixed":  {next: "h"},
+		"the name converges": {next: "j"},
+		"the name doubles":   {next: "${X}${X}", refused: true},
+		// The name reaches 13 characters and stays there: the chain
+		// converges, but only after more builds than the bound follows.
+		"the name converges late": {next: "${X:0:12}x", refused: true},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				u := unstructuredObj(kustv1.GroupVersion.String(), "Kustomization", "flux-system", "${X}")
+				for _, f := range []struct {
+					value any
+					path  []string
+				}{
+					{platformDirectory(t, placement), []string{"spec", "path"}},
+					{map[string]any{"kind": "GitRepository", "name": "flux-system"}, []string{"spec", "sourceRef"}},
+					{map[string]any{"X": c.next}, []string{"spec", "postBuild", "substitute"}},
+				} {
+					if err := unstructured.SetNestedField(u.Object, f.value, f.path...); err != nil {
+						t.Fatalf("SetNestedField: %v", err)
+					}
+				}
+				platform := srBundle("platform", objApp("platform-app", u))
+				platform.PostBuild = &stack.PostBuild{Substitute: map[string]string{"X": "h"}}
+				done := make(chan error, 1)
+				go func() {
+					_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(platform, true), withPlacement(nodeOnly, placement))
+					done <- err
+				}()
+				var err error
+				select {
+				case err = <-done:
+				case <-time.After(20 * time.Second):
+					t.Fatal("the integration did not end")
+				}
+				if !c.refused {
+					if err != nil {
+						t.Fatalf("got %v, want the tree admitted", err)
+					}
+					return
+				}
+				const want = "it cannot tell a chain that grows without end from one that converges later"
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Fatalf("got %v, want the tree refused with %q", err, want)
+				}
+			})
 		}
 	}
 }
