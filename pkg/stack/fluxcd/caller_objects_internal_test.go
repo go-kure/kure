@@ -144,7 +144,7 @@ func TestNormalizeCallerObjects(t *testing.T) {
 		m := map[string]any{"apiVersion": "v1", "kind": "List"}
 		m["items"] = []any{m}
 		err := normalizeForTest(layoutOf(&unstructured.Unstructured{Object: m}))
-		if err == nil || !strings.Contains(err.Error(), "contains itself") {
+		if err == nil || !strings.Contains(err.Error(), "holds itself") {
 			t.Errorf("got %v, want a refusal naming the cycle", err)
 		}
 	})
@@ -167,6 +167,39 @@ func TestNormalizeCallerObjects(t *testing.T) {
 		u := object(nest(100, 53))
 		if err := normalizeForTest(layoutOf(u)); err != nil {
 			t.Errorf("a nesting of 100 levels was refused: %v", err)
+		}
+	})
+
+	t.Run("a value nested deeper than the limit in a named container is refused", func(t *testing.T) {
+		type named map[string]any
+		m := named{"leaf": 53}
+		for range maxJSONDepth + 1 {
+			m = named{"n": m}
+		}
+		u := object(map[string]any{"deep": m})
+		for call := range 2 {
+			err := normalizeForTest(layoutOf(u))
+			if err == nil || !strings.Contains(err.Error(), "nested deeper than") {
+				t.Errorf("call %d: got %v, want a refusal for the nesting", call, err)
+			}
+		}
+	})
+
+	t.Run("an object that holds itself through a pointer is refused, not encoded without end", func(t *testing.T) {
+		u := object(nil)
+		u.Object["spec"] = map[string]any{"self": u}
+		err := normalizeForTest(layoutOf(u))
+		if err == nil || !strings.Contains(err.Error(), "holds itself") {
+			t.Errorf("got %v, want a refusal naming the cycle", err)
+		}
+	})
+
+	t.Run("maps that hold themselves twice are refused at once", func(t *testing.T) {
+		m := map[string]any{"n": 53}
+		m["a"], m["b"] = m, m
+		err := normalizeForTest(layoutOf(&unstructured.Unstructured{Object: m}))
+		if err == nil || !strings.Contains(err.Error(), "holds itself") {
+			t.Errorf("got %v, want a refusal naming the cycle", err)
 		}
 	})
 
