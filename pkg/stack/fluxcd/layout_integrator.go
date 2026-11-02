@@ -414,9 +414,11 @@ type hostedObject struct {
 type existingCR struct {
 	host *layout.ManifestLayout
 	path string
-	// dependsOn holds its spec.dependsOn entries
+	// dependsOn holds its spec.dependsOn entries and readyDependsOn those
+	// that set no readyExpr, the ones that wait for the dependency's Ready
 	// (fluxKustomizationDependsOn).
-	dependsOn []string
+	dependsOn      []string
+	readyDependsOn []string
 	// source is the Source its spec.sourceRef names, and remote whether it
 	// sets spec.kubeConfig (fluxKustomizationSource).
 	source string
@@ -1701,7 +1703,8 @@ func indexExistingKustomizations(ml, skip *layout.ManifestLayout) (map[string]ex
 				return errors.Errorf("Flux Kustomization name %q is present twice (in layout %q with spec.path %q and in layout %q with spec.path %q): Kustomization names must be unique", r.GetName(), prev.host.FullRepoPath(), prev.path, l.FullRepoPath(), path)
 			}
 			source, remote := fluxKustomizationSource(r)
-			out[key] = existingCR{host: l, path: path, dependsOn: fluxKustomizationDependsOn(r), source: source, remote: remote}
+			dependsOn, readyDependsOn := fluxKustomizationDependsOn(r)
+			out[key] = existingCR{host: l, path: path, dependsOn: dependsOn, readyDependsOn: readyDependsOn, source: source, remote: remote}
 		}
 		for _, c := range l.Children {
 			if err := walk(c); err != nil {
@@ -1852,27 +1855,32 @@ func fluxKustomizationPath(obj client.Object) (string, bool) {
 }
 
 // fluxKustomizationDependsOn returns the entries of the spec.dependsOn of obj,
-// a Flux Kustomization as fluxKustomizationPath reads one, in order. An entry
-// in obj's own namespace (none given, or that one) is its name, as the
-// integrator writes one; an entry in another namespace is "<namespace>/<name>",
-// which no name the integrator asks for equals.
-func fluxKustomizationDependsOn(obj client.Object) []string {
-	var entries []string
-	add := func(namespace, name string) {
+// a Flux Kustomization as fluxKustomizationPath reads one, in order: all of
+// them, and the ready subset, those that set no readyExpr. An entry in obj's
+// own namespace (none given, or that one) is its name, as the integrator
+// writes one; an entry in another namespace is "<namespace>/<name>", which no
+// name the integrator asks for equals. Only a plain entry makes obj wait for
+// the dependency's Ready: with the controller's additive CEL gate off, its
+// default, a readyExpr replaces that check (go-kure/kure#1190).
+func fluxKustomizationDependsOn(obj client.Object) (all, ready []string) {
+	add := func(namespace, name string, plain bool) {
 		if namespace != "" && crKey(namespace, "") != crKey(obj.GetNamespace(), "") {
 			name = namespace + "/" + name
 		}
-		entries = append(entries, name)
+		all = append(all, name)
+		if plain {
+			ready = append(ready, name)
+		}
 	}
 	if k, ok := obj.(*kustv1.Kustomization); ok {
 		for _, d := range k.Spec.DependsOn {
-			add(d.Namespace, d.Name)
+			add(d.Namespace, d.Name, d.ReadyExpr == "")
 		}
-		return entries
+		return all, ready
 	}
 	u, ok := obj.(*unstructured.Unstructured)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	deps, _, _ := unstructured.NestedFieldNoCopy(u.Object, "spec", "dependsOn")
 	list, _ := deps.([]any)
@@ -1880,11 +1888,12 @@ func fluxKustomizationDependsOn(obj client.Object) []string {
 		if m, ok := d.(map[string]any); ok {
 			if name, ok := m["name"].(string); ok {
 				namespace, _ := m["namespace"].(string)
-				add(namespace, name)
+				expr := m["readyExpr"]
+				add(namespace, name, expr == nil || expr == "")
 			}
 		}
 	}
-	return entries
+	return all, ready
 }
 
 // crKey is a Kustomization's identity: Flux Kustomizations are namespaced,
@@ -2221,10 +2230,16 @@ func (p *integratedPlacement) checkKeptNodeCR(host, child *layout.ManifestLayout
 	if err != nil {
 		return err
 	}
-	var missing []string
+	// Only an entry without a readyExpr makes the kept one wait for the
+	// dependency's Ready (readyDependsOn): the controller, with its additive
+	// CEL gate off, evaluates a readyExpr in place of that check.
+	var missing, exprOnly []string
 	for _, dep := range deps {
-		if !slices.Contains(kept.dependsOn, dep) {
+		if !slices.Contains(kept.readyDependsOn, dep) {
 			missing = append(missing, dep)
+			if slices.Contains(kept.dependsOn, dep) {
+				exprOnly = append(exprOnly, dep)
+			}
 		}
 	}
 	if len(missing) == 0 {
@@ -2232,12 +2247,15 @@ func (p *integratedPlacement) checkKeptNodeCR(host, child *layout.ManifestLayout
 	}
 	refusal := errors.Errorf("layout %q already has Flux Kustomization %q for node %q with spec.dependsOn %q, which lacks %q that the node's DependsOn and NamedDependsOn ask for: the kept Kustomization would not wait for them; remove it, or add them to it",
 		host.FullRepoPath(), name, p.nodes.path(nodes[0]), kept.dependsOn, missing)
+	if len(exprOnly) > 0 {
+		refusal = errors.Errorf("%s (%q named only with a readyExpr, which replaces the wait for the dependency's Ready)", refusal.Error(), exprOnly)
+	}
 	if p.gen.UmbrellasDoNotWait {
 		// An earlier integration with the setting wrote a dependsOn on an
 		// umbrella as one on its terminal leaves (R3): umbrellasDoNotWait
 		// accepts that form once the terminal sets are known.
 		p.keptNodeDeps = append(p.keptNodeDeps, keptNodeDependencies{
-			namespace: p.gen.DefaultNamespace, have: kept.dependsOn, missing: missing, refusal: refusal,
+			namespace: p.gen.DefaultNamespace, have: kept.readyDependsOn, missing: missing, refusal: refusal,
 		})
 		return nil
 	}

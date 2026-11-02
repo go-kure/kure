@@ -574,6 +574,17 @@ expression asks for less than `Ready`, and whose dependsOn closes a cycle, is th
 although it converges. Drop that `dependsOn`, depend on the object some other way, or, for a
 `readyExpr` of exactly `"true"`, set `AdditiveCELDependencyCheckOff` (below).
 
+That read is the safe one for the checks that look for a cycle, where counting too many waits can
+only refuse. It is the wrong one where a check needs proof that a Kustomization is `Ready` after
+its dependency: picking the terminal leaves of an umbrella, and what a node's kept Kustomization
+must carry. There only a `dependsOn` entry with no `readyExpr` counts, with
+`AdditiveCELDependencyCheckOff` or without. Under the default gate Flux skips its own readiness
+check for an entry with an expression, so it proves nothing about `Ready`; counting it would drop
+a sibling from the leaves, and a dependent could proceed before that sibling is `Ready`. The
+"umbrellas do not wait" integration still refuses an umbrella that has no terminal leaf when every
+entry is read as a wait for `Ready`, as before, whether or not anything depends on it; the
+standalone `UmbrellaTerminals` queries run no such check.
+
 #### With `AdditiveCELDependencyCheckOff`
 
 `ResourceGenerator.AdditiveCELDependencyCheckOff` states that every kustomize-controller
@@ -595,11 +606,12 @@ operator running the default controller sets it to true. kure cannot see the gat
 - **Where it applies:** Kustomizations kure generates carry no `readyExpr`, so the field changes
   only how Kustomizations an application emits, or a caller keeps, patches or substitutes, are
   judged, in every check: the members' check, the tree's, and the "umbrellas do not wait" rewrite
-  (an existence wait on an umbrella is kept as written, and one between siblings keeps neither
-  from being a terminal leaf). That rewrite reads each Kustomization as the tree holds it, not as
-  a patch applies it: when a Flux Kustomization of the tree sets `spec.patches` or
-  `spec.components`, which may rewrite a `readyExpr`, it reads every entry as waiting for
-  `Ready`, as without the setting, and so does `ResourceGenerator.UmbrellaTerminals`.
+  (an existence wait on an umbrella is kept as written). That rewrite reads each Kustomization as
+  the tree holds it, not as a patch applies it: when a Flux Kustomization of the tree sets
+  `spec.patches` or `spec.components`, which may rewrite a `readyExpr`, it reads every entry as
+  waiting for `Ready` in the checks that look for a cycle, as without the setting. Terminal leaves
+  do not depend on it: an entry with a `readyExpr` never makes a sibling depended on, and a patch
+  that adds a `readyExpr` to a plain entry is not seen.
   No entry point refuses it. A v1beta2 Kustomization's `dependsOn` has no `readyExpr` field, so
   it still waits for `Ready`.
 
@@ -1656,11 +1668,14 @@ instead of nested waits:
   `ErrUmbrellaDependency` too, since the umbrella does not wait and so is Ready before what it
   applies. The error names the terminal leaves to name instead. Under
   `AdditiveCELDependencyCheckOff` an entry whose `readyExpr` is exactly `"true"` waits only for
-  the dependency to exist, so it is none of these: it is kept as written, judged by no rule here,
-  and makes no Kustomization it names depended on when terminal leaves are picked. These rules
-  read each Kustomization as the tree holds it, so once a Flux Kustomization of the tree sets
-  `spec.patches` or `spec.components`, which may rewrite such an expression, they read every entry
-  as waiting for `Ready`, as without the setting.
+  the dependency to exist, so it is none of these: it is kept as written and judged by no rule
+  here. When terminal leaves are picked, an entry with any `readyExpr`, with the setting or
+  without, makes no Kustomization it names depended on: Flux skips its own readiness check for
+  it, so a dependent of the umbrella also waits for that Kustomization. These rules read each
+  Kustomization as the tree holds it, so once a Flux Kustomization of the tree sets `spec.patches`
+  or `spec.components`, which may rewrite such an expression, they read every entry as waiting for
+  `Ready`, as without the setting, wherever that decides a refusal; the terminal leaves are the
+  same.
 
 These checks read a Flux Kustomization in its context. One the integration places or keeps builds
 the directory of the tree its `spec.path` names. For any other (an application's, or the
@@ -1733,7 +1748,8 @@ they still leave out:
   tree stalls whatever kure reads, so the read may refuse such a tree but never admits a deadlock.
 - **`readyExpr`.** Read as a wait for `Ready`, or for existence when the expression is exactly
   `"true"` and the generator sets `AdditiveCELDependencyCheckOff` (see [With
-  `AdditiveCELDependencyCheckOff`](#with-additiveceldependencycheckoff)).
+  `AdditiveCELDependencyCheckOff`](#with-additiveceldependencycheckoff)). Terminal selection and
+  a node's kept `dependsOn` count only an entry with no `readyExpr` as a wait for `Ready`.
 - **`openapi`.** A build that reads a kustomization file setting `openapi` is not read:
   kustomize-controller isolates its schema by resetting kustomize's global one around each build,
   which kure does not do (see [One Kustomization per
@@ -1758,7 +1774,9 @@ is not rewritten; it is refused when it breaks R1 (with `ErrUmbrellaWait`, for `
 `healthChecks`) or R3 (with `ErrUmbrellaDependency`), since it was placed without the setting.
 A tree the setting wrote integrates again unchanged: a node's kept Kustomization whose
 `dependsOn` names the terminal leaves of an umbrella the node depends on satisfies that
-dependency, and one that names neither is refused with `ErrUmbrellaDependency`. The reconcile-order check (see "One Kustomization per directory") runs on the
+dependency, and one that names neither is refused with `ErrUmbrellaDependency`. An entry that
+names a leaf only with a `readyExpr` names it for existence, so it counts as naming neither. The
+reconcile-order check (see "One Kustomization per directory") runs on the
 rewritten specs.
 
 | Entry point | With the setting |
@@ -1780,11 +1798,12 @@ caller that places its own records them with `SetFluxKustomizations`. A record c
 current one, both read as kure reads identities: the path cleaned, an omitted namespace `default`,
 an omitted Source namespace the Kustomization's own. A Kustomization that two trees
 both hold, and a tree whose objects cannot be read, are refused with `ErrUmbrellaTerminals`.
-It reads every `dependsOn` as the integrator does by default. For trees integrated with
-`AdditiveCELDependencyCheckOff`, call the generator's method `ResourceGenerator.UmbrellaTerminals`
-instead: it reads a `readyExpr` of exactly `"true"` as that integration did, as an existence wait
-that makes no sibling depended on (in a tree with no Kustomization setting `spec.patches` or
-`spec.components`), and so returns the terminal leaves that integration wrote.
+It counts only a `dependsOn` entry with no `readyExpr` as a wait for `Ready`: a sibling that
+another one names with a `readyExpr` is a terminal leaf, with `AdditiveCELDependencyCheckOff` or
+without, and in a tree with a patching Kustomization or without. It runs no cycle check, so a tree
+whose entries wait for each other only through a `readyExpr` returns its leaves instead of
+`ErrUmbrellaTerminals`. The generator's method `ResourceGenerator.UmbrellaTerminals` returns the
+same leaves; it stays for callers that already use it.
 
 ### With `OmitUmbrellaChildHealthChecks`
 

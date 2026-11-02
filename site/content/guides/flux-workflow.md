@@ -975,12 +975,15 @@ conservative read. With it, a `readyExpr` of exactly `"true"` waits only for
 the dependency to exist; set on a cluster whose gate is on, the checks can
 admit a tree that never becomes Ready
 ([details](/api-reference/flux-engine/#with-additiveceldependencycheckoff)).
+Picking terminal leaves counts only a `dependsOn` entry with no `readyExpr` as
+a wait for `Ready`, with the setting or without: Flux skips its own readiness
+check for an entry with an expression.
 `fluxcd.UmbrellaTerminals` returns each umbrella's terminal leaves, for a
 dependency written from outside the tree, for trees as an integration returned
 them: only a Kustomization the integration recorded, still on the recorded
 path, Source and cluster, counts as an umbrella. For trees integrated with
-`AdditiveCELDependencyCheckOff`, call that generator's `UmbrellaTerminals`
-method, which reads the dependencies as its integration did. The full rules and refusals are in
+`AdditiveCELDependencyCheckOff`, that generator's `UmbrellaTerminals` method
+returns the same leaves. The full rules and refusals are in
 the [Flux Engine reference](/api-reference/flux-engine/#with-umbrellasdonotwait).
 
 ### Umbrellas without child health checks

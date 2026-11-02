@@ -393,6 +393,30 @@ func (t *kustomizationTree) deps(key string) []string {
 	return out
 }
 
+// readyDeps returns, as keys, the entries of the spec.dependsOn of the
+// Kustomization with key that prove the dependency Ready: those without a
+// readyExpr. deps counts more, for the checks where reading too many waits is
+// safe; this one answers the opposite question, whether a Kustomization's
+// Ready follows its dependency's, and an entry with a readyExpr does not
+// answer it, with the setting or without: where the controller's additive CEL
+// gate is off (its default) it evaluates the expression and skips its own
+// Ready check. It does not depend on existenceOnly or on a patched tree: a
+// patch can only move an entry from plain to carrying a readyExpr, which the
+// held spec does not show (go-kure/kure#1214).
+func (t *kustomizationTree) readyDeps(key string) []string {
+	refs := t.otherDeps[key]
+	if k := t.byKey[key]; k != nil {
+		refs = specDeps(k, true)
+	}
+	var out []string
+	for _, d := range refs {
+		if d.plain {
+			out = append(out, d.key)
+		}
+	}
+	return out
+}
+
 // readExistence sets existenceOnly to on, unless the tree holds a Flux
 // Kustomization that patches what it builds (patched). The tree reads every
 // spec as it holds it, and a patch may rewrite a readyExpr held as "true"
@@ -444,18 +468,27 @@ func (t *kustomizationTree) keptDroppedErr() error {
 // in the form R3 writes them: C, and each Kustomization of u's subtree a
 // member's dependsOn names, stand for their terminal leaves when they are
 // umbrellas, and C is depended on when another one's dependsOn awaits all of
-// C's; an entry that waits only for its dependency to exist awaits nothing
-// (deps). So a tree the setting already rewrote has the same sets. A dependsOn
-// of a Kustomization that is no member is not rewritten, so its entries on
-// umbrellas await nothing. A Flux Kustomization
+// C's; an entry with a readyExpr awaits nothing, as the controller skips its
+// own Ready check for it (readyDeps). So a tree the setting already rewrote
+// has the same sets. A dependsOn of a Kustomization that is no member is not
+// rewritten, so its entries on umbrellas await nothing. A Flux Kustomization
 // that is no member is a leaf: its own subtree is its author's. Entries are
 // deduplicated, in the order of u's children. An empty set is an error that
 // wraps ErrUmbrellaDependency.
 func (t *kustomizationTree) terminals(u string) ([]string, error) {
-	return t.terminalsFrom(u, map[string]bool{})
+	return t.terminalsFrom(u, map[string]bool{}, t.readyDeps)
 }
 
-func (t *kustomizationTree) terminalsFrom(u string, visiting map[string]bool) ([]string, error) {
+// conservativeTerminals is terminals over the dependsOn entries the cycle
+// checks read (deps): an error where it finds no terminal leaf or an umbrella
+// applying itself, which the integration refuses even where terminals, reading
+// only the entries that prove Ready, finds leaves. Only its error is used.
+func (t *kustomizationTree) conservativeTerminals(u string) error {
+	_, err := t.terminalsFrom(u, map[string]bool{}, t.deps)
+	return err
+}
+
+func (t *kustomizationTree) terminalsFrom(u string, visiting map[string]bool, reads func(key string) []string) ([]string, error) {
 	if visiting[u] {
 		return nil, errors.Wrapf(ErrUmbrellaDependency, "Flux Kustomization %q applies itself through the Kustomizations it applies", u)
 	}
@@ -472,7 +505,7 @@ func (t *kustomizationTree) terminalsFrom(u string, visiting map[string]bool) ([
 		if l, ok := memo[k]; ok {
 			return l, nil
 		}
-		l, err := t.terminalsFrom(k, visiting)
+		l, err := t.terminalsFrom(k, visiting, reads)
 		if err != nil {
 			return nil, err
 		}
@@ -481,7 +514,7 @@ func (t *kustomizationTree) terminalsFrom(u string, visiting map[string]bool) ([
 	}
 	awaited := map[string][]string{}
 	for _, s := range children {
-		for _, d := range t.deps(s) {
+		for _, d := range reads(s) {
 			if d == s {
 				continue
 			}
@@ -586,27 +619,28 @@ func (t *kustomizationTree) within(u, d string) bool {
 // plain wrapped sentinel, not a typed resource error. Nil roots are skipped;
 // no umbrella gives an empty map.
 //
-// It reads every dependsOn as the integrator does by default: for trees
-// integrated with ResourceGenerator.AdditiveCELDependencyCheckOff, call
-// ResourceGenerator.UmbrellaTerminals on that generator instead.
+// It counts only a dependsOn entry with no readyExpr as a wait for Ready
+// (readyDeps): a sibling that another one names with a readyExpr is a
+// terminal leaf, with or without ResourceGenerator.AdditiveCELDependencyCheckOff.
+// It runs no cycle check, so a tree whose Kustomizations wait for each other
+// only through a readyExpr returns its leaves, where it returned an error that
+// wraps ErrUmbrellaTerminals before go-kure/kure#1190.
 func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, error) {
 	return umbrellaTerminals(false, roots)
 }
 
-// UmbrellaTerminals is the package function UmbrellaTerminals, with the
-// dependsOn entries read as g's integration reads them: with
-// AdditiveCELDependencyCheckOff, an entry whose readyExpr is exactly "true"
-// waits only for its dependency to exist, so it makes no Kustomization it
-// names depended on, and the terminal leaves are those g's integration
-// writes. As there, a tree holding a Flux Kustomization that sets
-// spec.patches or spec.components is read as without the setting: a patch
-// may rewrite a readyExpr, and the tree is read as held.
+// UmbrellaTerminals is the package function UmbrellaTerminals, and returns
+// the terminal leaves g's integration writes. They no longer depend on the
+// setting: an entry with a readyExpr never makes a Kustomization it names
+// depended on, so the method returns what the package function does. It
+// stays for callers that already use it.
 func (g *ResourceGenerator) UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, error) {
 	return umbrellaTerminals(g.AdditiveCELDependencyCheckOff, roots)
 }
 
 // umbrellaTerminals is UmbrellaTerminals, with existenceOnly as
-// kustomizationTree.existenceOnly.
+// kustomizationTree.existenceOnly. The terminal leaves no longer depend on it
+// (readyDeps), so both entry points return the same leaves.
 func umbrellaTerminals(existenceOnly bool, roots []*layout.ManifestLayout) (map[string][]string, error) {
 	out := map[string][]string{}
 	placedIn := map[string]int{}

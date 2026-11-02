@@ -133,6 +133,13 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 		if err != nil {
 			return err
 		}
+		// The sets above count only entries that prove Ready. An umbrella
+		// whose Kustomizations wait for each other through readyExprs that
+		// may require Ready has leaves there but is a deadlock the cycle
+		// checks read: refused as before, whether or not a dependent names it.
+		if err := t.conservativeTerminals(key); err != nil {
+			return err
+		}
 		terminals[key] = terms
 	}
 	for _, c := range p.keptNodeDeps {
