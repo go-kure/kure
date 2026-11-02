@@ -1885,8 +1885,8 @@ among them), that holds another value (an `int`, an `int32`, a
 `[]string`, a `map[string]string`) with the map its JSON decodes to, a number as an `int64` or a
 `float64`. This changes the object the caller passed: its `Object` field holds a new map, and the map
 the caller built is not changed. An object that holds only JSON-typed values is left as it is. A
-value that does not marshal, a channel say, or one nested deeper than 1000 levels or holding itself,
-refuses the call with the layout, the object and the field named, and replaces no object. A call
+value that does not marshal, a channel say, or one nested deeper than 1000 levels or holding itself
+(through maps, slices, named container types or an `*unstructured.Unstructured`), refuses the call with the layout, the object and the field named, and replaces no object. A call
 that refuses later, for another reason, puts every `Object` map it replaced back, except one the
 caller has set to another map since. What they still leave out:
 

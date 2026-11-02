@@ -314,3 +314,37 @@ func TestCallerObject_TypedListItemUnmarshalableValueIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// writesOtherItems is a typed List whose Go Items are not what it writes under
+// items: kure reads the written ones, so the unwritten ones are no object it
+// reads.
+type writesOtherItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []*unstructured.Unstructured `json:"-"`
+	Written           []map[string]any             `json:"items"`
+}
+
+func (l *writesOtherItems) DeepCopyObject() runtime.Object { c := *l; return &c }
+
+// An object a typed List holds but does not write is read by nothing, so a
+// value in it that does not marshal refuses nothing.
+func TestCallerObject_UnwrittenTypedListItemIsNotRefused(t *testing.T) {
+	unwritten := unstructuredObj("v1", "ConfigMap", "default", "unwritten")
+	unwritten.Object["spec"] = map[string]any{"bad": make(chan int)}
+	l := &writesOtherItems{
+		TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"},
+		Items:    []*unstructured.Unstructured{unwritten},
+		Written:  []map[string]any{{"apiVersion": "v1", "kind": "ConfigMap", "metadata": map[string]any{"name": "written", "namespace": "default"}}},
+	}
+	l.Name, l.Namespace = "holder", "default"
+	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{l}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("UmbrellaTerminals panicked: %v", r)
+		}
+	}()
+	if _, err := fluxstack.UmbrellaTerminals(ml); err != nil && strings.Contains(err.Error(), "spec.bad") {
+		t.Errorf("got %v: an object the List does not write was refused", err)
+	}
+}
