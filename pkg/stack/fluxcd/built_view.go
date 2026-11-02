@@ -570,7 +570,13 @@ func differingFields(a, b occurrence) ([]string, error) {
 
 // specFields returns each of graphFields of obj's spec as JSON, "" for one
 // it does not set, read from obj as written so that one that cannot be read
-// in typed form is compared too.
+// in typed form is compared too. A field of zeroAsOmitted set to its zero
+// value (null, false for a boolean, an empty list for a list) counts as not
+// set: kustomize-controller applies both alike (go-kure/kure#1169). Everything
+// else is compared as written: any other field, a value of another type, a
+// zero value inside a field (an empty postBuild, a null map entry) and a field
+// named in another case still differ, which can only refuse a tree and never
+// admit one.
 func specFields(obj client.Object) (map[string]string, error) {
 	content, err := writtenContent(obj)
 	if err != nil {
@@ -580,7 +586,7 @@ func specFields(obj client.Object) (map[string]string, error) {
 	out := map[string]string{}
 	for _, f := range graphFields {
 		value, ok := spec[f]
-		if !ok {
+		if !ok || isZeroField(f, value) {
 			continue
 		}
 		raw, err := json.Marshal(value)
@@ -590,6 +596,45 @@ func specFields(obj client.Object) (map[string]string, error) {
 		out[f] = string(raw)
 	}
 	return out, nil
+}
+
+// zeroAsOmitted lists the graphFields whose zero value kustomize-controller
+// applies as the field omitted, each with the type the Kustomization CRD gives
+// it: a boolean's zero value is false, a list's is the empty list, and null
+// stands for either. TestZeroAsOmittedMatchesVendoredCRD holds each entry to
+// that CRD. A graphField not listed here is compared as written: a "" is no
+// omission for namePrefix, nameSuffix or targetNamespace, whose CRD requires a
+// non-empty value, and a value of the wrong type is never one. A field of a
+// later Flux is compared only once it is added to graphFields, and as written
+// until it is listed here.
+var zeroAsOmitted = map[string]string{
+	"wait":                    "boolean",
+	"ignoreMissingComponents": "boolean",
+	"dependsOn":               "array",
+	"healthChecks":            "array",
+	"healthCheckExprs":        "array",
+	"patches":                 "array",
+	"components":              "array",
+	"images":                  "array",
+}
+
+// isZeroField reports whether the value of spec field f is its zero value,
+// which counts as the field omitted (zeroAsOmitted): null, or, of the type the
+// CRD gives f, false or an empty list. Any other field or value is not.
+func isZeroField(f string, value any) bool {
+	if value == nil {
+		_, listed := zeroAsOmitted[f]
+		return listed
+	}
+	switch zeroAsOmitted[f] {
+	case "boolean":
+		b, ok := value.(bool)
+		return ok && !b
+	case "array":
+		l, ok := value.([]any)
+		return ok && len(l) == 0
+	}
+	return false
 }
 
 // describeWriter names writer w in a refusal.

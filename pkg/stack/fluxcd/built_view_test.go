@@ -663,6 +663,50 @@ func TestBuiltView_ImagesAreCompared(t *testing.T) {
 	}
 }
 
+// TestBuiltView_AZeroValueIsNotADifference: hand-written builds web's
+// directory with a patch that sets one of web's spec fields to its zero value
+// (false, an empty list). kustomize-controller applies that copy as it applies
+// web's own, which omits the field, so the two writers agree and the tree is
+// admitted (go-kure/kure#1169). The control sets the field to a value that
+// differs, and the tree is refused naming it.
+func TestBuiltView_AZeroValueIsNotADifference(t *testing.T) {
+	for name, c := range map[string]struct {
+		field, zero, value string
+	}{
+		"ignoreMissingComponents": {"ignoreMissingComponents", "false", "true"},
+		"wait":                    {"wait", "false", "true"},
+		"images":                  {"images", "[]", "[{name: safe, newName: m}]"},
+		"healthChecks":            {"healthChecks", "[]", "[{apiVersion: apps/v1, kind: Deployment, name: web}]"},
+	} {
+		for _, differs := range []bool{false, true} {
+			for _, placement := range integratedPlacements {
+				value := c.zero
+				if differs {
+					value = c.value
+				}
+				t.Run(fmt.Sprintf("%s/differs=%t/%s", name, differs, placement), func(t *testing.T) {
+					k := handWritten("hand-written")
+					k.Spec.Path = webDirectory(t, placement)
+					k.Spec.Patches = []kustomize.Patch{{
+						Patch:  fmt.Sprintf("- op: add\n  path: /spec/%s\n  value: %s\n", c.field, value),
+						Target: &kustomize.Selector{Kind: "Kustomization", Name: "web"},
+					}}
+					_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(noWaitCluster(srBundle("platform", objApp("platform-app", k)), false), withPlacement(nodeOnly, placement))
+					if !differs {
+						if err != nil {
+							t.Fatalf("got %v, want the tree admitted", err)
+						}
+						return
+					}
+					if err == nil || !strings.Contains(err.Error(), `Flux Kustomization "flux-system/web" is written by`) || !strings.Contains(err.Error(), "spec."+c.field) {
+						t.Fatalf("got %v, want the two writers of web refused on spec.%s", err, c.field)
+					}
+				})
+			}
+		}
+	}
+}
+
 // platformDirectory is the spec.path of platform in noWaitCluster.
 func platformDirectory(t *testing.T, placement layout.FluxPlacement) string {
 	t.Helper()

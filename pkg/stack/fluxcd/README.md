@@ -429,7 +429,14 @@ holding a `secretGenerator` entry with `behavior: merge` or a `generators` entry
 Kustomization two writers apply with a different `dependsOn`, `wait`, `healthChecks`,
 `healthCheckExprs`, `path`, `sourceRef`, `kubeConfig`, `postBuild`, `commonMetadata`, `images`
 (which Flux's generator writes into the build) or transform (`ignoreMissingComponents` included,
-which decides whether a missing component fails the build), which both keep overwriting; a member
+which decides whether a missing component fails the build), which both keep overwriting (a copy
+that sets `wait` or `ignoreMissingComponents` to `false` or `null`, or `dependsOn`, `healthChecks`,
+`healthCheckExprs`, `patches`, `components` or `images` to an empty list or `null`, agrees with one
+that omits the field, which Flux applies alike; every other compared field and value compares as
+written (a field a later Flux adds is compared only once kure lists it, and as written until its
+zero value is listed too), so `namePrefix: ""` (the CRD requires a non-empty value), a value of
+another type (`wait: ""`), an empty `postBuild`, a null entry in a map or a field named in another
+case (`Wait`) still differs, which can refuse a tree and never admit one); a member
 built from what no apply creates, a skipped copy, the first its writers' results showed, or its
 spec as the tree holds it, where no result held it yet, when the first copy that is applied
 differs in those fields, since what it applies cannot then be read; a member built from its spec as the tree holds it that no apply creates
