@@ -158,7 +158,9 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **goimports** - Installed as a tool dependency for the formatting check (`goimports -l`)
 - **Doc-sync checks** - `docs-build` and `doc-gate` run the shared `check-doc-sync`,
   `check-links` and `check-doc-gate` actions; see [Shared Workflows](/contributing/shared-workflows/)
-- **API-reference check** - `docs-build` also runs `scripts/check-doc-api-refs.sh`, which fails
+- **API-reference check** - `docs-build` also runs `scripts/check-doc-api-refs.sh`
+  (`mise run site:check-doc-api-refs` locally; `mise run verify` and `make check-docs` run it
+  with the self-link and doc-example checks below, the offline checks of `docs-build`), which fails
   when a live page names a `Create*`/`Set*`/`Add*` function `pkg/**` no longer exports, or any
   exported name it qualifies with the base name of a package under `pkg/` (`layout.Config`,
   `errors.ParseErrors`) that the package does not declare. A variable spelled like a package is read
@@ -618,10 +620,10 @@ Both are local aggregate targets. **Neither is what CI runs** — the pipeline c
 targets and its own inline commands, so `make ci` passing locally is not the pipeline passing, and
 the pipeline passing is not `make ci` passing.
 
-| Target | Tasks (`Makefile:349`, `:352`) | Use Case |
+| Target | Tasks (`Makefile:358`, `:361`) | Use Case |
 |--------|-------|----------|
-| `precommit` | fmt, tidy, lint, test, check-tool-versions, check-govulncheck-docs, versions-test, check-builders | Local pre-commit gate. Dominated by `test`: `pkg/kubernetes/internal/gen` alone runs ~1 minute |
-| `ci` | deps, fmt, tidy, lint, vet, test, test-race, test-coverage, test-integration, vuln, check-tool-versions, check-govulncheck-docs, versions-test, check-builders | Local superset — runs the race, coverage and integration passes `precommit` skips |
+| `precommit` | fmt, tidy, lint, test, check-tool-versions, check-govulncheck-docs, versions-test, check-builders, check-docs | Local pre-commit gate. Dominated by `test`: `pkg/kubernetes/internal/gen` alone runs ~1 minute |
+| `ci` | deps, fmt, tidy, lint, vet, test, test-race, test-coverage, test-integration, vuln, check-tool-versions, check-govulncheck-docs, versions-test, check-builders, check-docs | Local superset — runs the race, coverage and integration passes `precommit` skips |
 
 ---
 
