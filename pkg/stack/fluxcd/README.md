@@ -382,7 +382,16 @@ built from its spec as its own writer's result holds it. The build uses Flux's k
 but not Flux's reset of kustomize's global OpenAPI schema around each build: that reset writes a
 schema every other use of kustomize in the process reads, so two integrations, or one beside any
 other kustomize build, would race. kure builds only with kustomize's built-in schema, which it
-has kustomize parse before any of its uses of kustomize reads it, again after a reset.
+has kustomize parse before any of its uses of kustomize reads it, again after a reset. That is a
+contract with the rest of the process, since kustomize's schema is process-global: another user of
+kustomize must not set, reset or add definitions to it while an integration builds. kure reads the
+schema's version, so it does not read a build under a custom schema or another built-in version,
+naming the version. It does not detect definitions added to the built-in schema
+(`openapi.AddSchema`, `openapi.AddDefinitions`), which leave the version unchanged but can change
+how a field merges, so a verdict can go either way (a definition that merges a Kustomization's
+`spec.dependsOn` by name keeps a dependency a patch replaced, so kure reports a cycle Flux's build
+does not have). It orders only its own goroutines: another user's concurrent set or reset of
+the schema races with a build (go-kure/kure#1166).
 
 **An integration never fetches; a remote reference is reported as not read.**
 kustomize-controller fetches what a build names remotely: a Git repository in `resources`,
