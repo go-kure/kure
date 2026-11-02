@@ -5,9 +5,11 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"hash"
+	"maps"
 	"math"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -21,9 +23,10 @@ import (
 // through reflect.Value and never Interface().
 //
 // The stream says what each value is without repeating it. The first time a
-// type is met it is defined once, by its kind and full name (package path and
-// name, so a named type never reads as its underlying one: Strategy("merge")
-// is no "merge"), and for a struct by each field's name and type; every later
+// type is met it is defined once, by its kind and full name (for a named type
+// its kind, package path and name, so it never reads as its underlying one:
+// Strategy("merge") is no "merge", and two types of one name whose kinds
+// differ are told apart), and for a struct by each field's name and type; every later
 // use writes the number the definition got. The type of a value that sits in a
 // struct field, a slice or array element, a map key or a map value is the one
 // its container's definition names, so only the value is written there; an
@@ -34,7 +37,8 @@ import (
 // time is written as a reference to its first occurrence, so a schema that two
 // parents share is read once; its sharing is part of the stream, which makes a
 // replacement by an equal copy a difference, not a silent equality. A pointer,
-// map or slice that leads back to itself is written as a cycle. A function or
+// map or slice that leads back to a value on its path is written as a cycle to
+// that value's depth, also when the way back is through a map key. A function or
 // channel contributes its type and whether it is nil, as its identity is not a
 // definition.
 //
@@ -75,12 +79,12 @@ type walker struct {
 	buf      []byte
 	types    map[reflect.Type]int
 	seen     map[visit]int // pointers and maps met so far, by the number of their first occurrence
-	visiting map[visit]bool
+	visiting map[visit]int // the values on the walk's path, by their depth on it
 	entries  []entry
 }
 
 func newWalker(h hash.Hash) *walker {
-	return &walker{h: h, buf: make([]byte, 0, 1<<16), types: map[reflect.Type]int{}, seen: map[visit]int{}, visiting: map[visit]bool{}}
+	return &walker{h: h, buf: make([]byte, 0, 1<<16), types: map[reflect.Type]int{}, seen: map[visit]int{}, visiting: map[visit]int{}}
 }
 
 // root writes v with its type, whatever kind it is.
@@ -130,11 +134,27 @@ func (w *walker) str(s string) {
 	}
 }
 
-// typeName is the full name of t: package path and name for a named type,
-// else the type's own string, which spells out the types it is made of.
+// typeName is the full name of t, which says what t is made of: for a named
+// type its kind, package path and name (two types of one name whose kinds
+// differ are told apart, and neither reads as its underlying type); for a
+// pointer, slice, array or map the names of the types it holds; for any other
+// unnamed type the type's own string.
 func typeName(t reflect.Type) string {
 	if t.Name() != "" {
-		return t.PkgPath() + "." + t.Name()
+		if t.PkgPath() == "" {
+			return t.Name()
+		}
+		return t.Kind().String() + " " + t.PkgPath() + "." + t.Name()
+	}
+	switch t.Kind() {
+	case reflect.Pointer:
+		return "*" + typeName(t.Elem())
+	case reflect.Slice:
+		return "[]" + typeName(t.Elem())
+	case reflect.Array:
+		return "[" + strconv.Itoa(t.Len()) + "]" + typeName(t.Elem())
+	case reflect.Map:
+		return "map[" + typeName(t.Key()) + "]" + typeName(t.Elem())
 	}
 	return t.String()
 }
@@ -172,22 +192,20 @@ func (w *walker) typed(t reflect.Type) {
 }
 
 // enter notes a pointer-like value on the walk's path. When the value is
-// already there it reports how to write it instead: as a cycle, or, for a
-// value that is shared, as a reference to the number of its first occurrence.
+// already there it reports how to write it instead: as a cycle, with the depth
+// on the path of the value it returns to (a slice has no other number), or, for
+// a value that is shared, as a reference to the number of its first occurrence.
 func (w *walker) enter(k visit, shared bool) (tag byte, n int, first bool) {
-	if w.visiting[k] {
-		return tagCycle, w.seen[k], false
+	if d, ok := w.visiting[k]; ok {
+		return tagCycle, d, false
 	}
 	if shared {
 		if n, ok := w.seen[k]; ok {
 			return tagRef, n, false
 		}
-		n := len(w.seen)
-		w.seen[k] = n
-		w.visiting[k] = true
-		return 0, n, true
+		w.seen[k] = len(w.seen)
 	}
-	w.visiting[k] = true
+	w.visiting[k] = len(w.visiting)
 	return 0, 0, true
 }
 
@@ -321,7 +339,7 @@ func (w *walker) sortedEntries(v reflect.Value) {
 	for it := v.MapRange(); it.Next(); {
 		e := entry{key: it.Key(), val: it.Value()}
 		if !stringKeys {
-			e.enc = encode(e.key)
+			e.enc = w.encode(e.key)
 		}
 		w.entries = append(w.entries, e)
 	}
@@ -344,9 +362,16 @@ func (w *walker) key(e entry) {
 
 // encode returns the canonical encoding of v alone, for a key that is no
 // string. It is self-contained, with the type definitions and references of
-// its own, so that it does not depend on the order the map is iterated in.
-func encode(v reflect.Value) string {
-	w := newWalker(nil)
-	w.root(v)
-	return string(w.buf)
+// its own, so that it does not depend on the order the map is iterated in. It
+// starts on the path of the walk that calls it, so a key that leads back to a
+// value on that path is written as a cycle to its depth, not walked again.
+// Keys of equal encoding but different identity, such as two pointers to equal
+// values, sort in no fixed order: the fingerprint of such a map may differ
+// between calls, which only refuses.
+func (w *walker) encode(v reflect.Value) string {
+	e := newWalker(nil)
+	e.buf = make([]byte, 0, 256)
+	maps.Copy(e.visiting, w.visiting)
+	e.root(v)
+	return string(e.buf)
 }
