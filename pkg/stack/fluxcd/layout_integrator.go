@@ -66,12 +66,23 @@ func NewLayoutIntegrator(generator *ResourceGenerator) *LayoutIntegrator {
 // CR already present with the same name and spec.path in the layout that
 // would host it is kept; one with the same name elsewhere or with another
 // path is an error.
+//
+// An unstructured object in ml that holds a value apimachinery cannot read,
+// a plain int say, is replaced in place by one that holds what its JSON
+// decodes to, an int64 for it: its Object field is set to a new map, so the
+// object the caller passed changes, and the caller's map does not. An object
+// that holds only JSON typed values is left alone. A value that does not
+// marshal refuses the call, with the object and the field named
+// (go-kure/kure#1201).
 func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) error {
 	if err := rules.Validate(); err != nil {
 		return err
 	}
 	if ml == nil || c == nil || c.Node == nil {
 		return nil
+	}
+	if err := normalizeCallerObjects(ml); err != nil {
+		return err
 	}
 
 	rules = normalizeRulesPlacement(rules)

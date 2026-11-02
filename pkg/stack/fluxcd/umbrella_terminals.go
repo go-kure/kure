@@ -635,6 +635,14 @@ func (t *kustomizationTree) within(u, d string) bool {
 // It runs no cycle check, so a tree whose Kustomizations wait for each other
 // only through a readyExpr returns its leaves, where it returned an error that
 // wraps ErrUmbrellaTerminals before go-kure/kure#1190.
+//
+// An unstructured object in a root that holds a value apimachinery cannot
+// read, a plain int say, is replaced in place by one that holds what its JSON
+// decodes to, an int64 for it: its Object field is set to a new map, so the
+// object the caller passed changes, and the caller's map does not. An object
+// that holds only JSON typed values is left alone. A value that does not
+// marshal gives an error that wraps ErrUmbrellaTerminals, names the object
+// and the field, and replaces no object (go-kure/kure#1201).
 func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, error) {
 	return umbrellaTerminals(false, roots)
 }
@@ -652,6 +660,9 @@ func (g *ResourceGenerator) UmbrellaTerminals(roots ...*layout.ManifestLayout) (
 // kustomizationTree.existenceOnly. The terminal leaves no longer depend on it
 // (readyDeps), so both entry points return the same leaves.
 func umbrellaTerminals(existenceOnly bool, roots []*layout.ManifestLayout) (map[string][]string, error) {
+	if err := normalizeCallerObjects(roots...); err != nil {
+		return nil, errors.Wrapf(ErrUmbrellaTerminals, "%s", err.Error())
+	}
 	out := map[string][]string{}
 	placedIn := map[string]int{}
 	for i, root := range roots {
