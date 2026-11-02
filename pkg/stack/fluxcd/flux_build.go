@@ -46,9 +46,9 @@ import (
 // Kustomizations holds it.
 //
 // The definitions of kustomize's schema are checked twice per tree, not per
-// build (go-kure/kure#1166): before the first build, and by finish after the
-// last, so a definition added between two builds refuses the tree too. A
-// definition added and removed again between the checks is not seen.
+// build (go-kure/kure#1166): before the first build, and by finish once the
+// builds are done, so a definition added between two builds refuses the tree
+// too. A definition added and removed again between the checks is not seen.
 type treeBuilds struct {
 	root    *layout.ManifestLayout
 	dir     string
@@ -59,6 +59,10 @@ type treeBuilds struct {
 	// of kustomize's schema, and definitionsErr what it found.
 	definitionsChecked bool
 	definitionsErr     error
+
+	// ran holds the key of each Kustomization a build ran for, in order, once:
+	// the builds finish names when it refuses the tree.
+	ran []string
 }
 
 func newTreeBuilds(root *layout.ManifestLayout) *treeBuilds {
@@ -108,8 +112,8 @@ var fluxBuildMu sync.Mutex
 // kustomize, would race. It matters only where the schema is not kustomize's
 // built-in one: the build is not read, with an unreadBuild, when another use
 // of kustomize in the process set the schema or added or changed definitions
-// of it (builtInDefinitions, once per tree, and finish after the last build:
-// go-kure/kure#1166), or when the build reads a kustomization file that sets
+// of it (builtInDefinitions, once per tree, and finish, which refuses the tree
+// with an unreadBuild naming the builds: go-kure/kure#1166), or when the build reads a kustomization file that sets
 // openapi (a component a layout's extra files write may). Nor is a build read
 // that reads a file naming a remote reference, a Git repository or an http(s)
 // URL kustomize-controller fetches, or a file kure cannot check for one. buildGuard refuses both kinds of file
@@ -147,6 +151,9 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	}
 	if err := b.builtInDefinitions(); err != nil {
 		return nil, unreadBuild{err}
+	}
+	if key := crKey(k.Namespace, k.Name); !slices.Contains(b.ran, key) {
+		b.ran = append(b.ran, key)
 	}
 	manifest, kfile, _, err := fluxkustomize.NewGenerator(tree, unstructured.Unstructured{Object: content}).GenerateManifest(dir)
 	if err != nil {
@@ -201,7 +208,8 @@ func builtInVersion() error {
 
 // builtInDefinitions checks the definitions of kustomize's schema once per
 // tree, on the first build, and returns that result for every build after it.
-// Hashing them costs about 100 ms, so it is not repeated per build.
+// Hashing them costs a few tens of milliseconds, so it is not repeated per
+// build.
 func (b *treeBuilds) builtInDefinitions() error {
 	if !b.definitionsChecked {
 		b.definitionsChecked = true
@@ -218,9 +226,10 @@ func (b *treeBuilds) builtInDefinitions() error {
 // to see finish refuse the tree.
 var afterFirstDefinitionsCheck = func() {}
 
-// finish checks, after the last build of the tree, that the definitions of
-// kustomize's schema are still the built-in ones, and refuses the tree if not:
-// a definition another use of kustomize added after the first build would
+// finish checks, once the tree's builds are done, that the version and the
+// definitions of kustomize's schema are still the built-in ones, and refuses
+// the tree if not, with an unreadBuild naming the Kustomizations whose builds
+// ran: a definition another use of kustomize added after the first build would
 // have changed the builds after it, and the first check did not see it. A
 // tree that built nothing, or that the first check already refused, has
 // nothing more to refuse. It holds fluxBuildMu, as build does: another tree's
@@ -230,11 +239,12 @@ func (b *treeBuilds) finish() error {
 	if b.definitionsChecked && b.definitionsErr == nil {
 		fluxBuildMu.Lock()
 		defer fluxBuildMu.Unlock()
+		keys := strings.Join(b.ran, ", ")
 		if err := builtInVersion(); err != nil {
-			return errors.Wrap(err, "the schema changed while the tree's builds ran, so none of what they build is read")
+			return unreadBuild{errors.Wrapf(err, "the schema changed while the tree's builds ran, so none of what they build is read (Flux Kustomizations built: %s)", keys)}
 		}
 		if err := checkDefinitions("while its builds ran"); err != nil {
-			return errors.Wrap(err, "none of what the tree's builds make is read")
+			return unreadBuild{errors.Wrapf(err, "none of what the tree's builds make is read (Flux Kustomizations built: %s)", keys)}
 		}
 	}
 	return nil

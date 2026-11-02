@@ -428,7 +428,7 @@ base into the tree, or reference it through a Flux Source.
 concurrent integrations included, do not race each other on it. It refuses a build under a custom
 schema or another built-in version, naming it, and every build of a tree whose schema holds
 definitions other than the built-in ones, such as those kyaml's `AddSchema` and `AddDefinitions` <!-- doc-api-refs:ignore kyaml openapi functions, not kure API -->
-add, checked before the tree's first build and after its last (about 0.1 s each). A process that
+add, checked before the tree's first build and after its last (about 20 ms each). A process that
 registers CRD schemas with kustomize beside an integration therefore gets no reconcile-order
 verdict from it: kure cannot tell such a definition from one that changes how a field merges. It
 cannot order another use of kustomize in the same process: one that sets or resets the schema

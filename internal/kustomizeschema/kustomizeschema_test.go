@@ -117,6 +117,57 @@ func TestDefinitions_BuiltInMatchesThePin(t *testing.T) {
 	}
 }
 
+// TestDefinitions_UntouchedSchemaMatchesThePinInProcess: the same check as the
+// pin test, in this process, so that it counts for coverage and a pin that went
+// stale fails here too. Nothing here changes the definitions without a reset
+// that restores them (TestBuiltIn_TellsTheDefaultSchemaFromACustomOne does).
+func TestDefinitions_UntouchedSchemaMatchesThePinInProcess(t *testing.T) {
+	Parse()
+	got, ok := Definitions()
+	if !ok {
+		t.Fatalf("Definitions() = %s, want the pin %s", got, builtInDefinitions)
+	}
+	if again, _ := Definitions(); again != got {
+		t.Errorf("Definitions() = %s, then %s: it is not stable", got, again)
+	}
+}
+
+// TestIndexedSchemas_NamesTheSchemaKyamlServesForEachKind: every kind the
+// definitions declare is listed once, in order, with the schema kyaml's index
+// serves for it, the same pointer SchemaForResourceType returns; kinds of one
+// definition share one entry.
+func TestIndexedSchemas_NamesTheSchemaKyamlServesForEachKind(t *testing.T) {
+	Parse()
+	kinds, schemas := indexedSchemas()
+	if len(kinds) == 0 || len(schemas) == 0 || len(schemas) >= len(kinds) {
+		t.Fatalf("%d kinds and %d schemas, want kinds that share the schemas of the definitions that declare them", len(kinds), len(schemas))
+	}
+	var deployment bool
+	for i, k := range kinds {
+		if i > 0 {
+			prev := kinds[i-1]
+			if prev.APIVersion > k.APIVersion || (prev.APIVersion == k.APIVersion && prev.Kind >= k.Kind) {
+				t.Fatalf("kinds %v and %v are out of order or repeated", prev, k)
+			}
+		}
+		rs := openapi.SchemaForResourceType(yaml.TypeMeta{APIVersion: k.APIVersion, Kind: k.Kind})
+		switch {
+		case rs == nil || rs.Schema == nil:
+			if k.Schema != -1 {
+				t.Errorf("%s %s: schema %d, want -1: kyaml serves none", k.APIVersion, k.Kind, k.Schema)
+			}
+		case k.Schema < 0 || k.Schema >= len(schemas) || schemas[k.Schema] != any(rs.Schema):
+			t.Errorf("%s %s: schema %d is not the one kyaml serves", k.APIVersion, k.Kind, k.Schema)
+		}
+		if k.APIVersion == "apps/v1" && k.Kind == "Deployment" {
+			deployment = true
+		}
+	}
+	if !deployment {
+		t.Error("apps/v1 Deployment is not among the kinds")
+	}
+}
+
 // changedDefinitions runs mutate in a fresh process on the parsed built-in
 // schema and wants Definitions to tell it, with a fingerprint other than the
 // pin's; the control is the pin test above, which finds the schema unchanged.
