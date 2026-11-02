@@ -387,7 +387,7 @@ contract with the rest of the process, since kustomize's schema is process-globa
 kustomize must not set, reset or add definitions to it while an integration builds. kure reads the
 schema's version, so it does not read a build under a custom schema or another built-in version,
 naming the version. It does not detect definitions added to the built-in schema
-(`openapi.AddSchema`, `openapi.AddDefinitions`), which leave the version unchanged but can change
+(`openapi.AddSchema`, `openapi.AddDefinitions`), which leave the version unchanged but can change <!-- doc-api-refs:ignore kyaml openapi functions, not kure API -->
 how a field merges, so a verdict can go either way (a definition that merges a Kustomization's
 `spec.dependsOn` by name keeps a dependency a patch replaced, so kure reports a cycle Flux's build
 does not have). It orders only its own goroutines: another user's concurrent set or reset of
