@@ -850,6 +850,69 @@ func TestBuiltObjects_AliasedTypeIsRefused(t *testing.T) {
 	}
 }
 
+// go-kure/kure#1176: b-longer writes the ConfigMap default/ready and depends
+// on a, which health-checks it. Under a substituteFrom, ANCHOR "&id " and
+// ALIAS "*id" set inline make an annotation ${ANCHOR}${NAME:=ready} the
+// anchor of the ConfigMap's name ${ALIAS}: offline it is ready, but the
+// cluster may set NAME, and then the name is that value. The name references
+// no variable the cluster sets, so only substituting the object again with
+// NAME bound shows it moves (identityMoves), and the writer stays uncertain:
+// the tree is admitted. The same holds for the namespace. Where nothing the
+// cluster sets reaches the name, the identity is certain and the cycle is
+// refused: NAME set inline, an alias of an inline anchor, a cluster value
+// used elsewhere in the object. A cluster value that reaches the name only
+// through a form neither sentinel triggers (a substring past their length)
+// is not seen, and the cycle is refused as before: a probe miss leaves the
+// identity certain, never uncertain.
+func TestBuiltObjects_AliasedClusterValueMovesTheIdentity(t *testing.T) {
+	fromCluster := []stack.SubstituteRef{{Kind: "ConfigMap", Name: "vars"}}
+	anchor := map[string]string{"ANCHOR": "&id ", "ALIAS": "*id"}
+	with := func(extra map[string]string) map[string]string {
+		m := maps.Clone(anchor)
+		maps.Copy(m, extra)
+		return m
+	}
+	cases := map[string]struct {
+		namespace, name, annotations, other string
+		inline                              map[string]string
+		refused                             bool
+	}{
+		"the name carries a cluster value":                     {namespace: "default", name: "${ALIAS}", annotations: "${ANCHOR}${NAME:=ready}", inline: anchor},
+		"the namespace carries a cluster value":                {namespace: "${ALIAS}", name: "ready", annotations: "${ANCHOR}${NS:=default}", inline: anchor},
+		"the name carries a cluster value through a substring": {namespace: "default", name: "${ALIAS}", annotations: "${ANCHOR}${NAME:0:2}ready", inline: anchor},
+		"the name is read from the cluster directly":           {namespace: "default", name: "${NAME:=ready}", inline: anchor},
+		"the cluster value is set inline":                      {namespace: "default", name: "${ALIAS}", annotations: "${ANCHOR}${NAME:=ready}", inline: with(map[string]string{"NAME": "ready"}), refused: true},
+		"the alias carries no cluster value":                   {namespace: "default", name: "${ALIAS}", annotations: "${ANCHOR}ready", inline: anchor, refused: true},
+		"two cluster values cancel when they are alike":        {namespace: "default", name: "${ALIAS}", annotations: "${ANCHOR}${A/${B}/ready}", inline: anchor},
+		"a cluster value is used elsewhere":                    {namespace: "default", name: "${ALIAS}", annotations: "${ANCHOR}ready", other: "${OTHER:=x}", inline: anchor, refused: true},
+		"a cluster value reaches the name past the sentinels":  {namespace: "default", name: "${ALIAS}", annotations: "${ANCHOR}ready${NAME:40}", inline: anchor, refused: true},
+	}
+	for name, tc := range cases {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				ready := unstructuredObj("v1", "ConfigMap", tc.namespace, tc.name)
+				if tc.annotations != "" {
+					ready.SetAnnotations(map[string]string{"example.com/value": tc.annotations})
+				}
+				if tc.other != "" {
+					ready.SetLabels(map[string]string{"example.com/other": tc.other})
+				}
+				c := pairCluster(stack.HealthCheck{APIVersion: "v1", Kind: "ConfigMap", Namespace: "default", Name: "ready"},
+					[]client.Object{unstructuredObj("v1", "ConfigMap", "default", "a-cm")},
+					[]client.Object{ready})
+				c.Node.Children[1].Bundle.PostBuild = &stack.PostBuild{Substitute: tc.inline, SubstituteFrom: fromCluster}
+				err := integrateWalked(t, c, placement, nil)
+				if tc.refused && (err == nil || !strings.Contains(err.Error(), "can never all become Ready")) {
+					t.Fatalf("got %v, want the cycle through a's health check refused", err)
+				}
+				if !tc.refused && err != nil {
+					t.Fatalf("got %v, want the tree admitted", err)
+				}
+			})
+		}
+	}
+}
+
 // b-longer substitutes a variable whose name Flux refuses
 // (kustomize_varsub.go:230-233), so its substitution fails as Flux's does.
 // The refusal names b-longer, whose spec needs the fix, not only the object
