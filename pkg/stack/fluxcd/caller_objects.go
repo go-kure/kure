@@ -3,9 +3,9 @@ package fluxcd
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"slices"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	utiljson "k8s.io/apimachinery/pkg/util/json"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,12 +33,14 @@ const maxJSONDepth = 1000
 // then.
 //
 // The objects are those in each layout's Resources, and the unstructured
-// items a typed List in them holds (built.HeldItems). An unstructured List's
-// items are in its object, so they are covered with it. Nil roots are skipped.
+// objects a typed List in them holds, directly or through the typed Lists it
+// holds (built.HeldItems). An unstructured List's items are in its object,
+// so they are covered with it. Nil roots are skipped.
 //
 // It returns the function that puts every replaced Object map back, for a
 // call that a later check refuses: a refused call leaves the tree as the
-// caller gave it.
+// caller gave it. An object whose Object the caller has set to another map
+// since is left with that one.
 func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err error) {
 	type replacement struct {
 		obj          *unstructured.Unstructured
@@ -54,7 +56,11 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 		}
 		seenLayout[l] = true
 		for _, r := range l.Resources {
-			for _, u := range callerObjects(r) {
+			objs, err := callerObjects(r)
+			if err != nil {
+				return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+			}
+			for _, u := range objs {
 				if seenObject[u] {
 					continue
 				}
@@ -86,34 +92,41 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 	}
 	return func() {
 		for _, r := range replace {
-			r.obj.Object = r.held
+			// Only the replacement is put back: a caller who has set another
+			// map since keeps it.
+			if sameMap(r.obj.Object, r.parsed) {
+				r.obj.Object = r.held
+			}
 		}
 	}, nil
+}
+
+// sameMap reports whether a and b are the same map, not two with equal content.
+func sameMap(a, b map[string]any) bool {
+	return a != nil && b != nil && reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
 }
 
 // callerObjects returns the unstructured objects r holds as a caller's own: r
 // itself, or the unstructured items of a typed List r, which a read of the
 // List returns as they are, not as copies.
-func callerObjects(r client.Object) []*unstructured.Unstructured {
+func callerObjects(r client.Object) ([]*unstructured.Unstructured, error) {
 	switch o := r.(type) {
 	case nil:
-		return nil
+		return nil, nil
 	case *unstructured.Unstructured:
 		if o == nil {
-			return nil
+			return nil, nil
 		}
-		return []*unstructured.Unstructured{o}
-	}
-	if !meta.IsListType(r) {
-		return nil
+		return []*unstructured.Unstructured{o}, nil
 	}
 	return built.HeldItems(r)
 }
 
 // jsonTyped reports whether v holds only the types runtime.DeepCopyJSONValue
 // accepts: a string, an int64, a float64, a bool, nil, a json.Number, and a
-// map[string]any or a []any of them, nested no deeper than maxJSONDepth. It
-// must not accept more: a value it calls typed is read as it is, and
+// map[string]any or a []any of them, nested no deeper than maxJSONDepth. A
+// value nested deeper is not typed here and is refused when it is converted
+// (nestedTooDeep). It must not accept more: a value it calls typed is read as it is, and
 // apimachinery panics on any other.
 func jsonTyped(v any, depth int) bool {
 	if depth > maxJSONDepth {
@@ -139,6 +152,9 @@ func jsonTyped(v any, depth int) bool {
 // a whole number that fits one, else a float64. An integer above 2^53 keeps
 // its exact value.
 func jsonContentOf(m map[string]any) (map[string]any, error) {
+	if nestedTooDeep(m, 0) {
+		return nil, errors.New("nested too deep")
+	}
 	data, err := json.Marshal(m)
 	if err != nil {
 		return nil, err
@@ -148,6 +164,27 @@ func jsonContentOf(m map[string]any) (map[string]any, error) {
 		return nil, err
 	}
 	return content, nil
+}
+
+// nestedTooDeep reports whether v holds a map[string]any or a []any nested
+// deeper than maxJSONDepth, which refuses the object: a value that deep is
+// refused whether or not it contains itself. Any other type is no deeper
+// than JSON takes it for.
+func nestedTooDeep(v any, depth int) bool {
+	if depth > maxJSONDepth {
+		return true
+	}
+	switch v := v.(type) {
+	case map[string]any:
+		for _, e := range v {
+			if nestedTooDeep(e, depth+1) {
+				return true
+			}
+		}
+	case []any:
+		return slices.ContainsFunc(v, func(e any) bool { return nestedTooDeep(e, depth+1) })
+	}
+	return false
 }
 
 // tooDeep is firstUnmarshalable's answer for a value nested deeper than

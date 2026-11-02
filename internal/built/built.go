@@ -73,18 +73,41 @@ func Objects(r runtime.Object) ([]Object, error) {
 }
 
 // HeldItems returns the unstructured objects the typed List r holds as its
-// own items, the ones Objects returns as they are and not as copies read from
-// a written form: a change to one is a change to r. It returns none for an
-// object Objects refuses, which the caller's own read of r reports.
-func HeldItems(r runtime.Object) []*unstructured.Unstructured {
-	objs, err := Objects(r)
-	if err != nil {
+// own items, and those of the typed Lists it holds, as apimachinery reads
+// them (apimachineryItems): the objects themselves, an unstructured List
+// among them, so that a change to one is a change to r. It returns none for
+// an unstructured r, whose items are in its own map, and for a typed object
+// apimachinery takes for no List. A typed List that holds itself is refused,
+// as Objects refuses it. Items that Objects reads from a written form are
+// copies; an item held as raw JSON is none of these.
+func HeldItems(r runtime.Object) ([]*unstructured.Unstructured, error) {
+	if err := refuseItemCycle(r, map[listRef]bool{}); err != nil {
+		return nil, err
+	}
+	return heldItems(r), nil
+}
+
+// heldItems is HeldItems for a List that holds none of itself.
+func heldItems(r runtime.Object) []*unstructured.Unstructured {
+	if _, ok := r.(*unstructured.Unstructured); ok {
+		return nil
+	}
+	items, isList, err := apimachineryItems(r)
+	if !isList || err != nil {
+		// An error is refused where the List is read.
 		return nil
 	}
 	var out []*unstructured.Unstructured
-	for _, o := range objs {
-		if u, ok := o.Object.(*unstructured.Unstructured); ok && !o.Read && u != nil && runtime.Object(u) != r {
-			out = append(out, u)
+	for _, item := range items {
+		if empty(item) {
+			continue
+		}
+		switch o := item.(type) {
+		case *unstructured.Unstructured:
+			out = append(out, o)
+		case *runtime.Unknown:
+		default:
+			out = append(out, heldItems(o)...)
 		}
 	}
 	return out

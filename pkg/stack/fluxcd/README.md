@@ -1843,13 +1843,15 @@ panic on any other. kure reads such an object as its JSON, so it never panics on
 (go-kure/kure#1201). `IntegrateWithLayout`, `CreateLayoutWithResources` (through it),
 `GenerateFromLayout`, `GenerateFromCluster` (through it) and `UmbrellaTerminals` first replace the
 `Object` map of each unstructured object in the layouts they are given, a `List`'s items included
-(also the unstructured items of a typed `List`), that holds another value (an `int`, an `int32`, a
+(also the unstructured items of a typed `List`, and of the typed Lists it holds, an unstructured `List`
+among them), that holds another value (an `int`, an `int32`, a
 `[]string`, a `map[string]string`) with the map its JSON decodes to, a number as an `int64` or a
 `float64`. This changes the object the caller passed: its `Object` field holds a new map, and the map
 the caller built is not changed. An object that holds only JSON-typed values is left as it is. A
 value that does not marshal, a channel say, or one nested deeper than 1000 levels or holding itself,
 refuses the call with the layout, the object and the field named, and replaces no object. A call
-that refuses later, for another reason, puts every `Object` map back. What they still leave out:
+that refuses later, for another reason, puts every `Object` map it replaced back, except one the
+caller has set to another map since. What they still leave out:
 
 - **An object a build moves.** A health check on an object's name as its file writes it, where a
   `spec.targetNamespace` or a name prefix or suffix applies it under another, names an object that
