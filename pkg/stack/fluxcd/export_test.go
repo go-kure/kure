@@ -14,6 +14,16 @@ const (
 	KustomizeAPIAudited = kustomizeAPIAudited
 )
 
+// SetAfterFirstDefinitionsCheck makes f run once per tree, after the first
+// build's check of the schema's definitions passed, until the returned
+// function restores the real one (none): the external tests add a definition
+// there, which no test can do between two builds of a tree otherwise.
+func SetAfterFirstDefinitionsCheck(f func()) (restore func()) {
+	orig := afterFirstDefinitionsCheck
+	afterFirstDefinitionsCheck = f
+	return func() { afterFirstDefinitionsCheck = orig }
+}
+
 // SetBuildInfo makes the binary report info as its build information until
 // the returned function restores the real one.
 func SetBuildInfo(info *debug.BuildInfo) (restore func()) {

@@ -155,3 +155,55 @@ func TestKustomizeSchema_ACustomSchemaIsNotRead(t *testing.T) {
 		t.Fatalf("got %v, want %s ...) not read under a custom schema", err, want)
 	}
 }
+
+// TestKustomizeSchema_ADefinitionAddedDuringTheBuildsIsNotRead: the first
+// build of the tree passes the check of the definitions, and another use of
+// kustomize adds one right after it, as the hook does, so the build and the
+// ones after it are made over definitions Flux does not build with. The
+// tree's integration is refused, not judged: the check after the last build
+// (treeBuilds.finish) is the only one that sees it.
+func TestKustomizeSchema_ADefinitionAddedDuringTheBuildsIsNotRead(t *testing.T) {
+	if os.Getenv(freshProcessEnv) == "" {
+		inFreshProcess(t, "TestKustomizeSchema_ADefinitionAddedDuringTheBuildsIsNotRead", webDirectory(t, layout.FluxIntegratedPerBundle))
+		return
+	}
+	restore := fluxstack.SetAfterFirstDefinitionsCheck(func() {
+		added := []byte(`{"swagger":"2.0","info":{"title":"added","version":"v1"},"paths":{},"definitions":{"io.example.v1.Added":{"type":"object"}}}`)
+		if err := openapi.AddSchema(added); err != nil {
+			t.Errorf("add a schema: %v", err)
+		}
+	})
+	defer restore()
+	_, err := schemaTree(os.Getenv(webDirEnv), false)
+	if err == nil || !strings.Contains(err.Error(), "not its built-in ones") || !strings.Contains(err.Error(), "while its builds ran") {
+		t.Fatalf("got %v, want the tree refused for a definition added while its builds ran", err)
+	}
+}
+
+// TestKustomizeSchema_AnAddedDefinitionIsNotRead: another use of kustomize in
+// the process added a definition to the built-in schema (openapi.AddSchema, as
+// for a CRD), which leaves the version alone but can change how a field
+// merges, and so a verdict, in either direction (go-kure/kure#1166).
+// kustomize-controller builds with the built-in definitions alone, so the
+// tree is not read, naming the definitions. The control is the same tree in a
+// process whose schema is untouched (TestKustomizeSchema_ACustomSchemaIsNotRead
+// builds it likewise).
+func TestKustomizeSchema_AnAddedDefinitionIsNotRead(t *testing.T) {
+	if os.Getenv(freshProcessEnv) == "" {
+		dir := webDirectory(t, layout.FluxIntegratedPerBundle)
+		inFreshProcess(t, "TestKustomizeSchema_AnAddedDefinitionIsNotRead", dir)
+		if _, err := schemaTree(dir, false); err != nil {
+			t.Fatalf("with the built-in schema: got %v, want the tree admitted", err)
+		}
+		return
+	}
+	added := []byte(`{"swagger":"2.0","info":{"title":"added","version":"v1"},"paths":{},"definitions":{"io.example.v1.Added":{"type":"object"}}}`)
+	if err := openapi.AddSchema(added); err != nil {
+		t.Fatalf("add a schema: %v", err)
+	}
+	_, err := schemaTree(os.Getenv(webDirEnv), false)
+	const want = `Flux Kustomization "flux-system/hand-written" (spec.path`
+	if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "is not read") || !strings.Contains(err.Error(), "definitions of kustomize's OpenAPI schema in this process are not its built-in ones") {
+		t.Fatalf("got %v, want %s ...) not read with a definition added to the built-in schema", err, want)
+	}
+}

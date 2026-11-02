@@ -386,12 +386,22 @@ has kustomize parse before any of its uses of kustomize reads it, again after a 
 contract with the rest of the process, since kustomize's schema is process-global: another user of
 kustomize must not set, reset or add definitions to it while an integration builds. kure reads the
 schema's version, so it does not read a build under a custom schema or another built-in version,
-naming the version. It does not detect definitions added to the built-in schema
-(`openapi.AddSchema`, `openapi.AddDefinitions`), which leave the version unchanged but can change <!-- doc-api-refs:ignore kyaml openapi functions, not kure API -->
-how a field merges, so a verdict can go either way (a definition that merges a Kustomization's
-`spec.dependsOn` by name keeps a dependency a patch replaced, so kure reports a cycle Flux's build
-does not have). It orders only its own goroutines: another user's concurrent set or reset of
-the schema races with a build (go-kure/kure#1166).
+naming the version. Definitions added to the built-in schema (`openapi.AddSchema`, `openapi.AddDefinitions`) <!-- doc-api-refs:ignore kyaml openapi functions, not kure API -->
+leave the version unchanged but can change how a field merges, so a verdict
+could go either way (a definition that merges a Kustomization's `spec.dependsOn` by name keeps a
+dependency a patch replaced, so kure would report a cycle Flux's build does not have). kure
+therefore compares a SHA-256 of a walk over every field of the schema's definitions, exported or
+not, with a pinned one for the built-in schema, before the first build of a tree and again after
+its last, and does not read any build of a tree when either differs, naming the definitions. Any
+difference counts, a CRD schema another use of kustomize registered included, and so does a value
+moved to a field kyaml does not read, such as an extension moved to `ExtraProps`, which marshals
+to the same JSON. A change made and reverted between the two checks is not seen. The check covers
+the definitions kyaml exposes, and every kyaml path that registers a definition leaves an entry
+there. It does not see code that registers a definition and then deletes its entry from
+`openapi.Schema().Definitions` by hand: kyaml keeps its per-resource-type index apart, out of
+reach, and still serves the registered schema. That needs deliberate concealment by code in the
+same process, which no in-process check can stop, so it is out of scope. It orders only its own goroutines: another user's concurrent set or reset of the schema
+races with a build (go-kure/kure#1166).
 
 **An integration never fetches; a remote reference is reported as not read.**
 kustomize-controller fetches what a build names remotely: a Git repository in `resources`,
@@ -413,13 +423,19 @@ base into the tree, or reference it through a Flux Source.
 
 **kustomize's schema is the process's, not kure's.** kure guarantees that its own goroutines,
 concurrent integrations included, do not race each other on it. It refuses a build under a custom
-schema or another built-in version, naming it, but definitions added to the built-in schema
-(kyaml's `AddSchema` and `AddDefinitions`) <!-- doc-api-refs:ignore kyaml openapi functions, not kure API --> are not detected and can change kure's verdict in
-either direction. It cannot order another use of kustomize in the same process: one that sets or
-resets the schema while an integration runs, `fluxcd/pkg/kustomize`'s `Build` among them, races
-with it, and one that makes kustomize parse the schema for the first time while an integration
-starts may too. Run such a use apart from an integration, and add no definitions to kustomize's
-schema in a process that integrates. go-kure/kure#1166 tracks this.
+schema or another built-in version, naming it, and every build of a tree whose schema holds
+definitions other than the built-in ones, such as those kyaml's `AddSchema` and `AddDefinitions` <!-- doc-api-refs:ignore kyaml openapi functions, not kure API -->
+add, checked before the tree's first build and after its last (under 100 ms each). A process that
+registers CRD schemas with kustomize beside an integration therefore gets no reconcile-order
+verdict from it: kure cannot tell such a definition from one that changes how a field merges. It
+cannot order another use of kustomize in the same process: one that sets or resets the schema
+while an integration runs, `fluxcd/pkg/kustomize`'s `Build` among them, races with it, and one that
+makes kustomize parse the schema for the first time while an integration starts may too. Run such
+a use apart from an integration. The pinned fingerprint is for the kyaml this module builds with and
+for the layout of the types the walk reads (kyaml's schema type is `k8s.io/kube-openapi`'s
+`spec.Schema`, read field by field): a bump of either that changes the definitions or those types
+fails `TestDefinitions_BuiltInMatchesThePin`, which prints the value to set in
+`internal/kustomizeschema`.
 
 A copy whose apply skips it,
 `kustomize.toolkit.fluxcd.io/ssa: Ignore` or `kustomize.toolkit.fluxcd.io/reconcile: disabled` on

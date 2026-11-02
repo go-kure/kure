@@ -1,0 +1,129 @@
+package kustomizeschema
+
+import "testing"
+
+type pair struct {
+	A map[string]any
+	B map[string]any
+}
+
+type hidden struct {
+	shown  string
+	hidden string
+}
+
+type (
+	namedString string
+	namedBool   bool
+	namedInt    int
+	namedFloat  float64
+	namedSlice  []string
+	namedKey    string
+)
+
+type node struct {
+	Name string
+	Next *node
+	Any  any
+}
+
+// TestFingerprint_TellsValuesApart: each pair differs in one way a
+// serializer, or a walk that skipped it, would not see: a value moved to
+// another field, an unexported field, a dynamic type, nil against empty, a
+// pointer's pointee, and a split between two strings.
+func TestFingerprint_TellsValuesApart(t *testing.T) {
+	for name, tc := range map[string][2]any{
+		"a value moved between fields": {pair{A: map[string]any{"k": 1}}, pair{B: map[string]any{"k": 1}}},
+		"an unexported field":          {hidden{"a", "x"}, hidden{"a", "y"}},
+		"an int against a float":       {[]any{1}, []any{1.0}},
+		"an int against an int64":      {[]any{1}, []any{int64(1)}},
+		"a nil map against an empty":   {pair{}, pair{A: map[string]any{}}},
+		"a nil slice against an empty": {[]string(nil), []string{}},
+		"a pointee":                    {&node{Name: "a"}, &node{Name: "b"}},
+		"a nil pointer":                {&node{}, &node{Next: &node{}}},
+		"a split between strings":      {[]string{"ab", "c"}, []string{"a", "bc"}},
+		"a key against a value":        {map[string]string{"a": "b"}, map[string]string{"b": "a"}},
+		"an interface value's type":    {node{Any: "1"}, node{Any: 1}},
+		"a bool":                       {[]bool{true}, []bool{false}},
+		"an array element":             {[2]string{"a", "b"}, [2]string{"b", "a"}},
+		"a named string":               {[]any{"merge"}, []any{namedString("merge")}},
+		"a named bool":                 {[]any{true}, []any{namedBool(true)}},
+		"a named int":                  {[]any{1}, []any{namedInt(1)}},
+		"a named float":                {[]any{1.5}, []any{namedFloat(1.5)}},
+		"a named slice":                {[]any{[]string{"a"}}, []any{namedSlice{"a"}}},
+		"a named key":                  {map[any]string{"k": "v"}, map[any]string{namedKey("k"): "v"}},
+		"a named key type":             {map[string]string{"k": "v"}, map[namedKey]string{"k": "v"}},
+	} {
+		if fingerprint(tc[0]) == fingerprint(tc[1]) {
+			t.Errorf("%s: the fingerprints are equal", name)
+		}
+	}
+}
+
+// TestFingerprint_ReadsEqualValuesAlike: values equal in every field have one
+// fingerprint, whatever the pointers they hold, the order a map was filled in
+// or Go's order of iterating it, and a map keyed by something other than a
+// string.
+func TestFingerprint_ReadsEqualValuesAlike(t *testing.T) {
+	build := func(order []string) map[string]any {
+		m := map[string]any{}
+		for _, k := range order {
+			m[k] = []any{k, 1.5, map[string]any{"in": k}}
+		}
+		return m
+	}
+	want := fingerprint(build([]string{"a", "b", "c", "d", "e", "f"}))
+	for range 20 {
+		if got := fingerprint(build([]string{"f", "e", "d", "c", "b", "a"})); got != want {
+			t.Fatalf("a map filled in another order: %s, want %s", got, want)
+		}
+	}
+	chain := func() *node { return &node{Name: "x", Next: &node{Name: "y"}} }
+	if a, b := fingerprint(chain()), fingerprint(chain()); a != b {
+		t.Error("equal values behind different pointers have different fingerprints")
+	}
+	keyed := func() map[[2]int]string {
+		return map[[2]int]string{{1, 2}: "a", {3, 4}: "b", {0, 9}: "c", {5, 5}: "d"}
+	}
+	first := fingerprint(keyed())
+	for range 20 {
+		if got := fingerprint(keyed()); got != first {
+			t.Fatal("a map with array keys has an unstable fingerprint")
+		}
+	}
+}
+
+// TestFingerprint_StopsAtACycle: a pointer, and a map reached through an
+// interface, that lead back to themselves are walked once, and what they hold
+// still counts.
+func TestFingerprint_StopsAtACycle(t *testing.T) {
+	self := func(name string) *node {
+		n := &node{Name: name}
+		n.Next = n
+		return n
+	}
+	if a, b := fingerprint(self("a")), fingerprint(self("a")); a != b {
+		t.Error("a self-referencing pointer has an unstable fingerprint")
+	}
+	if fingerprint(self("a")) == fingerprint(self("b")) {
+		t.Error("two cycles holding different names have one fingerprint")
+	}
+	m := map[string]any{}
+	m["self"] = m
+	_ = fingerprint(m)
+	s := make([]any, 1)
+	s[0] = s
+	_ = fingerprint(s)
+}
+
+// BenchmarkDefinitions is the cost of one Definitions call on the parsed
+// built-in schema, which treeBuilds pays twice per tree.
+func BenchmarkDefinitions(b *testing.B) {
+	Parse()
+	b.ResetTimer()
+	for range b.N {
+		if _, ok := Definitions(); !ok {
+			b.Fatal("not the built-in definitions")
+		}
+	}
+}

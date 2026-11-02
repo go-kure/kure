@@ -131,6 +131,11 @@ func newBuiltViews(t *kustomizationTree, existenceOnly bool) ([]*builtView, erro
 		}
 		views = append(views, b)
 	}
+	// A definition another use of kustomize added after the first build has
+	// changed the builds after it: no view is judged then (go-kure/kure#1166).
+	if err := builds.finish(); err != nil {
+		return nil, err
+	}
 	for _, v := range views {
 		if err := v.agree(); err != nil {
 			return nil, err
