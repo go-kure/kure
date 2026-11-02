@@ -935,7 +935,14 @@ before and after substitution. An unstructured object you build in Go must hold
 JSON-typed values, as apimachinery's `Unstructured` requires: an `int64`, not an
 `int`. kure copies a `List` item and a compared Source through its JSON, but
 other reads still panic on such a value. A build that
-fails, a Kustomization two builds write differently, a placed one no apply
+fails, a Kustomization two builds write differently (`wait` or
+`ignoreMissingComponents` set to `false` or `null`, or a list field such as
+`dependsOn` or `patches` set to an empty list or `null`, is the field omitted,
+as Flux applies it;
+any other difference counts), the eighth build of one `spec.path` along a chain
+of builds that each write a copy of the next, since such a chain may write
+Kustomizations without end (a chain that comes back to a copy already built
+stops there), a placed one no apply
 creates (a Kustomization the Flux bootstrap applies counts as an apply only on
 the Source of a member whose build reads its directory), and a placed one a build applies on another cluster or from another
 Source, are refused. So is a build kure cannot read as Flux does, naming the
