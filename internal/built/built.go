@@ -73,21 +73,50 @@ func Objects(r runtime.Object) ([]Object, error) {
 }
 
 // HeldItems returns the unstructured objects the typed List r holds as its
-// own items, and those of the typed Lists it holds, as apimachinery reads
-// them (apimachineryItems): the objects themselves, an unstructured List
-// among them, so that a change to one is a change to r. It returns none for
-// an unstructured r, whose items are in its own map, and for a typed object
-// apimachinery takes for no List. A typed List that holds itself is refused,
-// as Objects refuses it. Items that Objects reads from a written form are
-// copies; an item held as raw JSON is none of these.
+// own items, and those of the typed Lists it holds: the objects Objects
+// returns as they are (Read false), an unstructured List among them as
+// itself and not as its items, so that a change to one is a change to r. It
+// returns none for an unstructured r, whose items are in its own map, and
+// none of the items Objects reads from a written form, which are copies. A
+// typed List that holds itself is refused, as Objects refuses it.
+//
+// Where Objects fails to read a List, HeldItems fails with the same error and
+// still returns the objects apimachinery takes for its items, so that the
+// caller can name an object or a field that is the cause.
 func HeldItems(r runtime.Object) ([]*unstructured.Unstructured, error) {
+	if _, ok := r.(*unstructured.Unstructured); ok {
+		return nil, nil
+	}
 	if err := refuseItemCycle(r, map[listRef]bool{}); err != nil {
 		return nil, err
 	}
-	return heldItems(r), nil
+	items, isList, err := listItems(r)
+	if err != nil {
+		return heldItems(r), err
+	}
+	if !isList {
+		return nil, nil
+	}
+	var out []*unstructured.Unstructured
+	for _, item := range items {
+		if item.Read {
+			continue
+		}
+		if u, ok := item.Object.(*unstructured.Unstructured); ok {
+			out = append(out, u)
+			continue
+		}
+		held, err := HeldItems(item.Object)
+		out = append(out, held...)
+		if err != nil {
+			return out, err
+		}
+	}
+	return out, nil
 }
 
-// heldItems is HeldItems for a List that holds none of itself.
+// heldItems is the objects apimachinery takes for the items of r, and of the
+// typed Lists they are, for a List that holds none of itself.
 func heldItems(r runtime.Object) []*unstructured.Unstructured {
 	if _, ok := r.(*unstructured.Unstructured); ok {
 		return nil
