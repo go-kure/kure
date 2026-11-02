@@ -13,6 +13,14 @@ const kustomizeAPIModule = "sigs.k8s.io/kustomize/api"
 // readBuildInfo is debug.ReadBuildInfo; a test replaces it.
 var readBuildInfo = debug.ReadBuildInfo
 
+// decrypts reports whether kure treats Flux as decrypting the files and the
+// objects of k's build: spec.decryption is set, with any provider. No
+// provider and no data path is told apart, so none can be missed. Both
+// mergeUnread and buildGuard key on it (go-kure/kure#1178).
+func decrypts(k *kustv1.Kustomization) bool {
+	return k.Spec.Decryption != nil
+}
+
 // mergeUnread says why a build that merges into a Secret is not read, or ""
 // when it is: kustomize hashes a merged Secret's name over the merged content
 // inside the build, so the name kure builds is the one Flux computes, but for
@@ -29,7 +37,7 @@ var readBuildInfo = debug.ReadBuildInfo
 // kustomize-controller v1.10.1 builds with. A module that imports kure
 // resolves v0.21.2 unless it repeats kure's replace directives.
 func mergeUnread(k *kustv1.Kustomization, info func() (*debug.BuildInfo, bool)) string {
-	if k.Spec.Decryption != nil {
+	if decrypts(k) {
 		return "the Kustomization sets spec.decryption, and decrypted data may change the hash a merged Secret's name carries"
 	}
 	return unauditedKustomize(info)

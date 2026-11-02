@@ -588,6 +588,68 @@ func TestBuiltObjects_GeneratedNameIsRead(t *testing.T) {
 	}
 }
 
+// b-longer generates the ConfigMap settings from values.yaml, as above, and a
+// health-checks its hashed name. With spec.decryption set and a SOPS marker in
+// values.yaml, a file Flux may decrypt before it hashes the name, the build
+// kure runs is not read, and the whole tree is refused naming the file
+// (go-kure/kure#1178, #1223), where the same build is read without the marker
+// or without spec.decryption (the cycle is refused). A b-longer whose build
+// transforms nothing is not built, so its marked file refuses nothing; one
+// that only substitutes (postBuild) over this directory, which generates a
+// ConfigMap, is built too (buildsWithKustomize, go-kure/kure#1177), so its
+// marked file refuses the tree as a transform's does.
+func TestBuiltObjects_SOPSMarkerRefusesTheTree(t *testing.T) {
+	const marker = "# mac: ENC[AES256_GCM,data:x]\nk: v\n"
+	sops := &kustv1.Decryption{Provider: "sops"}
+	for name, tc := range map[string]struct {
+		content    string
+		decryption *kustv1.Decryption
+		// transformed sets a target namespace; substituted sets a post-build
+		// substitution only. Either makes the build one kure runs.
+		transformed, substituted bool
+		unread                   bool
+	}{
+		"marker, decryption, built":               {marker, sops, true, false, true},
+		"no marker, decryption, built":            {"k: v\n", sops, true, false, false},
+		"marker, no decryption, built":            {marker, nil, true, false, false},
+		"marker, decryption, not built":           {marker, sops, false, false, false},
+		"marker, empty decryption, built":         {marker, &kustv1.Decryption{}, true, false, true},
+		"no marker, no decryption, not built":     {"k: v\n", nil, false, false, false},
+		"marker, decryption, only substituted":    {marker, sops, false, true, true},
+		"no marker, decryption, only substituted": {"k: v\n", sops, false, true, false},
+		"marker, no decryption, only substituted": {marker, nil, false, true, false},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				err := keptPair(t, placement, []client.Object{unstructuredObj("v1", "ConfigMap", "default", "b-cm")}, "ConfigMap", "settings-",
+					func(l *layout.ManifestLayout, b *kustv1.Kustomization) {
+						l.ConfigMapGenerators = append(l.ConfigMapGenerators, layout.ConfigMapGeneratorSpec{Name: "settings", Files: []string{"values.yaml"}})
+						l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: "values.yaml", Content: []byte(tc.content)})
+						b.Spec.Decryption = tc.decryption
+						if tc.transformed {
+							b.Spec.TargetNamespace = "default"
+						}
+						if tc.substituted {
+							b.Spec.PostBuild = &kustv1.PostBuild{Substitute: map[string]string{"X": "y"}}
+						}
+					})
+				switch {
+				case tc.unread:
+					if err == nil || !strings.Contains(err.Error(), "is not read") || !strings.Contains(err.Error(), "values.yaml") || !strings.Contains(err.Error(), "SOPS") {
+						t.Fatalf("got %v, want b-longer's build not read, naming values.yaml and SOPS", err)
+					}
+				case tc.transformed:
+					if err == nil || !strings.Contains(err.Error(), "can never all become Ready") {
+						t.Fatalf("got %v, want the cycle through a's health check refused", err)
+					}
+				case err != nil:
+					t.Fatalf("got %v, want the tree admitted", err)
+				}
+			})
+		}
+	}
+}
+
 // b-longer writes the Secret default/creds, and a component of its build
 // generates a Secret over it. a health-checks the Secret b-longer's build
 // makes. A merge (behavior: merge) is part of that build, so the Secret is

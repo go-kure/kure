@@ -106,9 +106,14 @@ var fluxBuildMu sync.Mutex
 // the Kustomization sets spec.decryption or this binary links a kustomize
 // other than the audited one (mergeUnread): the merge and the hash of the
 // merged Secret's name run inside the build, so otherwise the name is the one
-// Flux builds (go-kure/kure#1181). Like the controller it refuses a built
-// object without an apiVersion, kind or name
-// (kustomization_controller.go:855-859).
+// Flux builds (go-kure/kure#1181). Nor is a build read, when the Kustomization
+// sets spec.decryption (decrypts), that reads a file holding a SOPS marker, or
+// one it cannot read: Flux decrypts such a file, and what the build names or
+// replaces is over what it decrypts to, so no object of the build is read
+// (go-kure/kure#1178, #1223). That is every build kure runs: a Kustomization
+// with a transform (transformsBuild) or a substitution over a directory that
+// generates a ConfigMap (buildsWithKustomize). Like the controller it refuses a built object
+// without an apiVersion, kind or name (kustomization_controller.go:855-859).
 func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	tree, err := b.tree()
 	if err != nil {
@@ -142,6 +147,7 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 		return nil, errors.Wrap(err, "open the tree")
 	}
 	guard := newBuildGuard(fsys, tree)
+	guard.decrypting = decrypts(k)
 	rm, err := kustomizeBuild(guard, dir)
 	if guard.unread != nil {
 		return nil, unreadBuild{guard.unread}
