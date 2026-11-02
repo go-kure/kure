@@ -39,8 +39,11 @@ description = "Quick pre-commit check"
 run = "make check"
 
 [tasks.verify]
-description = "Run all checks (tidy, lint, test, tool pins, govulncheck docs, generated builders)"
-depends = ["tidy", "lint", "test", "check-tool-versions", "check-govulncheck-docs", "versions:test", "builders:check"]
+description = "Run all checks (tidy, lint, test, tool pins, govulncheck docs, generated builders, offline docs-build checks)"
+# The three site:check-* tasks are the offline checks of CI's docs-build job that
+# need no Hugo, lychee or network; the Hugo build and the rendered-site link
+# check stay CI-only.
+depends = ["tidy", "lint", "test", "check-tool-versions", "check-govulncheck-docs", "versions:test", "builders:check", "site:check-doc-api-refs", "site:check-self-links", "site:check-doc-examples"]
 
 [tasks.check-tool-versions]
 description = "Verify golangci-lint pin parity (Makefile/ci.yml/docs) against mise.toml"
@@ -109,6 +112,13 @@ git -C ../dot-github fetch -q origin main
 d=$(mktemp -d); trap 'rm -rf "$d"' EXIT
 git -C ../dot-github archive origin/main scripts | tar -x -C "$d"
 bash "$d/scripts/check-doc-sync.sh" .
+"""
+
+[tasks."site:check-doc-api-refs"]
+description = "Fail if a page or example comment names API that pkg/ does not export"
+run = """
+bash scripts/check-doc-api-refs.sh --self-test
+bash scripts/check-doc-api-refs.sh
 """
 
 [tasks."site:check-self-links"]

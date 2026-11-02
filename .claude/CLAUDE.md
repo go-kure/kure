@@ -120,7 +120,7 @@ mise run tidy
 mise run check
 # or: make check
 
-# Run all checks (tidy, lint, test)
+# Run all checks (tidy, lint, test, pins, generated builders, offline docs checks)
 mise run verify
 # or: make precommit
 ```

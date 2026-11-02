@@ -305,6 +305,15 @@ gen-builders: ## Regenerate the per-kind constructor wrappers under pkg/kubernet
 check-builders: ## Fail if the generated constructor wrappers under pkg/kubernetes are stale
 	./scripts/gen-builders.sh check
 
+.PHONY: check-docs
+check-docs: ## Run the offline checks of CI's docs-build job (API references, site self-links, doc examples)
+	bash scripts/check-doc-api-refs.sh --self-test
+	bash scripts/check-doc-api-refs.sh
+	bash scripts/check-site-self-links.sh --self-test
+	bash scripts/check-site-self-links.sh
+	bash scripts/gen-doc-examples.sh --self-test
+	bash scripts/gen-doc-examples.sh --check
+
 .PHONY: versions-test
 versions-test: ## Run sync-versions.sh guard tests (hermetic, no network)
 	@echo "$(COLOR_YELLOW)Running sync-versions.sh guard tests...$(COLOR_RESET)"
@@ -346,10 +355,10 @@ dev: tools ## Set up development environment (mise, deps, git hooks)
 check: lint vet test-short check-tool-versions check-govulncheck-docs check-builders ## Quick code quality check (lint, vet, short tests, tool pins, generated builders)
 
 .PHONY: precommit
-precommit: fmt tidy lint test check-tool-versions check-govulncheck-docs versions-test check-builders ## Run fast pre-commit checks (fmt, tidy, lint, test, tool pins, versions guard, generated builders)
+precommit: fmt tidy lint test check-tool-versions check-govulncheck-docs versions-test check-builders check-docs ## Run fast pre-commit checks (fmt, tidy, lint, test, tool pins, versions guard, generated builders, offline docs checks)
 
 .PHONY: ci
-ci: deps fmt tidy lint vet test test-race test-coverage test-integration vuln check-tool-versions check-govulncheck-docs versions-test check-builders ## Run comprehensive CI pipeline
+ci: deps fmt tidy lint vet test test-race test-coverage test-integration vuln check-tool-versions check-govulncheck-docs versions-test check-builders check-docs ## Run comprehensive CI pipeline
 
 # =============================================================================
 # Cleanup
