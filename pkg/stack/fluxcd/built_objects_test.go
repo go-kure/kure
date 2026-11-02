@@ -4,6 +4,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"testing"
@@ -589,48 +590,86 @@ func TestBuiltObjects_GeneratedNameIsRead(t *testing.T) {
 
 // b-longer writes the Secret default/creds, and a component of its build
 // generates a Secret over it. a health-checks the Secret b-longer's build
-// makes. Which Secret a merge (behavior: merge) changes, and under which
-// name, kure does not read (go-kure/kure#1181): b-longer's build is not read,
-// so the tree is refused naming it, however the merge is spelled (a key in
-// another case) and whatever else the component sets (annotations over the
-// Secret), whichever namespace or name suffix the merge lands under, and
-// also where a configMapGenerator reads the loaded component as data too. A
-// generator creating another Secret, extra, merges nothing: the edge is
-// certain and the cycle is refused. A component no build loads merges
-// nothing either: with b-longer's spec.components empty, read as the tree
-// holds it or built for its target namespace, creds is the literal Secret
-// b-longer writes, and the cycle is refused. So it is when a
-// configMapGenerator only reads the component's file as data, also when it
-// reads every kustomization file name of that directory as data (each one a
-// kustomization kure parses: a file of such a name that does not parse makes
-// the build not read, go-kure/kure#1168).
-func TestBuiltObjects_MergingBuildIsNotRead(t *testing.T) {
+// makes. A merge (behavior: merge) is part of that build, so the Secret is
+// read as built (go-kure/kure#1181): under the name the build gives it, which
+// is creds for a literal Secret, whatever the merge's spelling (a key in
+// another case), whatever else the component sets (annotations over the
+// Secret), whichever namespace or name suffix the merge lands under, and also
+// where a configMapGenerator reads the loaded component as data too; and
+// under the hashed name for a Secret a component generates and another
+// merges into, where the unhashed name has no writer. The edge is certain and
+// the cycle is refused. A generator creating another Secret, extra, merges
+// nothing, and a component no build loads merges nothing either: with
+// b-longer's spec.components empty, read as the tree holds it or built for
+// its target namespace, creds is the literal Secret b-longer writes, and the
+// cycle is refused. So it is when a configMapGenerator only reads the
+// component's file as data, also when it reads every kustomization file name
+// of that directory as data (each one a kustomization kure parses: a file of
+// such a name that does not parse makes the build not read, go-kure/kure#1168).
+// The merging build is not read, and the tree refused naming it, when b-longer
+// sets spec.decryption, even an empty one, or when the binary links another
+// kustomize than the audited one.
+func TestBuiltObjects_MergingBuildIsRead(t *testing.T) {
 	creds := unstructuredObj("v1", "Secret", "default", "creds")
 	creds.Object["data"] = map[string]any{"base": "dg=="}
-	const merge = "- name: creds\n  namespace: default\n  behavior: merge\n  literals:\n  - k=v\n"
+	const (
+		merge = "- name: creds\n  namespace: default\n  behavior: merge\n  literals:\n  - k=v\n"
+		// gen is a Secret a component generates under a hashed name, and
+		// mergeGen merges into it.
+		gen      = "- name: gen\n  namespace: default\n  literals:\n  - base=v\n"
+		mergeGen = "- name: gen\n  namespace: default\n  behavior: merge\n  literals:\n  - k=v\n"
+	)
+	const (
+		apiModule = fluxstack.KustomizeAPIModule
+		apiAudit  = fluxstack.KustomizeAPIAudited
+	)
+	audited := &debug.BuildInfo{Deps: []*debug.Module{{Path: apiModule, Version: "v0.21.2",
+		Replace: &debug.Module{Path: apiModule, Version: apiAudit}}}}
+	linked := &debug.BuildInfo{Deps: []*debug.Module{{Path: apiModule, Version: "v0.21.2"}}}
 	cases := map[string]struct {
-		generator, prefix, suffix, targetNamespace   string
-		unused, dataFile, everyName, refused, unread bool
+		generator, prefix, suffix, targetNamespace string
+		unused, dataFile, everyName, refused       bool
+		// unread, if set, is what the refusal of an unread build says.
+		unread string
+		// base, if set, is a component listed before the merging one, which
+		// generates a Secret; decryption sets spec.decryption; info, if set,
+		// is the build info the binary reports.
+		base       string
+		decryption *kustv1.Decryption
+		info       *debug.BuildInfo
 		// blue, if set, has b-longer also write blue/creds; checked, if
 		// set, is the exact name a health-checks in default.
 		blue    bool
 		checked string
 	}{
-		"merge":                          {generator: merge, prefix: "creds", unread: true},
-		"merge, a key in another case":   {generator: strings.Replace(merge, "behavior:", "Behavior:", 1), prefix: "creds", unread: true},
-		"merge, annotations over it":     {generator: merge + "commonAnnotations:\n  kure.go-kure.github.io/merge-probe: fixed\n", prefix: "creds", unread: true},
-		"merge in another namespace":     {generator: strings.Replace(merge, "namespace: default", "namespace: blue", 1), blue: true, checked: "creds", unread: true},
-		"merge, name suffix x":           {generator: merge, prefix: "credsx", suffix: "x", unread: true},
-		"merge, component also data":     {generator: merge, prefix: "creds", dataFile: true, unread: true},
+		"merge":                          {generator: merge, prefix: "creds", refused: true},
+		"merge, a key in another case":   {generator: strings.Replace(merge, "behavior:", "Behavior:", 1), prefix: "creds", refused: true},
+		"merge, annotations over it":     {generator: merge + "commonAnnotations:\n  kure.go-kure.github.io/merge-probe: fixed\n", prefix: "creds", refused: true},
+		"merge in another namespace":     {generator: strings.Replace(merge, "namespace: default", "namespace: blue", 1), blue: true, checked: "creds", refused: true},
+		"merge, name suffix x":           {generator: merge, prefix: "credsx", suffix: "x", refused: true},
+		"merge, component also data":     {generator: merge, prefix: "creds", dataFile: true, refused: true},
+		"merge into a generated Secret":  {base: gen, generator: mergeGen, prefix: "gen-", refused: true},
+		"the unhashed name is no writer": {base: gen, generator: mergeGen, checked: "gen"},
 		"create":                         {generator: "- name: extra\n  namespace: default\n  literals:\n  - k=v\n", prefix: "extra-", refused: true},
 		"merge, component unused":        {generator: merge, prefix: "creds", unused: true, refused: true},
 		"merge, component unused, built": {generator: merge, prefix: "creds", unused: true, targetNamespace: "default", refused: true},
 		"merge, read only as data":       {generator: merge, prefix: "creds", unused: true, dataFile: true, targetNamespace: "default", refused: true},
 		"merge, every name read as data": {generator: merge, prefix: "creds", unused: true, dataFile: true, everyName: true, targetNamespace: "default", refused: true},
+		// A binary that replaces kustomize/api with the audited version reads
+		// the build, as kure's own does: the replacement is what counts.
+		"merge, the audited replacement": {generator: merge, prefix: "creds", info: audited, refused: true},
+		// What stays unread.
+		"merge, decryption set":       {generator: merge, prefix: "creds", decryption: &kustv1.Decryption{Provider: "sops"}, unread: "spec.decryption"},
+		"merge, an empty decryption":  {generator: merge, prefix: "creds", decryption: &kustv1.Decryption{}, unread: "spec.decryption"},
+		"merge, another kustomize":    {generator: merge, prefix: "creds", info: linked, unread: "not the " + apiModule + " " + apiAudit},
+		"merge, no build information": {generator: merge, prefix: "creds", info: &debug.BuildInfo{}, unread: "does not list sigs.k8s.io/kustomize/api"},
 	}
 	for name, tc := range cases {
 		for _, placement := range integratedPlacements {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				if tc.info != nil {
+					t.Cleanup(fluxstack.SetBuildInfo(tc.info))
+				}
 				objs := []client.Object{unstructuredObj("v1", "ConfigMap", "default", "b-cm"), creds.DeepCopy()}
 				name := func(ml *layout.ManifestLayout, b *kustv1.Kustomization) string {
 					return builtName(t, builtNames(t, ml, b, "Secret"), tc.prefix)
@@ -649,9 +688,17 @@ func TestBuiltObjects_MergingBuildIsNotRead(t *testing.T) {
 							Name:    "component/kustomization.yaml",
 							Content: []byte("apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\nsecretGenerator:\n" + tc.generator),
 						})
-						if !tc.unused {
-							b.Spec.Components = []string{"component"}
+						if tc.base != "" {
+							l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{
+								Name:    "base/kustomization.yaml",
+								Content: []byte("apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\nsecretGenerator:\n" + tc.base),
+							})
+							b.Spec.Components = []string{"base"}
 						}
+						if !tc.unused {
+							b.Spec.Components = append(b.Spec.Components, "component")
+						}
+						b.Spec.Decryption = tc.decryption
 						if tc.dataFile {
 							files := []string{"component/kustomization.yaml"}
 							if tc.everyName {
@@ -665,9 +712,9 @@ func TestBuiltObjects_MergingBuildIsNotRead(t *testing.T) {
 						b.Spec.NameSuffix = tc.suffix
 						b.Spec.TargetNamespace = tc.targetNamespace
 					})
-				if tc.unread {
-					if err == nil || !strings.Contains(err.Error(), "is not read") || !strings.Contains(err.Error(), "component/kustomization.yaml, which may merge into a Secret") {
-						t.Fatalf("got %v, want b-longer's build not read", err)
+				if tc.unread != "" {
+					if err == nil || !strings.Contains(err.Error(), "is not read") || !strings.Contains(err.Error(), "component/kustomization.yaml, which may merge into a Secret") || !strings.Contains(err.Error(), tc.unread) {
+						t.Fatalf("got %v, want b-longer's build not read, naming %q", err, tc.unread)
 					}
 					return
 				}

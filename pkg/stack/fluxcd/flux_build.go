@@ -102,11 +102,12 @@ var fluxBuildMu sync.Mutex
 // reference, a Git repository or an http(s) URL kustomize-controller fetches,
 // or a file kure cannot check for one. buildGuard refuses both kinds of file
 // before kustomize reads its fields. Nor is a build read that loads, as a
-// kustomization, a file that may merge into a Secret (buildGuard.merged):
-// kustomize hashes a merged Secret's name over its merged content, a hash
-// that differs between kustomize versions, and kure does not read which
-// Secret a merge changes, or under which name (go-kure/kure#1181). Like the
-// controller it refuses a built object without an apiVersion, kind or name
+// kustomization, a file that may merge into a Secret (buildGuard.merged), when
+// the Kustomization sets spec.decryption or this binary links a kustomize
+// other than the audited one (mergeUnread): the merge and the hash of the
+// merged Secret's name run inside the build, so otherwise the name is the one
+// Flux builds (go-kure/kure#1181). Like the controller it refuses a built
+// object without an apiVersion, kind or name
 // (kustomization_controller.go:855-859).
 func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 	tree, err := b.tree()
@@ -149,7 +150,9 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 		return nil, errors.Wrap(err, "kustomize build failed")
 	}
 	if file, ok := guard.merged(); ok {
-		return nil, unreadBuild{errors.Errorf("its build loads %s, which may merge into a Secret (a secretGenerator entry with behavior merge, or a generators entry): kure does not read which Secret a merge changes, or under which name", guard.rel(file))}
+		if why := mergeUnread(k, readBuildInfo); why != "" {
+			return nil, unreadBuild{errors.Errorf("its build loads %s, which may merge into a Secret (a secretGenerator entry with behavior merge, or a generators entry), and %s: kure cannot tell under which name Flux builds the merged Secret", guard.rel(file), why)}
+		}
 	}
 	objs := make([]client.Object, 0, rm.Size())
 	for _, res := range rm.Resources() {

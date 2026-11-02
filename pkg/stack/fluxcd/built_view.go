@@ -529,11 +529,13 @@ func (v *builtView) heldKeys(w string) []string {
 // checks read, or that decide what its build makes: images among them, which
 // Flux's generator writes into the build (fluxcd/pkg/kustomize v1.44.0
 // kustomize_generator.go:296-331), where an image transformer may rewrite any field a
-// component's configuration names.
+// component's configuration names. decryption is among them because it decides
+// whether a build that merges into a Secret is read (treeBuilds.build): two
+// copies that differ only in it are two different applies.
 var graphFields = []string{
 	"dependsOn", "healthChecks", "healthCheckExprs", "wait", "path", "sourceRef", "kubeConfig",
 	"patches", "components", "ignoreMissingComponents", "namePrefix", "nameSuffix", "targetNamespace", "postBuild", "commonMetadata",
-	"images",
+	"images", "decryption",
 }
 
 // agree refuses a Flux Kustomization two writers apply with different
@@ -638,8 +640,10 @@ func specFields(obj client.Object) (map[string]string, error) {
 
 // zeroAsOmitted lists the graphFields whose zero value kustomize-controller
 // applies as the field omitted, each with the type the Kustomization CRD gives
-// it: a boolean's zero value is false, a list's is the empty list, and null
-// stands for either. TestZeroAsOmittedMatchesVendoredCRD holds each entry to
+// it: a boolean's zero value is false, a list's is the empty list, an object's
+// is none (an empty object is a value), and null stands for any of them (the
+// CRD field is optional and not nullable, so the API server drops a null).
+// TestZeroAsOmittedMatchesVendoredCRD holds each entry to
 // that CRD. A graphField not listed here is compared as written: a "" is no
 // omission for namePrefix, nameSuffix or targetNamespace, whose CRD requires a
 // non-empty value, and a value of the wrong type is never one. A field of a
@@ -654,11 +658,13 @@ var zeroAsOmitted = map[string]string{
 	"patches":                 "array",
 	"components":              "array",
 	"images":                  "array",
+	"decryption":              "object",
 }
 
 // isZeroField reports whether the value of spec field f is its zero value,
 // which counts as the field omitted (zeroAsOmitted): null, or, of the type the
-// CRD gives f, false or an empty list. Any other field or value is not.
+// CRD gives f, false or an empty list (an object has no zero value but null).
+// Any other field or value is not.
 func isZeroField(f string, value any) bool {
 	if value == nil {
 		_, listed := zeroAsOmitted[f]

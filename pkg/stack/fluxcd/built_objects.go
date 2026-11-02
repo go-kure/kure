@@ -424,11 +424,12 @@ func (v *builtView) objectWriters(apiVersion, kind, namespace, name string) ([]s
 // index does not read as applied may make the object of group, kind and
 // name: a configMapGenerator entry of a layout an apply reads as held
 // (objectSource.heldScope), whose name the object's is or starts with, or
-// which may change at apply. No Secret is one: a build that merges into a
-// Secret is not read (treeBuilds.build), and a build read as the tree holds
-// it (heldBuild) merges none, as the kustomization.yaml kure writes lists
-// only the layout's resource files and child directories, and an extra file
-// takes no kustomization file name of its layout's directory.
+// which may change at apply. No Secret is one: a Secret a generator makes in
+// a build kure reads is in the build's output, merged or not, and a build
+// read as the tree holds it (heldBuild) merges none, as the kustomization.yaml
+// kure writes lists only the layout's resource files and child directories,
+// and an extra file takes no kustomization file name of its layout's
+// directory.
 func (v *builtView) generatorMayName(group, kind, name string) bool {
 	if group != "" || kind != "ConfigMap" {
 		return false

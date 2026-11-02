@@ -70,16 +70,26 @@ func TestSpecFields_ZeroValueEqualsOmitted(t *testing.T) {
 		"images false against omitted":           {a: map[string]any{"images": false}, b: map[string]any{}, differ: true},
 		"images empty string against omitted":    {a: map[string]any{"images": ""}, b: map[string]any{}, differ: true},
 		"dependsOn empty object against omitted": {a: map[string]any{"dependsOn": map[string]any{}}, b: map[string]any{}, differ: true},
+		// An object has no zero value but null: an empty one, false or a
+		// string is a value. Two copies that differ in decryption differ.
+		"decryption empty object against omitted": {a: map[string]any{"decryption": map[string]any{}}, b: map[string]any{}, differ: true},
+		"decryption false against omitted":        {a: map[string]any{"decryption": false}, b: map[string]any{}, differ: true},
+		"decryption sops against omitted":         {a: map[string]any{"decryption": map[string]any{"provider": "sops"}}, b: map[string]any{}, differ: true},
+		"omitted against decryption sops":         {a: map[string]any{}, b: map[string]any{"decryption": map[string]any{"provider": "sops"}}, differ: true},
+		"decryption sops against sops":            {a: map[string]any{"decryption": map[string]any{"provider": "sops"}}, b: map[string]any{"decryption": map[string]any{"provider": "sops"}}},
+		"decryption sops against null":            {a: map[string]any{"decryption": map[string]any{"provider": "sops"}}, b: map[string]any{"decryption": nil}, differ: true},
 	}
 	for field, kind := range zeroAsOmitted {
 		zero := any(false)
 		if kind == "array" {
 			zero = []any{}
 		}
-		cases[field+" zero value against omitted"] = struct {
-			a, b   map[string]any
-			differ bool
-		}{a: map[string]any{field: zero}, b: map[string]any{}}
+		if kind != "object" {
+			cases[field+" zero value against omitted"] = struct {
+				a, b   map[string]any
+				differ bool
+			}{a: map[string]any{field: zero}, b: map[string]any{}}
+		}
 		cases[field+" null against omitted"] = struct {
 			a, b   map[string]any
 			differ bool
