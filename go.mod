@@ -81,6 +81,7 @@ require (
 	github.com/fluxcd/pkg/tar v1.4.0
 	github.com/fluxcd/source-controller/api v1.10.1
 	github.com/fluxcd/source-watcher/api/v2 v2.3.1
+	github.com/google/gnostic-models v0.7.1
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.94.2
 	go.universe.tf/metallb v0.16.1
 	go.yaml.in/yaml/v2 v2.4.5
@@ -94,6 +95,7 @@ require (
 	k8s.io/apiserver v0.37.2
 	k8s.io/cli-runtime v0.37.2
 	k8s.io/kube-aggregator v0.37.2
+	k8s.io/kube-openapi v0.0.0-20261014044854-ca3452a79603
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
 	sigs.k8s.io/controller-runtime v0.25.2
 	sigs.k8s.io/gateway-api v1.7.0
@@ -167,7 +169,6 @@ require (
 	github.com/gofrs/flock v0.13.0 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/cel-go v0.31.0 // indirect
-	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
@@ -256,7 +257,6 @@ require (
 	k8s.io/client-go v0.37.2 // indirect
 	k8s.io/component-base v0.37.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20261014044854-ca3452a79603 // indirect
 	k8s.io/streaming v0.37.2 // indirect
 	oras.land/oras-go/v2 v2.6.2 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.36.0 // indirect

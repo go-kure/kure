@@ -48,6 +48,11 @@ import (
 // build (go-kure/kure#1166): before the first build, and by finish once the
 // builds are done, so a definition added between two builds refuses the tree
 // too. A definition added and removed again between the checks is not seen.
+// That holds for the tree newBuiltViews reads, which calls finish. The tree
+// laterPatchRefusal builds only names a patch in a refusal that already stands,
+// and never calls finish: a build of it that is not read is not the error the
+// refusal compares with, so the refusal stays as it was. The scope of each kind
+// a build makes is checked in that build (builtInScopes).
 type treeBuilds struct {
 	root    *layout.ManifestLayout
 	dir     string
@@ -181,6 +186,9 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 			return nil, unreadBuild{errors.Errorf("its build loads %s, which may merge into a Secret (a secretGenerator entry with behavior merge, or a generators entry), and %s: kure cannot tell under which name Flux builds the merged Secret", guard.rel(file), why)}
 		}
 	}
+	if err := builtInScopes(rm); err != nil {
+		return nil, unreadBuild{err}
+	}
 	objs := make([]client.Object, 0, rm.Size())
 	for _, res := range rm.Resources() {
 		if res.GetName() == "" || res.GetKind() == "" || res.GetApiVersion() == "" {
@@ -259,6 +267,30 @@ func (b *treeBuilds) finish() error {
 func checkDefinitions(when string) error {
 	if _, ok := kustomizeschema.Definitions(); !ok {
 		return errors.Errorf("the definitions of kustomize's OpenAPI schema in this process are not its built-in ones: another use of kustomize added or changed some %s, and kustomize-controller builds with the built-in definitions, so kure cannot build it as Flux does", when)
+	}
+	return nil
+}
+
+// builtInScopes is nil when kyaml answers the scope of each kind rm holds as
+// its built-in schema does. The definitions do not show a schema added with
+// paths only: kyaml records from the paths of each schema added which kinds are
+// cluster-scoped, and kustomize's namespace filter and name references decide
+// on that answer, so a kind such a schema names is built without the namespace
+// a Kustomization sets, where kustomize-controller's build gives it. The table
+// cannot be listed, so each kind of the build is asked, under the lock the
+// build holds (go-kure/kure#1166).
+func builtInScopes(rm resmap.ResMap) error {
+	seen := map[string]bool{}
+	for _, res := range rm.Resources() {
+		apiVersion, kind := res.GetApiVersion(), res.GetKind()
+		key := apiVersion + " " + kind
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		if !kustomizeschema.ScopeIsBuiltIn(apiVersion, kind) {
+			return errors.Errorf("kyaml's scope of %s is not its built-in one: another use of kustomize added a schema with a path for it, and kustomize-controller builds with the built-in schema, so kure cannot build it as Flux does", key)
+		}
 	}
 	return nil
 }

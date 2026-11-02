@@ -983,6 +983,13 @@ build of a tree and again after its last (about 20 ms each), and refuses every
 build of the tree if either differs, naming the definitions. A process that
 registers CRD schemas with kustomize beside an integration therefore gets no
 reconcile-order verdict from it; run such a use apart from the integration.
+The definitions are not the whole of what kustomize remembers from a schema
+added: it also records, from the schema's paths, which kinds are cluster-scoped,
+and decides on that when it applies a target namespace or rewrites name
+references. A schema added with a path alone for a kind therefore leaves the
+definitions as they were and still changes a build, so kure also asks, in each
+build, for the scope of every kind the build made, and does not read a build in
+which one differs from the built-in schema's.
 One
 without `wait` that health-checks any other object waits for the Kustomization
 that applies it, whatever its expression says, when that writer is certain,

@@ -22,7 +22,9 @@
 // definition and then deletes its entry by hand: the index is unexported,
 // still serves the schema, and no definition declares its kind any more.
 // Hiding a registration that way is deliberate concealment, which no check in
-// the same process can stop.
+// the same process can stop. Neither BuiltIn nor Definitions sees the third
+// table kyaml fills from the paths of every schema added, the scope of each
+// resource type: ScopeIsBuiltIn asks it for one kind.
 package kustomizeschema
 
 import (
@@ -77,7 +79,8 @@ func BuiltIn() (string, bool) {
 // the definitions declare, since a write through the schema that
 // openapi.SchemaForResourceType returns changes a build and leaves the
 // definitions alone. It does not read the version, so a custom schema is told
-// by BuiltIn.
+// by BuiltIn, nor the scope of a kind, which a schema added with paths alone
+// changes and ScopeIsBuiltIn tells.
 func Definitions() (string, bool) {
 	kinds, schemas := indexedSchemas()
 	got := "sha256:" + fingerprint(state{Definitions: openapi.Schema().Definitions, Kinds: kinds, Schemas: schemas})
