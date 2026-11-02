@@ -683,7 +683,8 @@ func (t *kustomizationTree) within(u, d string) bool {
 // object the caller passed changes, and the caller's map does not. An object
 // that holds only JSON typed values is left alone. A value that does not
 // marshal gives an error that wraps ErrUmbrellaTerminals, names the object
-// and the field, and replaces no object (go-kure/kure#1201).
+// and the field, and replaces no object. An error after the replacement puts
+// every Object map back (go-kure/kure#1201).
 func UmbrellaTerminals(roots ...*layout.ManifestLayout) (map[string][]string, error) {
 	return umbrellaTerminals(false, roots)
 }
@@ -701,9 +702,21 @@ func (g *ResourceGenerator) UmbrellaTerminals(roots ...*layout.ManifestLayout) (
 // kustomizationTree.existenceOnly. The terminal leaves no longer depend on it
 // (readyDeps), so both entry points return the same leaves.
 func umbrellaTerminals(existenceOnly bool, roots []*layout.ManifestLayout) (map[string][]string, error) {
-	if err := normalizeCallerObjects(roots...); err != nil {
+	undo, err := normalizeCallerObjects(roots...)
+	if err != nil {
 		return nil, errors.Wrapf(ErrUmbrellaTerminals, "%s", err.Error())
 	}
+	out, err := umbrellaTerminalsOf(existenceOnly, roots)
+	if err != nil {
+		undo()
+		return nil, err
+	}
+	return out, nil
+}
+
+// umbrellaTerminalsOf is umbrellaTerminals for roots whose caller's objects
+// are read as JSON.
+func umbrellaTerminalsOf(existenceOnly bool, roots []*layout.ManifestLayout) (map[string][]string, error) {
 	out := map[string][]string{}
 	placedIn := map[string]int{}
 	for i, root := range roots {

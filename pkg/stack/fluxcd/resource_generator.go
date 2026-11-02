@@ -235,7 +235,8 @@ func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.L
 // object the caller passed changes, and the caller's map does not. An object
 // that holds only JSON typed values is left alone. A value that does not
 // marshal refuses the call, with the object and the field named, and replaces
-// no object (go-kure/kure#1201).
+// no object, and a refusal after it puts every Object map back
+// (go-kure/kure#1201).
 func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, error) {
 	out, _, err := g.generateFromLayout(root, c)
 	return out, err
@@ -244,7 +245,24 @@ func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *s
 // generateFromLayout is GenerateFromLayout, and returns the index of the
 // tree's origins it generated from as well: nil when there was nothing to
 // index (a nil root, cluster or root node).
-func (g *ResourceGenerator) generateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, *layout.OriginIndex, error) {
+func (g *ResourceGenerator) generateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) (out []client.Object, ix *layout.OriginIndex, err error) {
+	if root != nil && c != nil && c.Node != nil {
+		var undo func()
+		if undo, err = normalizeCallerObjects(root); err != nil {
+			return nil, nil, err
+		}
+		defer func() {
+			if err != nil {
+				undo()
+			}
+		}()
+	}
+	return g.generateFromNormalizedLayout(root, c)
+}
+
+// generateFromNormalizedLayout is generateFromLayout for a tree whose
+// caller's objects are read as JSON.
+func (g *ResourceGenerator) generateFromNormalizedLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, *layout.OriginIndex, error) {
 	if g.UmbrellasDoNotWait {
 		// The list says nothing about which Kustomization's build applies
 		// which: there is no umbrella to read for R1 or R3.
@@ -255,9 +273,6 @@ func (g *ResourceGenerator) generateFromLayout(root *layout.ManifestLayout, c *s
 	}
 	if root == nil || c == nil || c.Node == nil {
 		return nil, nil, nil
-	}
-	if err := normalizeCallerObjects(root); err != nil {
-		return nil, nil, err
 	}
 	ix, err := layout.IndexOrigins(root, c)
 	if err != nil {

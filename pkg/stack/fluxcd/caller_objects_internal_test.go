@@ -44,7 +44,7 @@ func TestJSONTyped_MirrorsDeepCopyJSONValue(t *testing.T) {
 				defer func() { accepted = recover() == nil }()
 				runtime.DeepCopyJSONValue(v)
 			}()
-			if got := jsonTyped(v); got != accepted {
+			if got := jsonTyped(v, 0); got != accepted {
 				t.Errorf("jsonTyped(%#v) = %v, but DeepCopyJSONValue accepts it: %v", v, got, accepted)
 			}
 		})
@@ -66,7 +66,7 @@ func TestNormalizeCallerObjects(t *testing.T) {
 	t.Run("integers become int64 and keep their exact value", func(t *testing.T) {
 		const big = int64(1<<53 + 1)
 		u := object(map[string]any{"n": 53, "big": int(big), "u": uint(7), "f32": float32(2.5), "i32": int32(-3), "huge": uint64(math.MaxInt64)})
-		if err := normalizeCallerObjects(layoutOf(u)); err != nil {
+		if err := normalizeForTest(layoutOf(u)); err != nil {
 			t.Fatal(err)
 		}
 		spec := u.Object["spec"].(map[string]any)
@@ -82,7 +82,7 @@ func TestNormalizeCallerObjects(t *testing.T) {
 
 	t.Run("the common caller shapes are normalized", func(t *testing.T) {
 		u := object(map[string]any{"labels": map[string]string{"app": "x"}, "args": []string{"a", "b"}})
-		if err := normalizeCallerObjects(layoutOf(u)); err != nil {
+		if err := normalizeForTest(layoutOf(u)); err != nil {
 			t.Fatal(err)
 		}
 		want := map[string]any{"labels": map[string]any{"app": "x"}, "args": []any{"a", "b"}}
@@ -95,7 +95,7 @@ func TestNormalizeCallerObjects(t *testing.T) {
 		u := object(map[string]any{"n": int64(1), "f": 1.5, "s": "x", "b": true, "z": nil, "num": json.Number("2"), "l": []any{int64(1)}})
 		before := u.Object
 		spec := u.Object["spec"].(map[string]any)
-		if err := normalizeCallerObjects(layoutOf(u)); err != nil {
+		if err := normalizeForTest(layoutOf(u)); err != nil {
 			t.Fatal(err)
 		}
 		if reflect.ValueOf(u.Object).Pointer() != reflect.ValueOf(before).Pointer() || reflect.ValueOf(u.Object["spec"]).Pointer() != reflect.ValueOf(spec).Pointer() {
@@ -106,7 +106,7 @@ func TestNormalizeCallerObjects(t *testing.T) {
 	t.Run("the caller's map is not changed", func(t *testing.T) {
 		u := object(map[string]any{"n": 53})
 		held := u.Object["spec"].(map[string]any)
-		if err := normalizeCallerObjects(layoutOf(u)); err != nil {
+		if err := normalizeForTest(layoutOf(u)); err != nil {
 			t.Fatal(err)
 		}
 		if held["n"] != 53 {
@@ -119,7 +119,7 @@ func TestNormalizeCallerObjects(t *testing.T) {
 		bad := object(map[string]any{"ok": []any{map[string]any{"ch": make(chan int)}}})
 		root := layoutOf(good)
 		root.Children = []*layout.ManifestLayout{layoutOf(bad)}
-		err := normalizeCallerObjects(root)
+		err := normalizeForTest(root)
 		if err == nil {
 			t.Fatal("got no error")
 		}
@@ -135,10 +135,41 @@ func TestNormalizeCallerObjects(t *testing.T) {
 
 	t.Run("nil roots, layouts and objects are skipped", func(t *testing.T) {
 		var nilObj *unstructured.Unstructured
-		if err := normalizeCallerObjects(nil, layoutOf(nilObj, nil)); err != nil {
+		if err := normalizeForTest(nil, layoutOf(nilObj, nil)); err != nil {
 			t.Fatal(err)
 		}
 	})
+
+	t.Run("an object that holds itself is refused, not followed without end", func(t *testing.T) {
+		m := map[string]any{"apiVersion": "v1", "kind": "List"}
+		m["items"] = []any{m}
+		err := normalizeForTest(layoutOf(&unstructured.Unstructured{Object: m}))
+		if err == nil || !strings.Contains(err.Error(), "contains itself") {
+			t.Errorf("got %v, want a refusal naming the cycle", err)
+		}
+	})
+
+	t.Run("undo puts the caller's Object maps back", func(t *testing.T) {
+		u := object(map[string]any{"n": 53})
+		held := u.Object
+		undo, err := normalizeCallerObjects(layoutOf(u))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reflect.ValueOf(u.Object).Pointer() == reflect.ValueOf(held).Pointer() {
+			t.Fatal("the object was not replaced")
+		}
+		undo()
+		if reflect.ValueOf(u.Object).Pointer() != reflect.ValueOf(held).Pointer() {
+			t.Error("undo did not put the caller's map back")
+		}
+	})
+}
+
+// normalizeForTest is normalizeCallerObjects without the undo.
+func normalizeForTest(roots ...*layout.ManifestLayout) error {
+	_, err := normalizeCallerObjects(roots...)
+	return err
 }
 
 // runtimeSafe deep-copies u, which panics on a value that is not JSON typed.
