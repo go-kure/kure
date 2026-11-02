@@ -1,6 +1,7 @@
 package fluxcd
 
 import (
+	"encoding"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -8,8 +9,10 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	utiljson "k8s.io/apimachinery/pkg/util/json"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/internal/built"
@@ -182,7 +185,9 @@ func jsonTypedCount(v any, depth int, nodes *int) bool {
 // from the Go values directly, and not through encoding/json, so that it
 // ends on every value: a number is an int64 when it is a whole number that
 // fits one, else a float64, and an integer above 2^53 keeps its exact value;
-// a []byte is its base64 string; a nil map or slice is nil. It refuses a
+// a []byte is its base64 string; a nil map or slice is nil; a string is valid
+// UTF-8; a value of a non-struct type that marshals itself (json.RawMessage,
+// net.IP, json.Number) is what the encoder writes for it, read back. It refuses a
 // value with no JSON form here (normalizeCallerObjects), naming the field.
 func jsonContentOf(m map[string]any) (map[string]any, error) {
 	if jsonTyped(m, 0) {
@@ -209,11 +214,51 @@ type converter struct {
 	open  map[openKey]bool
 }
 
-var jsonNumberType = reflect.TypeFor[json.Number]()
+var (
+	jsonNumberType   = reflect.TypeFor[json.Number]()
+	jsonMarshaler    = reflect.TypeFor[json.Marshaler]()
+	textMarshalerTyp = reflect.TypeFor[encoding.TextMarshaler]()
+)
+
+// marshalsItself reports whether the encoder writes a value of type t by a
+// method or a rule of its own that its Go kind does not give: a
+// json.RawMessage, a net.IP, a json.Number.
+func marshalsItself(t reflect.Type) bool {
+	return t == jsonNumberType || t.Implements(jsonMarshaler) || t.Implements(textMarshalerTyp)
+}
+
+// viaJSON is x as the encoder writes it and the decoder reads it back. It is
+// for a leaf that is no struct, which holds no value of the caller's to
+// follow: the encoder runs on that one value only.
+func viaJSON(x any, path string) (any, error) {
+	data, err := json.Marshal(x)
+	if err != nil {
+		return nil, errors.Wrapf(err, "%s", where(path))
+	}
+	var out any
+	if err := utiljson.Unmarshal(data, &out); err != nil {
+		return nil, errors.Wrapf(err, "%s", where(path))
+	}
+	return out, nil
+}
+
+// validUTF8 is s with each byte that is no UTF-8 replaced by U+FFFD, as the
+// encoder writes a string.
+func validUTF8(s string) string {
+	return strings.Map(func(r rune) rune { return r }, s)
+}
 
 func (c *converter) convert(v reflect.Value, path string, depth int) (any, error) {
 	if c.nodes++; c.nodes > maxJSONNodes {
 		return nil, errors.Errorf("%s holds more than %d values", where(path), maxJSONNodes)
+	}
+	if k := v.Kind(); k != reflect.Struct && k != reflect.Interface && k != reflect.Pointer && v.CanInterface() && marshalsItself(v.Type()) {
+		if k == reflect.Map || k == reflect.Slice {
+			if v.IsNil() {
+				return nil, nil
+			}
+		}
+		return viaJSON(v.Interface(), path)
 	}
 	switch v.Kind() {
 	case reflect.Invalid:
@@ -241,33 +286,17 @@ func (c *converter) convert(v reflect.Value, path string, depth int) (any, error
 		return v.Bool(), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return v.Int(), nil
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		if u := v.Uint(); u <= math.MaxInt64 {
 			return int64(u), nil
 		}
 		return float64(v.Uint()), nil
 	case reflect.Float32:
-		// As the shortest decimal for 32 bits, which is what a marshalling writes.
-		f, err := strconv.ParseFloat(strconv.FormatFloat(v.Float(), 'g', -1, 32), 64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "%s", where(path))
-		}
-		return number(path, f)
+		return number(path, v.Float(), 32)
 	case reflect.Float64:
-		return number(path, v.Float())
+		return number(path, v.Float(), 64)
 	case reflect.String:
-		if v.Type() == jsonNumberType {
-			n := json.Number(v.String())
-			if i, err := n.Int64(); err == nil {
-				return i, nil
-			}
-			f, err := n.Float64()
-			if err != nil {
-				return nil, errors.Wrapf(err, "%s holds a json.Number", where(path))
-			}
-			return number(path, f)
-		}
-		return v.String(), nil
+		return validUTF8(v.String()), nil
 	case reflect.Map:
 		return c.convertMap(v, path, depth)
 	case reflect.Slice, reflect.Array:
@@ -312,7 +341,7 @@ func (c *converter) convertMap(v reflect.Value, path string, depth int) (any, er
 		if err != nil {
 			return nil, err
 		}
-		out[k.String()] = e
+		out[validUTF8(k.String())] = e
 	}
 	return out, nil
 }
@@ -348,15 +377,22 @@ func (c *converter) convertList(v reflect.Value, path string, depth int) (any, e
 	return out, nil
 }
 
-// number is f as JSON decodes it: an int64 for a whole number that fits one.
-func number(path string, f float64) (any, error) {
-	switch {
-	case math.IsNaN(f) || math.IsInf(f, 0):
+// number is f, a float of the given size, as the decoder reads what the
+// encoder writes for it: the shortest decimal that gives f back, an int64 when
+// that is a whole number that fits one, else a float64.
+func number(path string, f float64, bits int) (any, error) {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
 		return nil, errors.Errorf("%s holds %v, which JSON cannot hold", where(path), f)
-	case f == math.Trunc(f) && f >= -(1<<63) && f < 1<<63:
-		return int64(f), nil
 	}
-	return f, nil
+	format := byte('f')
+	if abs := math.Abs(f); abs != 0 && (abs < 1e-6 || abs >= 1e21) {
+		format = 'e'
+	}
+	text := strconv.FormatFloat(f, format, -1, bits)
+	if i, err := strconv.ParseInt(text, 10, 64); err == nil {
+		return i, nil
+	}
+	return strconv.ParseFloat(text, 64)
 }
 
 func unsupported(path string, v reflect.Value) error {
