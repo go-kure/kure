@@ -934,7 +934,13 @@ read as its JSON, so a number in it, a port say, is read like any other field,
 before and after substitution. An unstructured object you build in Go must hold
 JSON-typed values, as apimachinery's `Unstructured` requires: an `int64`, not an
 `int`. kure copies a `List` item and a compared Source through its JSON, but
-other reads still panic on such a value. A build that
+other reads still panic on such a value. A Flux Kustomization you hand-write
+as an unstructured object is read the way the API server reads it: a key
+matches a field only in its exact spelling, and a key the type does not have is
+dropped. A `Wait:` or `KubeConfig:` key therefore sets nothing, as it sets
+nothing for Flux. If the API server rejects such a key instead of pruning it,
+the apply of that object fails there, and the integration does not report it.
+A build that
 fails, a Kustomization two builds write differently, a placed one no apply
 creates (a Kustomization the Flux bootstrap applies counts as an apply only on
 the Source of a member whose build reads its directory), and a placed one a build applies on another cluster or from another
