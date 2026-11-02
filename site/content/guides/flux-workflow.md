@@ -945,7 +945,14 @@ dropped. A `Wait:` or `KubeConfig:` key therefore sets nothing, as it sets
 nothing for Flux. If the API server rejects such a key instead of pruning it,
 the apply of that object fails there, and the integration does not report it.
 A build that
-fails, a Kustomization two builds write differently, a placed one no apply
+fails, a Kustomization two builds write differently (`wait` or
+`ignoreMissingComponents` set to `false` or `null`, or a list field such as
+`dependsOn` or `patches` set to an empty list or `null`, is the field omitted,
+as Flux applies it; any other difference counts, and a key in another case,
+`Wait:` say, is no field and is ignored), the eighth build of one `spec.path`
+along a chain of builds that each write a copy of the next, since such a chain
+may write Kustomizations without end (a chain that comes back to a copy already
+built stops there), a placed one no apply
 creates (a Kustomization the Flux bootstrap applies counts as an apply only on
 the Source of a member whose build reads its directory), and a placed one a build applies on another cluster or from another
 Source, are refused. So is a build kure cannot read as Flux does, naming the
