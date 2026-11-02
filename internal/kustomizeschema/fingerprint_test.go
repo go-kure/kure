@@ -266,7 +266,8 @@ func TestFingerprint_NumbersASliceCycleByDepth(t *testing.T) {
 	if fingerprint(cycle(true)) == fingerprint(cycle(false)) {
 		t.Error("a cycle back to the root and one back to the inner slice have one fingerprint")
 	}
-	if fingerprint(cycle(true)) != fingerprint(cycle(true)) {
+	first, again := fingerprint(cycle(true)), fingerprint(cycle(true))
+	if first != again {
 		t.Error("a slice cycle has an unstable fingerprint")
 	}
 }
