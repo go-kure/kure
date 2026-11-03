@@ -940,7 +940,9 @@ lifecycle hooks, and the legacy seccomp and AppArmor annotations are not checked
   `runAsUser` other than 0; `capabilities.drop: [ALL]` with only `NET_BIND_SERVICE`
   added; `seccompProfile` of `RuntimeDefault` or `Localhost`. A pod value for
   `runAsNonRoot` or `seccompProfile` satisfies every container that leaves its own
-  unset, and a container value overrides the pod value.
+  unset, and a container value overrides the pod value. A pod value the standard
+  forbids (`runAsNonRoot: false`, an `Unconfined` `seccompProfile`) stays a violation
+  even when every container sets an acceptable value.
 
 `BaselineAllowedCapabilities` returns the capabilities the baseline level allows in
 `capabilities.add`, and `RestrictedAllowedCapabilities` the one the restricted level

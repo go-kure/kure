@@ -207,14 +207,18 @@ func ValidateContainerPSA(container *corev1.Container, level PSALevel) error {
 //
 // Restricted adds: allowPrivilegeEscalation=false; runAsNonRoot=true and
 // runAsUser other than 0; capabilities.drop ALL with at most the
-// [RestrictedAllowedCapabilities] added; a seccompProfile of RuntimeDefault or Localhost. runAsNonRoot and
-// seccompProfile are accepted when the pod sets them, or when every container
-// does; a container value overrides the pod value.
+// [RestrictedAllowedCapabilities] added; a seccompProfile of RuntimeDefault or
+// Localhost. runAsNonRoot and seccompProfile are accepted when the pod sets
+// them, or when every container does; a container value overrides the pod
+// value, but a pod value the standard forbids (runAsNonRoot false, an
+// Unconfined seccompProfile) stays a violation whatever the containers set.
 //
 // Two pod-level exemptions follow the Pod Security Standards. With
-// spec.hostUsers set to false, runAsNonRoot, runAsUser and procMount are not
-// checked. With spec.os.name set to windows, allowPrivilegeEscalation,
-// capabilities and seccompProfile are not checked at the restricted level.
+// spec.hostUsers set to false, runAsNonRoot and runAsUser are not checked, and
+// procMount is not checked at the baseline level only: the restricted level
+// still refuses a procMount other than Default. With spec.os.name set to
+// windows, allowPrivilegeEscalation, capabilities and seccompProfile are not
+// checked at the restricted level.
 func ValidatePodSpecPSA(spec *corev1.PodSpec, level PSALevel) error {
 	if spec == nil {
 		return errors.ErrNilPodSpec
