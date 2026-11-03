@@ -72,6 +72,21 @@ func Objects(r runtime.Object) ([]Object, error) {
 	return objects(Object{Object: r}, map[uintptr]bool{})
 }
 
+// HeldCandidates returns the unstructured objects apimachinery takes for the
+// items of the typed List r, and of the typed Lists they are, written or not.
+// It reads the Go values and marshals none, so it can run before HeldItems,
+// which reads the List from what it writes. A typed List that holds itself is
+// refused, as in HeldItems. An unstructured r has none.
+func HeldCandidates(r runtime.Object) ([]*unstructured.Unstructured, error) {
+	if _, ok := r.(*unstructured.Unstructured); ok {
+		return nil, nil
+	}
+	if err := refuseItemCycle(r, map[listRef]bool{}); err != nil {
+		return nil, err
+	}
+	return heldItems(r), nil
+}
+
 // HeldItems returns the unstructured objects the typed List r holds as its
 // own items, and those of the typed Lists it holds: the objects Objects
 // returns as they are (Read false), an unstructured List among them as

@@ -348,3 +348,61 @@ func TestCallerObject_UnwrittenTypedListItemIsNotRefused(t *testing.T) {
 		t.Errorf("got %v: an object the List does not write was refused", err)
 	}
 }
+
+// panicMarshaler panics when it is marshalled, and counts the calls.
+type panicMarshaler struct{}
+
+var panicMarshalCalls int
+
+func (panicMarshaler) MarshalJSON() ([]byte, error) {
+	panicMarshalCalls++
+	panic("a caller's marshaler was called")
+}
+
+// A typed List is discovered before its items are validated. The discovery
+// must not marshal an item that holds a value with a marshaler: the call is
+// refused, and the method is never called (go-kure/kure#1201).
+func TestCallerObject_TypedListItemMarshalerIsRefusedNotCalled(t *testing.T) {
+	for _, placement := range append(slices.Clone(integratedPlacements), layout.FluxSeparate) {
+		t.Run(string(placement), func(t *testing.T) {
+			panicMarshalCalls = 0
+			cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
+			cm.Object["spec"] = map[string]any{"m": panicMarshaler{}}
+			got, panicked := integrateOutcome(t, baseCluster(typedListOf("List", cm)), placement)
+			if panicked != nil {
+				t.Fatalf("integration panicked: %v", panicked)
+			}
+			for _, want := range []string{"ConfigMap", "default/cm", "spec.m", "marshals itself"} {
+				if !strings.Contains(got, want) {
+					t.Errorf("error %q does not name %q", got, want)
+				}
+			}
+			if panicMarshalCalls != 0 {
+				t.Errorf("the marshaler was called %d times", panicMarshalCalls)
+			}
+		})
+	}
+}
+
+// The same holds for an item of a typed List held by a typed List, and for
+// the entry point that reads the layout without integrating it.
+func TestCallerObject_NestedTypedListItemMarshalerIsRefusedNotCalled(t *testing.T) {
+	panicMarshalCalls = 0
+	cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
+	cm.Object["spec"] = map[string]any{"m": panicMarshaler{}}
+	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{typedListOf("List", cm)}}
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("UmbrellaTerminals panicked: %v", r)
+			}
+		}()
+		_, err := fluxstack.UmbrellaTerminals(ml)
+		if err == nil || !strings.Contains(err.Error(), "marshals itself") {
+			t.Errorf("got %v, want a refusal naming the marshaler", err)
+		}
+	}()
+	if panicMarshalCalls != 0 {
+		t.Errorf("the marshaler was called %d times", panicMarshalCalls)
+	}
+}
