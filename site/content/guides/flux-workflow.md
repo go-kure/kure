@@ -956,6 +956,8 @@ object and the field. A type of your own that embeds an unstructured object
 (by pointer or by value, also as an item of a typed List) is not replaced by a
 copy: it is refused, naming its Go type, when its map holds such a value, so
 hold the object as a plain `*unstructured.Unstructured` to have it converted.
+A type that embeds two such objects at the same depth, or that has a
+`DeepCopyObject` of its own (or one in a type it embeds), is refused too.
 A typed object whose method panics, and a typed nil
 resource, are refused naming the Go type. The package README lists the accepted
 shapes. A Flux Kustomization you hand-write
