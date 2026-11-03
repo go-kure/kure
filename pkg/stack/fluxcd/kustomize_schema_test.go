@@ -198,10 +198,14 @@ func TestKustomizeSchema_ABuildThatFailsOverAnAddedDefinitionIsNotJudged(t *test
 	// searches: a directory of this test's own, so that a tree another run
 	// left in the shared one is not found.
 	t.Setenv("TMPDIR", t.TempDir())
+	removed := 0
+	var addDefinition bool
 	restore := fluxstack.SetAfterFirstDefinitionsCheck(func() {
-		added := []byte(`{"swagger":"2.0","info":{"title":"added","version":"v1"},"paths":{},"definitions":{"io.example.v1.Added":{"type":"object"}}}`)
-		if err := openapi.AddSchema(added); err != nil {
-			t.Errorf("add a schema: %v", err)
+		if addDefinition {
+			added := []byte(`{"swagger":"2.0","info":{"title":"added","version":"v1"},"paths":{},"definitions":{"io.example.v1.Added":{"type":"object"}}}`)
+			if err := openapi.AddSchema(added); err != nil {
+				t.Errorf("add a schema: %v", err)
+			}
 		}
 		trees, _ := filepath.Glob(filepath.Join(os.TempDir(), "kure-flux-build-*"))
 		if len(trees) != 1 {
@@ -213,13 +217,32 @@ func TestKustomizeSchema_ABuildThatFailsOverAnAddedDefinitionIsNotJudged(t *test
 				if rmErr := os.RemoveAll(p); rmErr != nil {
 					t.Errorf("remove the component: %v", rmErr)
 				}
+				removed++
 				return filepath.SkipDir
 			}
 			return nil
 		})
 	})
 	defer restore()
+
+	// The control, before any definition is added: the component is gone
+	// and nothing else changed, so the tree fails on the build alone. It
+	// shows that removing the directory makes the build fail, and that the
+	// seam found it, so that the case below is not a seam that matched
+	// nothing, in which finish would refuse the added definition all the same.
 	_, err := schemaTree(os.Getenv(webDirEnv), true)
+	if removed != 1 {
+		t.Fatalf("the seam removed %d component directories in the control, want 1", removed)
+	}
+	if err == nil || strings.Contains(err.Error(), "while its builds ran") {
+		t.Fatalf("control: got %v, want the build to fail over the removed component", err)
+	}
+
+	removed, addDefinition = 0, true
+	_, err = schemaTree(os.Getenv(webDirEnv), true)
+	if removed != 1 {
+		t.Fatalf("the seam removed %d component directories, want 1: the build did not fail, so the refusal below proves nothing", removed)
+	}
 	if err == nil || !strings.Contains(err.Error(), "not its built-in ones") || !strings.Contains(err.Error(), "while its builds ran") {
 		t.Fatalf("got %v, want the tree refused for a definition added while its builds ran, not for the build that failed over it", err)
 	}
