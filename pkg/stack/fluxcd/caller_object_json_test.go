@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -703,4 +704,36 @@ func TestCallerObject_ListsHeldTwiceAreRefusedAtOnce(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("the call did not end")
 	}
+}
+
+// A typed nil resource holds no object: reading it for caller objects must not
+// call a method on it, and the later checks of the layout answer as they did.
+func TestCallerObject_TypedNilResourceDoesNotPanic(t *testing.T) {
+	var cm *corev1.ConfigMap
+	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{cm}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("GenerateFromLayout panicked: %v", r)
+		}
+	}()
+	_, err := fluxstack.NewResourceGenerator().GenerateFromLayout(ml, &stack.Cluster{Node: &stack.Node{Name: "root"}})
+	t.Logf("GenerateFromLayout: %v", err)
+	if err != nil && strings.Contains(err.Error(), "typed object") {
+		t.Errorf("got %v, want the answer of the layout checks, not one of the caller-object walk", err)
+	}
+}
+
+// A typed nil item of a typed List is no object either.
+func TestCallerObject_TypedNilListItemDoesNotPanic(t *testing.T) {
+	var cm *corev1.ConfigMap
+	l := &objectItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}, Items: []runtime.Object{cm}}
+	l.Name, l.Namespace = "holder", "default"
+	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{l}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("GenerateFromLayout panicked: %v", r)
+		}
+	}()
+	_, err := fluxstack.NewResourceGenerator().GenerateFromLayout(ml, &stack.Cluster{Node: &stack.Node{Name: "root"}})
+	t.Logf("GenerateFromLayout: %v", err)
 }
