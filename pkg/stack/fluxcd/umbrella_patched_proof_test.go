@@ -401,3 +401,76 @@ func TestUmbrellaTerminals_HeldCopiesOfAPatcher(t *testing.T) {
 		})
 	}
 }
+
+// a builds controllers, which holds b; b builds apps, which holds h, depending
+// on x with a plain entry, and x. The directory lc holds a local-config Flux
+// Kustomization p, with the path of apps and the Source of a and b, that
+// patches h to add a readyExpr to that entry; a build drops it, and the member
+// c, on the Source other, keeps it by a patch that sets its local-config
+// annotation to "false". The Flux bootstrap applies the p that c's build
+// makes, so its patch lands on h and x is a terminal leaf of a beside h. The
+// build reads p as no writer (its Source is not c's), and the tree holds no
+// copy of it that is not dropped, so only the kept occurrence shows the patch
+// (go-kure/kure#1243). A p that c does not keep, one that patches nothing and
+// one c reads on its own Source are the controls.
+func TestUmbrellaTerminals_KeptLocalConfigPatcher(t *testing.T) {
+	keep := "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: p\n  namespace: flux-system\n  annotations:\n    config.kubernetes.io/local-config: \"false\"\n"
+	const dropped = "true"
+	all := []string{"flux-system/b", "flux-system/h", "flux-system/x"}
+	for name, tc := range map[string]struct {
+		p       bool   // lc holds p
+		patches bool   // p patches h
+		kept    bool   // c keeps p
+		source  string // the Source of p
+		want    []string
+	}{
+		"p kept, patching, on the Source of a and b": {true, true, true, "flux-system", all},
+		"p not kept (ctl)":                           {true, true, false, "flux-system", all[:2]},
+		"c patches what lc does not hold (ctl)":      {false, false, true, "flux-system", all},
+		"p kept, patching, on the Source of c (ctl)": {true, true, true, "other", all},
+		"p kept, patching nothing (ctl, admitted)":   {true, false, true, "flux-system", all[:2]},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := &layout.ManifestLayout{Name: "demo", Namespace: "clusters"}
+			controllers := &layout.ManifestLayout{Name: "controllers", Namespace: root.FullRepoPath()}
+			apps := &layout.ManifestLayout{Name: "apps", Namespace: controllers.FullRepoPath()}
+			lc := &layout.ManifestLayout{Name: "lc", Namespace: root.FullRepoPath(), UmbrellaChild: true}
+			root.Children = []*layout.ManifestLayout{controllers, lc}
+			controllers.Children = []*layout.ManifestLayout{apps}
+			a := handWritten("a")
+			a.Spec.Path = controllers.FullRepoPath()
+			b := handWritten("b")
+			b.Spec.Path = apps.FullRepoPath()
+			c := handWritten("c")
+			c.Spec.Path = lc.FullRepoPath()
+			c.Spec.SourceRef.Name = "other"
+			if tc.kept {
+				c.Spec.Patches = []kustomize.Patch{{Patch: keep}}
+			}
+			root.Resources = []client.Object{a, c}
+			controllers.Resources = []client.Object{b}
+			apps.Resources = []client.Object{handWritten("h", "x"), handWritten("x")}
+			if tc.p {
+				p := handWritten("p")
+				p.Spec.Path = apps.FullRepoPath()
+				p.Spec.SourceRef.Name = tc.source
+				if tc.patches {
+					p.Spec.Patches = []kustomize.Patch{toAddReadyExpr("h")}
+				}
+				lc.Resources = []client.Object{annotateLocalConfig(p, ptr(dropped))}
+			}
+			root.SetFluxKustomizations([]layout.FluxKustomizationRecord{
+				{Namespace: "flux-system", Name: "a", Path: controllers.FullRepoPath(), SourceKind: "GitRepository", SourceName: "flux-system"},
+				{Namespace: "flux-system", Name: "b", Path: apps.FullRepoPath(), SourceKind: "GitRepository", SourceName: "flux-system"},
+				{Namespace: "flux-system", Name: "c", Path: lc.FullRepoPath(), SourceKind: "GitRepository", SourceName: "other"},
+			})
+			got, err := fluxstack.UmbrellaTerminals(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(got["flux-system/a"], tc.want) {
+				t.Errorf("got %v, want flux-system/a -> %v", got, tc.want)
+			}
+		})
+	}
+}

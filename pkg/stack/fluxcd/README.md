@@ -708,7 +708,7 @@ by its terminal leaves. It refuses the tree when:
 
 A tree whose build before the rewrite fails, or that holds a Flux Kustomization the build cannot
 read (an unreadable copy, or a patching non-member on a member's Source that no build reads as a
-writer), falls back to the earlier blanket: no entry proves anything and the checks refuse more.
+writer, whether the tree holds it or a patch keeps it from local config), falls back to the earlier blanket: no entry proves anything and the checks refuse more.
 The fallback asks the build after the rewrite to keep every entry each member held, and to keep
 the terminal leaves written for an umbrella among them.
 
