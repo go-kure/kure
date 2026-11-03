@@ -23,8 +23,9 @@ import (
 // tree holds them. The reconcile-order checks judge it (orderGraph,
 // checkPlacedReconcileOrder). The "umbrellas do not wait" rewrite and
 // UmbrellaTerminals read the Kustomizations as the tree holds them; on a tree
-// that patches they also read each dependsOn entry from the views of the
-// build before and after the rewrite (go-kure/kure#1226).
+// that patches they also read each dependsOn entry from a view of its build:
+// UmbrellaTerminals one of the tree it is given, the rewrite those before and
+// after it (go-kure/kure#1226).
 //
 // A writer is a Kustomization whose build is the tree's: the Flux bootstrap
 // (key ""), which applies the root directory; every member whose spec.path is
