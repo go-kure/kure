@@ -49,6 +49,33 @@ type privateCycleList struct {
 
 func (l *privateCycleList) DeepCopyObject() runtime.Object { c := *l; return &c }
 
+// zeroPanics is a field whose IsZero panics, which encoding/json calls for a
+// field tagged omitzero.
+type zeroPanics struct{ V int }
+
+func (zeroPanics) IsZero() bool { panic("IsZero") }
+
+// zeroItem is an object whose serialization panics, held by a List that does
+// not write it.
+type zeroItem struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	X                 zeroPanics `json:"x,omitzero"`
+}
+
+func (o *zeroItem) DeepCopyObject() runtime.Object { c := *o; return &c }
+
+// unwrittenItems is a typed List whose Items are not written, and which
+// writes another array of the same length under items.
+type unwrittenItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []*zeroItem `json:"-"`
+	Written           []any       `json:"items"`
+}
+
+func (l *unwrittenItems) DeepCopyObject() runtime.Object { c := *l; return &c }
+
 func hostileCases() map[string]func() client.Object {
 	list := func() *objectItems {
 		l := &objectItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}}
@@ -133,6 +160,11 @@ func hostileCases() map[string]func() client.Object {
 		"interface map key that marshals itself": func() client.Object {
 			cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
 			return &ifaceKeyed{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Thing"}, Keyed: map[encoding.TextMarshaler]string{key{U: cm}: "v"}}
+		},
+		"list whose unwritten item panics when serialized": func() client.Object {
+			l := &unwrittenItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}, Items: []*zeroItem{{}}, Written: []any{map[string]any{"apiVersion": "v1", "kind": "ConfigMap"}}}
+			l.Name, l.Namespace = "holder", "default"
+			return l
 		},
 		"map key that holds itself": func() client.Object {
 			m := map[string]any{}

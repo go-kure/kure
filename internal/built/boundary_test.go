@@ -60,6 +60,35 @@ func TestBoundary_GetObjectKindOnlyInTheGuard(t *testing.T) {
 	}
 }
 
+// A caller's object is marshalled only through marshalHeld, which guards the
+// methods the encoder calls (MarshalJSON, IsZero). The one other call writes a
+// value read back from JSON, which holds plain Go values and no caller's type.
+func TestBoundary_MarshalOnlyInTheGuard(t *testing.T) {
+	const plainValueCalls = 1 // built.go: the ignored-by-kustomize annotation value
+	others := 0
+	for name, f := range parseNonTestFiles(t, ".") {
+		if name == "held.go" {
+			continue
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok {
+				if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Marshal" {
+					if id, ok := sel.X.(*ast.Ident); ok && id.Name == "json" {
+						others++
+						if name != "built.go" {
+							t.Errorf("%s calls json.Marshal outside held.go", name)
+						}
+					}
+				}
+			}
+			return true
+		})
+	}
+	if others != plainValueCalls {
+		t.Errorf("%d json.Marshal calls outside held.go, want %d: route a caller's object through marshalHeld", others, plainValueCalls)
+	}
+}
+
 func TestBoundary_ReadingFilesDoNotFormatWithV(t *testing.T) {
 	files := parseNonTestFiles(t, ".")
 	for _, name := range []string{"held.go", "items.go"} {

@@ -219,7 +219,11 @@ func listItems(obj runtime.Object) (items []Object, isList bool, err error) {
 	// What is written under items decides, as it does for an unstructured
 	// List: the Go value's items are the List's only where they are what is
 	// written there.
-	if !writtenAs(extracted, held) {
+	same, err := writtenAs(extracted, held)
+	if err != nil {
+		return nil, false, err
+	}
+	if !same {
 		return readItems(written)
 	}
 	for _, item := range extracted {
@@ -260,10 +264,13 @@ func readItems(written map[string]any) (items []Object, isList bool, err error) 
 // The same content written from another field cannot be told from the
 // field's own. A change to such an item does not reach what is written, which
 // the delivery intent finds when it verifies the written form afterwards.
-func writtenAs(items []runtime.Object, held any) bool {
+//
+// An error is the refusal of an item whose method panicked; an item that
+// merely fails to marshal is a mismatch.
+func writtenAs(items []runtime.Object, held any) (bool, error) {
 	written, ok := held.([]any)
 	if !ok || len(written) != len(items) {
-		return false
+		return false, nil
 	}
 	for i, item := range items {
 		data := []byte("null")
@@ -272,17 +279,25 @@ func writtenAs(items []runtime.Object, held any) bool {
 				data = raw.Raw
 			} else {
 				var err error
-				if data, err = json.Marshal(item); err != nil {
-					return false
+				if data, err = marshalHeld(item); err != nil {
+					if isRefusal(err) {
+						return false, err
+					}
+					return false, nil // the item does not marshal: not what is written
 				}
 			}
 		}
-		var own any
-		if err := json.Unmarshal(data, &own); err != nil || !reflect.DeepEqual(own, written[i]) {
-			return false
+		if !sameJSON(data, written[i]) {
+			return false, nil
 		}
 	}
-	return true
+	return true, nil
+}
+
+// sameJSON reports whether data is JSON that decodes to want.
+func sameJSON(data []byte, want any) bool {
+	var got any
+	return json.Unmarshal(data, &got) == nil && reflect.DeepEqual(got, want)
 }
 
 // listRef names a typed List by its type and address.
