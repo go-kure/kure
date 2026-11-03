@@ -706,9 +706,9 @@ func TestCallerObject_ListsHeldTwiceAreRefusedAtOnce(t *testing.T) {
 	}
 }
 
-// A typed nil resource holds no object: reading it for caller objects must not
-// call a method on it, and the later checks of the layout answer as they did.
-func TestCallerObject_TypedNilResourceDoesNotPanic(t *testing.T) {
+// A typed nil resource is refused, naming the layout, its place in it and its
+// Go type: a method called on it may panic.
+func TestCallerObject_TypedNilResourceIsRefusedNamingIt(t *testing.T) {
 	var cm *corev1.ConfigMap
 	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{cm}}
 	defer func() {
@@ -717,9 +717,13 @@ func TestCallerObject_TypedNilResourceDoesNotPanic(t *testing.T) {
 		}
 	}()
 	_, err := fluxstack.NewResourceGenerator().GenerateFromLayout(ml, &stack.Cluster{Node: &stack.Node{Name: "root"}})
-	t.Logf("GenerateFromLayout: %v", err)
-	if err != nil && strings.Contains(err.Error(), "typed object") {
-		t.Errorf("got %v, want the answer of the layout checks, not one of the caller-object walk", err)
+	if err == nil {
+		t.Fatal("got no error, want a refusal")
+	}
+	for _, want := range []string{"layout", "resource 0", "nil *v1.ConfigMap"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q", err, want)
+		}
 	}
 }
 
