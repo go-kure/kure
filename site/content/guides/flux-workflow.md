@@ -942,7 +942,11 @@ integration entry points replace a plain Go integer, `[]string`, `map[string]str
 or other accepted shape in an `Object` map with a JSON-typed copy (the caller's
 map is not changed), and refuse a value they cannot convert, such as a struct,
 a pointer, a channel or a type that marshals itself, naming the layout, the
-object and the field. A typed object whose method panics, and a typed nil
+object and the field. A type of your own that embeds an unstructured object
+(by pointer or by value, also as an item of a typed List) is not replaced by a
+copy: it is refused, naming its Go type, when its map holds such a value, so
+hold the object as a plain `*unstructured.Unstructured` to have it converted.
+A typed object whose method panics, and a typed nil
 resource, are refused naming the Go type. The package README lists the accepted
 shapes. A Flux Kustomization you hand-write
 as an unstructured object is read the way the API server reads it: a key

@@ -91,20 +91,35 @@ func RefuseItemCycle(r runtime.Object) error {
 // still returns the objects apimachinery takes for its items, so that the
 // caller can name an object or a field that is the cause.
 func HeldItems(r runtime.Object) ([]*unstructured.Unstructured, error) {
+	out, _, err := HeldObjects(r)
+	return out, err
+}
+
+// HeldObjects is HeldItems that also returns the other objects the typed List r
+// holds as its own items, and those of the typed Lists it holds: each item that
+// is neither an unstructured object nor a List, a type that embeds an
+// unstructured object say. Such an item is returned as it is held, so that the
+// caller can look at what it embeds.
+func HeldObjects(r runtime.Object) (items []*unstructured.Unstructured, others []runtime.Object, err error) {
+	items, others, _, err = heldObjects(r)
+	return items, others, err
+}
+
+// heldObjects is HeldObjects, and whether r is a List.
+func heldObjects(r runtime.Object) (out []*unstructured.Unstructured, others []runtime.Object, isList bool, err error) {
 	if _, ok := r.(*unstructured.Unstructured); ok {
-		return nil, nil
+		return nil, nil, false, nil
 	}
 	if err := refuseItemCycle(r, map[listRef]bool{}); err != nil {
-		return nil, err
+		return nil, nil, false, err
 	}
 	items, isList, err := listItems(r)
 	if err != nil {
-		return heldItems(r), err
+		return heldItems(r), nil, false, err
 	}
 	if !isList {
-		return nil, nil
+		return nil, nil, false, nil
 	}
-	var out []*unstructured.Unstructured
 	for _, item := range items {
 		if item.Read {
 			continue
@@ -113,13 +128,17 @@ func HeldItems(r runtime.Object) ([]*unstructured.Unstructured, error) {
 			out = append(out, u)
 			continue
 		}
-		held, err := HeldItems(item.Object)
+		held, heldOthers, itemIsList, err := heldObjects(item.Object)
 		out = append(out, held...)
+		others = append(others, heldOthers...)
 		if err != nil {
-			return out, err
+			return out, others, true, err
+		}
+		if !itemIsList {
+			others = append(others, item.Object)
 		}
 	}
-	return out, nil
+	return out, others, true, nil
 }
 
 // heldItems is the objects apimachinery takes for the items of r, and of the
