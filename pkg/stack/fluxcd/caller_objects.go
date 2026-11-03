@@ -155,8 +155,6 @@ func sameMap(a, b map[string]any) bool {
 	return a != nil && b != nil && reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
 }
 
-var unstructuredPtrType = reflect.TypeFor[*unstructured.Unstructured]()
-
 // maxEmbedDepth is how many levels of embedded structs embeddedUnstructured
 // follows to an unstructured object.
 const maxEmbedDepth = 8
@@ -188,120 +186,6 @@ func refuseWrapper(l *layout.ManifestLayout, i int, r apiruntime.Object) error {
 	return errors.Wrapf(err, "layout %q: %s %q is held by a %s that embeds it, and is not normalized; hold it as a *unstructured.Unstructured to have it normalized", l.FullRepoPath(), kind, crKey(namespace, name), st)
 }
 
-// embeddedUnstructured returns the unstructured object that r embeds, for a
-// named struct that does: by pointer or by value, directly or through other
-// embedded structs, so that its methods are promoted from the object. The
-// object is nil, with no error, when r is no such wrapper. st is the type of
-// the wrapper's struct.
-//
-// A wrapper is only accepted when its DeepCopyObject is the one promoted from
-// what it embeds, which the compiler writes (isPromotion): a wrapper with a
-// DeepCopyObject of its own is caller code the layout would call, and is
-// refused, as is one embedding a nil pointer or one whose embedded object
-// cannot be reached. Where this cannot be told, the wrapper is refused.
-func embeddedUnstructured(r apiruntime.Object) (u *unstructured.Unstructured, st reflect.Type, err error) {
-	if r == nil {
-		return nil, nil, nil
-	}
-	rv := reflect.ValueOf(r)
-	// A typed nil is refused by callerObjects, with the type named.
-	if rv.Kind() == reflect.Pointer && rv.IsNil() {
-		return nil, nil, nil
-	}
-	t := rv.Type()
-	st = t
-	for st.Kind() == reflect.Pointer {
-		st = st.Elem()
-	}
-	if st.Kind() != reflect.Struct || st == unstructuredType || st == unstructuredListType || !embedsUnstructured(st, 0) {
-		return nil, nil, nil
-	}
-	if m, ok := t.MethodByName("DeepCopyObject"); !ok || !isPromotion(m.Func.Pointer()) {
-		return nil, st, errors.Errorf("a %s embeds an unstructured object but has a DeepCopyObject of its own", st)
-	}
-	v := rv
-	for v.Kind() == reflect.Pointer {
-		v = v.Elem()
-	}
-	u, reached := reachEmbedded(v, 0)
-	if !reached {
-		return nil, st, errors.Errorf("a %s embeds a nil *unstructured.Unstructured or an unstructured object that cannot be reached", st)
-	}
-	return u, st, nil
-}
-
-// embedsUnstructured reports whether the struct type st embeds an
-// unstructured.Unstructured, or a pointer to one, directly or through another
-// embedded struct.
-func embedsUnstructured(st reflect.Type, depth int) bool {
-	if depth > maxEmbedDepth {
-		// Not followed further: taken for a wrapper, then refused as unreachable.
-		return true
-	}
-	for i := 0; i < st.NumField(); i++ {
-		f := st.Field(i)
-		if !f.Anonymous {
-			continue
-		}
-		if f.Type == unstructuredPtrType || f.Type == unstructuredType {
-			return true
-		}
-		ft := f.Type
-		if ft.Kind() == reflect.Pointer {
-			ft = ft.Elem()
-		}
-		if ft.Kind() == reflect.Struct && ft != unstructuredListType && embedsUnstructured(ft, depth+1) {
-			return true
-		}
-	}
-	return false
-}
-
-// reachEmbedded returns the unstructured object the struct v embeds, by the
-// first path embedsUnstructured finds. It reports false when a pointer on the
-// way is nil, when the object cannot be reached or when v is not addressable
-// where the object is held by value.
-func reachEmbedded(v reflect.Value, depth int) (*unstructured.Unstructured, bool) {
-	if depth > maxEmbedDepth {
-		return nil, false
-	}
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		if !f.Anonymous {
-			continue
-		}
-		fv := v.Field(i)
-		switch {
-		case f.Type == unstructuredPtrType:
-			if fv.IsNil() || !fv.CanInterface() {
-				return nil, false
-			}
-			return fv.Interface().(*unstructured.Unstructured), true
-		case f.Type == unstructuredType:
-			if !fv.CanAddr() || !fv.Addr().CanInterface() {
-				return nil, false
-			}
-			return fv.Addr().Interface().(*unstructured.Unstructured), true
-		}
-		ft := f.Type
-		if ft.Kind() == reflect.Pointer {
-			ft = ft.Elem()
-		}
-		if ft.Kind() != reflect.Struct || ft == unstructuredListType || !embedsUnstructured(ft, depth+1) {
-			continue
-		}
-		if fv.Kind() == reflect.Pointer {
-			if fv.IsNil() {
-				return nil, false
-			}
-			fv = fv.Elem()
-		}
-		return reachEmbedded(fv, depth+1)
-	}
-	return nil, false
-}
-
 // callerObjects returns the unstructured objects r holds as a caller's own: r
 // itself, or the unstructured items of a typed List r, which a read of the
 // List returns as they are, not as copies.
@@ -312,8 +196,9 @@ func reachEmbedded(v reflect.Value, depth int) (*unstructured.Unstructured, bool
 // holds an unstructured object with a value that marshalling would call a
 // method of, is refused. The object that fails is returned as bad.
 //
-// others are the objects a typed List holds that are neither unstructured nor
-// Lists, which the caller looks at for a wrapper that embeds one.
+// others are the objects a typed List holds that are not unstructured, Lists
+// included, which the caller looks at for a wrapper that embeds an unstructured
+// object or List.
 func callerObjects(r client.Object) (objs []*unstructured.Unstructured, others []apiruntime.Object, bad *unstructured.Unstructured, err error) {
 	if r == nil {
 		return nil, nil, nil, nil
