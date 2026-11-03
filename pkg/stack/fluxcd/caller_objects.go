@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	apiruntime "k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/internal/built"
@@ -55,8 +56,14 @@ const (
 //
 // The objects are those in each layout's Resources, and the unstructured
 // objects a typed List in them holds, directly or through the typed Lists it
-// holds (built.HeldItems). An unstructured List's items are in its object,
+// holds (built.HeldObjects). An unstructured List's items are in its object,
 // so they are covered with it. Nil roots are skipped.
+//
+// A type that embeds an unstructured object, as a resource or as an item of a
+// typed List, is not normalized: the layout and the walker's records of an
+// object's origin hold the wrapper, so a copy in its place would lose what is
+// done to the wrapper. It is refused, naming its type, when its map needs
+// conversion (refuseWrapper), and left as it is when it does not.
 //
 // It returns the function that puts every replaced Object map back, for a
 // call that a later check refuses: a refused call leaves the tree as the
@@ -69,16 +76,6 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 		held, parsed map[string]any
 	}
 	var replace []replacement
-	// A wrapper type that embeds *unstructured.Unstructured is replaced in its
-	// layout by a normalized *Unstructured copy of what it embeds: that is what
-	// the promoted DeepCopyObject gives, so the layout holds nothing else.
-	type slotReplacement struct {
-		layout *layout.ManifestLayout
-		index  int
-		held   client.Object
-		parsed *unstructured.Unstructured
-	}
-	var replaceSlot []slotReplacement
 	seenLayout := map[*layout.ManifestLayout]bool{}
 	seenObject := map[*unstructured.Unstructured]bool{}
 	refuse := func(l *layout.ManifestLayout, u *unstructured.Unstructured, cause error) error {
@@ -92,11 +89,10 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 		}
 		seenLayout[l] = true
 		for i, r := range l.Resources {
-			embedded, wrapped, err := embeddedUnstructured(r)
-			if err != nil {
-				return errors.Wrapf(err, "layout %q: resource %d", l.FullRepoPath(), i)
+			if err := refuseWrapper(l, i, r); err != nil {
+				return err
 			}
-			objs, bad, err := callerObjects(r)
+			objs, others, bad, err := callerObjects(r)
 			if err != nil {
 				if bad != nil {
 					return refuse(l, bad, err)
@@ -109,13 +105,9 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 				}
 				return errors.Wrapf(err, "layout %q: read list items of resource %d", l.FullRepoPath(), i)
 			}
-			if wrapped {
-				content, err := jsonContentOf(embedded.Object)
-				if err != nil {
-					return refuse(l, embedded, err)
-				}
-				if content != nil {
-					replaceSlot = append(replaceSlot, slotReplacement{l, i, r, &unstructured.Unstructured{Object: content}})
+			for _, o := range others {
+				if err := refuseWrapper(l, i, o); err != nil {
+					return err
 				}
 			}
 			for _, u := range objs {
@@ -147,16 +139,7 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 	for _, r := range replace {
 		r.obj.Object = r.parsed
 	}
-	for _, r := range replaceSlot {
-		r.layout.Resources[r.index] = r.parsed
-	}
 	return func() {
-		for _, r := range replaceSlot {
-			// Only the replacement is put back, as for an Object map.
-			if r.layout.Resources[r.index] == client.Object(r.parsed) {
-				r.layout.Resources[r.index] = r.held
-			}
-		}
 		for _, r := range replace {
 			// Only the replacement is put back: a caller who has set another
 			// map since keeps it.
@@ -174,50 +157,149 @@ func sameMap(a, b map[string]any) bool {
 
 var unstructuredPtrType = reflect.TypeFor[*unstructured.Unstructured]()
 
-// embeddedUnstructured returns the *unstructured.Unstructured that r embeds, for
-// a named struct that does. Such a wrapper is only accepted when its
-// DeepCopyObject is the one promoted from what it embeds, which the compiler
-// writes (isPromotion): a wrapper with a DeepCopyObject of its own is caller
-// code the layout would call, and is refused, as is one embedding a nil
-// pointer. Where this cannot be told, the wrapper is refused.
-func embeddedUnstructured(r client.Object) (u *unstructured.Unstructured, wrapped bool, err error) {
+// maxEmbedDepth is how many levels of embedded structs embeddedUnstructured
+// follows to an unstructured object.
+const maxEmbedDepth = 8
+
+// refuseWrapper refuses r, resource i of layout l or an item of it, when it is
+// a wrapper that embeds an unstructured object (embeddedUnstructured) whose map
+// holds a value that is not JSON typed. Such a wrapper cannot be normalized:
+// the layout and the records the walker made of its origin hold the wrapper,
+// and a copy put in its place would no longer carry what is done to the
+// wrapper. So it is refused, naming its type, and a wrapper that holds only
+// JSON typed values is left as it is. An object that is no wrapper is no
+// concern of this check.
+func refuseWrapper(l *layout.ManifestLayout, i int, r apiruntime.Object) error {
+	embedded, st, err := embeddedUnstructured(r)
+	if err != nil {
+		return errors.Wrapf(err, "layout %q: resource %d", l.FullRepoPath(), i)
+	}
+	if embedded == nil {
+		return nil
+	}
+	content, err := jsonContentOf(embedded.Object)
+	if err == nil && content == nil {
+		return nil
+	}
+	if err == nil {
+		err = errors.New("holds a value that is not JSON typed")
+	}
+	kind, namespace, name := identityOf(embedded)
+	return errors.Wrapf(err, "layout %q: %s %q is held by a %s that embeds it, and is not normalized; hold it as a *unstructured.Unstructured to have it normalized", l.FullRepoPath(), kind, crKey(namespace, name), st)
+}
+
+// embeddedUnstructured returns the unstructured object that r embeds, for a
+// named struct that does: by pointer or by value, directly or through other
+// embedded structs, so that its methods are promoted from the object. The
+// object is nil, with no error, when r is no such wrapper. st is the type of
+// the wrapper's struct.
+//
+// A wrapper is only accepted when its DeepCopyObject is the one promoted from
+// what it embeds, which the compiler writes (isPromotion): a wrapper with a
+// DeepCopyObject of its own is caller code the layout would call, and is
+// refused, as is one embedding a nil pointer or one whose embedded object
+// cannot be reached. Where this cannot be told, the wrapper is refused.
+func embeddedUnstructured(r apiruntime.Object) (u *unstructured.Unstructured, st reflect.Type, err error) {
 	if r == nil {
-		return nil, false, nil
+		return nil, nil, nil
 	}
+	rv := reflect.ValueOf(r)
 	// A typed nil is refused by callerObjects, with the type named.
-	if rv := reflect.ValueOf(r); rv.Kind() == reflect.Pointer && rv.IsNil() {
-		return nil, false, nil
+	if rv.Kind() == reflect.Pointer && rv.IsNil() {
+		return nil, nil, nil
 	}
-	t := reflect.TypeOf(r)
-	st := t
+	t := rv.Type()
+	st = t
 	for st.Kind() == reflect.Pointer {
 		st = st.Elem()
 	}
-	if st.Kind() != reflect.Struct || st == unstructuredType {
-		return nil, false, nil
-	}
-	var field reflect.StructField
-	for i := 0; i < st.NumField(); i++ {
-		if f := st.Field(i); f.Anonymous && f.Type == unstructuredPtrType {
-			field, wrapped = f, true
-			break
-		}
-	}
-	if !wrapped {
-		return nil, false, nil
+	if st.Kind() != reflect.Struct || st == unstructuredType || st == unstructuredListType || !embedsUnstructured(st, 0) {
+		return nil, nil, nil
 	}
 	if m, ok := t.MethodByName("DeepCopyObject"); !ok || !isPromotion(m.Func.Pointer()) {
-		return nil, true, errors.Errorf("a %s embeds *unstructured.Unstructured but has a DeepCopyObject of its own", st)
+		return nil, st, errors.Errorf("a %s embeds an unstructured object but has a DeepCopyObject of its own", st)
 	}
-	v := reflect.ValueOf(r)
+	v := rv
 	for v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
-	embedded := v.FieldByIndex(field.Index)
-	if embedded.IsNil() || !embedded.CanInterface() {
-		return nil, true, errors.Errorf("a %s embeds a nil *unstructured.Unstructured", st)
+	u, reached := reachEmbedded(v, 0)
+	if !reached {
+		return nil, st, errors.Errorf("a %s embeds a nil *unstructured.Unstructured or an unstructured object that cannot be reached", st)
 	}
-	return embedded.Interface().(*unstructured.Unstructured), true, nil
+	return u, st, nil
+}
+
+// embedsUnstructured reports whether the struct type st embeds an
+// unstructured.Unstructured, or a pointer to one, directly or through another
+// embedded struct.
+func embedsUnstructured(st reflect.Type, depth int) bool {
+	if depth > maxEmbedDepth {
+		// Not followed further: taken for a wrapper, then refused as unreachable.
+		return true
+	}
+	for i := 0; i < st.NumField(); i++ {
+		f := st.Field(i)
+		if !f.Anonymous {
+			continue
+		}
+		if f.Type == unstructuredPtrType || f.Type == unstructuredType {
+			return true
+		}
+		ft := f.Type
+		if ft.Kind() == reflect.Pointer {
+			ft = ft.Elem()
+		}
+		if ft.Kind() == reflect.Struct && ft != unstructuredListType && embedsUnstructured(ft, depth+1) {
+			return true
+		}
+	}
+	return false
+}
+
+// reachEmbedded returns the unstructured object the struct v embeds, by the
+// first path embedsUnstructured finds. It reports false when a pointer on the
+// way is nil, when the object cannot be reached or when v is not addressable
+// where the object is held by value.
+func reachEmbedded(v reflect.Value, depth int) (*unstructured.Unstructured, bool) {
+	if depth > maxEmbedDepth {
+		return nil, false
+	}
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		if !f.Anonymous {
+			continue
+		}
+		fv := v.Field(i)
+		switch {
+		case f.Type == unstructuredPtrType:
+			if fv.IsNil() || !fv.CanInterface() {
+				return nil, false
+			}
+			return fv.Interface().(*unstructured.Unstructured), true
+		case f.Type == unstructuredType:
+			if !fv.CanAddr() || !fv.Addr().CanInterface() {
+				return nil, false
+			}
+			return fv.Addr().Interface().(*unstructured.Unstructured), true
+		}
+		ft := f.Type
+		if ft.Kind() == reflect.Pointer {
+			ft = ft.Elem()
+		}
+		if ft.Kind() != reflect.Struct || ft == unstructuredListType || !embedsUnstructured(ft, depth+1) {
+			continue
+		}
+		if fv.Kind() == reflect.Pointer {
+			if fv.IsNil() {
+				return nil, false
+			}
+			fv = fv.Elem()
+		}
+		return reachEmbedded(fv, depth+1)
+	}
+	return nil, false
 }
 
 // callerObjects returns the unstructured objects r holds as a caller's own: r
@@ -229,29 +311,32 @@ func embeddedUnstructured(r client.Object) (u *unstructured.Unstructured, wrappe
 // and a typed List the walk cannot read, one that holds itself or one that
 // holds an unstructured object with a value that marshalling would call a
 // method of, is refused. The object that fails is returned as bad.
-func callerObjects(r client.Object) (objs []*unstructured.Unstructured, bad *unstructured.Unstructured, err error) {
+//
+// others are the objects a typed List holds that are neither unstructured nor
+// Lists, which the caller looks at for a wrapper that embeds one.
+func callerObjects(r client.Object) (objs []*unstructured.Unstructured, others []apiruntime.Object, bad *unstructured.Unstructured, err error) {
 	if r == nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	// A typed nil holds no object, and a method called on it may panic, here and
 	// in the phases after this one: it is refused, not passed on unread. An
 	// unstructured one is no exception: its accessors dereference it.
 	if v := reflect.ValueOf(r); v.Kind() == reflect.Pointer && v.IsNil() {
-		return nil, nil, errors.Errorf("a nil %T", r)
+		return nil, nil, nil, errors.Errorf("a nil %T", r)
 	}
 	if o, ok := r.(*unstructured.Unstructured); ok {
-		return []*unstructured.Unstructured{o}, nil, nil
+		return []*unstructured.Unstructured{o}, nil, nil, nil
 	}
 	// The walk is bounded, so it goes first: the cycle check below revisits a
 	// List held twice each time it is held.
 	if bad, err := walkHeld(r); err != nil {
-		return nil, bad, err
+		return nil, nil, bad, err
 	}
 	if err := built.RefuseItemCycle(r); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	objs, err = built.HeldItems(r)
-	return objs, nil, err
+	objs, others, err = built.HeldObjects(r)
+	return objs, others, nil, err
 }
 
 // identityOf returns the kind, namespace and name of u for a refusal, read

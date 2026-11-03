@@ -89,6 +89,9 @@ type recursiveEmbed struct {
 // included, from the *Unstructured it embeds.
 type embedsUnstructured struct{ *unstructured.Unstructured }
 
+// embedsValue embeds the Unstructured itself.
+type embedsValue struct{ unstructured.Unstructured }
+
 func hostileCases() map[string]func() client.Object {
 	list := func() *objectItems {
 		l := &objectItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}}
@@ -112,6 +115,18 @@ func hostileCases() map[string]func() client.Object {
 			u := unstructuredObj("v1", "ConfigMap", "default", "cm")
 			u.Object["spec"] = map[string]any{"n": 7}
 			return embedsUnstructured{u}
+		},
+		"wrapper embedding Unstructured by value holds a plain int": func() client.Object {
+			u := unstructuredObj("v1", "ConfigMap", "default", "cm")
+			u.Object["spec"] = map[string]any{"n": 7}
+			return &embedsValue{*u}
+		},
+		"wrapper among the items of a typed List holds a plain int": func() client.Object {
+			u := unstructuredObj("v1", "ConfigMap", "default", "cm")
+			u.Object["spec"] = map[string]any{"n": 7}
+			l := list()
+			l.Items = []runtime.Object{embedsUnstructured{u}}
+			return l
 		},
 		"typed nil wrapper embedding Unstructured": func() client.Object { return (*embedsUnstructured)(nil) },
 		"embedded nil pointer": func() client.Object {
@@ -256,13 +271,16 @@ func runHostile(r func() client.Object) (answers []string) {
 // refusalNames are the cases that every entry point must refuse, and what the
 // refusal names.
 var refusalNames = map[string]string{
-	"typed nil resource":                              "nil *v1.ConfigMap",
-	"typed nil unstructured resource":                 "nil *unstructured.Unstructured",
-	"typed nil wrapper embedding Unstructured":        "nil *fluxcd_test.embedsUnstructured",
-	"embedded nil pointer":                            "struct { *v1.ConfigMap }",
-	"GetObjectKind panics with a string":              "fluxcd_test.kindPanics",
-	"GetObjectKind panics with a nil error":           "fluxcd_test.kindPanics",
-	"marshaler of another package in a private field": "hidingItem",
+	"typed nil resource":                                        "nil *v1.ConfigMap",
+	"typed nil unstructured resource":                           "nil *unstructured.Unstructured",
+	"typed nil wrapper embedding Unstructured":                  "nil *fluxcd_test.embedsUnstructured",
+	"wrapper embedding Unstructured holds a plain int":          "fluxcd_test.embedsUnstructured",
+	"wrapper embedding Unstructured by value holds a plain int": "fluxcd_test.embedsValue",
+	"wrapper among the items of a typed List holds a plain int": "fluxcd_test.embedsUnstructured",
+	"embedded nil pointer":                                      "struct { *v1.ConfigMap }",
+	"GetObjectKind panics with a string":                        "fluxcd_test.kindPanics",
+	"GetObjectKind panics with a nil error":                     "fluxcd_test.kindPanics",
+	"marshaler of another package in a private field":           "hidingItem",
 }
 
 const hostileChildEnv = "KURE_HOSTILE_CASE"
