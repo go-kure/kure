@@ -157,11 +157,13 @@ func callerObjects(r client.Object) (objs []*unstructured.Unstructured, bad *uns
 		}
 		return []*unstructured.Unstructured{o}, nil, nil
 	}
-	if err := built.RefuseItemCycle(r); err != nil {
-		return nil, nil, err
-	}
+	// The walk is bounded, so it goes first: the cycle check below revisits a
+	// List held twice each time it is held.
 	if bad, err := walkHeld(r); err != nil {
 		return nil, bad, err
+	}
+	if err := built.RefuseItemCycle(r); err != nil {
+		return nil, nil, err
 	}
 	objs, err = built.HeldItems(r)
 	return objs, nil, err
@@ -254,9 +256,9 @@ var (
 // anything marshals it, and fails closed. It looks for the unstructured objects
 // r holds, wherever it holds them, and checks each for what marshalling it
 // would call a method of or would not end on (reachable). Interfaces and
-// non-nil pointers are followed, the unexported fields marshalling leaves out
-// are not, and each pointer, map and slice is followed once on a path: one that
-// holds itself is refused, as is a value nested deeper than maxHeldDepth, a
+// non-nil pointers are followed. The unexported fields marshalling leaves out
+// are not, unless the type marshals itself. Each pointer, map and slice is
+// followed once on a path: one that holds itself is refused, as is a value nested deeper than maxHeldDepth, a
 // walk of more than maxJSONNodes values and a value that cannot be read. When
 // an unstructured object fails, bad is a wrapper of its Object map, to name it
 // in the refusal.
@@ -326,7 +328,8 @@ func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
 		}
 		defer delete(w.open, key)
 		for it := v.MapRange(); it.Next(); {
-			if err := w.walk(it.Value(), path+"."+fmt.Sprint(it.Key()), depth+1); err != nil {
+			// The key is not formatted: a key may hold itself.
+			if err := w.walk(it.Value(), path+"[key]", depth+1); err != nil {
 				return err
 			}
 		}
@@ -385,9 +388,12 @@ func (w *heldWalk) walkStruct(v reflect.Value, path string, depth int) error {
 		}
 		return nil
 	}
+	// A type that marshals itself may write any of its fields, a private one
+	// included. Marshalling leaves out the private fields of any other.
+	writesItself := hasMarshaler(v.Type())
 	for i := 0; i < v.NumField(); i++ {
 		f := v.Type().Field(i)
-		if !f.IsExported() && !f.Anonymous {
+		if !f.IsExported() && !f.Anonymous && !writesItself {
 			continue
 		}
 		if err := w.walk(v.Field(i), path+"."+f.Name, depth+1); err != nil {
