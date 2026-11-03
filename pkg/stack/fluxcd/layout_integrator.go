@@ -402,6 +402,11 @@ type integratedPlacement struct {
 	// without a readyExpr for it: keptNodeReadiness judges them once every
 	// patch is placed (go-kure/kure#1214).
 	keptNodeProofs []keptNodeProof
+	// pre is the snapshot of the build of the tree as it stands once every
+	// patch is placed, taken on first use (preSnapshot, preDone) and shared by
+	// keptNodeReadiness and umbrellasDoNotWait; nil when it did not build.
+	pre     *depSnapshot
+	preDone bool
 	// laterPatches maps the namespace/name of a bundle's own Kustomization
 	// that placeBundlePatches wrote a later patch on to what it wrote there:
 	// laterPatchRefusal reads it when a check's build of it fails.
@@ -2267,7 +2272,7 @@ func (p *integratedPlacement) checkKeptNodeCR(host, child *layout.ManifestLayout
 		// umbrella as one on its terminal leaves (R3): umbrellasDoNotWait
 		// accepts that form once the terminal sets are known.
 		p.keptNodeDeps = append(p.keptNodeDeps, keptNodeDependencies{
-			namespace: p.gen.DefaultNamespace, have: kept.readyDependsOn, missing: missing, refusal: refusal,
+			key: key, namespace: p.gen.DefaultNamespace, have: kept.readyDependsOn, missing: missing, refusal: refusal,
 		})
 		return nil
 	}

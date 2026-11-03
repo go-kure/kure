@@ -51,10 +51,12 @@ func patchedProofTree(edit func(root, apps *layout.ManifestLayout, a *kustv1.Kus
 	return root
 }
 
-// A patch in the tree may add a readyExpr to h's plain entry on x, so the entry
-// no longer proves x Ready: x stays a terminal leaf of a beside h. The reading
-// is blanket: a patch on a build that does not include h counts too, as a patch
-// may add patches to another Kustomization and so reach h from there.
+// A patch that lands on h adds a readyExpr to h's plain entry on x, so the
+// entry no longer proves x Ready: x stays a terminal leaf of a beside h. The
+// reading follows the build (go-kure/kure#1226): a patch naming no
+// Kustomization of its build reaches nothing and h's entry still proves x. A
+// patch of a non-member the build does not read may reach h from where the
+// view cannot see, so the entry proves nothing then, as before.
 func TestUmbrellaTerminals_PatchedPlainEntryProvesNothing(t *testing.T) {
 	for name, tc := range map[string]struct {
 		edit func(root, apps *layout.ManifestLayout, a *kustv1.Kustomization)
@@ -81,7 +83,7 @@ func TestUmbrellaTerminals_PatchedPlainEntryProvesNothing(t *testing.T) {
 			},
 			want: []string{"flux-system/h", "flux-system/x"},
 		},
-		"patched by a build that does not include h": {
+		"patch of a non-member the build does not read": {
 			edit: func(root, apps *layout.ManifestLayout, a *kustv1.Kustomization) {
 				elsewhere := &layout.ManifestLayout{Name: "elsewhere", Namespace: root.FullRepoPath()}
 				root.Children = append(root.Children, elsewhere)
@@ -91,6 +93,12 @@ func TestUmbrellaTerminals_PatchedPlainEntryProvesNothing(t *testing.T) {
 				root.Resources = append(root.Resources, b)
 			},
 			want: []string{"flux-system/h", "flux-system/x"},
+		},
+		"patch naming nothing the build holds": {
+			edit: func(root, apps *layout.ManifestLayout, a *kustv1.Kustomization) {
+				a.Spec.Patches = []kustomize.Patch{toAddReadyExpr("nothing-is-named-this")}
+			},
+			want: []string{"flux-system/h"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -171,7 +179,7 @@ func TestKeptNode_PlainEntryProvesNothingWherePatched(t *testing.T) {
 					if reach == "reaches another directory" {
 						p.Spec.Path = layoutPathNamed(t, build, rules, "shop")
 					}
-					p.Spec.Patches = []kustomize.Patch{toAddReadyExpr("nothing-is-named-this")}
+					p.Spec.Patches = []kustomize.Patch{toAddReadyExpr("apps")}
 					if reach == "unreadable non-member patcher" {
 						// An interval Flux substitutes at apply time does not
 						// read in typed form: the copy may carry patches.
@@ -222,7 +230,7 @@ func TestKeptNode_UmbrellaLeafEntriesProveNothingWherePatched(t *testing.T) {
 					if reach == "reaches another directory" {
 						p.Spec.Path = layoutPathNamed(t, build, rules, "shop")
 					}
-					p.Spec.Patches = []kustomize.Patch{toAddReadyExpr("nothing-is-named-this")}
+					p.Spec.Patches = []kustomize.Patch{toAddReadyExpr("apps")}
 					ml.Resources = append(ml.Resources, p)
 				}
 				err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules)
@@ -243,8 +251,9 @@ func TestKeptNode_UmbrellaLeafEntriesProveNothingWherePatched(t *testing.T) {
 // With UmbrellasDoNotWait web's dependsOn on the umbrella platform is written
 // as one on its terminal leaves. b holds a plain entry on a, which proves a
 // Ready, so the leaf is b alone; where the tree holds a patch it may add a
-// readyExpr to that entry, and web waits for a as well (go-kure/kure#1214),
-// whichever directory the patch builds.
+// readyExpr to that entry. A patch that lands on b makes a second write of b
+// with another dependsOn, which is refused; one that builds another directory
+// reaches nothing, and the leaf stays b alone (go-kure/kure#1226).
 func TestUmbrellaRewrite_PatchedEntryLeavesBothLeaves(t *testing.T) {
 	for _, reach := range []string{"none", "reaches b", "reaches another directory"} {
 		for _, placement := range integratedPlacements {
@@ -256,7 +265,7 @@ func TestUmbrellaRewrite_PatchedEntryLeavesBothLeaves(t *testing.T) {
 					if patch != "" {
 						p := handWritten("patch-writer")
 						p.Spec.Path = patch
-						p.Spec.Patches = []kustomize.Patch{toAddReadyExpr("nothing-is-named-this")}
+						p.Spec.Patches = []kustomize.Patch{toAddReadyExpr("b")}
 						c.Node.Children = append(c.Node.Children, &stack.Node{Name: "patcher", Bundle: srBundle("patcher", objApp("patcher-app", p))})
 					}
 					return c
@@ -269,13 +278,19 @@ func TestUmbrellaRewrite_PatchedEntryLeavesBothLeaves(t *testing.T) {
 					patch = hostPathOf(t, func() *stack.Cluster { return build("") }, rules, "web")
 				}
 				ml, err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).CreateLayoutWithResources(build(patch), rules)
+				if reach == "reaches b" {
+					// The patched b and platform's own b are two writes of one
+					// identity with different dependsOn: refused whatever the
+					// rewrite does, so a patch that lands on b cannot be admitted.
+					if err == nil || !strings.Contains(err.Error(), "with different spec.dependsOn") {
+						t.Fatalf("got %v, want the two writes of b refused", err)
+					}
+					return
+				}
 				if err != nil {
 					t.Fatalf("got %v, want the tree admitted", err)
 				}
 				want := []string{"b"}
-				if reach != "none" {
-					want = []string{"a", "b"}
-				}
 				for _, k := range kustomizations(ml) {
 					if k.Name != "web" {
 						continue
@@ -295,7 +310,7 @@ func TestUmbrellaRewrite_PatchedEntryLeavesBothLeaves(t *testing.T) {
 
 // a builds controllers, which holds b, and patches b to add spec.patches; b,
 // which holds no patch itself, builds apps, which holds h, depending on x with
-// a plain entry, and x. The patch b then applies may add a readyExpr to h, so
+// a plain entry, and x. The patch b then applies adds a readyExpr to h, so
 // the entry proves nothing and x is a terminal leaf of a beside h, though no
 // held patch list is in the build that holds h (a scoped reading missed it).
 func TestUmbrellaTerminals_PatchAddedToAnotherKustomizationProvesNothing(t *testing.T) {
@@ -307,7 +322,7 @@ func TestUmbrellaTerminals_PatchAddedToAnotherKustomizationProvesNothing(t *test
 	a := handWritten("a")
 	a.Spec.Path = controllers.FullRepoPath()
 	a.Spec.Patches = []kustomize.Patch{{
-		Patch:  "- op: add\n  path: /spec/patches\n  value: []\n",
+		Patch:  "- op: add\n  path: /spec/patches\n  value:\n  - target: {kind: Kustomization, name: h}\n    patch: |-\n      - op: add\n        path: /spec/dependsOn/0/readyExpr\n        value: \"true\"\n",
 		Target: &kustomize.Selector{Kind: "Kustomization", Name: "b"},
 	}}
 	b := handWritten("b")

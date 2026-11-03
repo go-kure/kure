@@ -169,7 +169,16 @@ func TestKustomizeSchema_ADefinitionAddedDuringTheBuildsIsNotRead(t *testing.T) 
 		inFreshProcess(t, "TestKustomizeSchema_ADefinitionAddedDuringTheBuildsIsNotRead", webDirectory(t, layout.FluxIntegratedPerBundle))
 		return
 	}
+	// The tree is built twice (before and after the rewrite, go-kure/kure#1226),
+	// each build with its own check of the definitions. The definition is added
+	// in the second, the sequence whose end (treeBuilds.finish) is the only
+	// check that sees it.
+	calls := 0
 	restore := fluxstack.SetAfterFirstDefinitionsCheck(func() {
+		calls++
+		if calls != 2 {
+			return
+		}
 		added := []byte(`{"swagger":"2.0","info":{"title":"added","version":"v1"},"paths":{},"definitions":{"io.example.v1.Added":{"type":"object"}}}`)
 		if err := openapi.AddSchema(added); err != nil {
 			t.Errorf("add a schema: %v", err)
@@ -177,6 +186,9 @@ func TestKustomizeSchema_ADefinitionAddedDuringTheBuildsIsNotRead(t *testing.T) 
 	})
 	defer restore()
 	_, err := schemaTree(os.Getenv(webDirEnv), false)
+	if calls != 2 {
+		t.Fatalf("the seam fired %d times, want 2 (a build before the rewrite and one after it)", calls)
+	}
 	if err == nil || !strings.Contains(err.Error(), "not its built-in ones") || !strings.Contains(err.Error(), "while its builds ran") {
 		t.Fatalf("got %v, want the tree refused for a definition added while its builds ran", err)
 	}
@@ -198,9 +210,16 @@ func TestKustomizeSchema_ABuildThatFailsOverAnAddedDefinitionIsNotJudged(t *test
 	// searches: a directory of this test's own, so that a tree another run
 	// left in the shared one is not found.
 	t.Setenv("TMPDIR", t.TempDir())
-	removed := 0
+	// The tree is built twice (before and after the rewrite, go-kure/kure#1226);
+	// the definition is added and the component removed in the second, the
+	// sequence whose end (treeBuilds.finish) is the only check that sees it.
+	removed, calls := 0, 0
 	var addDefinition bool
 	restore := fluxstack.SetAfterFirstDefinitionsCheck(func() {
+		calls++
+		if calls != 2 {
+			return
+		}
 		if addDefinition {
 			added := []byte(`{"swagger":"2.0","info":{"title":"added","version":"v1"},"paths":{},"definitions":{"io.example.v1.Added":{"type":"object"}}}`)
 			if err := openapi.AddSchema(added); err != nil {
@@ -231,17 +250,17 @@ func TestKustomizeSchema_ABuildThatFailsOverAnAddedDefinitionIsNotJudged(t *test
 	// seam found it, so that the case below is not a seam that matched
 	// nothing, in which finish would refuse the added definition all the same.
 	_, err := schemaTree(os.Getenv(webDirEnv), true)
-	if removed != 1 {
-		t.Fatalf("the seam removed %d component directories in the control, want 1", removed)
+	if calls != 2 || removed != 1 {
+		t.Fatalf("the seam fired %d times and removed %d component directories in the control, want 2 and 1", calls, removed)
 	}
 	if err == nil || strings.Contains(err.Error(), "while its builds ran") {
 		t.Fatalf("control: got %v, want the build to fail over the removed component", err)
 	}
 
-	removed, addDefinition = 0, true
+	removed, calls, addDefinition = 0, 0, true
 	_, err = schemaTree(os.Getenv(webDirEnv), true)
-	if removed != 1 {
-		t.Fatalf("the seam removed %d component directories, want 1: the build did not fail, so the refusal below proves nothing", removed)
+	if calls != 2 || removed != 1 {
+		t.Fatalf("the seam fired %d times and removed %d component directories, want 2 and 1: the build did not fail, so the refusal below proves nothing", calls, removed)
 	}
 	if err == nil || !strings.Contains(err.Error(), "not its built-in ones") || !strings.Contains(err.Error(), "while its builds ran") {
 		t.Fatalf("got %v, want the tree refused for a definition added while its builds ran, not for the build that failed over it", err)
