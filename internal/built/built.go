@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/kustomize/api/konfig"
@@ -52,7 +51,7 @@ type Object struct {
 // the items field, a field left out when empty counts as absent,
 // and one written as null or as something that is no array is read as that,
 // whatever the Go value holds beside it. The items are the ones its Go value
-// gives access to, read as the writers serialize them (rawItems): an
+// gives access to, read as the writers serialize them (goItems): an
 // item held as raw JSON is the object that JSON encodes, and an empty item
 // holds nothing, as does one that is a nil pointer, which is written as null.
 // A List among them need not carry object metadata (metav1.List has none) to
@@ -129,7 +128,7 @@ func heldItems(r runtime.Object) []*unstructured.Unstructured {
 	if _, ok := r.(*unstructured.Unstructured); ok {
 		return nil
 	}
-	items, isList, err := apimachineryItems(r)
+	items, isList, _, err := goItems(r)
 	if !isList || err != nil {
 		// An error is refused where the List is read.
 		return nil
@@ -210,11 +209,11 @@ func listItems(obj runtime.Object) (items []Object, isList bool, err error) {
 	if !has {
 		return nil, false, nil
 	}
-	extracted, isList, err := apimachineryItems(obj)
+	extracted, isList, nilEntry, err := goItems(obj)
 	if err != nil {
 		return nil, false, err
 	}
-	if !isList {
+	if !isList || nilEntry {
 		return readItems(written)
 	}
 	// What is written under items decides, as it does for an unstructured
@@ -286,51 +285,6 @@ func writtenAs(items []runtime.Object, held any) bool {
 	return true
 }
 
-// apimachineryItems returns the items of obj where apimachinery reads it as a
-// typed List (meta.IsListType, then meta.ExtractList and meta.GetItemsPtr,
-// with rawItems), and whether it does. Its reflection panics on shapes it
-// does not expect, by
-// k8s.io/apimachinery v0.37.1 pkg/api/meta/help.go: a pointer to a value
-// that is no struct, or a nil embedded pointer on the way to Items
-// (getItemsPtr, :95, reflect.Value.FieldByName); an Items field of interface
-// type that is nil or holds a value of a kind without an element type
-// (:101); a nil entry of an Items slice of runtime.Object (ExtractList,
-// :248-249). It keeps its answer per type (IsListType, :44-67), so a value
-// of a type once taken for a List can panic where its items are read. An
-// object it panics on is no List it can read, and is read from what it
-// writes, as any typed object apimachinery takes for no List. Only those
-// calls are recovered from; rawItems runs after them.
-func apimachineryItems(obj runtime.Object) ([]runtime.Object, bool, error) {
-	var (
-		isList   bool
-		items    []runtime.Object
-		itemsPtr any
-		err      error
-	)
-	read := func() (ok bool) {
-		defer func() {
-			if recover() != nil {
-				ok = false
-			}
-		}()
-		if isList = meta.IsListType(obj); !isList {
-			return true
-		}
-		if items, err = meta.ExtractList(obj); err != nil || len(items) == 0 {
-			return true
-		}
-		itemsPtr, err = meta.GetItemsPtr(obj)
-		return true
-	}
-	if !read() || !isList {
-		return nil, false, nil
-	}
-	if err != nil {
-		return nil, true, err
-	}
-	return rawItems(items, itemsPtr), true, nil
-}
-
 // listRef names a typed List by its type and address.
 type listRef struct {
 	typ reflect.Type
@@ -344,10 +298,10 @@ type listRef struct {
 // the encoder never sees the whole path and the marshalling does not end.
 // Where one of them does not write its Items, the List may have a written
 // form and is refused all the same: the rule is on the list as apimachinery
-// reads it (apimachineryItems), not on what it writes. open has the Lists
+// reads it (goItems), not on what it writes. open has the Lists
 // being read around obj.
 //
-// A List is followed where apimachinery reads it as one (apimachineryItems:
+// A List is followed where apimachinery reads it as one (goItems:
 // a pointer to a struct with an Items field), through what it holds as its
 // items, read as the writers serialize them, so an object beside an item's
 // raw JSON is not. A value that reaches itself another way, through another
@@ -357,7 +311,7 @@ func refuseItemCycle(obj runtime.Object, open map[listRef]bool) error {
 	if _, ok := obj.(*unstructured.Unstructured); ok {
 		return nil
 	}
-	items, isList, err := apimachineryItems(obj)
+	items, isList, _, err := goItems(obj)
 	if !isList || err != nil {
 		// An error is refused where the List is read.
 		return nil
@@ -490,36 +444,6 @@ func writtenObject(obj runtime.Object) (map[string]any, error) {
 	return writtenForm(obj)
 }
 
-// kindOf returns the kind obj reports, or the refusal of an object whose
-// method panics.
-func kindOf(obj runtime.Object) (kind string, err error) {
-	err = callHeld(obj, func() { kind = obj.GetObjectKind().GroupVersionKind().Kind })
-	return kind, err
-}
-
-// callHeld calls f, which calls a method of obj, an object a caller holds, and
-// returns a panic of it as a refusal that names the Go type of obj: a type that
-// embeds a nil pointer panics in the methods it promotes from it. It guards
-// only the calls into the caller's value, never kure's own code. The panic
-// value is not formatted unless it is an error or a string, as a caller's value
-// may hold itself.
-func callHeld(obj runtime.Object, f func()) (err error) {
-	defer func() {
-		if p := recover(); p != nil {
-			cause := "a value that is no error"
-			switch v := p.(type) {
-			case error:
-				cause = v.Error()
-			case string:
-				cause = v
-			}
-			err = errors.Errorf("a method of the %T it holds panicked, so the object cannot be read: %s", obj, cause)
-		}
-	}()
-	f()
-	return nil
-}
-
 // writtenForm returns a typed object as it is written: the writers marshal an
 // object to JSON first.
 func writtenForm(obj runtime.Object) (map[string]any, error) {
@@ -527,10 +451,7 @@ func writtenForm(obj runtime.Object) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var data []byte
-	if panicked := callHeld(obj, func() { data, err = json.Marshal(obj) }); panicked != nil {
-		return nil, panicked
-	}
+	data, err := marshalHeld(obj)
 	if err != nil {
 		return nil, errors.Wrapf(err, "marshal the %s", kind)
 	}
@@ -539,34 +460,4 @@ func writtenForm(obj runtime.Object) (map[string]any, error) {
 		return nil, errors.Wrapf(err, "read the %s as written", kind)
 	}
 	return written, nil
-}
-
-// rawItems returns items, the items meta.ExtractList read from a typed List,
-// as the writers serialize them, with itemsPtr, what meta.GetItemsPtr
-// returned for that List. An item held as a runtime.RawExtension is
-// serialized from its raw JSON when it has any and from its object otherwise
-// (RawExtension.MarshalJSON), so it is read in that order: meta.ExtractList
-// reads the object first, and would name an object the written file does not
-// hold when the two differ. The raw JSON is returned as a runtime.Unknown.
-//
-// meta.ExtractList reads the list, so whatever it accepts as a list of items
-// is accepted and whatever it refuses (an Items pointer that is nil, among
-// others) is refused with its error (apimachineryItems). It decides by the
-// element type of the Items slice, and so does the correction: a named slice
-// type and a pointer to the slice are read alike. An empty item is a nil
-// entry.
-func rawItems(items []runtime.Object, itemsPtr any) []runtime.Object {
-	if len(items) == 0 {
-		return items
-	}
-	slice := reflect.ValueOf(itemsPtr).Elem()
-	if slice.Type().Elem() != reflect.TypeFor[runtime.RawExtension]() {
-		return items
-	}
-	for i := range items {
-		if raw := slice.Index(i).Interface().(runtime.RawExtension).Raw; raw != nil {
-			items[i] = &runtime.Unknown{Raw: raw}
-		}
-	}
-	return items
 }
