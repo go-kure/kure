@@ -72,20 +72,12 @@ func Objects(r runtime.Object) ([]Object, error) {
 	return objects(Object{Object: r}, map[uintptr]bool{})
 }
 
-// HeldCandidates returns the unstructured objects apimachinery takes for the
-// items of the typed List r, and of the typed Lists they are, written or not.
-// For a List apimachinery cannot read, one with a nil item say, they are the
-// ones under its Items field. It reads the Go values and marshals none, so it can run before HeldItems,
-// which reads the List from what it writes. A typed List that holds itself is
-// refused, as in HeldItems. An unstructured r has none.
-func HeldCandidates(r runtime.Object) ([]*unstructured.Unstructured, error) {
-	if _, ok := r.(*unstructured.Unstructured); ok {
-		return nil, nil
-	}
-	if err := refuseItemCycle(r, map[listRef]bool{}); err != nil {
-		return nil, err
-	}
-	return heldItems(r, map[listRef]bool{}), nil
+// RefuseItemCycle fails when the typed List r holds itself among its items,
+// directly or through the typed Lists it holds, as Objects refuses it. It reads
+// the Go values and marshals none, so it can run before anything is written.
+// An unstructured r is no typed List.
+func RefuseItemCycle(r runtime.Object) error {
+	return refuseItemCycle(r, map[listRef]bool{})
 }
 
 // HeldItems returns the unstructured objects the typed List r holds as its
@@ -108,7 +100,7 @@ func HeldItems(r runtime.Object) ([]*unstructured.Unstructured, error) {
 	}
 	items, isList, err := listItems(r)
 	if err != nil {
-		return heldItems(r, map[listRef]bool{}), err
+		return heldItems(r), err
 	}
 	if !isList {
 		return nil, nil
@@ -132,29 +124,15 @@ func HeldItems(r runtime.Object) ([]*unstructured.Unstructured, error) {
 }
 
 // heldItems is the objects apimachinery takes for the items of r, and of the
-// typed Lists they are. Where apimachinery cannot read r's items (readableItems)
-// it is the unstructured objects under r's Items field, nil items skipped. open
-// has the Lists being read around r, so that a List that holds itself under a
-// nil item does not end the walk.
-func heldItems(r runtime.Object, open map[listRef]bool) []*unstructured.Unstructured {
+// typed Lists they are, for a List that holds none of itself.
+func heldItems(r runtime.Object) []*unstructured.Unstructured {
 	if _, ok := r.(*unstructured.Unstructured); ok {
 		return nil
 	}
-	if v := reflect.ValueOf(r); v.Kind() == reflect.Pointer && !v.IsNil() {
-		ref := listRef{typ: v.Type(), ptr: v.Pointer()}
-		if open[ref] {
-			return nil
-		}
-		open[ref] = true
-		defer delete(open, ref)
-	}
 	items, isList, err := apimachineryItems(r)
-	if err != nil {
+	if !isList || err != nil {
 		// An error is refused where the List is read.
 		return nil
-	}
-	if !isList {
-		items = fieldItems(r)
 	}
 	var out []*unstructured.Unstructured
 	for _, item := range items {
@@ -166,50 +144,10 @@ func heldItems(r runtime.Object, open map[listRef]bool) []*unstructured.Unstruct
 			out = append(out, o)
 		case *runtime.Unknown:
 		default:
-			out = append(out, heldItems(o, open)...)
+			out = append(out, heldItems(o)...)
 		}
 	}
 	return out
-}
-
-// fieldItems returns the objects held under the Items field of obj, a pointer
-// to a struct, as Go values: no nil item, and none apimachinery's reflection
-// could not read (meta.ExtractList panics on a nil one). It returns none for a
-// value without an Items slice, array or an interface holding one.
-func fieldItems(obj runtime.Object) (items []runtime.Object) {
-	defer func() {
-		if recover() != nil {
-			items = nil
-		}
-	}()
-	v := reflect.ValueOf(obj)
-	if v.Kind() != reflect.Pointer || v.IsNil() || v.Elem().Kind() != reflect.Struct {
-		return nil
-	}
-	f := v.Elem().FieldByName("Items")
-	for f.IsValid() && f.Kind() == reflect.Interface && !f.IsNil() {
-		f = f.Elem()
-	}
-	if !f.IsValid() || (f.Kind() != reflect.Slice && f.Kind() != reflect.Array) {
-		return nil
-	}
-	for i := 0; i < f.Len(); i++ {
-		e := f.Index(i)
-		var o runtime.Object
-		switch {
-		case e.Kind() == reflect.Interface || e.Kind() == reflect.Pointer:
-			if e.IsNil() {
-				continue
-			}
-			o, _ = e.Interface().(runtime.Object)
-		case e.CanAddr():
-			o, _ = e.Addr().Interface().(runtime.Object)
-		}
-		if o != nil {
-			items = append(items, o)
-		}
-	}
-	return items
 }
 
 // objects is Objects for one object. open has the unstructured Lists that are

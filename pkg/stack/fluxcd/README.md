@@ -1859,7 +1859,10 @@ with a `MarshalJSON` or `MarshalText` method (`json.RawMessage` and `net.IP` amo
 that holds itself through maps and slices, one nested deeper than 1000 levels, one with more than 4
 million values and a byte slice of more than 4 million bytes. A refusal names the layout, the object
 and the field, and replaces no object. kure never calls a method of a caller's value, a marshaler
-included, also not to read a typed `List` that holds such an object. The cases the issue names (a
+included, also not to read a typed `List` that holds such an object. A typed object is walked, field by
+field, before it is written, and refused when it holds itself, when it is nested deeper than 4000
+steps, when the walk meets more than 4 million values or when an unstructured object in it holds a
+value that would call a method when written. The cases the issue names (a
 plain `int` in an object, nested in a `sourceRef`, in a `List`'s items, in a `Source` `spec`) all stay accepted. A
 call that refuses later, for another reason, puts every `Object` map it replaced back, as long as the
 caller does not change the tree during the call. What they still leave out:

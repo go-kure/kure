@@ -27,6 +27,11 @@ const (
 	// is far smaller (the API server stores 1.5 MiB at most); a larger count
 	// is a value that shares its parts so often that its tree is huge.
 	maxJSONNodes = 1 << 22
+
+	// maxHeldDepth is how deep walkHeld follows a typed object, counted in the
+	// pointers, interfaces, fields, elements and values it steps through, which
+	// are several for each level of a value.
+	maxHeldDepth = 4 * maxJSONDepth
 )
 
 // normalizeCallerObjects makes every unstructured object a caller put in the
@@ -137,10 +142,11 @@ func sameMap(a, b map[string]any) bool {
 // itself, or the unstructured items of a typed List r, which a read of the
 // List returns as they are, not as copies.
 //
-// A typed List is read from what it writes, and writing it marshals the
-// unstructured objects it holds. So each of them it holds, written or not, is
-// first checked for a value that marshalling would call a method of, or would
-// not end on (reachable). The object that fails is returned as bad.
+// A typed List is read from what it writes, and writing it marshals what it
+// holds. So before that every value reachable from it is walked (walkHeld),
+// and a typed List the walk cannot read, one that holds itself or one that
+// holds an unstructured object with a value that marshalling would call a
+// method of, is refused. The object that fails is returned as bad.
 func callerObjects(r client.Object) (objs []*unstructured.Unstructured, bad *unstructured.Unstructured, err error) {
 	switch o := r.(type) {
 	case nil:
@@ -151,14 +157,11 @@ func callerObjects(r client.Object) (objs []*unstructured.Unstructured, bad *uns
 		}
 		return []*unstructured.Unstructured{o}, nil, nil
 	}
-	held, err := built.HeldCandidates(r)
-	if err != nil {
+	if err := built.RefuseItemCycle(r); err != nil {
 		return nil, nil, err
 	}
-	for _, u := range held {
-		if err := reachable(u.Object); err != nil {
-			return held, u, err
-		}
+	if bad, err := walkHeld(r); err != nil {
+		return nil, bad, err
 	}
 	objs, err = built.HeldItems(r)
 	return objs, nil, err
@@ -240,6 +243,165 @@ func jsonContentOf(m map[string]any) (map[string]any, error) {
 	}
 	content, _ := v.(map[string]any)
 	return content, nil
+}
+
+var (
+	unstructuredType     = reflect.TypeFor[unstructured.Unstructured]()
+	unstructuredListType = reflect.TypeFor[unstructured.UnstructuredList]()
+)
+
+// walkHeld walks every value reachable from the typed object r, before
+// anything marshals it, and fails closed. It looks for the unstructured objects
+// r holds, wherever it holds them, and checks each for what marshalling it
+// would call a method of or would not end on (reachable). Interfaces and
+// non-nil pointers are followed, the unexported fields marshalling leaves out
+// are not, and each pointer, map and slice is followed once on a path: one that
+// holds itself is refused, as is a value nested deeper than maxHeldDepth, a
+// walk of more than maxJSONNodes values and a value that cannot be read. When
+// an unstructured object fails, bad is a wrapper of its Object map, to name it
+// in the refusal.
+func walkHeld(r client.Object) (bad *unstructured.Unstructured, err error) {
+	w := &heldWalk{open: map[heldKey]bool{}}
+	err = w.walk(reflect.ValueOf(r), "", 0)
+	return w.bad, err
+}
+
+// heldKey names a pointer, a map or a slice being walked.
+type heldKey struct {
+	typ reflect.Type
+	ptr uintptr
+	len int
+}
+
+type heldWalk struct {
+	nodes int
+	open  map[heldKey]bool
+	bad   *unstructured.Unstructured
+}
+
+// scalarKind reports whether a value of kind k holds nothing to walk into.
+func scalarKind(k reflect.Kind) bool {
+	switch k {
+	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.String,
+		reflect.Chan, reflect.Func, reflect.UnsafePointer:
+		return true
+	default:
+		return false
+	}
+}
+
+func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
+	if w.nodes++; w.nodes > maxJSONNodes {
+		return errors.Errorf("%s holds more than %d values", whereTyped(path), maxJSONNodes)
+	}
+	if depth > maxHeldDepth {
+		return errors.Errorf("%s holds a value nested deeper than %d steps", whereTyped(path), maxHeldDepth)
+	}
+	switch v.Kind() {
+	case reflect.Invalid:
+		return nil
+	case reflect.Interface:
+		if v.IsNil() {
+			return nil
+		}
+		return w.walk(v.Elem(), path, depth)
+	case reflect.Pointer:
+		if v.IsNil() {
+			return nil
+		}
+		if done, err := w.enter(v, heldKey{typ: v.Type(), ptr: v.Pointer()}, path); done || err != nil {
+			return err
+		}
+		defer delete(w.open, heldKey{typ: v.Type(), ptr: v.Pointer()})
+		return w.walk(v.Elem(), path, depth+1)
+	case reflect.Map:
+		if v.IsNil() || scalarKind(v.Type().Elem().Kind()) {
+			return nil
+		}
+		key := heldKey{typ: v.Type(), ptr: v.Pointer()}
+		if _, err := w.enter(v, key, path); err != nil {
+			return err
+		}
+		defer delete(w.open, key)
+		for it := v.MapRange(); it.Next(); {
+			if err := w.walk(it.Value(), path+"."+fmt.Sprint(it.Key()), depth+1); err != nil {
+				return err
+			}
+		}
+		return nil
+	case reflect.Slice, reflect.Array:
+		if v.Kind() == reflect.Slice && v.IsNil() || scalarKind(v.Type().Elem().Kind()) {
+			return nil
+		}
+		if v.Len() > maxJSONNodes-w.nodes {
+			return errors.Errorf("%s holds more than %d values", whereTyped(path), maxJSONNodes)
+		}
+		if v.Kind() == reflect.Slice && v.Len() > 0 {
+			key := heldKey{typ: v.Type(), ptr: v.Pointer(), len: v.Len()}
+			if _, err := w.enter(v, key, path); err != nil {
+				return err
+			}
+			defer delete(w.open, key)
+		}
+		for i := 0; i < v.Len(); i++ {
+			if err := w.walk(v.Index(i), fmt.Sprintf("%s[%d]", path, i), depth+1); err != nil {
+				return err
+			}
+		}
+		return nil
+	case reflect.Struct:
+		return w.walkStruct(v, path, depth)
+	default:
+		// A scalar, a channel, a function: nothing in it for marshalling to call.
+		return nil
+	}
+}
+
+// enter marks the pointer, map or slice v, with its key, as open on the path.
+// A key already open is a value that holds itself: it is refused.
+func (w *heldWalk) enter(v reflect.Value, key heldKey, path string) (done bool, err error) {
+	if w.open[key] {
+		return true, errors.Errorf("%s holds itself", whereTyped(path))
+	}
+	w.open[key] = true
+	return false, nil
+}
+
+func (w *heldWalk) walkStruct(v reflect.Value, path string, depth int) error {
+	switch v.Type() {
+	case unstructuredType, unstructuredListType:
+		if !v.CanInterface() {
+			return errors.Errorf("%s holds an unstructured object that cannot be read", whereTyped(path))
+		}
+		m, _ := v.FieldByName("Object").Interface().(map[string]any)
+		if err := reachable(m); err != nil {
+			w.bad = &unstructured.Unstructured{Object: m}
+			return err
+		}
+		if v.Type() == unstructuredListType {
+			return w.walk(v.FieldByName("Items"), path+".Items", depth+1)
+		}
+		return nil
+	}
+	for i := 0; i < v.NumField(); i++ {
+		f := v.Type().Field(i)
+		if !f.IsExported() && !f.Anonymous {
+			continue
+		}
+		if err := w.walk(v.Field(i), path+"."+f.Name, depth+1); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func whereTyped(path string) string {
+	if path == "" {
+		return "the typed object"
+	}
+	return "the typed object" + path
 }
 
 // reachable reports a value in m that marshalling it would call a method of,
