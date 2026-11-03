@@ -225,13 +225,21 @@ func hostileCluster(r client.Object) *stack.Cluster {
 // hand that holds r, and returns what each entry point answered, named. A walk
 // that fails is reported as it came. The walker skips some objects (a typed
 // nil), so only the hand-built layout reaches the entry points with those.
-func runHostile(r func() client.Object) (answers []string) {
+//
+// A heavy case (heavyCases) runs on the first placement only, on the three
+// entry points that call normalizeCallerObjects, and not on the hand-built
+// layouts and CreateLayoutWithResources: see heavyCases.
+func runHostile(r func() client.Object, heavy bool) (answers []string) {
 	answer := func(entry string, err error) {
 		if err != nil {
 			answers = append(answers, entry+": "+err.Error())
 		}
 	}
-	for _, placement := range allPlacements {
+	placements := allPlacements
+	if heavy {
+		placements = allPlacements[:1]
+	}
+	for _, placement := range placements {
 		rules := withPlacement(nodeOnly, placement)
 		walk := func() (*stack.Cluster, *layout.ManifestLayout, bool) {
 			c := hostileCluster(r())
@@ -250,8 +258,14 @@ func runHostile(r func() client.Object) (answers []string) {
 		if c, ml, ok := walk(); ok {
 			answer(string(placement)+" IntegrateWithLayout", fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules))
 		}
+		if heavy {
+			continue
+		}
 		_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(hostileCluster(r()), rules)
 		answer(string(placement)+" CreateLayoutWithResources", err)
+	}
+	if heavy {
+		return answers
 	}
 	// A layout built by hand holds r as it is, with no origins: the entry
 	// points that need none answer for r itself.
@@ -283,6 +297,22 @@ var refusalNames = map[string]string{
 	"marshaler of another package in a private field":           "hidingItem",
 }
 
+// heavyCases are the cases that run to a bound of the walk (maxJSONNodes): each
+// entry point reads millions of values before it refuses, and under -race that
+// is most of the matrix's run time. The bound is enforced by one code path,
+// walkHeld, which the three entry points below reach through
+// normalizeCallerObjects, each by its own call, so each is still checked:
+//   - GenerateFromLayout (resource_generator.go),
+//   - UmbrellaTerminals (umbrella_terminals.go),
+//   - IntegrateWithLayout (layout_integrator.go).
+//
+// What a heavy case skips repeats these: the other placements (the walk of the
+// resource does not depend on the placement), the hand-built layouts (the same
+// three entry points, on a layout without origins) and
+// CreateLayoutWithResources (a WalkCluster followed by IntegrateWithLayout).
+// The depth stays: the walk to maxJSONNodes values is what the case proves.
+var heavyCases = map[string]bool{"lists held twice": true}
+
 const hostileChildEnv = "KURE_HOSTILE_CASE"
 
 // TestHostileResources_Child is the child process of TestHostileResources.
@@ -295,7 +325,7 @@ func TestHostileResources_Child(t *testing.T) {
 	if !ok {
 		t.Fatalf("no case %q", name)
 	}
-	for _, a := range runHostile(r) {
+	for _, a := range runHostile(r, heavyCases[name]) {
 		fmt.Println("ANSWER " + a)
 	}
 }
