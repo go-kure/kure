@@ -1,6 +1,7 @@
 package fluxcd
 
 import (
+	"crypto/x509"
 	"encoding/json"
 	"math"
 	"net"
@@ -135,9 +136,16 @@ func TestNormalizeCallerObjects(t *testing.T) {
 	})
 
 	t.Run("nil roots, layouts and objects are skipped", func(t *testing.T) {
-		var nilObj *unstructured.Unstructured
-		if err := normalizeForTest(nil, layoutOf(nilObj, nil)); err != nil {
+		if err := normalizeForTest(nil, layoutOf(nil)); err != nil {
 			t.Fatal(err)
+		}
+	})
+
+	t.Run("a typed nil object is refused, naming it", func(t *testing.T) {
+		var nilObj *unstructured.Unstructured
+		err := normalizeForTest(layoutOf(nilObj))
+		if err == nil || !strings.Contains(err.Error(), "nil *unstructured.Unstructured") {
+			t.Fatalf("got %v, want a refusal naming a nil *unstructured.Unstructured", err)
 		}
 	})
 
@@ -523,6 +531,44 @@ func TestTrustedPath(t *testing.T) {
 	} {
 		if got := trustedPath(path); got != want {
 			t.Errorf("trustedPath(%q) = %v, want %v", path, got, want)
+		}
+	}
+}
+
+// promotesTrusted embeds a trusted type and so promotes its marshaler.
+type promotesTrusted struct{ *unstructured.Unstructured }
+
+// declaresOwn embeds a trusted type but declares a MarshalJSON of its own.
+type declaresOwn struct{ *unstructured.Unstructured }
+
+func (declaresOwn) MarshalJSON() ([]byte, error) { return []byte(`{}`), nil }
+
+// ownMarshaler is a marshaler of this package, which is not trusted.
+type ownMarshaler struct{}
+
+func (ownMarshaler) MarshalJSON() ([]byte, error) { return []byte(`{}`), nil }
+
+// promotesUntrusted embeds a marshaler of a package that is not trusted.
+type promotesUntrusted struct{ x509.OID }
+
+// A named struct that only promotes a marshaler from an embedded trusted type
+// is trusted; one that declares its own, or promotes one from a type that is
+// not trusted, is not.
+func TestPromotedFromTrusted(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		typ  reflect.Type
+		want bool
+	}{
+		{"promotes a trusted marshaler", reflect.TypeFor[promotesTrusted](), true},
+		{"promotes a trusted marshaler, addressed", reflect.TypeFor[*promotesTrusted](), true},
+		{"declares its own", reflect.TypeFor[declaresOwn](), false},
+		{"promotes an untrusted marshaler", reflect.TypeFor[promotesUntrusted](), false},
+		{"is the marshaler", reflect.TypeFor[ownMarshaler](), false},
+		{"no marshaler", reflect.TypeFor[struct{ A int }](), false},
+	} {
+		if got := promotedFromTrusted(tc.typ); got != tc.want {
+			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
 		}
 	}
 }

@@ -11,6 +11,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -90,7 +91,8 @@ func hostileCases() map[string]func() client.Object {
 		return l
 	}
 	return map[string]func() client.Object{
-		"typed nil resource": func() client.Object { return (*corev1.ConfigMap)(nil) },
+		"typed nil resource":              func() client.Object { return (*corev1.ConfigMap)(nil) },
+		"typed nil unstructured resource": func() client.Object { return (*unstructured.Unstructured)(nil) },
 		"embedded nil pointer": func() client.Object {
 			return &struct{ *corev1.ConfigMap }{}
 		},
