@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 
+	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+
 	"github.com/go-kure/kure/pkg/errors"
 )
 
@@ -118,18 +120,39 @@ func newDepSnapshot(t *kustomizationTree, existenceOnly bool) (*depSnapshot, err
 // otherSpecs keeps: the tree may hold a patching copy and a plain one of a
 // key in two directories, and which of them otherSpecs keeps depends on the
 // order the tree lists them in (go-kure/kure#1243).
+//
+// The copies the tree holds are not all a build makes: a local-config
+// Kustomization that a patch keeps (builtItems) is in no copy list, only in
+// the result of the writer that keeps it. The occurrences of the view, those
+// the apply of their writer writes, are judged the same way.
 func (v *builtView) unbuiltPatcher() error {
 	sources := map[string]bool{}
 	for _, m := range v.t.kusts {
 		sources[sourceRefKey(m.Spec.SourceRef, m.Namespace)] = true
+	}
+	patchesTree := func(k *kustv1.Kustomization) bool {
+		return patchesBuild(k) && k.Spec.KubeConfig == nil && v.t.directoryAt(k.Spec.Path) != nil && sources[sourceRefKey(k.Spec.SourceRef, k.Namespace)]
 	}
 	for _, key := range sortedKeys(v.t.otherSpecs) {
 		if _, built := v.writerSpec[key]; built {
 			continue
 		}
 		for _, k := range v.t.copies[key] {
-			if patchesBuild(k) && k.Spec.KubeConfig == nil && v.t.directoryAt(k.Spec.Path) != nil && sources[sourceRefKey(k.Spec.SourceRef, k.Namespace)] {
+			if patchesTree(k) {
 				return errors.Errorf("Flux Kustomization %q patches what it builds, a directory of the tree, and the build of the tree does not read it as a writer", key)
+			}
+		}
+	}
+	for _, key := range sortedKeys(v.occurrences) {
+		if _, built := v.writerSpec[key]; built {
+			continue
+		}
+		for _, o := range v.occurrences[key] {
+			if o.obj == nil || o.writer == key || !v.applies(o) {
+				continue
+			}
+			if k, err := typedKustomization(o.obj); err == nil && patchesTree(k) {
+				return errors.Errorf("Flux Kustomization %q on Source %q patches what it builds, a directory of the tree, and the build of the tree does not read it as a writer", key, sourceRefKey(k.Spec.SourceRef, k.Namespace))
 			}
 		}
 	}
