@@ -9,9 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
@@ -574,12 +576,14 @@ func TestCallerObject_MapKeyThatHoldsItselfDoesNotOverflow(t *testing.T) {
 	_, _ = fluxstack.UmbrellaTerminals(ml)
 }
 
-// hidingItem holds an unstructured object in a private field and writes it
-// through its own marshaler, so marshalling reaches what no other type's
-// private field would.
-type hidingItem struct{ u *unstructured.Unstructured }
+// hidingItem holds an unstructured object in a private field, one struct down,
+// and writes it through its own marshaler: marshalling reaches what the walk
+// of fields does not.
+type hidingItem struct {
+	inner struct{ u *unstructured.Unstructured }
+}
 
-func (h hidingItem) MarshalJSON() ([]byte, error) { return json.Marshal(h.u) }
+func (h hidingItem) MarshalJSON() ([]byte, error) { return json.Marshal(h.inner.u) }
 
 type hidingHolder struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -589,15 +593,67 @@ type hidingHolder struct {
 
 func (o *hidingHolder) DeepCopyObject() runtime.Object { c := *o; return &c }
 
-func TestCallerObject_PrivateFieldOfSelfMarshalingTypeIsRefused(t *testing.T) {
+// A type that marshals itself and is not from a trusted package is refused
+// wherever the object holds it, with its type named, and is never called.
+func TestCallerObject_SelfMarshalingTypeOfAnotherPackageIsRefused(t *testing.T) {
 	panicMarshalCalls = 0
 	cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
 	cm.Object["spec"] = map[string]any{"m": panicMarshaler{}}
-	o := &hidingHolder{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Thing"}, Hidden: hidingItem{u: cm}}
+	o := &hidingHolder{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Thing"}}
+	o.Hidden.inner.u = cm
 	o.Name, o.Namespace = "holder", "default"
-	refusedWithoutPanic(t, o, "cannot be read")
+	refusedWithoutPanic(t, o, "hidingItem")
 	if panicMarshalCalls != 0 {
 		t.Errorf("the marshaler was called %d times", panicMarshalCalls)
+	}
+}
+
+// key writes itself as text, and holds an unstructured object.
+type key struct{ U *unstructured.Unstructured }
+
+func (k key) MarshalText() ([]byte, error) { return json.Marshal(k.U) }
+
+type keyedMarshaler struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Keyed             map[key]any `json:"keyed,omitempty"`
+}
+
+func (o *keyedMarshaler) DeepCopyObject() runtime.Object { c := *o; return &c }
+
+func TestCallerObject_MapKeyThatMarshalsItselfIsRefused(t *testing.T) {
+	panicMarshalCalls = 0
+	cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
+	cm.Object["spec"] = map[string]any{"m": panicMarshaler{}}
+	o := &keyedMarshaler{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Thing"}, Keyed: map[key]any{{U: cm}: nil}}
+	o.Name, o.Namespace = "holder", "default"
+	refusedWithoutPanic(t, o, "fluxcd_test.key")
+	if panicMarshalCalls != 0 {
+		t.Errorf("the marshaler was called %d times", panicMarshalCalls)
+	}
+}
+
+// trustedHolder holds types of trusted packages that marshal themselves.
+type trustedHolder struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	When              metav1.Time        `json:"when"`
+	Size              resource.Quantity  `json:"size"`
+	Port              intstr.IntOrString `json:"port"`
+	Raw               json.RawMessage    `json:"raw,omitempty"`
+}
+
+func (o *trustedHolder) DeepCopyObject() runtime.Object { c := *o; return &c }
+
+func TestCallerObject_SelfMarshalingTypesOfTrustedPackagesAreAccepted(t *testing.T) {
+	o := &trustedHolder{
+		TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Thing"},
+		When:     metav1.Now(), Size: resource.MustParse("1Gi"), Port: intstr.FromInt32(80), Raw: json.RawMessage(`{}`),
+	}
+	o.Name, o.Namespace = "holder", "default"
+	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{o}}
+	if _, err := fluxstack.UmbrellaTerminals(ml); err != nil && strings.Contains(err.Error(), "trusted package") {
+		t.Errorf("got %v, want trusted types accepted", err)
 	}
 }
 

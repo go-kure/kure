@@ -1899,7 +1899,10 @@ and the field, and replaces no object. kure never calls a method of a caller's v
 included, also not to read a typed `List` that holds such an object. A typed object is walked, field by
 field, before it is written, and refused when it holds itself, when it is nested deeper than 4000
 steps, when the walk meets more than 4 million values or when an unstructured object in it holds a
-value that would call a method when written. The cases the issue names (a
+value that would call a method when written. A typed object that holds a type with a `MarshalJSON`,
+`MarshalText` or `MarshalYAML` method, as a field, an element or a map key, is refused, naming the
+type, unless the type is from the standard library, `k8s.io`, `sigs.k8s.io`, `github.com/fluxcd` or
+`github.com/go-kure`. The cases the issue names (a
 plain `int` in an object, nested in a `sourceRef`, in a `List`'s items, in a `Source` `spec`) all stay accepted. A
 call that refuses later, for another reason, puts every `Object` map it replaced back, as long as the
 caller does not change the tree during the call. What they still leave out:

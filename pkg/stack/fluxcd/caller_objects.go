@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -256,10 +257,12 @@ var (
 // anything marshals it, and fails closed. It looks for the unstructured objects
 // r holds, wherever it holds them, and checks each for what marshalling it
 // would call a method of or would not end on (reachable). Interfaces and
-// non-nil pointers are followed. The unexported fields marshalling leaves out
-// are not, unless the type marshals itself. Each pointer, map and slice is
-// followed once on a path: one that holds itself is refused, as is a value nested deeper than maxHeldDepth, a
-// walk of more than maxJSONNodes values and a value that cannot be read. When
+// non-nil pointers are followed; the unexported fields marshalling leaves out
+// are not. A type of r that marshals itself, a map key included, is refused
+// unless its package is trusted (checkType). Each pointer, map and slice is
+// followed once on a path: one that holds itself is refused, as is a value
+// nested deeper than maxHeldDepth, a walk of more than maxJSONNodes values and
+// a value that cannot be read. When
 // an unstructured object fails, bad is a wrapper of its Object map, to name it
 // in the refusal.
 func walkHeld(r client.Object) (bad *unstructured.Unstructured, err error) {
@@ -276,9 +279,10 @@ type heldKey struct {
 }
 
 type heldWalk struct {
-	nodes int
-	open  map[heldKey]bool
-	bad   *unstructured.Unstructured
+	nodes   int
+	open    map[heldKey]bool
+	checked map[reflect.Type]bool
+	bad     *unstructured.Unstructured
 }
 
 // scalarKind reports whether a value of kind k holds nothing to walk into.
@@ -309,6 +313,12 @@ func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
 			return nil
 		}
 		return w.walk(v.Elem(), path, depth)
+	default:
+	}
+	if err := w.checkType(v.Type(), path); err != nil {
+		return err
+	}
+	switch v.Kind() {
 	case reflect.Pointer:
 		if v.IsNil() {
 			return nil
@@ -319,6 +329,14 @@ func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
 		defer delete(w.open, heldKey{typ: v.Type(), ptr: v.Pointer()})
 		return w.walk(v.Elem(), path, depth+1)
 	case reflect.Map:
+		// A key is written by its marshaler, if it has one, and a type is checked
+		// before any shortcut. A key is not formatted: it may hold itself.
+		if err := w.checkType(v.Type().Key(), path+"[key]"); err != nil {
+			return err
+		}
+		if err := w.checkType(v.Type().Elem(), path+"[key]"); err != nil {
+			return err
+		}
 		if v.IsNil() || scalarKind(v.Type().Elem().Kind()) {
 			return nil
 		}
@@ -328,13 +346,15 @@ func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
 		}
 		defer delete(w.open, key)
 		for it := v.MapRange(); it.Next(); {
-			// The key is not formatted: a key may hold itself.
 			if err := w.walk(it.Value(), path+"[key]", depth+1); err != nil {
 				return err
 			}
 		}
 		return nil
 	case reflect.Slice, reflect.Array:
+		if err := w.checkType(v.Type().Elem(), path+"[]"); err != nil {
+			return err
+		}
 		if v.Kind() == reflect.Slice && v.IsNil() || scalarKind(v.Type().Elem().Kind()) {
 			return nil
 		}
@@ -360,6 +380,43 @@ func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
 		// A scalar, a channel, a function: nothing in it for marshalling to call.
 		return nil
 	}
+}
+
+// checkType refuses a type that marshals itself unless its package is trusted.
+// Such a method may write what the walk cannot see, from a private field say,
+// and may call anything. A package is trusted when it is in the standard
+// library, in k8s.io, sigs.k8s.io, github.com/fluxcd or github.com/go-kure,
+// and is not a test package. A type of no package, a struct that embeds a
+// marshaler for one, is not trusted.
+func (w *heldWalk) checkType(t reflect.Type, path string) error {
+	if t.Kind() == reflect.Interface || w.checked[t] {
+		return nil
+	}
+	if w.checked == nil {
+		w.checked = map[reflect.Type]bool{}
+	}
+	if !hasMarshaler(t) || trustedPackage(t) {
+		w.checked[t] = true
+		return nil
+	}
+	return errors.Errorf("%s holds a %s, which marshals itself and is not from a trusted package", whereTyped(path), t)
+}
+
+// trustedPackagePrefixes are the module paths whose marshalers are trusted.
+var trustedPackagePrefixes = []string{"k8s.io/", "sigs.k8s.io/", "github.com/fluxcd/", "github.com/go-kure/"}
+
+func trustedPackage(t reflect.Type) bool {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	p := t.PkgPath()
+	switch {
+	case p == "" || strings.HasSuffix(p, "_test"):
+		return false
+	case !strings.Contains(strings.SplitN(p, "/", 2)[0], "."):
+		return true // the standard library
+	}
+	return slices.ContainsFunc(trustedPackagePrefixes, func(prefix string) bool { return strings.HasPrefix(p, prefix) })
 }
 
 // enter marks the pointer, map or slice v, with its key, as open on the path.
@@ -388,12 +445,11 @@ func (w *heldWalk) walkStruct(v reflect.Value, path string, depth int) error {
 		}
 		return nil
 	}
-	// A type that marshals itself may write any of its fields, a private one
-	// included. Marshalling leaves out the private fields of any other.
-	writesItself := hasMarshaler(v.Type())
+	// Marshalling leaves out the private fields of a struct. A type that
+	// marshals itself and could write one is refused by checkType.
 	for i := 0; i < v.NumField(); i++ {
 		f := v.Type().Field(i)
-		if !f.IsExported() && !f.Anonymous && !writesItself {
+		if !f.IsExported() && !f.Anonymous {
 			continue
 		}
 		if err := w.walk(v.Field(i), path+"."+f.Name, depth+1); err != nil {
@@ -444,13 +500,14 @@ var (
 	jsonNumberType    = reflect.TypeFor[json.Number]()
 	jsonMarshalerType = reflect.TypeFor[json.Marshaler]()
 	textMarshalerType = reflect.TypeFor[encoding.TextMarshaler]()
+	yamlMarshalerType = reflect.TypeFor[interface{ MarshalYAML() (any, error) }]()
 )
 
 // hasMarshaler reports whether a value of type t, or one addressed, marshals
 // itself, which the converter refuses and never calls.
 func hasMarshaler(t reflect.Type) bool {
 	for _, t := range []reflect.Type{t, reflect.PointerTo(t)} {
-		if t.Implements(jsonMarshalerType) || t.Implements(textMarshalerType) {
+		if t.Implements(jsonMarshalerType) || t.Implements(textMarshalerType) || t.Implements(yamlMarshalerType) {
 			return true
 		}
 	}
