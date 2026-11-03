@@ -337,7 +337,9 @@ func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
 		if err := w.checkType(v.Type().Elem(), path+"[key]"); err != nil {
 			return err
 		}
-		if v.IsNil() || scalarKind(v.Type().Elem().Kind()) {
+		// An interface key holds any type: the keys are walked, as the values are.
+		keys := v.Type().Key().Kind() == reflect.Interface
+		if v.IsNil() || scalarKind(v.Type().Elem().Kind()) && !keys {
 			return nil
 		}
 		key := heldKey{typ: v.Type(), ptr: v.Pointer()}
@@ -346,6 +348,11 @@ func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
 		}
 		defer delete(w.open, key)
 		for it := v.MapRange(); it.Next(); {
+			if keys {
+				if err := w.walk(it.Key(), path+"[key]", depth+1); err != nil {
+					return err
+				}
+			}
 			if err := w.walk(it.Value(), path+"[key]", depth+1); err != nil {
 				return err
 			}
@@ -384,9 +391,9 @@ func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
 
 // checkType refuses a type that marshals itself unless its package is trusted.
 // Such a method may write what the walk cannot see, from a private field say,
-// and may call anything. A package is trusted when it is in the standard
-// library, in k8s.io, sigs.k8s.io, github.com/fluxcd or github.com/go-kure,
-// and is not a test package. A type of no package, a struct that embeds a
+// and may call anything. A package is trusted when it is one of
+// trustedStdPackages, or in k8s.io, sigs.k8s.io, github.com/fluxcd or
+// github.com/go-kure, and is not a test package. A type of no package, a struct that embeds a
 // marshaler for one, is not trusted.
 func (w *heldWalk) checkType(t reflect.Type, path string) error {
 	if t.Kind() == reflect.Interface || w.checked[t] {
@@ -402,19 +409,29 @@ func (w *heldWalk) checkType(t reflect.Type, path string) error {
 	return errors.Errorf("%s holds a %s, which marshals itself and is not from a trusted package", whereTyped(path), t)
 }
 
-// trustedPackagePrefixes are the module paths whose marshalers are trusted.
-var trustedPackagePrefixes = []string{"k8s.io/", "sigs.k8s.io/", "github.com/fluxcd/", "github.com/go-kure/"}
+var (
+	// trustedPackagePrefixes are the module paths whose marshalers are trusted.
+	trustedPackagePrefixes = []string{"k8s.io/", "sigs.k8s.io/", "github.com/fluxcd/", "github.com/go-kure/"}
+
+	// trustedStdPackages are the standard library packages that define a
+	// marshaler. A path with no dot is not enough: package main and a caller's
+	// module of a short name have none.
+	trustedStdPackages = []string{"encoding/json", "encoding/json/jsontext", "encoding/json/v2", "log/slog", "math/big", "net", "net/netip", "net/url", "regexp", "time"}
+)
 
 func trustedPackage(t reflect.Type) bool {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	p := t.PkgPath()
+	return trustedPath(t.PkgPath())
+}
+
+func trustedPath(p string) bool {
 	switch {
 	case p == "" || strings.HasSuffix(p, "_test"):
 		return false
-	case !strings.Contains(strings.SplitN(p, "/", 2)[0], "."):
-		return true // the standard library
+	case slices.Contains(trustedStdPackages, p):
+		return true
 	}
 	return slices.ContainsFunc(trustedPackagePrefixes, func(prefix string) bool { return strings.HasPrefix(p, prefix) })
 }
