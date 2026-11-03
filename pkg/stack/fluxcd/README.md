@@ -1905,7 +1905,10 @@ type, unless the type is from `k8s.io`, `sigs.k8s.io`, `github.com/fluxcd`, `git
 one of the standard library packages that define such a type (`time`, `net`, `net/netip`, `net/url`,
 `math/big`, `regexp`, `log/slog` and `encoding/json`). A type of `package main` is not trusted. A typed resource whose own method panics when kure reads
 its kind (a struct that embeds a nil pointer) is refused, naming the layout, the resource's place in it
-and its Go type. The cases the issue names (a
+and its Go type; so is a typed nil resource. The one place kure calls a method of a caller's object is
+guarded: a panic there is a refusal that names only the Go type of the panic value, never its text. kure reads
+the items of a `List` by reflection and never formats a caller's object, so an item that is no
+object cannot make it format without end. The cases the issue names (a
 plain `int` in an object, nested in a `sourceRef`, in a `List`'s items, in a `Source` `spec`) all stay accepted. A
 call that refuses later, for another reason, puts every `Object` map it replaced back, as long as the
 caller does not change the tree during the call. What they still leave out:
