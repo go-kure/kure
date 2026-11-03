@@ -2,11 +2,13 @@ package fluxcd
 
 import (
 	"encoding"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
 	"slices"
+	"strconv"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,9 +42,9 @@ const (
 // A value of any other shape refuses the call, with the layout, the object
 // and the field named, and no object is replaced then. So does a value that
 // holds itself, one nested deeper than maxJSONDepth and one with more than
-// maxJSONNodes values. Nothing the caller built is ever marshalled or
-// asked to marshal itself: a marshaler could not be stopped on a value that
-// holds itself.
+// maxJSONNodes values. No method of a value the caller built is ever called,
+// also not to read a typed List that holds it: a marshaler could not be
+// stopped on a value that holds itself.
 //
 // The objects are those in each layout's Resources, and the unstructured
 // objects a typed List in them holds, directly or through the typed Lists it
@@ -63,7 +65,8 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 	seenLayout := map[*layout.ManifestLayout]bool{}
 	seenObject := map[*unstructured.Unstructured]bool{}
 	refuse := func(l *layout.ManifestLayout, u *unstructured.Unstructured, cause error) error {
-		return errors.Wrapf(cause, "layout %q: %s %q", l.FullRepoPath(), u.GetKind(), crKey(u.GetNamespace(), u.GetName()))
+		kind, namespace, name := identityOf(u)
+		return errors.Wrapf(cause, "layout %q: %s %q", l.FullRepoPath(), kind, crKey(namespace, name))
 	}
 	var walk func(l *layout.ManifestLayout) error
 	walk = func(l *layout.ManifestLayout) error {
@@ -72,8 +75,11 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 		}
 		seenLayout[l] = true
 		for _, r := range l.Resources {
-			objs, err := callerObjects(r)
+			objs, bad, err := callerObjects(r)
 			if err != nil {
+				if bad != nil {
+					return refuse(l, bad, err)
+				}
 				// Name the object or field that is the cause, when an item is.
 				for _, u := range objs {
 					if _, convErr := jsonContentOf(u.Object); convErr != nil {
@@ -130,17 +136,43 @@ func sameMap(a, b map[string]any) bool {
 // callerObjects returns the unstructured objects r holds as a caller's own: r
 // itself, or the unstructured items of a typed List r, which a read of the
 // List returns as they are, not as copies.
-func callerObjects(r client.Object) ([]*unstructured.Unstructured, error) {
+//
+// A typed List is read from what it writes, and writing it marshals the
+// unstructured objects it holds. So each of them it holds, written or not, is
+// first checked for a value that marshalling would call a method of, or would
+// not end on (reachable). The object that fails is returned as bad.
+func callerObjects(r client.Object) (objs []*unstructured.Unstructured, bad *unstructured.Unstructured, err error) {
 	switch o := r.(type) {
 	case nil:
-		return nil, nil
+		return nil, nil, nil
 	case *unstructured.Unstructured:
 		if o == nil {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return []*unstructured.Unstructured{o}, nil
+		return []*unstructured.Unstructured{o}, nil, nil
 	}
-	return built.HeldItems(r)
+	held, err := built.HeldCandidates(r)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, u := range held {
+		if err := reachable(u.Object); err != nil {
+			return held, u, err
+		}
+	}
+	objs, err = built.HeldItems(r)
+	return objs, nil, err
+}
+
+// identityOf returns the kind, namespace and name of u for a refusal, read
+// from the fields as they are. The accessors of Unstructured format a value
+// that is no string, and a value that holds itself has no end when formatted.
+func identityOf(u *unstructured.Unstructured) (kind, namespace, name string) {
+	kind, _ = u.Object["kind"].(string)
+	meta, _ := u.Object["metadata"].(map[string]any)
+	namespace, _ = meta["namespace"].(string)
+	name, _ = meta["name"].(string)
+	return kind, namespace, name
 }
 
 // jsonTyped reports whether v holds only the types runtime.DeepCopyJSONValue
@@ -183,7 +215,10 @@ func jsonTypedCount(v any, depth int, nodes *int) bool {
 //   - a Go integer kind (int, int8 to int64, uint, uint8 to uint64, uintptr) as
 //     an int64, so an integer above 2^53 keeps its exact value; a uint64 above
 //     the largest int64 is refused, as it has no int64;
-//   - a float32 as a float64;
+//   - a float32 as the float64 of its shortest 32-bit decimal form, as
+//     encoding/json writes it (float32(0.1) is 0.1);
+//   - a byte slice as its base64 string, as encoding/json writes it, which a
+//     list of more than maxJSONNodes bytes is not;
 //   - a named string, bool, integer or float kind as its base type;
 //   - a map with string keys and a slice of any accepted element, element by
 //     element, a nil map or slice staying nil; an interface holds an element;
@@ -192,7 +227,8 @@ func jsonTypedCount(v any, depth int, nodes *int) bool {
 // Everything else is refused with the field named: a struct, a pointer, an
 // array, a channel, a function, a map with other keys, and any type with a
 // marshaler (json.RawMessage and net.IP among them). The conversion is made
-// from the Go values and never marshals one, so it ends on every value.
+// from the Go values and never marshals one, so it ends on every value. A slice
+// longer than the values left of maxJSONNodes is refused before it is copied.
 func jsonContentOf(m map[string]any) (map[string]any, error) {
 	if jsonTyped(m, 0) {
 		return nil, nil
@@ -206,6 +242,20 @@ func jsonContentOf(m map[string]any) (map[string]any, error) {
 	return content, nil
 }
 
+// reachable reports a value in m that marshalling it would call a method of,
+// or would not end on: one with a marshaler, one that holds itself, one nested
+// too deep or with too many values, and a struct, a pointer or an array, which
+// marshalling follows into fields that may hold any of those. It leaves the
+// shapes that marshalling only fails on, a channel say, to the conversion.
+func reachable(m map[string]any) error {
+	if jsonTyped(m, 0) {
+		return nil
+	}
+	c := &converter{open: map[openKey]bool{}, reach: true}
+	_, err := c.convert(reflect.ValueOf(m), "", 0)
+	return err
+}
+
 // openKey names a map or a slice being converted: a slice by its first
 // element and its length, as two slices of one array are two values.
 type openKey struct {
@@ -216,6 +266,10 @@ type openKey struct {
 type converter struct {
 	nodes int
 	open  map[openKey]bool
+
+	// reach makes the walk the check of reachable: it refuses what marshalling
+	// would call or not end on, and converts nothing else.
+	reach bool
 }
 
 var (
@@ -262,10 +316,21 @@ func (c *converter) convert(v reflect.Value, path string, depth int) (any, error
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		u := v.Uint()
 		if u > math.MaxInt64 {
+			if c.reach {
+				return nil, nil
+			}
 			return nil, errors.Errorf("%s holds %d, which is above the largest int64", where(path), u)
 		}
 		return int64(u), nil
-	case reflect.Float32, reflect.Float64:
+	case reflect.Float32:
+		// As encoding/json writes it, in 32 bits, and reads it back: float32(0.1)
+		// is 0.1, not 0.10000000149011612.
+		f, err := strconv.ParseFloat(strconv.FormatFloat(v.Float(), 'g', -1, 32), 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "%s holds a float32 that is no number", where(path))
+		}
+		return f, nil
+	case reflect.Float64:
 		return v.Float(), nil
 	case reflect.String:
 		return v.String(), nil
@@ -273,13 +338,18 @@ func (c *converter) convert(v reflect.Value, path string, depth int) (any, error
 		return c.convertMap(v, path, depth)
 	case reflect.Slice:
 		return c.convertSlice(v, path, depth)
+	case reflect.Chan, reflect.Func, reflect.Complex64, reflect.Complex128, reflect.UnsafePointer:
+		if c.reach {
+			return nil, nil
+		}
+		return nil, unsupported(path, v, "")
 	default:
 		return nil, unsupported(path, v, "")
 	}
 }
 
 func (c *converter) convertMap(v reflect.Value, path string, depth int) (any, error) {
-	if v.Type().Key().Kind() != reflect.String || hasMarshaler(v.Type().Key()) {
+	if hasMarshaler(v.Type().Key()) || (v.Type().Key().Kind() != reflect.String && !c.reach) {
 		return nil, unsupported(path, v, "its keys are no plain strings")
 	}
 	if v.IsNil() {
@@ -326,6 +396,21 @@ func (c *converter) convertSlice(v reflect.Value, path string, depth int) (any, 
 	if depth > maxJSONDepth {
 		return nil, errors.Errorf("%s holds a value nested deeper than %d levels", where(path), maxJSONDepth)
 	}
+	if c.isByteSlice(v.Type()) {
+		// As encoding/json writes it: a base64 string.
+		if v.Len() > maxJSONNodes {
+			return nil, errors.Errorf("%s holds more than %d bytes", where(path), maxJSONNodes)
+		}
+		if c.reach {
+			return nil, nil
+		}
+		return base64.StdEncoding.EncodeToString(v.Bytes()), nil
+	}
+	// The count is checked before the allocation: a slice of a type that needs no
+	// storage can be as long as an int holds.
+	if v.Len() > maxJSONNodes-c.nodes {
+		return nil, errors.Errorf("%s holds more than %d values", where(path), maxJSONNodes)
+	}
 	if v.Len() > 0 {
 		key := openKey{ptr: v.Pointer(), len: v.Len()}
 		if c.open[key] {
@@ -343,6 +428,12 @@ func (c *converter) convertSlice(v reflect.Value, path string, depth int) (any, 
 		out[i] = e
 	}
 	return out, nil
+}
+
+// isByteSlice reports whether encoding/json writes a slice of type t as a
+// base64 string: its elements are bytes, and a byte has no marshaler.
+func (c *converter) isByteSlice(t reflect.Type) bool {
+	return t.Elem().Kind() == reflect.Uint8 && !hasMarshaler(t.Elem())
 }
 
 // unsupported refuses a value of a shape jsonContentOf does not accept.

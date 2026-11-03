@@ -251,7 +251,7 @@ func TestNormalizeCallerObjects(t *testing.T) {
 			"int": int64(1), "int8": int64(2), "uint16": int64(3), "uintptr": int64(4), "exact": int64(1<<53 + 1),
 			"maxUint64": int64(math.MaxInt64), "float32": 2.5, "float64": 1.5, "whole": 2.0,
 			"name": "x", "flag": true, "count": int64(5), "labels": map[string]any{"a": "b"},
-			"strings": []any{"a"}, "bytes": []any{int64(1), int64(2)}, "nested": []any{map[string]any{"a": []any{int64(1), int64(2)}}},
+			"strings": []any{"a"}, "bytes": "AQI=", "nested": []any{map[string]any{"a": []any{int64(1), int64(2)}}},
 			"number": json.Number("7"), "iface": []any{int64(-3), nil},
 			"nilMap": nil, "nilSlice": nil, "empty": []any{},
 		}
@@ -380,4 +380,105 @@ type selfMarshalingMap map[string]any
 func (m selfMarshalingMap) MarshalJSON() ([]byte, error) {
 	selfMarshalCalls++
 	return json.Marshal(map[string]any(m))
+}
+
+// The refusal names the object by its kind, namespace and name. A value that
+// holds itself in one of them must not be formatted: apimachinery's accessors
+// format the value of a field that is no string, and recurse on one that holds
+// itself.
+func TestNormalizeCallerObjects_RefusalDoesNotFormatIdentityValues(t *testing.T) {
+	self := map[string]any{}
+	self["self"] = self
+	for _, field := range []string{"kind", "namespace", "name"} {
+		t.Run(field, func(t *testing.T) {
+			u := &unstructured.Unstructured{Object: map[string]any{
+				"apiVersion": "v1", "kind": "ConfigMap",
+				"metadata": map[string]any{"name": "cm", "namespace": "default"},
+			}}
+			if field == "kind" {
+				u.Object["kind"] = self
+			} else {
+				u.Object["metadata"].(map[string]any)[field] = self
+			}
+			err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{u}})
+			if err == nil || !strings.Contains(err.Error(), "holds itself") {
+				t.Errorf("got %v, want a refusal naming the cycle", err)
+			}
+		})
+	}
+}
+
+func TestNormalizeCallerObjects_HugeSliceIsRefusedNotAllocated(t *testing.T) {
+	// A slice of a zero-size type needs no storage, so it can be as long as
+	// an int holds.
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1", "kind": "ConfigMap",
+		"spec": map[string]any{"v": make([]struct{}, int(^uint(0)>>1))},
+	}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("the conversion panicked: %v", r)
+		}
+	}()
+	err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{u}})
+	if err == nil || !strings.Contains(err.Error(), "spec.v") || !strings.Contains(err.Error(), "more than") {
+		t.Errorf("got %v, want a refusal naming spec.v and the limit", err)
+	}
+}
+
+// What the old read made of a value is what the conversion makes of it: the
+// value as encoding/json writes it, read back.
+type namedBytes []byte
+type namedFloat32 float32
+
+func TestNormalizeCallerObjects_MatchesEncodingJSON(t *testing.T) {
+	values := map[string]any{
+		"float32 0.1":        float32(0.1),
+		"float32 small":      float32(1e-7),
+		"float32 large":      float32(3.4e38),
+		"float32 integer":    float32(16777216),
+		"float32 negative":   float32(-2.5),
+		"named float32":      namedFloat32(0.1),
+		"float32 in a slice": []float32{0.1, 0.2},
+		"bytes":              []byte{1, 2},
+		"bytes empty":        []byte{},
+		"bytes nil":          []byte(nil),
+		"named bytes":        namedBytes("hello"),
+		"bytes in a map":     map[string][]byte{"k": []byte("secret")},
+		"bytes all values":   []byte{0, 255, 128},
+	}
+	for name, v := range values {
+		t.Run(name, func(t *testing.T) {
+			data, err := json.Marshal(v)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var want any
+			if err := json.Unmarshal(data, &want); err != nil {
+				t.Fatal(err)
+			}
+			u := &unstructured.Unstructured{Object: map[string]any{"apiVersion": "v1", "kind": "ConfigMap", "spec": map[string]any{"v": v}}}
+			if err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{u}}); err != nil {
+				t.Fatal(err)
+			}
+			got := u.Object["spec"].(map[string]any)["v"]
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("got %#v, want %#v (encoding/json: %s)", got, want, data)
+			}
+			if _, err := runtimeSafe(u); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+}
+
+func TestNormalizeCallerObjects_OversizedByteSliceIsRefused(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1", "kind": "Secret",
+		"data": map[string]any{"v": make([]byte, maxJSONNodes+1)},
+	}}
+	err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{u}})
+	if err == nil || !strings.Contains(err.Error(), "data.v holds more than") || !strings.Contains(err.Error(), "bytes") {
+		t.Errorf("got %v, want a refusal naming data.v and the byte limit", err)
+	}
 }
