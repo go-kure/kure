@@ -588,3 +588,78 @@ func TestIsPromotion_CannotTellIsNo(t *testing.T) {
 		t.Error("the wrapper of a promoted method is not called a promotion")
 	}
 }
+
+// ownCopy embeds *unstructured.Unstructured but copies itself in its own way.
+type ownCopy struct{ *unstructured.Unstructured }
+
+func (o ownCopy) DeepCopyObject() runtime.Object { return o.Unstructured.DeepCopy() }
+
+// A wrapper that embeds *unstructured.Unstructured and takes its DeepCopyObject
+// from it is replaced in its layout by a normalized *Unstructured copy, which
+// is what the layout would hold after a copy; the wrapper and the map it holds
+// are not changed. A wrapper with a DeepCopyObject of its own, or one that
+// embeds a nil pointer, is refused.
+func TestNormalizeCallerObjects_WrapperEmbeddingUnstructured(t *testing.T) {
+	newObj := func() *unstructured.Unstructured {
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "v1", "kind": "ConfigMap",
+			"metadata": map[string]any{"name": "cm", "namespace": "default"},
+			"spec":     map[string]any{"n": 7},
+		}}
+	}
+	t.Run("the wrapper is replaced by a normalized copy and left unchanged", func(t *testing.T) {
+		inner := newObj()
+		held := inner.Object
+		w := promotesTrusted{inner}
+		l := &layout.ManifestLayout{Name: "l", Resources: []client.Object{w}}
+		undo, err := normalizeCallerObjects(l)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, ok := l.Resources[0].(*unstructured.Unstructured)
+		if !ok {
+			t.Fatalf("the layout holds a %T, want the *Unstructured copy", l.Resources[0])
+		}
+		if n := got.Object["spec"].(map[string]any)["n"]; n != int64(7) {
+			t.Errorf("spec.n = %#v, want int64(7)", n)
+		}
+		if _, err := runtimeSafe(got); err != nil {
+			t.Error(err)
+		}
+		if !reflect.DeepEqual(inner.Object, held) || inner.Object["spec"].(map[string]any)["n"] != 7 {
+			t.Error("the wrapper's embedded object was written to")
+		}
+		undo()
+		if l.Resources[0] == client.Object(got) {
+			t.Error("undo did not put the wrapper back")
+		}
+		if _, still := l.Resources[0].(promotesTrusted); !still {
+			t.Errorf("after undo the layout holds a %T", l.Resources[0])
+		}
+	})
+	t.Run("a wrapper that holds only JSON typed values is kept", func(t *testing.T) {
+		inner := newObj()
+		inner.Object["spec"] = map[string]any{"n": int64(7)}
+		l := &layout.ManifestLayout{Name: "l", Resources: []client.Object{promotesTrusted{inner}}}
+		if err := normalizeForTest(l); err != nil {
+			t.Fatal(err)
+		}
+		if _, kept := l.Resources[0].(promotesTrusted); !kept {
+			t.Errorf("the layout holds a %T, want the wrapper", l.Resources[0])
+		}
+	})
+	t.Run("a wrapper with a DeepCopyObject of its own is refused", func(t *testing.T) {
+		l := &layout.ManifestLayout{Name: "l", Resources: []client.Object{ownCopy{newObj()}}}
+		err := normalizeForTest(l)
+		if err == nil || !strings.Contains(err.Error(), "DeepCopyObject of its own") {
+			t.Fatalf("got %v, want a refusal naming the DeepCopyObject of its own", err)
+		}
+	})
+	t.Run("a wrapper that embeds a nil pointer is refused", func(t *testing.T) {
+		l := &layout.ManifestLayout{Name: "l", Resources: []client.Object{promotesTrusted{}}}
+		err := normalizeForTest(l)
+		if err == nil || !strings.Contains(err.Error(), "nil *unstructured.Unstructured") {
+			t.Fatalf("got %v, want a refusal naming a nil *unstructured.Unstructured", err)
+		}
+	})
+}

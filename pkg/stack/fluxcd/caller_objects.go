@@ -69,6 +69,16 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 		held, parsed map[string]any
 	}
 	var replace []replacement
+	// A wrapper type that embeds *unstructured.Unstructured is replaced in its
+	// layout by a normalized *Unstructured copy of what it embeds: that is what
+	// the promoted DeepCopyObject gives, so the layout holds nothing else.
+	type slotReplacement struct {
+		layout *layout.ManifestLayout
+		index  int
+		held   client.Object
+		parsed *unstructured.Unstructured
+	}
+	var replaceSlot []slotReplacement
 	seenLayout := map[*layout.ManifestLayout]bool{}
 	seenObject := map[*unstructured.Unstructured]bool{}
 	refuse := func(l *layout.ManifestLayout, u *unstructured.Unstructured, cause error) error {
@@ -82,6 +92,10 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 		}
 		seenLayout[l] = true
 		for i, r := range l.Resources {
+			embedded, wrapped, err := embeddedUnstructured(r)
+			if err != nil {
+				return errors.Wrapf(err, "layout %q: resource %d", l.FullRepoPath(), i)
+			}
 			objs, bad, err := callerObjects(r)
 			if err != nil {
 				if bad != nil {
@@ -94,6 +108,15 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 					}
 				}
 				return errors.Wrapf(err, "layout %q: read list items of resource %d", l.FullRepoPath(), i)
+			}
+			if wrapped {
+				content, err := jsonContentOf(embedded.Object)
+				if err != nil {
+					return refuse(l, embedded, err)
+				}
+				if content != nil {
+					replaceSlot = append(replaceSlot, slotReplacement{l, i, r, &unstructured.Unstructured{Object: content}})
+				}
 			}
 			for _, u := range objs {
 				if seenObject[u] {
@@ -124,7 +147,16 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 	for _, r := range replace {
 		r.obj.Object = r.parsed
 	}
+	for _, r := range replaceSlot {
+		r.layout.Resources[r.index] = r.parsed
+	}
 	return func() {
+		for _, r := range replaceSlot {
+			// Only the replacement is put back, as for an Object map.
+			if r.layout.Resources[r.index] == client.Object(r.parsed) {
+				r.layout.Resources[r.index] = r.held
+			}
+		}
 		for _, r := range replace {
 			// Only the replacement is put back: a caller who has set another
 			// map since keeps it.
@@ -138,6 +170,50 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 // sameMap reports whether a and b are the same map, not two with equal content.
 func sameMap(a, b map[string]any) bool {
 	return a != nil && b != nil && reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
+}
+
+var unstructuredPtrType = reflect.TypeFor[*unstructured.Unstructured]()
+
+// embeddedUnstructured returns the *unstructured.Unstructured that r embeds, for
+// a named struct that does. Such a wrapper is only accepted when its
+// DeepCopyObject is the one promoted from what it embeds, which the compiler
+// writes (isPromotion): a wrapper with a DeepCopyObject of its own is caller
+// code the layout would call, and is refused, as is one embedding a nil
+// pointer. Where this cannot be told, the wrapper is refused.
+func embeddedUnstructured(r client.Object) (u *unstructured.Unstructured, wrapped bool, err error) {
+	if r == nil {
+		return nil, false, nil
+	}
+	t := reflect.TypeOf(r)
+	st := t
+	for st.Kind() == reflect.Pointer {
+		st = st.Elem()
+	}
+	if st.Kind() != reflect.Struct || st == unstructuredType {
+		return nil, false, nil
+	}
+	var field reflect.StructField
+	for i := 0; i < st.NumField(); i++ {
+		if f := st.Field(i); f.Anonymous && f.Type == unstructuredPtrType {
+			field, wrapped = f, true
+			break
+		}
+	}
+	if !wrapped {
+		return nil, false, nil
+	}
+	if m, ok := t.MethodByName("DeepCopyObject"); !ok || !isPromotion(m.Func.Pointer()) {
+		return nil, true, errors.Errorf("a %s embeds *unstructured.Unstructured but has a DeepCopyObject of its own", st)
+	}
+	v := reflect.ValueOf(r)
+	for v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
+	embedded := v.FieldByIndex(field.Index)
+	if embedded.IsNil() || !embedded.CanInterface() {
+		return nil, true, errors.Errorf("a %s embeds a nil *unstructured.Unstructured", st)
+	}
+	return embedded.Interface().(*unstructured.Unstructured), true, nil
 }
 
 // callerObjects returns the unstructured objects r holds as a caller's own: r
