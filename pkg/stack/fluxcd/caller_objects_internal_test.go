@@ -504,3 +504,25 @@ func TestNormalizeCallerObjects_InterfaceValuesCountOnce(t *testing.T) {
 		t.Errorf("got %d values, last %#v", len(got), got[len(got)-1])
 	}
 }
+
+// A package path with no dot is not the standard library: package main and a
+// caller's module of a short name have none.
+func TestTrustedPath(t *testing.T) {
+	for path, want := range map[string]bool{
+		"time":                                true,
+		"encoding/json":                       true,
+		"k8s.io/apimachinery/pkg/util/intstr": true,
+		"sigs.k8s.io/yaml":                    true,
+		"github.com/go-kure/kure/pkg/x":       true,
+		"main":                                false,
+		"myapp/model":                         false,
+		"os":                                  false,
+		"example.com/x":                       false,
+		"github.com/go-kure/kure/pkg/x_test":  false,
+		"":                                    false,
+	} {
+		if got := trustedPath(path); got != want {
+			t.Errorf("trustedPath(%q) = %v, want %v", path, got, want)
+		}
+	}
+}

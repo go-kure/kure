@@ -1901,8 +1901,9 @@ field, before it is written, and refused when it holds itself, when it is nested
 steps, when the walk meets more than 4 million values or when an unstructured object in it holds a
 value that would call a method when written. A typed object that holds a type with a `MarshalJSON`,
 `MarshalText` or `MarshalYAML` method, as a field, an element or a map key, is refused, naming the
-type, unless the type is from the standard library, `k8s.io`, `sigs.k8s.io`, `github.com/fluxcd` or
-`github.com/go-kure`. The cases the issue names (a
+type, unless the type is from `k8s.io`, `sigs.k8s.io`, `github.com/fluxcd`, `github.com/go-kure` or
+one of the standard library packages that define such a type (`time`, `net`, `net/netip`, `net/url`,
+`math/big`, `regexp`, `log/slog` and `encoding/json`). A type of `package main` is not trusted. The cases the issue names (a
 plain `int` in an object, nested in a `sourceRef`, in a `List`'s items, in a `Source` `spec`) all stay accepted. A
 call that refuses later, for another reason, puts every `Object` map it replaced back, as long as the
 caller does not change the tree during the call. What they still leave out:
