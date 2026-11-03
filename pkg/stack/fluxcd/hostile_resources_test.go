@@ -2,6 +2,7 @@ package fluxcd_test
 
 import (
 	"encoding"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -84,6 +85,10 @@ type recursiveEmbed struct {
 	*unstructured.Unstructured
 }
 
+// embedsUnstructured is a wrapper that takes its methods, DeepCopyObject
+// included, from the *Unstructured it embeds.
+type embedsUnstructured struct{ *unstructured.Unstructured }
+
 func hostileCases() map[string]func() client.Object {
 	list := func() *objectItems {
 		l := &objectItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}}
@@ -102,6 +107,11 @@ func hostileCases() map[string]func() client.Object {
 		"typed nil unstructured resource": func() client.Object { return (*unstructured.Unstructured)(nil) },
 		"type that embeds itself and a trusted marshaler": func() client.Object {
 			return &recursiveEmbed{Unstructured: unstructuredObj("v1", "ConfigMap", "default", "cm")}
+		},
+		"wrapper embedding Unstructured holds a plain int": func() client.Object {
+			u := unstructuredObj("v1", "ConfigMap", "default", "cm")
+			u.Object["spec"] = map[string]any{"n": 7}
+			return embedsUnstructured{u}
 		},
 		"embedded nil pointer": func() client.Object {
 			return &struct{ *corev1.ConfigMap }{}
@@ -186,16 +196,71 @@ func hostileCases() map[string]func() client.Object {
 	}
 }
 
-// runHostile runs every entry point on a fresh layout holding r.
-func runHostile(r func() client.Object) {
+// hostileCluster is a cluster whose application emits r, so that a layout
+// walked from it carries the origins the entry points check.
+func hostileCluster(r client.Object) *stack.Cluster {
+	obj := r
+	app := stack.NewApplication("hostile", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+	return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "root", Bundle: srBundle("root", app)}}
+}
+
+// runHostile runs every entry point on a fresh layout walked from a cluster
+// whose application emits r, for each Flux placement, and on a layout built by
+// hand that holds r, and returns what each entry point answered, named. A walk
+// that fails is reported as it came. The walker skips some objects (a typed
+// nil), so only the hand-built layout reaches the entry points with those.
+func runHostile(r func() client.Object) (answers []string) {
+	answer := func(entry string, err error) {
+		if err != nil {
+			answers = append(answers, entry+": "+err.Error())
+		}
+	}
+	for _, placement := range allPlacements {
+		rules := withPlacement(nodeOnly, placement)
+		walk := func() (*stack.Cluster, *layout.ManifestLayout, bool) {
+			c := hostileCluster(r())
+			ml, err := layout.WalkCluster(c, rules)
+			answer(string(placement)+" walk", err)
+			return c, ml, err == nil
+		}
+		if c, ml, ok := walk(); ok {
+			_, err := fluxstack.NewResourceGenerator().GenerateFromLayout(ml, c)
+			answer(string(placement)+" GenerateFromLayout", err)
+		}
+		if _, ml, ok := walk(); ok {
+			_, err := fluxstack.UmbrellaTerminals(ml)
+			answer(string(placement)+" UmbrellaTerminals", err)
+		}
+		if c, ml, ok := walk(); ok {
+			answer(string(placement)+" IntegrateWithLayout", fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules))
+		}
+		_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(hostileCluster(r()), rules)
+		answer(string(placement)+" CreateLayoutWithResources", err)
+	}
+	// A layout built by hand holds r as it is, with no origins: the entry
+	// points that need none answer for r itself.
 	cluster := &stack.Cluster{Node: &stack.Node{Name: "root"}}
 	rules := withPlacement(nodeOnly, layout.FluxSeparate)
-	root := func() *layout.ManifestLayout {
+	hand := func() *layout.ManifestLayout {
 		return &layout.ManifestLayout{Name: "root", Resources: []client.Object{r()}}
 	}
-	_, _ = fluxstack.NewResourceGenerator().GenerateFromLayout(root(), cluster)
-	_, _ = fluxstack.UmbrellaTerminals(root())
-	_ = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(root(), cluster, rules)
+	_, err := fluxstack.NewResourceGenerator().GenerateFromLayout(hand(), cluster)
+	answer("hand-built GenerateFromLayout", err)
+	_, err = fluxstack.UmbrellaTerminals(hand())
+	answer("hand-built UmbrellaTerminals", err)
+	answer("hand-built IntegrateWithLayout", fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(hand(), cluster, rules))
+	return answers
+}
+
+// refusalNames are the cases that every entry point must refuse, and what the
+// refusal names.
+var refusalNames = map[string]string{
+	"typed nil resource":                              "nil *v1.ConfigMap",
+	"typed nil unstructured resource":                 "nil *unstructured.Unstructured",
+	"embedded nil pointer":                            "struct { *v1.ConfigMap }",
+	"GetObjectKind panics with a string":              "fluxcd_test.kindPanics",
+	"GetObjectKind panics with a nil error":           "fluxcd_test.kindPanics",
+	"marshaler of another package in a private field": "hidingItem",
 }
 
 const hostileChildEnv = "KURE_HOSTILE_CASE"
@@ -210,7 +275,9 @@ func TestHostileResources_Child(t *testing.T) {
 	if !ok {
 		t.Fatalf("no case %q", name)
 	}
-	runHostile(r)
+	for _, a := range runHostile(r) {
+		fmt.Println("ANSWER " + a)
+	}
 }
 
 func TestHostileResources_NoEntryPointPanics(t *testing.T) {
@@ -228,6 +295,22 @@ func TestHostileResources_NoEntryPointPanics(t *testing.T) {
 			if err != nil {
 				lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 				t.Errorf("the child failed: %v\n%s", err, strings.Join(lines[:min(len(lines), 12)], "\n"))
+				return
+			}
+			var answers []string
+			for _, line := range strings.Split(string(out), "\n") {
+				if a, ok := strings.CutPrefix(line, "ANSWER "); ok {
+					answers = append(answers, a)
+				}
+			}
+			for _, a := range answers {
+				if !strings.HasPrefix(a, "hand-built") && strings.Contains(a, "build it with layout.WalkCluster") {
+					t.Errorf("an entry point stopped at a missing origin, not at the resource: %s", a)
+				}
+			}
+			// A refusal concerns the resource: the answers of these cases name it.
+			if want, ok := refusalNames[name]; ok && !slices.ContainsFunc(answers, func(a string) bool { return strings.Contains(a, want) }) {
+				t.Errorf("no entry point refused the resource naming %q; answers:\n%s", want, strings.Join(answers, "\n"))
 			}
 		})
 	}

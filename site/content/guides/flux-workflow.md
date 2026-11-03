@@ -945,10 +945,16 @@ the generated name is read as built and substituted. A tree that was admitted
 with such a Kustomization whose generator kure cannot build (a remote file
 source, a kustomize failure) is now refused. A built object is
 read as its JSON, so a number in it, a port say, is read like any other field,
-before and after substitution. An unstructured object you build in Go must hold
+before and after substitution. An unstructured object you build in Go should hold
 JSON-typed values, as apimachinery's `Unstructured` requires: an `int64`, not an
-`int`. kure copies a `List` item and a compared Source through its JSON, but
-other reads still panic on such a value. A Flux Kustomization you hand-write
+`int`. kure reads such an object as its JSON and never panics on one: the
+integration entry points replace a plain Go integer, `[]string`, `map[string]string`
+or other accepted shape in an `Object` map with a JSON-typed copy (the caller's
+map is not changed), and refuse a value they cannot convert, such as a struct,
+a pointer, a channel or a type that marshals itself, naming the layout, the
+object and the field. A typed object whose method panics, and a typed nil
+resource, are refused naming the Go type. The package README lists the accepted
+shapes. A Flux Kustomization you hand-write
 as an unstructured object is read the way the API server reads it: a key
 matches a field only in its exact spelling, and a key the type does not have is
 dropped. A `Wait:` or `KubeConfig:` key therefore sets nothing, as it sets

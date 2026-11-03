@@ -115,3 +115,17 @@ func TestGoItems_ItemsOfNoObjectAndAPrivateCycleAreRefusedNotFormatted(t *testin
 		t.Errorf("isList = %v, error %v, want a refusal naming the type", isList, err)
 	}
 }
+
+// Items of an interface type that is no Object (a []any holding objects) are
+// refused by meta.ExtractList, which switches on the static element type, and
+// so by goItems: the reader's contract is parity, not a wider reading.
+func TestGoItems_InterfaceItemsThatAreNoObjectAreRefusedAsExtractListDoes(t *testing.T) {
+	l := &genericList[[]any]{Items: []any{&corev1.ConfigMap{}}}
+	if _, err := meta.ExtractList(l); err == nil {
+		t.Fatal("meta.ExtractList accepts the List: the reader's parity contract changed")
+	}
+	_, isList, _, err := goItems(l)
+	if !isList || err == nil || !strings.Contains(err.Error(), "not objects") {
+		t.Errorf("isList = %v, error %v, want a refusal as ExtractList's", isList, err)
+	}
+}
