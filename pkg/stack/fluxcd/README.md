@@ -1906,9 +1906,10 @@ they still leave out:
 
 A tree refused for a cycle through one of these integrates once the dependency or health check
 that closes the reported chain is dropped, or names another Kustomization. The "umbrellas do not
-wait" rewrite and `UmbrellaTerminals` still read the tree as it holds it, so a local-config
-Kustomization a patched build may keep, and that cannot be read in typed form, is still refused
-there.
+wait" rewrite and `UmbrellaTerminals` read the Kustomizations of the tree as it holds them, and
+on a tree that patches they read each `dependsOn` entry as the build shows it (go-kure/kure#1226).
+So a local-config Kustomization a patched build may keep, and that cannot be read in typed form,
+is still refused there.
 
 The rules apply to the Kustomizations the call generates. One kept from an earlier integration
 is not rewritten; it is refused when it breaks R1 (with `ErrUmbrellaWait`, for `wait` or any
