@@ -33,10 +33,12 @@ import (
 // and 1.0 differ; a scalar, func or chan value is written without one, as the
 // definition of the field, element, key or value it sits in names its type. A value moved to another field changes the stream, because a struct
 // writes its fields in the order its definition lists them. A map is walked in
-// key order, its nil and empty forms told apart. A pointer or map met a second
-// time is written as a reference to its first occurrence, so a schema that two
-// parents share is read once; its sharing is part of the stream, which makes a
-// replacement by an equal copy a difference, not a silent equality. A pointer,
+// key order, its nil and empty forms told apart. A pointer, map or non-empty
+// slice met a second time (a slice is the same value by its address, type and
+// length) is written as a reference to its first occurrence, so a schema that
+// two parents share is read once and a slice shared many times over stays
+// linear; its sharing is part of the stream, which makes a replacement by an
+// equal copy a difference, not a silent equality. A pointer,
 // map or slice that leads back to a value on its path is written as a cycle to
 // that value's depth, also when the way back is through a map key. A function or
 // channel contributes its type and whether it is nil, as its identity is not a
@@ -78,7 +80,7 @@ type walker struct {
 	h        hash.Hash // nil for a walk that is kept in buf
 	buf      []byte
 	types    map[reflect.Type]int
-	seen     map[visit]int // pointers and maps met so far, by the number of their first occurrence
+	seen     map[visit]int // pointers, maps and slices met so far, by the number of their first occurrence
 	visiting map[visit]int // the values on the walk's path, by their depth on it
 	entries  []entry
 }
@@ -263,8 +265,9 @@ func (w *walker) typed(t reflect.Type) {
 
 // enter notes a pointer-like value on the walk's path. When the value is
 // already there it reports how to write it instead: as a cycle, with the depth
-// on the path of the value it returns to (a slice has no other number), or, for
-// a value that is shared, as a reference to the number of its first occurrence.
+// on the path of the value it returns to, or, for a value that is shared (a
+// pointer, a map or a non-empty slice), as a reference to the number of its
+// first occurrence.
 func (w *walker) enter(k visit, shared bool) (tag byte, n int, first bool) {
 	if d, ok := w.visiting[k]; ok {
 		return tagCycle, d, false
@@ -350,7 +353,7 @@ func (w *walker) body(v reflect.Value) {
 		}
 		if v.Len() > 0 {
 			k := visit{p: v.Pointer(), t: v.Type(), n: v.Len()}
-			tag, n, first := w.enter(k, false)
+			tag, n, first := w.enter(k, true)
 			if !first {
 				w.byte(tag)
 				w.count(n)

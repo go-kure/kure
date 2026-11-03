@@ -44,7 +44,7 @@ import (
 // the definitions, or those types, fails TestDefinitions_BuiltInMatchesThePin,
 // which prints the new value, and the bump's change sets it. A stale pin
 // would refuse every build.
-const builtInDefinitions = "sha256:b20ddd6872eae73702f87188fb60f93bb2520fd8f750af3b045efaa08215742f"
+const builtInDefinitions = "sha256:1bb7a9bc0aad5766956c5ab5920942d38c150be80b3803ed1bc00a2036e52cd6"
 
 // Parse parses kustomize's schema unless it is parsed already; a concurrent
 // caller waits until it is. Once parsed, it costs one lock.
