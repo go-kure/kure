@@ -988,8 +988,11 @@ added: it also records, from the schema's paths, which kinds are cluster-scoped,
 and decides on that when it applies a target namespace or rewrites name
 references. A schema added with a path alone for a kind therefore leaves the
 definitions as they were and still changes a build, so kure also asks, in each
-build, for the scope of every kind the build made, and does not read a build in
-which one differs from the built-in schema's.
+build, for the scope of every kind the build made and of every kind in a file or
+inline patch it read, an object an overlay deletes later included, and does not
+read a build in which one differs from the built-in schema's. It does not read a
+build either when an object's kind may come through a merge chain more than one
+level deep, or a List nested more than eight deep, which it does not follow.
 One
 without `wait` that health-checks any other object waits for the Kustomization
 that applies it, whatever its expression says, when that writer is certain,

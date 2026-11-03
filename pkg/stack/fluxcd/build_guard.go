@@ -78,6 +78,11 @@ type buildGuard struct {
 	// that may merge into a Secret (kustomization).
 	read, found map[string]map[string]bool
 	merges      []string
+	// kinds holds, once each and in the order met, the apiVersion and kind
+	// of every object a file or inline patch the build reads holds
+	// (loadedKinds).
+	kinds    []kindKey
+	kindSeen map[kindKey]bool
 	// decrypting is set when the Kustomization sets spec.decryption
 	// (decrypts): Flux decrypts the files and the objects of its build.
 	decrypting bool
@@ -112,6 +117,7 @@ func newBuildGuard(fsys filesys.FileSystem, tree string) *buildGuard {
 		tree:       tree,
 		rf:         resmap.NewFactory(provider.NewDepProvider().GetResourceFactory()),
 		configs:    map[string]bool{},
+		kindSeen:   map[kindKey]bool{},
 	}
 }
 
@@ -137,6 +143,9 @@ func (g *buildGuard) ReadFile(name string) ([]byte, error) {
 	}
 	if why == "" {
 		why = g.checked(name, b, isKustomization)
+	}
+	if why == "" {
+		why = g.loadedKinds(b)
 	}
 	if why == "" {
 		return b, nil
@@ -203,6 +212,18 @@ func (g *buildGuard) kustomization(name string, b []byte) string {
 			if why := g.entry(dir, field, f.reads, v); why != "" {
 				return why
 			}
+		}
+	}
+	// The inline patches come after the remote-reference checks, which refuse
+	// first.
+	for _, p := range k.Patches {
+		if why := g.loadedKinds([]byte(p.Patch)); why != "" {
+			return why
+		}
+	}
+	for _, p := range k.PatchesStrategicMerge { //nolint:staticcheck // SA1019: kustomize still reads it
+		if why := g.loadedKinds([]byte(p)); why != "" {
+			return why
 		}
 	}
 	merges := slices.ContainsFunc(k.SecretGenerator, func(gen kusttypes.SecretArgs) bool {
