@@ -5,6 +5,7 @@ import (
 	randv2 "math/rand/v2"
 	"runtime/debug"
 	"testing"
+	"time"
 )
 
 type pair struct {
@@ -177,7 +178,8 @@ func TestFingerprint_ReadsTheLayoutOfATypeNotItsName(t *testing.T) {
 // two parents share is read once and written as a reference the second time,
 // so the same content in two copies differs from it, the conservative way: a
 // definition replaced by an equal copy that stops being shared is refused,
-// never read as unchanged. Slices carry no such sharing.
+// never read as unchanged. A non-empty slice met again with the same address,
+// type and length is shared the same way.
 func TestFingerprint_ASharedPointerOrMapIsNotAnEqualCopy(t *testing.T) {
 	p := &node{Name: "x"}
 	if fingerprint([]*node{p, p}) == fingerprint([]*node{{Name: "x"}, {Name: "x"}}) {
@@ -191,8 +193,38 @@ func TestFingerprint_ASharedPointerOrMapIsNotAnEqualCopy(t *testing.T) {
 		t.Error("a shared map and two equal copies have one fingerprint")
 	}
 	s := []string{"a"}
-	if fingerprint([][]string{s, s}) != fingerprint([][]string{{"a"}, {"a"}}) {
-		t.Error("a shared slice and two equal copies have different fingerprints")
+	if fingerprint([][]string{s, s}) == fingerprint([][]string{{"a"}, {"a"}}) {
+		t.Error("a shared slice and two equal copies have one fingerprint")
+	}
+	if a, b := fingerprint([][]string{s, s}), fingerprint([][]string{s, s}); a != b {
+		t.Error("a shared slice has an unstable fingerprint")
+	}
+	long := []string{"a", "a"}
+	if fingerprint([][]string{long[:1], long}) != fingerprint([][]string{{"a"}, {"a", "a"}}) {
+		t.Error("two slices of one array that differ in length are not two distinct values: they must read as their contents")
+	}
+}
+
+// TestFingerprint_ASliceSharedManyTimesIsWalkedOnce: a slice written into the
+// schema by hand and rebuilt 40 times as []any{s, s} holds 2^40 elements when
+// every occurrence is walked, which stalls the build lock (go-kure/kure#1234).
+// A shared slice is walked once and then referenced, so the walk is linear in
+// the values that exist. The walk runs on its own goroutine so that a
+// regression fails the test at once instead of hanging it.
+func TestFingerprint_ASliceSharedManyTimesIsWalkedOnce(t *testing.T) {
+	var s []any = []any{"a"}
+	for range 40 {
+		s = []any{s, s}
+	}
+	done := make(chan string, 1)
+	go func() { done <- fingerprint(s) }()
+	select {
+	case got := <-done:
+		if got == "" {
+			t.Error("empty fingerprint")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the walk of a slice shared 40 levels deep did not finish in 10 s: shared slices are walked at every occurrence")
 	}
 }
 
