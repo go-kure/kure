@@ -80,7 +80,7 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 			return nil
 		}
 		seenLayout[l] = true
-		for _, r := range l.Resources {
+		for i, r := range l.Resources {
 			objs, bad, err := callerObjects(r)
 			if err != nil {
 				if bad != nil {
@@ -92,7 +92,7 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 						return refuse(l, u, convErr)
 					}
 				}
-				return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+				return errors.Wrapf(err, "layout %q: read list items of resource %d", l.FullRepoPath(), i)
 			}
 			for _, u := range objs {
 				if seenObject[u] {

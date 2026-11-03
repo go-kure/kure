@@ -368,7 +368,10 @@ func refuseItemCycle(obj runtime.Object, open map[listRef]bool) error {
 	}
 	ref := listRef{typ: v.Type(), ptr: v.Pointer()}
 	if open[ref] {
-		kind := obj.GetObjectKind().GroupVersionKind().Kind
+		kind, err := kindOf(obj)
+		if err != nil {
+			return err
+		}
 		if kind == "" {
 			kind = "List"
 		}
@@ -487,11 +490,47 @@ func writtenObject(obj runtime.Object) (map[string]any, error) {
 	return writtenForm(obj)
 }
 
+// kindOf returns the kind obj reports, or the refusal of an object whose
+// method panics.
+func kindOf(obj runtime.Object) (kind string, err error) {
+	err = callHeld(obj, func() { kind = obj.GetObjectKind().GroupVersionKind().Kind })
+	return kind, err
+}
+
+// callHeld calls f, which calls a method of obj, an object a caller holds, and
+// returns a panic of it as a refusal that names the Go type of obj: a type that
+// embeds a nil pointer panics in the methods it promotes from it. It guards
+// only the calls into the caller's value, never kure's own code. The panic
+// value is not formatted unless it is an error or a string, as a caller's value
+// may hold itself.
+func callHeld(obj runtime.Object, f func()) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			cause := "a value that is no error"
+			switch v := p.(type) {
+			case error:
+				cause = v.Error()
+			case string:
+				cause = v
+			}
+			err = errors.Errorf("a method of the %T it holds panicked, so the object cannot be read: %s", obj, cause)
+		}
+	}()
+	f()
+	return nil
+}
+
 // writtenForm returns a typed object as it is written: the writers marshal an
 // object to JSON first.
 func writtenForm(obj runtime.Object) (map[string]any, error) {
-	kind := obj.GetObjectKind().GroupVersionKind().Kind
-	data, err := json.Marshal(obj)
+	kind, err := kindOf(obj)
+	if err != nil {
+		return nil, err
+	}
+	var data []byte
+	if panicked := callHeld(obj, func() { data, err = json.Marshal(obj) }); panicked != nil {
+		return nil, panicked
+	}
 	if err != nil {
 		return nil, errors.Wrapf(err, "marshal the %s", kind)
 	}
