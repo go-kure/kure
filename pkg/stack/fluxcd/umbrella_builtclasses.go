@@ -113,18 +113,24 @@ func newDepSnapshot(t *kustomizationTree, existenceOnly bool) (*depSnapshot, err
 // the view does not apply them. Such a view says nothing of the entries it
 // shows plain. One on another Source, or on another cluster, builds what the
 // tree does not hold.
+//
+// Every copy the tree holds under the identity is judged, not the one
+// otherSpecs keeps: the tree may hold a patching copy and a plain one of a
+// key in two directories, and which of them otherSpecs keeps depends on the
+// order the tree lists them in (go-kure/kure#1243).
 func (v *builtView) unbuiltPatcher() error {
 	sources := map[string]bool{}
 	for _, m := range v.t.kusts {
 		sources[sourceRefKey(m.Spec.SourceRef, m.Namespace)] = true
 	}
 	for _, key := range sortedKeys(v.t.otherSpecs) {
-		k := v.t.otherSpecs[key]
-		if !patchesBuild(k) || k.Spec.KubeConfig != nil || v.t.directoryAt(k.Spec.Path) == nil || !sources[sourceRefKey(k.Spec.SourceRef, k.Namespace)] {
+		if _, built := v.writerSpec[key]; built {
 			continue
 		}
-		if _, built := v.writerSpec[key]; !built {
-			return errors.Errorf("Flux Kustomization %q patches what it builds, a directory of the tree, and the build of the tree does not read it as a writer", key)
+		for _, k := range v.t.copies[key] {
+			if patchesBuild(k) && k.Spec.KubeConfig == nil && v.t.directoryAt(k.Spec.Path) != nil && sources[sourceRefKey(k.Spec.SourceRef, k.Namespace)] {
+				return errors.Errorf("Flux Kustomization %q patches what it builds, a directory of the tree, and the build of the tree does not read it as a writer", key)
+			}
 		}
 	}
 	return nil

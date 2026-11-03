@@ -343,3 +343,61 @@ func TestUmbrellaTerminals_PatchAddedToAnotherKustomizationProvesNothing(t *test
 		t.Errorf("got %v, want flux-system/a -> %v", got, want)
 	}
 }
+
+// a builds controllers, which holds b; b builds apps, which holds h, depending
+// on x with a plain entry, and x. The tree also holds two Flux Kustomizations
+// named p, each in a directory nothing builds, on the Source of a and b and
+// with the path of apps: p1 patches h to add a readyExpr to that entry, p2
+// patches nothing. The Flux bootstrap may apply either, so p1's patch may
+// land on h, and x is a terminal leaf of a beside h whichever order the tree
+// lists them in (go-kure/kure#1243). p2 alone patches nothing: the entry
+// proves x Ready, and x is no leaf.
+func TestUmbrellaTerminals_HeldCopiesOfAPatcher(t *testing.T) {
+	both := []string{"flux-system/b", "flux-system/h", "flux-system/x"}
+	for name, tc := range map[string]struct {
+		order []string
+		want  []string
+	}{
+		"patching copy, then plain copy": {[]string{"p1", "p2"}, both},
+		"plain copy, then patching copy": {[]string{"p2", "p1"}, both},
+		"patching copy alone (ctl)":      {[]string{"p1"}, both},
+		"plain copy alone (ctl)":         {[]string{"p2"}, both[:2]},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := &layout.ManifestLayout{Name: "demo", Namespace: "clusters"}
+			controllers := &layout.ManifestLayout{Name: "controllers", Namespace: root.FullRepoPath()}
+			apps := &layout.ManifestLayout{Name: "apps", Namespace: controllers.FullRepoPath()}
+			root.Children = []*layout.ManifestLayout{controllers}
+			controllers.Children = []*layout.ManifestLayout{apps}
+			a := handWritten("a")
+			a.Spec.Path = controllers.FullRepoPath()
+			b := handWritten("b")
+			b.Spec.Path = apps.FullRepoPath()
+			root.Resources = []client.Object{a}
+			controllers.Resources = []client.Object{b}
+			apps.Resources = []client.Object{handWritten("h", "x"), handWritten("x")}
+			for i, copyName := range tc.order {
+				p := handWritten("p")
+				p.Spec.Path = apps.FullRepoPath()
+				if copyName == "p1" {
+					p.Spec.Patches = []kustomize.Patch{toAddReadyExpr("h")}
+				}
+				root.Children = append(root.Children, &layout.ManifestLayout{
+					Name: "unbuilt" + string(rune('0'+i)), Namespace: root.FullRepoPath(), UmbrellaChild: true,
+					Resources: []client.Object{p},
+				})
+			}
+			root.SetFluxKustomizations([]layout.FluxKustomizationRecord{
+				{Namespace: "flux-system", Name: "a", Path: controllers.FullRepoPath(), SourceKind: "GitRepository", SourceName: "flux-system"},
+				{Namespace: "flux-system", Name: "b", Path: apps.FullRepoPath(), SourceKind: "GitRepository", SourceName: "flux-system"},
+			})
+			got, err := fluxstack.UmbrellaTerminals(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(got["flux-system/a"], tc.want) {
+				t.Errorf("got %v, want flux-system/a -> %v", got, tc.want)
+			}
+		})
+	}
+}
