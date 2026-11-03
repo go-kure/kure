@@ -77,6 +77,13 @@ type unwrittenItems struct {
 
 func (l *unwrittenItems) DeepCopyObject() runtime.Object { c := *l; return &c }
 
+// recursiveEmbed embeds itself and a trusted marshaler: checking whether its
+// marshaler is promoted from a trusted type must not recurse without end.
+type recursiveEmbed struct {
+	*recursiveEmbed //nolint:unused // the embedding is the case under test
+	*unstructured.Unstructured
+}
+
 func hostileCases() map[string]func() client.Object {
 	list := func() *objectItems {
 		l := &objectItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}}
@@ -93,6 +100,9 @@ func hostileCases() map[string]func() client.Object {
 	return map[string]func() client.Object{
 		"typed nil resource":              func() client.Object { return (*corev1.ConfigMap)(nil) },
 		"typed nil unstructured resource": func() client.Object { return (*unstructured.Unstructured)(nil) },
+		"type that embeds itself and a trusted marshaler": func() client.Object {
+			return &recursiveEmbed{Unstructured: unstructuredObj("v1", "ConfigMap", "default", "cm")}
+		},
 		"embedded nil pointer": func() client.Object {
 			return &struct{ *corev1.ConfigMap }{}
 		},
