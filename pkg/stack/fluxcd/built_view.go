@@ -21,8 +21,10 @@ import (
 // apply of each writes, from what their builds make as kustomize-controller
 // builds them (go-kure/kure#1094), where kustomizationTree reads them as the
 // tree holds them. The reconcile-order checks judge it (orderGraph,
-// checkPlacedReconcileOrder); the "umbrellas do not wait" rewrite and
-// UmbrellaTerminals still read the tree as held.
+// checkPlacedReconcileOrder). The "umbrellas do not wait" rewrite and
+// UmbrellaTerminals read the Kustomizations as the tree holds them; on a tree
+// that patches they also read each dependsOn entry from the views of the
+// build before and after the rewrite (go-kure/kure#1226).
 //
 // A writer is a Kustomization whose build is the tree's: the Flux bootstrap
 // (key ""), which applies the root directory; every member whose spec.path is
