@@ -455,3 +455,94 @@ func TestCallerObject_ListWithNilItemHoldingItselfDoesNotRecurse(t *testing.T) {
 	}()
 	_, _ = fluxstack.UmbrellaTerminals(ml)
 }
+
+// ptrItems is a typed List whose Items field is a pointer to a slice.
+type ptrItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             *[]runtime.Object `json:"items"`
+}
+
+func (l *ptrItems) DeepCopyObject() runtime.Object { c := *l; return &c }
+
+func refusedWithoutPanic(t *testing.T, r client.Object, want string) {
+	t.Helper()
+	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{r}}
+	defer func() {
+		if p := recover(); p != nil {
+			t.Fatalf("UmbrellaTerminals panicked: %v", p)
+		}
+	}()
+	_, err := fluxstack.UmbrellaTerminals(ml)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("got %v, want a refusal naming %q", err, want)
+	}
+}
+
+// The held objects of a List are found wherever the List holds them: through a
+// pointer to a slice as well, with a nil item that apimachinery cannot read.
+func TestCallerObject_PointerItemsWithNilItemStillChecksItsObjects(t *testing.T) {
+	panicMarshalCalls = 0
+	cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
+	cm.Object["spec"] = map[string]any{"m": panicMarshaler{}}
+	items := []runtime.Object{nil, cm}
+	l := &ptrItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}, Items: &items}
+	l.Name, l.Namespace = "holder", "default"
+	refusedWithoutPanic(t, l, "marshals itself")
+	if panicMarshalCalls != 0 {
+		t.Errorf("the marshaler was called %d times", panicMarshalCalls)
+	}
+}
+
+// A cycle the item walk cannot see, through a nil item and a RawExtension that
+// holds the List, is refused, and not marshalled until the stack ends.
+func TestCallerObject_ListCycleThroughRawExtensionIsRefused(t *testing.T) {
+	l := &objectItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}}
+	l.Name, l.Namespace = "holder", "default"
+	inner := &metav1.List{Items: []runtime.RawExtension{{Object: l}}}
+	l.Items = []runtime.Object{nil, inner}
+	refusedWithoutPanic(t, l, "holds itself")
+}
+
+// chainNode is a typed object that holds a chain of its own kind.
+type chainNode struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Next              *chainNode `json:"next,omitempty"`
+}
+
+func (c *chainNode) DeepCopyObject() runtime.Object { n := *c; return &n }
+
+// A typed object nested far deeper than any real one is refused.
+func TestCallerObject_VeryDeepTypedObjectIsRefused(t *testing.T) {
+	head := &chainNode{}
+	head.Name, head.Namespace = "head", "default"
+	for tail, i := head, 0; i < 3000; i++ {
+		tail.Next = &chainNode{}
+		tail = tail.Next
+	}
+	refusedWithoutPanic(t, head, "nested deeper than")
+}
+
+// otherField is a typed object that holds an unstructured object under a field
+// that is no Items.
+type otherField struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Extra             *unstructured.Unstructured `json:"extra,omitempty"`
+}
+
+func (o *otherField) DeepCopyObject() runtime.Object { c := *o; return &c }
+
+// An unstructured object held under a field other than Items is checked too.
+func TestCallerObject_UnstructuredUnderAnotherFieldIsChecked(t *testing.T) {
+	panicMarshalCalls = 0
+	cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
+	cm.Object["spec"] = map[string]any{"m": panicMarshaler{}}
+	o := &otherField{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Thing"}, Extra: cm}
+	o.Name, o.Namespace = "holder", "default"
+	refusedWithoutPanic(t, o, "marshals itself")
+	if panicMarshalCalls != 0 {
+		t.Errorf("the marshaler was called %d times", panicMarshalCalls)
+	}
+}
