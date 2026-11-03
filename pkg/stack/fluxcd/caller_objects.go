@@ -290,17 +290,15 @@ func hasMarshaler(t reflect.Type) bool {
 }
 
 func (c *converter) convert(v reflect.Value, path string, depth int) (any, error) {
+	// An interface and the value it holds are one value, as jsonTyped counts them.
+	if v.Kind() == reflect.Interface && !v.IsNil() {
+		v = v.Elem()
+	}
 	if c.nodes++; c.nodes > maxJSONNodes {
 		return nil, errors.Errorf("%s holds more than %d values", where(path), maxJSONNodes)
 	}
-	if v.Kind() == reflect.Invalid {
+	if v.Kind() == reflect.Invalid || v.Kind() == reflect.Interface {
 		return nil, nil
-	}
-	if v.Kind() == reflect.Interface {
-		if v.IsNil() {
-			return nil, nil
-		}
-		return c.convert(v.Elem(), path, depth)
 	}
 	if v.Type() == jsonNumberType {
 		return json.Number(v.String()), nil
