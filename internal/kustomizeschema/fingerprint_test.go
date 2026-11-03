@@ -1,6 +1,8 @@
 package kustomizeschema
 
 import (
+	randv1 "math/rand"
+	randv2 "math/rand/v2"
 	"runtime/debug"
 	"testing"
 )
@@ -247,6 +249,58 @@ func TestFingerprint_ReadsTheKindOfANamedType(t *testing.T) {
 	}
 	if fingerprint(localKindIntSlice()) == fingerprint(localKindStringSlice()) {
 		t.Error("a slice of a named int and one of a named string have one fingerprint")
+	}
+}
+
+func localInt() []any {
+	type N int
+	type S struct{ F []struct{ G N } }
+	type P struct{ F *struct{ G N } }
+	type C struct{ F chan N }
+	type R struct{ F func(N) }
+	type O struct{ F func() N }
+	type I struct{ F interface{ M(N) } }
+	return []any{S{}, P{}, C{}, R{}, O{}, I{}}
+}
+
+func localString() []any {
+	type N string
+	type S struct{ F []struct{ G N } }
+	type P struct{ F *struct{ G N } }
+	type C struct{ F chan N }
+	type R struct{ F func(N) }
+	type O struct{ F func() N }
+	type I struct{ F interface{ M(N) } }
+	return []any{S{}, P{}, C{}, R{}, O{}, I{}}
+}
+
+// TestFingerprint_ReadsTheKindOfANamedTypeInAnUnnamedOne: the same two types
+// behind a field of an unnamed struct, func, chan or interface type, which a
+// nil value or a func or chan leaves undefined beyond its type.
+func TestFingerprint_ReadsTheKindOfANamedTypeInAnUnnamedOne(t *testing.T) {
+	ints, strs := localInt(), localString()
+	for i, shape := range []string{"slice of struct", "pointer to struct", "chan", "func parameter", "func result", "interface method"} {
+		if fingerprint(ints[i]) == fingerprint(strs[i]) {
+			t.Errorf("a %s of a named int and one of a named string have one fingerprint", shape)
+		}
+	}
+}
+
+func shortNameV1() any {
+	type T struct{ F []struct{ G *randv1.Rand } }
+	return T{}
+}
+
+func shortNameV2() any {
+	type T struct{ F []struct{ G *randv2.Rand } }
+	return T{}
+}
+
+// TestFingerprint_ReadsThePackagePathInAnUnnamedStruct: two packages of one
+// short name behind a field of an unnamed struct.
+func TestFingerprint_ReadsThePackagePathInAnUnnamedStruct(t *testing.T) {
+	if fingerprint(shortNameV1()) == fingerprint(shortNameV2()) {
+		t.Error("two packages of one short name in an unnamed struct have one fingerprint")
 	}
 }
 

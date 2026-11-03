@@ -142,8 +142,10 @@ func (w *walker) str(s string) {
 // typeName is the full name of t, which says what t is made of: for a named
 // type its kind, package path and name (two types of one name whose kinds
 // differ are told apart, and neither reads as its underlying type); for a
-// pointer, slice, array or map the names of the types it holds; for any other
-// unnamed type the type's own string.
+// pointer, slice, array, map, chan, func, struct or interface the names of the
+// types it holds (Go's own string for such a type names a package by its short
+// name and never says the kind of a named type inside it). Each recurses only
+// as far as a named type, so it ends.
 func typeName(t reflect.Type) string {
 	if t.Name() != "" {
 		if t.PkgPath() == "" {
@@ -160,9 +162,70 @@ func typeName(t reflect.Type) string {
 		return "[" + strconv.Itoa(t.Len()) + "]" + typeName(t.Elem())
 	case reflect.Map:
 		return "map[" + typeName(t.Key()) + "]" + typeName(t.Elem())
+	case reflect.Chan:
+		return t.ChanDir().String() + " " + typeName(t.Elem())
+	case reflect.Func:
+		return funcName(t)
+	case reflect.Struct:
+		var b strings.Builder
+		b.WriteString("struct{")
+		for i := range t.NumField() {
+			f := t.Field(i)
+			if i > 0 {
+				b.WriteString("; ")
+			}
+			if f.Anonymous {
+				b.WriteString("embedded ")
+			}
+			// An unexported name belongs to the package that wrote it.
+			b.WriteString(strconv.Quote(f.PkgPath + "." + f.Name))
+			b.WriteString(" " + typeName(f.Type))
+			if f.Tag != "" {
+				b.WriteString(" " + strconv.Quote(string(f.Tag)))
+			}
+		}
+		b.WriteString("}")
+		return b.String()
+	case reflect.Interface:
+		var b strings.Builder
+		b.WriteString("interface{")
+		for i := range t.NumMethod() {
+			m := t.Method(i)
+			if i > 0 {
+				b.WriteString("; ")
+			}
+			b.WriteString(strconv.Quote(m.PkgPath+"."+m.Name) + funcName(m.Type)[len("func"):])
+		}
+		b.WriteString("}")
+		return b.String()
 	default:
 		return t.String()
 	}
+}
+
+// funcName names a func type by what its parameters and results are.
+func funcName(t reflect.Type) string {
+	var b strings.Builder
+	b.WriteString("func(")
+	for i := range t.NumIn() {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		if t.IsVariadic() && i == t.NumIn()-1 {
+			b.WriteString("..." + typeName(t.In(i).Elem()))
+		} else {
+			b.WriteString(typeName(t.In(i)))
+		}
+	}
+	b.WriteString(")(")
+	for i := range t.NumOut() {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(typeName(t.Out(i)))
+	}
+	b.WriteString(")")
+	return b.String()
 }
 
 // typed writes t: its definition the first time, its number after.
