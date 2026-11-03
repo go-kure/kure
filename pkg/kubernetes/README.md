@@ -942,6 +942,10 @@ lifecycle hooks, and the legacy seccomp and AppArmor annotations are not checked
   `runAsNonRoot` or `seccompProfile` satisfies every container that leaves its own
   unset, and a container value overrides the pod value.
 
+`BaselineAllowedCapabilities` returns the capabilities the baseline level allows in
+`capabilities.add`, and `RestrictedAllowedCapabilities` the one the restricted level
+allows (`NET_BIND_SERVICE`). Both return a new sorted slice on each call.
+
 `ValidatePodSpecPSA` honours two pod-level exemptions of the standard. With
 `spec.hostUsers: false`, `runAsNonRoot` and `runAsUser` are not checked, and `procMount`
 is not checked at the baseline level. With `spec.os.name: windows`,

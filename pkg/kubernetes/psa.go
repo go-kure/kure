@@ -2,6 +2,8 @@ package kubernetes
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -199,13 +201,13 @@ func ValidateContainerPSA(container *corev1.Container, level PSALevel) error {
 // checked.
 //
 // Baseline: hostNetwork, hostPID, hostIPC; privileged; capabilities.add
-// against the baseline capability list; procMount; windowsOptions.hostProcess;
+// against [BaselineAllowedCapabilities]; procMount; windowsOptions.hostProcess;
 // seccompProfile and appArmorProfile types other than RuntimeDefault and
 // Localhost; seLinuxOptions; pod sysctls outside the safe list.
 //
 // Restricted adds: allowPrivilegeEscalation=false; runAsNonRoot=true and
-// runAsUser other than 0; capabilities.drop ALL with at most NET_BIND_SERVICE
-// added; a seccompProfile of RuntimeDefault or Localhost. runAsNonRoot and
+// runAsUser other than 0; capabilities.drop ALL with at most the
+// [RestrictedAllowedCapabilities] added; a seccompProfile of RuntimeDefault or Localhost. runAsNonRoot and
 // seccompProfile are accepted when the pod sets them, or when every container
 // does; a container value overrides the pod value.
 //
@@ -551,6 +553,22 @@ var baselineAllowedCapabilities = map[corev1.Capability]bool{
 
 func isBaselineAllowedCapability(cap corev1.Capability) bool {
 	return baselineAllowedCapabilities[cap]
+}
+
+// BaselineAllowedCapabilities returns the capabilities that the baseline Pod
+// Security Standards level allows in capabilities.add, sorted by name.
+// [ValidateContainerPSA] and [ValidatePodSpecPSA] check against this list. The
+// caller owns the returned slice and may change it.
+func BaselineAllowedCapabilities() []corev1.Capability {
+	return slices.Sorted(maps.Keys(baselineAllowedCapabilities))
+}
+
+// RestrictedAllowedCapabilities returns the capabilities that the restricted
+// Pod Security Standards level allows in capabilities.add, which is only
+// NET_BIND_SERVICE. The restricted level also requires capabilities.drop to
+// contain ALL. The caller owns the returned slice and may change it.
+func RestrictedAllowedCapabilities() []corev1.Capability {
+	return []corev1.Capability{capabilityNetBindService}
 }
 
 // baselineAllowedSELinuxTypes lists the seLinuxOptions types the baseline

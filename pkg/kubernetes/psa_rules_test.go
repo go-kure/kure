@@ -360,6 +360,50 @@ func TestValidatePodSpecPSA_WindowsExemption(t *testing.T) {
 	})
 }
 
+func TestBaselineAllowedCapabilities(t *testing.T) {
+	got := BaselineAllowedCapabilities()
+	want := []corev1.Capability{
+		"AUDIT_WRITE", "CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL", "MKNOD",
+		"NET_BIND_SERVICE", "SETFCAP", "SETGID", "SETPCAP", "SETUID", "SYS_CHROOT",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d capabilities %v, want %d", len(got), got, len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("capability %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+
+	// The list and the validator agree: every listed capability passes
+	// baseline, and one outside the list does not.
+	for _, c := range got {
+		spec := baselinePod(func(s *corev1.PodSpec) {
+			containerSC(s).Capabilities = &corev1.Capabilities{Add: []corev1.Capability{c}}
+		})
+		if err := ValidatePodSpecPSA(spec, PSABaseline); err != nil {
+			t.Errorf("listed capability %q refused at baseline: %v", c, err)
+		}
+	}
+
+	// The caller owns the slice: changing it does not change the next call.
+	got[0] = "CHANGED"
+	if again := BaselineAllowedCapabilities(); again[0] != "AUDIT_WRITE" {
+		t.Errorf("a changed result leaked into the next call: %q", again[0])
+	}
+}
+
+func TestRestrictedAllowedCapabilities(t *testing.T) {
+	got := RestrictedAllowedCapabilities()
+	if len(got) != 1 || got[0] != "NET_BIND_SERVICE" {
+		t.Fatalf("got %v, want [NET_BIND_SERVICE]", got)
+	}
+	got[0] = "CHANGED"
+	if again := RestrictedAllowedCapabilities(); again[0] != "NET_BIND_SERVICE" {
+		t.Errorf("a changed result leaked into the next call: %q", again[0])
+	}
+}
+
 // ValidateContainerPSA has no pod: nothing is inherited and no pod-dependent
 // exemption applies.
 func TestValidateContainerPSA_Rows(t *testing.T) {
