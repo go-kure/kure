@@ -53,7 +53,7 @@ import (
 // laterPatchRefusal builds only names a patch in a refusal that already stands,
 // and never calls finish: a build of it that is not read is not the error the
 // refusal compares with, so the refusal stays as it was. The scope of each kind
-// a build makes is checked in that build (builtInScopes).
+// a build loads or makes is checked in that build (builtInScopes).
 type treeBuilds struct {
 	root    *layout.ManifestLayout
 	dir     string
@@ -187,7 +187,7 @@ func (b *treeBuilds) build(k *kustv1.Kustomization) ([]client.Object, error) {
 			return nil, unreadBuild{errors.Errorf("its build loads %s, which may merge into a Secret (a secretGenerator entry with behavior merge, or a generators entry), and %s: kure cannot tell under which name Flux builds the merged Secret", guard.rel(file), why)}
 		}
 	}
-	if err := builtInScopes(rm); err != nil {
+	if err := builtInScopes(rm, guard.kinds); err != nil {
 		return nil, unreadBuild{err}
 	}
 	objs := make([]client.Object, 0, rm.Size())
@@ -272,25 +272,40 @@ func checkDefinitions(when string) error {
 	return nil
 }
 
-// builtInScopes is nil when kyaml answers the scope of each kind rm holds as
-// its built-in schema does. The definitions do not show a schema added with
-// paths only: kyaml records from the paths of each schema added which kinds are
-// cluster-scoped, and kustomize's namespace filter and name references decide
-// on that answer, so a kind such a schema names is built without the namespace
-// a Kustomization sets, where kustomize-controller's build gives it. The table
-// cannot be listed, so each kind of the build is asked, under the lock the
-// build holds (go-kure/kure#1166).
-func builtInScopes(rm resmap.ResMap) error {
-	seen := map[string]bool{}
-	for _, res := range rm.Resources() {
-		apiVersion, kind := res.GetApiVersion(), res.GetKind()
-		key := apiVersion + " " + kind
+// builtInScopes is nil when kyaml answers the scope of each kind the build
+// loaded, and of each kind rm holds, as its built-in schema does. The
+// definitions do not show a schema added with paths only: kyaml records from
+// the paths of each schema added which kinds are cluster-scoped, and
+// kustomize's namespace filter and name references decide on that answer, so a
+// kind such a schema names is built without the namespace a Kustomization
+// sets, where kustomize-controller's build gives it. The table cannot be
+// listed, so each kind is asked, under the lock the build holds
+// (go-kure/kure#1166). kustomize reads the scope of a kind as it loads the
+// objects, before an overlay may delete them, so the kinds of the objects the
+// build ends with are not all it asked about: loaded holds the kinds of every
+// file and inline patch the build read (buildGuard.loadedKinds, go-kure/kure#1235).
+// A kind only a generator made and an overlay deleted is in neither, and is
+// not asked: a generator makes a ConfigMap or a Secret.
+func builtInScopes(rm resmap.ResMap, loaded []kindKey) error {
+	seen := map[kindKey]bool{}
+	ask := func(key kindKey) error {
 		if seen[key] {
-			continue
+			return nil
 		}
 		seen[key] = true
-		if !kustomizeschema.ScopeIsBuiltIn(apiVersion, kind) {
-			return errors.Errorf("kyaml's scope of %s is not its built-in one: another use of kustomize added a schema with a path for it, and kustomize-controller builds with the built-in schema, so kure cannot build it as Flux does", key)
+		if !kustomizeschema.ScopeIsBuiltIn(key.apiVersion, key.kind) {
+			return errors.Errorf("kyaml's scope of %s %s is not its built-in one: another use of kustomize added a schema with a path for it, and kustomize-controller builds with the built-in schema, so kure cannot build it as Flux does", key.apiVersion, key.kind)
+		}
+		return nil
+	}
+	for _, key := range loaded {
+		if err := ask(key); err != nil {
+			return err
+		}
+	}
+	for _, res := range rm.Resources() {
+		if err := ask(kindKey{res.GetApiVersion(), res.GetKind()}); err != nil {
+			return err
 		}
 	}
 	return nil
