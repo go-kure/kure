@@ -1886,16 +1886,18 @@ object the caller passed: its `Object` field holds a new map, and the map the ca
 changed. The accepted shapes are a closed list. A `string`, `int64`, `float64`, `bool`, `nil`,
 `json.Number`, `map[string]interface{}` and `[]interface{}` are kept as they are. A Go integer kind
 (`int`, `int8` to `int32`, `uint`, `uint8` to `uint32`, `uintptr`, and a `uint64` up to the largest
-`int64`) becomes an `int64`, so an integer above 2^53 stays exact, and a `float32` becomes a
-`float64`. A named `string`, `bool`, integer or float kind becomes its base type. A map with string
-keys and a slice of any element type (`[]string`, `map[string]string`) are converted element by
-element. Anything else is refused instead of converted: a struct, a pointer, an array, a channel, a
+`int64`) becomes an `int64`, so an integer above 2^53 stays exact. A `float32` becomes the
+`float64` of its shortest 32-bit decimal form, as `encoding/json` writes it (`float32(0.1)` is
+`0.1`), and a byte slice becomes its base64 string, as `encoding/json` writes it. A named `string`,
+`bool`, integer or float kind becomes its base type. A map with string keys and a slice of any
+element type (`[]string`, `map[string]string`) are converted element by element. Anything else is refused instead of converted: a struct, a pointer, an array, a channel, a
 function, a complex number, a map with other keys, a `uint64` above the largest `int64`, and every type
 with a `MarshalJSON` or `MarshalText` method (`json.RawMessage` and `net.IP` among them). So is a value
-that holds itself through maps and slices, one nested deeper than 1000 levels, and one with more than 4
-million values. A refusal names the layout, the object and the field, and replaces no object. kure never
-marshals a caller's value and never calls a method of it. The cases the issue names (a plain `int`
-in an object, nested in a `sourceRef`, in a `List`'s items, in a `Source` `spec`) all stay accepted. A
+that holds itself through maps and slices, one nested deeper than 1000 levels, one with more than 4
+million values and a byte slice of more than 4 million bytes. A refusal names the layout, the object
+and the field, and replaces no object. kure never calls a method of a caller's value, a marshaler
+included, also not to read a typed `List` that holds such an object. The cases the issue names (a
+plain `int` in an object, nested in a `sourceRef`, in a `List`'s items, in a `Source` `spec`) all stay accepted. A
 call that refuses later, for another reason, puts every `Object` map it replaced back, as long as the
 caller does not change the tree during the call. What they still leave out:
 
