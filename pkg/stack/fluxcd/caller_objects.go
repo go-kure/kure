@@ -184,6 +184,10 @@ func embeddedUnstructured(r client.Object) (u *unstructured.Unstructured, wrappe
 	if r == nil {
 		return nil, false, nil
 	}
+	// A typed nil is refused by callerObjects, with the type named.
+	if rv := reflect.ValueOf(r); rv.Kind() == reflect.Pointer && rv.IsNil() {
+		return nil, false, nil
+	}
 	t := reflect.TypeOf(r)
 	st := t
 	for st.Kind() == reflect.Pointer {

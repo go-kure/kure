@@ -113,6 +113,7 @@ func hostileCases() map[string]func() client.Object {
 			u.Object["spec"] = map[string]any{"n": 7}
 			return embedsUnstructured{u}
 		},
+		"typed nil wrapper embedding Unstructured": func() client.Object { return (*embedsUnstructured)(nil) },
 		"embedded nil pointer": func() client.Object {
 			return &struct{ *corev1.ConfigMap }{}
 		},
@@ -257,6 +258,7 @@ func runHostile(r func() client.Object) (answers []string) {
 var refusalNames = map[string]string{
 	"typed nil resource":                              "nil *v1.ConfigMap",
 	"typed nil unstructured resource":                 "nil *unstructured.Unstructured",
+	"typed nil wrapper embedding Unstructured":        "nil *fluxcd_test.embedsUnstructured",
 	"embedded nil pointer":                            "struct { *v1.ConfigMap }",
 	"GetObjectKind panics with a string":              "fluxcd_test.kindPanics",
 	"GetObjectKind panics with a nil error":           "fluxcd_test.kindPanics",
