@@ -482,3 +482,25 @@ func TestNormalizeCallerObjects_OversizedByteSliceIsRefused(t *testing.T) {
 		t.Errorf("got %v, want a refusal naming data.v and the byte limit", err)
 	}
 }
+
+// An object that is under the value limit as JSON typed values is under it
+// after one value needs converting: an interface and the value it holds are
+// one value, as jsonTyped counts them.
+func TestNormalizeCallerObjects_InterfaceValuesCountOnce(t *testing.T) {
+	const n = 3_000_000
+	list := make([]any, n, n+1)
+	for i := range list {
+		list[i] = int64(i)
+	}
+	if !jsonTyped(list, 0) {
+		t.Fatal("the list is not JSON typed")
+	}
+	list = append(list, 1) // an int: the object now needs the conversion
+	u := &unstructured.Unstructured{Object: map[string]any{"apiVersion": "v1", "kind": "ConfigMap", "spec": map[string]any{"v": list}}}
+	if err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{u}}); err != nil {
+		t.Fatalf("refused an object of %d values: %v", n+1, err)
+	}
+	if got := u.Object["spec"].(map[string]any)["v"].([]any); len(got) != n+1 || got[n] != int64(1) {
+		t.Errorf("got %d values, last %#v", len(got), got[len(got)-1])
+	}
+}
