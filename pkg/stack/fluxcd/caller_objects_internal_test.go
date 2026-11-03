@@ -572,3 +572,19 @@ func TestPromotedFromTrusted(t *testing.T) {
 		}
 	}
 }
+
+// Where it cannot be told whether a method is a promotion wrapper, the answer
+// is no, so the type is not trusted.
+func TestIsPromotion_CannotTellIsNo(t *testing.T) {
+	if isPromotion(0) {
+		t.Error("a function that cannot be found is called a promotion")
+	}
+	own, _ := reflect.TypeFor[declaresOwn]().MethodByName("MarshalJSON")
+	if isPromotion(own.Func.Pointer()) {
+		t.Error("a method with a source file is called a promotion")
+	}
+	promoted, _ := reflect.TypeFor[promotesTrusted]().MethodByName("MarshalJSON")
+	if !isPromotion(promoted.Func.Pointer()) {
+		t.Error("the wrapper of a promoted method is not called a promotion")
+	}
+}
