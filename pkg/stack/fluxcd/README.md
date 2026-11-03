@@ -1866,9 +1866,9 @@ value that would call a method when written. A typed object that holds a type wi
 `MarshalText` or `MarshalYAML` method, as a field, an element or a map key, is refused, naming the
 type, unless the type is from `k8s.io`, `sigs.k8s.io`, `github.com/fluxcd`, `github.com/go-kure` or
 one of the standard library packages that define such a type (`time`, `net`, `net/netip`, `net/url`,
-`math/big`, `regexp`, `log/slog` and `encoding/json`). A type of `package main` is not trusted. A typed resource whose own method panics when kure reads
+`math/big`, `regexp`, `log/slog` and `encoding/json`). A type of `package main` is not trusted. A named struct that only promotes such a method from an embedded type of a trusted package (a type that embeds `*unstructured.Unstructured`) is accepted; one that declares the method itself is not. A typed resource whose own method panics when kure reads
 its kind (a struct that embeds a nil pointer) is refused, naming the layout, the resource's place in it
-and its Go type; so is a typed nil resource. The one place kure calls a method of a caller's object is
+and its Go type; so is a typed nil resource, an unstructured one included. The one place kure calls a method of a caller's object is
 guarded: a panic there is a refusal that names only the Go type of the panic value, never its text. kure reads
 the items of a `List` by reflection and never formats a caller's object, so an item that is no
 object cannot make it format without end. The cases the issue names (a
