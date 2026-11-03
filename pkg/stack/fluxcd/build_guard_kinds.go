@@ -48,13 +48,14 @@ const (
 // The false refusal left is a List that deep, or an object with a merge chain
 // that deep, in a file that is no resource.
 func (g *buildGuard) loadedKinds(b []byte) string {
+	seen := map[kindVisit]bool{}
 	for _, part := range splitDocuments(string(b)) {
 		var doc kyaml.Node
 		if err := kyaml.NewDecoder(strings.NewReader(part)).Decode(&doc); err != nil {
 			continue
 		}
 		if doc.Kind == kyaml.DocumentNode && len(doc.Content) == 1 {
-			if why := g.noteKinds(doc.Content[0], 0, false); why != "" {
+			if why := g.noteKinds(doc.Content[0], 0, false, seen); why != "" {
 				return why
 			}
 		}
@@ -85,14 +86,39 @@ func splitDocuments(s string) []string {
 	return append(parts, s[prev:])
 }
 
+// kindVisit is everything a visit of noteKinds depends on: the mapping read
+// (an alias already resolved), how deep in Lists it sits, and whether an
+// enclosing List or the mapping itself is an object.
+type kindVisit struct {
+	n      *kyaml.Node
+	depth  int
+	object bool
+}
+
 // noteKinds records the kind of the node n when it is a mapping, and of its
 // items when its kind ends in List. object is whether n, or a List it sits in,
 // has a metadata key: only then is a bound that stops the read a refusal.
-func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool) string {
+//
+// seen holds the visits of one loadedKinds call: of a mapping, and of the
+// sequence of items of a List. A visit met again gives the result of the
+// first: a refusal ended the call, and the kinds it recorded are recorded. So
+// a mapping or a sequence many aliases name is read once per depth and object
+// flag, and the Lists are walked in at most (maxListDepth+1) times 2 reads of
+// each node of the file, not in the paths through its aliases. What each
+// mapping visit reads of itself (its keys and the mappings its merge keys
+// name) is not memoized. The memo lives one call, so concurrent builds share
+// nothing.
+func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, seen map[kindVisit]bool) string {
 	n = resolve(n)
 	if n == nil || n.Kind != kyaml.MappingNode {
 		return ""
 	}
+	visit := kindVisit{n, depth, object}
+	if seen[visit] {
+		return ""
+	}
+	seen[visit] = true
+	g.kindVisits++
 	m := objectMeta{}
 	var merges []*kyaml.Node
 	m.read(n, &merges)
@@ -115,9 +141,14 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool) string {
 				}
 				return ""
 			}
-			for _, item := range items.Content {
-				if why := g.noteKinds(item, depth+1, object); why != "" {
-					return why
+			// The Lists that hold one sequence step over it once.
+			if step := (kindVisit{items, depth, object}); !seen[step] {
+				seen[step] = true
+				for _, item := range items.Content {
+					g.kindItems++
+					if why := g.noteKinds(item, depth+1, object, seen); why != "" {
+						return why
+					}
 				}
 			}
 		}

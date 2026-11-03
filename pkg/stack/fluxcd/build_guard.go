@@ -81,8 +81,10 @@ type buildGuard struct {
 	// kinds holds, once each and in the order met, the apiVersion and kind
 	// of every object a file or inline patch the build reads holds
 	// (loadedKinds).
-	kinds    []kindKey
-	kindSeen map[kindKey]bool
+	kinds      []kindKey
+	kindSeen   map[kindKey]bool
+	kindVisits int // mappings loadedKinds walked: a count the tests pin
+	kindItems  int // List items loadedKinds stepped over: a count the tests pin
 	// decrypting is set when the Kustomization sets spec.decryption
 	// (decrypts): Flux decrypts the files and the objects of its build.
 	decrypting bool

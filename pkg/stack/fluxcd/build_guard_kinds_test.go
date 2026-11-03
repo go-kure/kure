@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -172,4 +173,209 @@ func TestTreeBuilds_AGeneratorDataFileWithAMergeChainStillBuilds(t *testing.T) {
 	if err != nil || len(objs) != 1 || objs[0].GetObjectKind().GroupVersionKind().Kind != "ConfigMap" {
 		t.Fatalf("got %v, %v, want a read build of one ConfigMap", objs, err)
 	}
+}
+
+// aliasedList is a List whose items are the aliases of one anchor: n of them
+// name the List itself when self is set, else a Widget.
+func aliasedList(n int, metadata bool) string {
+	var b strings.Builder
+	b.WriteString("&a {apiVersion: v1, kind: List, ")
+	if metadata {
+		b.WriteString("metadata: {name: l}, ")
+	}
+	b.WriteString("items: [")
+	for i := range n {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("*a")
+	}
+	return b.String() + "]}\n"
+}
+
+// TestBuildGuard_LoadedKindsWalksAShareOnce: a node met again with the same
+// depth and object flag gives the same result, so it is walked once. A List
+// that holds itself n times would otherwise be walked n to the power of the
+// depth bound times, under the build lock (go-kure/kure#1240).
+func TestBuildGuard_LoadedKindsWalksAShareOnce(t *testing.T) {
+	t.Run("a List holding itself, pinned exactly", func(t *testing.T) {
+		g := newBuildGuard(nil, "")
+		if why := g.loadedKinds([]byte(aliasedList(4, false))); why != "" {
+			t.Fatalf("refused: %s", why)
+		}
+		// One walk per depth, from the root to the bound.
+		if want := maxListDepth + 1; g.kindVisits != want {
+			t.Errorf("walked %d mappings, want %d", g.kindVisits, want)
+		}
+		if len(g.kinds) != 1 || g.kinds[0] != (kindKey{"v1", "List"}) {
+			t.Errorf("kinds = %v, want the List", g.kinds)
+		}
+	})
+	t.Run("a hundred aliases of a List that holds itself", func(t *testing.T) {
+		for _, metadata := range []bool{false, true} {
+			done := make(chan string, 1)
+			go func() {
+				g := newBuildGuard(nil, "")
+				done <- g.loadedKinds([]byte(aliasedList(100, metadata)))
+			}()
+			select {
+			case why := <-done:
+				if refused := why != ""; refused != metadata {
+					t.Errorf("metadata %v: refusal = %q", metadata, why)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatalf("metadata %v: the walk did not end in 10 s", metadata)
+			}
+		}
+	})
+	t.Run("a shared tree reads as its expansion", func(t *testing.T) {
+		shared := "w: &w {apiVersion: example.com/v1, kind: Widget}\n" +
+			"l: &l {apiVersion: v1, kind: List, items: [*w, *w, *w]}\n" +
+			"apiVersion: v1\nkind: List\nitems: [*l, *l]\n"
+		const l = "{apiVersion: v1, kind: List, items: [" +
+			"{apiVersion: example.com/v1, kind: Widget}, " +
+			"{apiVersion: example.com/v1, kind: Widget}, " +
+			"{apiVersion: example.com/v1, kind: Widget}]}"
+		expanded := "apiVersion: v1\nkind: List\nitems: [" + l + ", " + l + "]\n"
+		gs, ge := newBuildGuard(nil, ""), newBuildGuard(nil, "")
+		if why := gs.loadedKinds([]byte(shared)); why != "" {
+			t.Fatalf("shared refused: %s", why)
+		}
+		if why := ge.loadedKinds([]byte(expanded)); why != "" {
+			t.Fatalf("expanded refused: %s", why)
+		}
+		if !slices.Equal(gs.kinds, ge.kinds) {
+			t.Errorf("shared kinds %v, expanded %v", gs.kinds, ge.kinds)
+		}
+		// The shared tree: the root, one List, one Widget. The expansion
+		// walks the List twice and the Widget six times.
+		if gs.kindVisits != 3 || ge.kindVisits != 9 {
+			t.Errorf("walked shared %d, expanded %d, want 3 and 9", gs.kindVisits, ge.kindVisits)
+		}
+	})
+	t.Run("the object flag is part of a visit", func(t *testing.T) {
+		// The anchored List is met first outside an object, where the depth
+		// bound is no refusal, then inside a List with a metadata key, where
+		// it is: the second visit must not be read as the first.
+		file := "apiVersion: v1\nkind: List\nitems:\n" +
+			"  - &a {apiVersion: v1, kind: List, items: [*a]}\n" +
+			"  - {apiVersion: v1, kind: List, metadata: {name: m}, items: [*a]}\n"
+		g := newBuildGuard(nil, "")
+		if why := g.loadedKinds([]byte(file)); why == "" {
+			t.Error("a List nested past the bound inside an object was not refused")
+		}
+	})
+	t.Run("a legitimate List of fifty items is read whole", func(t *testing.T) {
+		var b strings.Builder
+		b.WriteString("apiVersion: v1\nkind: List\nmetadata: {name: l}\nitems:\n")
+		for i := range 50 {
+			b.WriteString("  - {apiVersion: example.com/v1, kind: Widget" + strings.Repeat("k", i%5) + "}\n")
+		}
+		g := newBuildGuard(nil, "")
+		if why := g.loadedKinds([]byte(b.String())); why != "" {
+			t.Fatalf("refused: %s", why)
+		}
+		if len(g.kinds) != 6 || g.kindVisits != 51 {
+			t.Errorf("kinds %d, walked %d, want 6 and 51", len(g.kinds), g.kindVisits)
+		}
+	})
+}
+
+// sharedSequence is a file with one anchored sequence of n aliases of a
+// Widget, and a List of m Lists that all hold that sequence as their items.
+func sharedSequence(n, m int) string {
+	var b strings.Builder
+	b.WriteString("w: &w {apiVersion: example.com/v1, kind: Widget}\nseq: &s [")
+	for range n {
+		b.WriteString("*w, ")
+	}
+	b.WriteString("*w]\napiVersion: v1\nkind: List\nitems:\n")
+	for range m {
+		b.WriteString("  - {apiVersion: v1, kind: List, items: *s}\n")
+	}
+	return b.String()
+}
+
+// TestBuildGuard_LoadedKindsStepsASharedSequenceOnce: the items of a List are
+// stepped over once for each sequence node, depth and object flag, so m Lists
+// that hold one sequence of n items cost m plus n steps and not m times n
+// (go-kure/kure#1240: about a minute at 1 MiB, under the build lock).
+func TestBuildGuard_LoadedKindsStepsASharedSequenceOnce(t *testing.T) {
+	t.Run("steps are pinned exactly", func(t *testing.T) {
+		g := newBuildGuard(nil, "")
+		if why := g.loadedKinds([]byte(sharedSequence(4, 3))); why != "" {
+			t.Fatalf("refused: %s", why)
+		}
+		// The root steps over its 3 Lists, the first List over the 5 items of
+		// the sequence, and the other two Lists find it stepped over.
+		if g.kindItems != 3+5 || g.kindVisits != 1+3+1 {
+			t.Errorf("stepped %d items, walked %d mappings, want 8 and 5", g.kindItems, g.kindVisits)
+		}
+		if len(g.kinds) != 2 {
+			t.Errorf("kinds = %v, want the Widget and the List", g.kinds)
+		}
+	})
+	t.Run("a file of about a megabyte", func(t *testing.T) {
+		const n, m = 131000, 11400
+		file := sharedSequence(n, m)
+		if len(file) < 1<<20-64<<10 {
+			t.Fatalf("the file is %d bytes, not megabyte-sized", len(file))
+		}
+		type result struct {
+			why          string
+			items, walks int
+		}
+		done := make(chan result, 1)
+		go func() {
+			g := newBuildGuard(nil, "")
+			done <- result{g.loadedKinds([]byte(file)), g.kindItems, g.kindVisits}
+		}()
+		select {
+		case r := <-done:
+			if r.why != "" || r.items != m+n+1 || r.walks != m+2 {
+				t.Errorf("refusal %q, stepped %d items, walked %d mappings, want none, %d and %d", r.why, r.items, r.walks, m+n+1, m+2)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("the walk did not end in 10 s")
+		}
+	})
+	t.Run("Lists at different depths read as the expansion", func(t *testing.T) {
+		shared := "w: &w {apiVersion: example.com/v1, kind: Widget}\n" +
+			"s: &s [*w, {apiVersion: example.com/v1, kind: Other}]\n" +
+			"apiVersion: v1\nkind: List\nitems:\n" +
+			"  - {apiVersion: v1, kind: List, items: *s}\n" +
+			"  - {apiVersion: v1, kind: List, items: [{apiVersion: v1, kind: List, items: *s}]}\n"
+		const seq = "[{apiVersion: example.com/v1, kind: Widget}, {apiVersion: example.com/v1, kind: Other}]"
+		expanded := "apiVersion: v1\nkind: List\nitems:\n" +
+			"  - {apiVersion: v1, kind: List, items: " + seq + "}\n" +
+			"  - {apiVersion: v1, kind: List, items: [{apiVersion: v1, kind: List, items: " + seq + "}]}\n"
+		gs, ge := newBuildGuard(nil, ""), newBuildGuard(nil, "")
+		if why := gs.loadedKinds([]byte(shared)); why != "" {
+			t.Fatalf("shared refused: %s", why)
+		}
+		if why := ge.loadedKinds([]byte(expanded)); why != "" {
+			t.Fatalf("expanded refused: %s", why)
+		}
+		if !slices.Equal(gs.kinds, ge.kinds) {
+			t.Errorf("shared kinds %v, expanded %v", gs.kinds, ge.kinds)
+		}
+		// The root steps over 2 Lists, the first holds the sequence at depth 1
+		// (2 items), the second one List (1 item) that holds it at depth 2
+		// (2 items): the sequence is met at two depths, so stepped over twice.
+		if gs.kindItems != 2+2+1+2 {
+			t.Errorf("stepped %d items in the shared file, want 7", gs.kindItems)
+		}
+	})
+	t.Run("the object flag is part of a step", func(t *testing.T) {
+		// A sequence that holds a List that holds the sequence again is met
+		// first outside an object, where the depth bound is no refusal, then
+		// inside a List with a metadata key, where it is.
+		file := "apiVersion: v1\nkind: List\nitems:\n" +
+			"  - {apiVersion: v1, kind: List, items: &q [&a {apiVersion: v1, kind: List, items: *q}]}\n" +
+			"  - {apiVersion: v1, kind: List, metadata: {name: m}, items: *q}\n"
+		g := newBuildGuard(nil, "")
+		if why := g.loadedKinds([]byte(file)); why == "" {
+			t.Error("a List nested past the bound inside an object was not refused")
+		}
+	})
 }
