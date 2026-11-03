@@ -97,28 +97,24 @@ func HeldItems(r runtime.Object) ([]*unstructured.Unstructured, error) {
 
 // HeldObjects is HeldItems that also returns the other objects the typed List r
 // holds as its own items, and those of the typed Lists it holds: each item that
-// is neither an unstructured object nor a List, a type that embeds an
-// unstructured object say. Such an item is returned as it is held, so that the
-// caller can look at what it embeds.
-func HeldObjects(r runtime.Object) (items []*unstructured.Unstructured, others []runtime.Object, err error) {
-	items, others, _, err = heldObjects(r)
-	return items, others, err
-}
-
-// heldObjects is HeldObjects, and whether r is a List.
-func heldObjects(r runtime.Object) (out []*unstructured.Unstructured, others []runtime.Object, isList bool, err error) {
+// is no unstructured object, a type that embeds an unstructured object say. An
+// item that is a List is among them too, as the object it is held as: a type
+// that embeds an unstructured List is such an item, and its items are copies
+// that HeldItems skips. Each is returned as it is held, so that the caller can
+// look at what it embeds.
+func HeldObjects(r runtime.Object) (out []*unstructured.Unstructured, others []runtime.Object, err error) {
 	if _, ok := r.(*unstructured.Unstructured); ok {
-		return nil, nil, false, nil
+		return nil, nil, nil
 	}
 	if err := refuseItemCycle(r, map[listRef]bool{}); err != nil {
-		return nil, nil, false, err
+		return nil, nil, err
 	}
 	items, isList, err := listItems(r)
 	if err != nil {
-		return heldItems(r), nil, false, err
+		return heldItems(r), nil, err
 	}
 	if !isList {
-		return nil, nil, false, nil
+		return nil, nil, nil
 	}
 	for _, item := range items {
 		if item.Read {
@@ -128,17 +124,15 @@ func heldObjects(r runtime.Object) (out []*unstructured.Unstructured, others []r
 			out = append(out, u)
 			continue
 		}
-		held, heldOthers, itemIsList, err := heldObjects(item.Object)
+		others = append(others, item.Object)
+		held, heldOthers, err := HeldObjects(item.Object)
 		out = append(out, held...)
 		others = append(others, heldOthers...)
 		if err != nil {
-			return out, others, true, err
-		}
-		if !itemIsList {
-			others = append(others, item.Object)
+			return out, others, err
 		}
 	}
-	return out, others, true, nil
+	return out, others, nil
 }
 
 // heldItems is the objects apimachinery takes for the items of r, and of the
