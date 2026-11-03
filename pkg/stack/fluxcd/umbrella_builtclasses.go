@@ -62,8 +62,16 @@ func (s classSet) holds(need int) bool {
 type viewSnapshot struct {
 	rescue bool
 	// ids is every Flux Kustomization identity the view holds: the members,
-	// the others the tree holds, and every identity a build wrote.
+	// the others the tree holds, and every identity a build wrote. The
+	// obligation and field checks read it, so a held namesake that no build
+	// makes is still judged.
 	ids map[string]bool
+	// built is the identities the view builds: the members and every identity
+	// a build wrote, not the others the tree only holds. checkSameIdentities
+	// reads it: a namesake held in a directory no writer builds says nothing of
+	// which identities the builds make, and must not stand in for one that a
+	// patch moved (go-kure/kure#1243).
+	built map[string]bool
 	// classes holds, per identity and per dependency, the classes of the
 	// identity's entries on that dependency.
 	classes map[string]map[string]classSet
@@ -127,17 +135,20 @@ func snapshotView(v *builtView) (*viewSnapshot, error) {
 	s := &viewSnapshot{
 		rescue:  v.rescue,
 		ids:     map[string]bool{},
+		built:   map[string]bool{},
 		classes: map[string]map[string]classSet{},
 		fields:  map[string]map[string]string{},
 	}
 	for _, k := range v.t.kusts {
 		s.ids[crKey(k.Namespace, k.Name)] = true
+		s.built[crKey(k.Namespace, k.Name)] = true
 	}
 	for _, key := range v.t.otherKeys {
 		s.ids[key] = true
 	}
 	for key := range v.occurrences {
 		s.ids[key] = true
+		s.built[key] = true
 	}
 	for id := range s.ids {
 		k, err := v.spec(id)
@@ -330,13 +341,13 @@ func (t *kustomizationTree) heldStandsFor(v *builtView, x string) (bool, error) 
 // the metadata (a JSON6902 copy of /spec/dependsOn/0/name into /metadata/name),
 // so what a rewritten list holds can change which identities the build makes.
 func checkSameIdentities(p, q *viewSnapshot) error {
-	for _, id := range sortedKeys(p.ids) {
-		if !q.ids[id] {
+	for _, id := range sortedKeys(p.built) {
+		if !q.built[id] {
 			return refuseRewrite("the build of the tree makes Flux Kustomization %q before the rewrite but not after it: the rewritten dependsOn changes what a patch does, and what the Kustomizations wait for cannot be compared", id)
 		}
 	}
-	for _, id := range sortedKeys(q.ids) {
-		if !p.ids[id] {
+	for _, id := range sortedKeys(q.built) {
+		if !p.built[id] {
 			return refuseRewrite("the build of the tree makes Flux Kustomization %q after the rewrite but not before it: the rewritten dependsOn changes what a patch does, and what the Kustomizations wait for cannot be compared", id)
 		}
 	}

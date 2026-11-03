@@ -646,3 +646,68 @@ func TestBuiltClasses_RescueView(t *testing.T) {
 		}
 	}
 }
+
+// namesakesOfTheCopies are two ordinary Kustomizations, x-platform and
+// x-y-infra, in a directory no writer builds. Each clones the graph fields of
+// the generated s (its path, source and, with wait, its wait) and holds the
+// dependsOn the rewrite gives the copy, [y-infra y-services v]. The rename
+// patch of TestBuiltClasses_PatchRenamesByCopyingADependsOnName moves the
+// built copy from x-platform to x-y-infra; these two stand for neither.
+func namesakesOfTheCopies(t *testing.T, rules layout.LayoutRules, wait bool) []client.Object {
+	t.Helper()
+	s := findKustomization(integrated(t, builtClassCluster([]string{"v"}), rules), "s")
+	if s == nil {
+		t.Fatal("no generated Kustomization s")
+	}
+	var out []client.Object
+	for _, name := range []string{"x-platform", "x-y-infra"} {
+		k := s.DeepCopy()
+		k.Name = name
+		k.Spec.Wait = wait
+		k.Spec.DependsOn = nil
+		for _, d := range []string{"y-infra", "y-services", "v"} {
+			k.Spec.DependsOn = append(k.Spec.DependsOn, kustv1.DependencyReference{Name: d})
+		}
+		out = append(out, k)
+	}
+	return out
+}
+
+// A patch of the renamed copy of s copies the name of dependsOn index 0 into
+// metadata.name, so the build makes x-platform before the rewrite and
+// x-y-infra after it. The tree also holds an unbuilt namesake of each name that
+// matches the copy in every graph field and in the rewritten dependsOn, so
+// reading held objects as identities of the build would hide the move: the
+// identity-set check compares what the build makes, and refuses it
+// (go-kure/kure#1226, go-kure/kure#1243). Namesakes that differ in wait are
+// refused as well, by the same check. The same namesakes with a patch that
+// renames nothing are admitted: an unbuilt namesake alone is no defect.
+func TestBuiltClasses_RenameBesideMatchingUnbuiltNamesakes(t *testing.T) {
+	const rename = "- op: copy\n  from: /spec/dependsOn/0/name\n  path: /metadata/name\n"
+	const noop = "- op: add\n  path: /metadata/labels\n  value:\n    a: b\n"
+	for name, tc := range map[string]struct {
+		patch string
+		wait  bool
+		want  string
+	}{
+		"rename, namesakes match":        {rename, true, `makes Flux Kustomization "flux-system/x-platform" before the rewrite but not after it`},
+		"rename, namesakes differ (ctl)": {rename, false, `makes Flux Kustomization "flux-system/x-platform" before the rewrite but not after it`},
+		"no rename, namesakes (ctl)":     {noop, true, ""},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				c, rules := renamedSCluster(t, placement, tc.patch, nil)
+				ml := mustWalk(t, c, rules)
+				strayLayout(ml, namesakesOfTheCopies(t, rules, tc.wait)...)
+				err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules)
+				if tc.want != "" {
+					wantRefusedWith(t, err, tc.want)
+					return
+				}
+				if err != nil {
+					t.Fatalf("got %v, want the tree admitted", err)
+				}
+			})
+		}
+	}
+}
