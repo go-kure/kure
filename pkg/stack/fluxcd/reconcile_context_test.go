@@ -319,9 +319,10 @@ func webBuildDirectory(t *testing.T, placement layout.FluxPlacement) string {
 // still depending on hand-written, since dependsOn is no reference kustomize
 // rewrites: a deadlock, refused through web under the name it is built with.
 // A target namespace moves web's copy into another namespace, where its
-// dependsOn, written without one, names a hand-written that does not exist:
-// the copy never becomes Ready, a stall the checks do not judge, and no
-// cycle, so the rewrite is accepted.
+// dependsOn, written without one, names a platform that does not exist there:
+// the copy waits for it before the rewrite, and not after, since the rewrite
+// writes its entries on the leaves. That is the renamed-copy class: refused
+// as a wait the rewrite dropped (go-kure/kure#1226).
 func TestReconcileContext_TransformedBuildIsRead(t *testing.T) {
 	const throughWeb = "ready flux-system/hand-written -> ready flux-system/web -> apply flux-system/web"
 	const deleteWeb = "$patch: delete\napiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: web\n  namespace: flux-system\n"
@@ -352,7 +353,8 @@ func TestReconcileContext_TransformedBuildIsRead(t *testing.T) {
 			chain: "ready flux-system/hand-written -> ready flux-system/x-web -> apply flux-system/x-web"},
 		"name suffix": {edit: func(k *kustv1.Kustomization) { k.Spec.NameSuffix = "-x" },
 			chain: "ready flux-system/hand-written -> ready flux-system/web-x -> apply flux-system/web-x"},
-		"target namespace": {edit: func(k *kustv1.Kustomization) { k.Spec.TargetNamespace = "elsewhere" }},
+		"target namespace": {edit: func(k *kustv1.Kustomization) { k.Spec.TargetNamespace = "elsewhere" },
+			chain: "waits for \"elsewhere/platform\" before the rewrite and not after it"},
 	}
 	for name, tc := range cases {
 		for _, placement := range integratedPlacements {

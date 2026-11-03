@@ -93,7 +93,15 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 		return nil
 	}
 	t, err := indexKustomizationTree(root, generatedMembers(p.generated))
+	// pre is the build of the tree as it stands, before any dependsOn is
+	// rewritten: the rewrite mutates the objects a later build reads. nil where
+	// the tree has no umbrella, or does not build as it stands.
+	var pre *depSnapshot
 	if err == nil {
+		if t.hasUmbrella() {
+			pre = p.preSnapshot(t)
+		}
+		t.pre = pre
 		t.readExistence(p.gen.AdditiveCELDependencyCheckOff)
 		err = t.otherErr
 	}
@@ -144,9 +152,10 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	}
 	for _, c := range p.keptNodeDeps {
 		// An entry without a readyExpr proves no Ready where the tree holds a
-		// patch (go-kure/kure#1214): it names no leaf.
+		// patch unless the build of the tree shows it plain (go-kure/kure#1214,
+		// go-kure/kure#1226): it names no leaf otherwise.
 		if t.patched {
-			c.have = nil
+			c.have = t.provenHave(c)
 		}
 		if err := c.check(terminals); err != nil {
 			return err
@@ -184,11 +193,16 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	// rewritten lists every dependsOn edge R3 writes onto a terminal leaf, so
 	// that the graph after the rewrite can be checked for a cycle it closes.
 	var rewritten []rewrittenDep
+	// wrote records, per member, the class of the entry its final dependsOn
+	// holds on each terminal leaf the rewrite names (checkRewriteResult).
+	wrote := map[string]map[string]int{}
+	heldDeps := map[string]map[string]classSet{}
 	for _, k := range t.kusts {
 		key := crKey(k.Namespace, k.Name)
 		created := p.created[key]
 		var deps []kustv1.DependencyReference
 		seen := map[string]bool{}
+		held := map[string]int{}
 		for _, d := range k.Spec.DependsOn {
 			ns := d.Namespace
 			if ns == "" {
@@ -198,10 +212,16 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 			terms, umbrella := terminals[target]
 			// An entry that waits only for the umbrella to exist
 			// (specDeps) waits for nothing its wait would cover: kept.
-			if !umbrella || (t.existenceOnly && d.ReadyExpr == "true") {
+			exist := t.existenceOnly && d.ReadyExpr == "true"
+			if heldDeps[key] == nil {
+				heldDeps[key] = map[string]classSet{}
+			}
+			heldDeps[key][target] |= 1 << classOf(depRef{exist: exist, plain: d.ReadyExpr == ""})
+			if !umbrella || t.existEntry(key, depRef{key: target, exist: exist}) {
 				if !seen[target] {
 					seen[target] = true
 					deps = append(deps, d)
+					held[target] = classOf(depRef{exist: exist, plain: d.ReadyExpr == ""})
 				}
 				continue
 			}
@@ -215,11 +235,15 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 				// Checked also when an earlier entry already names the
 				// leaf: that entry was the caller's, judged by no check.
 				rewritten = append(rewritten, rewrittenDep{from: key, umbrella: target, to: term})
-				if seen[term] {
-					continue
+				if !seen[term] {
+					seen[term] = true
+					deps = append(deps, dependencyOn(k.Namespace, term))
+					held[term] = classPlain
 				}
-				seen[term] = true
-				deps = append(deps, dependencyOn(k.Namespace, term))
+				if wrote[key] == nil {
+					wrote[key] = map[string]int{}
+				}
+				wrote[key][term] = held[term]
 			}
 		}
 		if created == nil {
@@ -243,7 +267,7 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	// the rewritten dependsOn too, and the cycle may close through the copy
 	// alone: the leaf then never becomes Ready, and the dependent, waiting for
 	// it, never applies.
-	if len(rewritten) == 0 {
+	if len(terminals) == 0 {
 		return nil
 	}
 	// Each view newBuiltViews returns is checked, and the first refusal of
@@ -252,12 +276,31 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	if err != nil {
 		return p.laterPatchRefusal(root, err)
 	}
+	// The rewrite may change the meaning of the tree only by replacing a wait
+	// on an umbrella with waits on its terminal leaves. A patch can read the
+	// rewritten dependsOn (by position, or by copying an entry), and one a
+	// patch adds is not rewritten: the views are judged against the tree as it
+	// was before the rewrite (go-kure/kure#1226, go-kure/kure#1221).
 	for _, v := range views {
 		if err := v.checkRewritten(rewritten); err != nil {
 			return err
 		}
 	}
-	return nil
+	return t.checkRewriteResult(pre, views, rewriteFacts{terminals: terminals, wrote: wrote, held: heldDeps})
+}
+
+// preSnapshot returns the snapshot of the build of the tree t indexes as it
+// stands, before the rewrite, taken once for this placement:
+// keptNodeReadiness and umbrellasDoNotWait run one after the other with no
+// change to the tree between them (placeBundlePatches has run), so they share
+// it. nil where the tree does not build as it stands; what reads it then falls
+// back to the tree as it holds it (checkAgainstHeld, the patched blanket).
+func (p *integratedPlacement) preSnapshot(t *kustomizationTree) *depSnapshot {
+	if !p.preDone {
+		p.preDone = true
+		p.pre, _ = newDepSnapshot(t, p.gen.AdditiveCELDependencyCheckOff)
+	}
+	return p.pre
 }
 
 // rewrittenDep is a dependsOn entry the rewrite writes onto a terminal leaf:
@@ -390,12 +433,15 @@ type keptNodeProof struct {
 
 // keptNodeReadiness refuses, once every patch is placed, a kept node
 // Kustomization accepted on a dependency by an entry without a readyExpr when
-// the tree holds a patch (patched): the patch may add a readyExpr, to this
-// Kustomization or, by patching another patching Kustomization, to any other,
-// and the controller, with its additive CEL gate off, then evaluates the
-// expression in place of its own Ready check, so the kept one would not wait
-// for the dependency's Ready (go-kure/kure#1214). checkKeptNodeCR runs while
-// the tree is still being placed, before the patches are known.
+// the tree holds a patch (patched) and the build of the tree does not show
+// that entry still plain (depSnapshot.proves): the patch may add a readyExpr,
+// to this Kustomization or, by patching another patching Kustomization, to any
+// other, and the controller, with its additive CEL gate off, then evaluates
+// the expression in place of its own Ready check, so the kept one would not
+// wait for the dependency's Ready (go-kure/kure#1214). Without a build of the
+// tree no entry is shown plain, so the refusal is blanket then.
+// checkKeptNodeCR runs while the tree is still being placed, before the
+// patches are known.
 func (p *integratedPlacement) keptNodeReadiness(root *layout.ManifestLayout) error {
 	if len(p.keptNodeProofs) == 0 {
 		return nil
@@ -407,9 +453,26 @@ func (p *integratedPlacement) keptNodeReadiness(root *layout.ManifestLayout) err
 	if !t.patched {
 		return nil
 	}
-	c := p.keptNodeProofs[0]
-	return errors.Errorf("layout %q already has Flux Kustomization %q for node %q with spec.dependsOn %q, which names %q only with entries that set no readyExpr, and a patch of a Flux Kustomization in the tree may reach it and add one: with the controller's additive CEL gate off an expression replaces the wait for the dependency's Ready, so the kept Kustomization may not wait for them; remove it, or remove the patch",
-		c.layout, c.key, c.node, c.dependsOn, c.proven)
+	// The build of the tree, patches applied, says which entries are still
+	// plain; without one, none is (go-kure/kure#1226).
+	var pre *depSnapshot
+	if !t.opaque {
+		pre = p.preSnapshot(t)
+	}
+	for _, c := range p.keptNodeProofs {
+		ns, _, _ := strings.Cut(c.key, "/")
+		var lost []string
+		for _, dep := range c.proven {
+			if !pre.proves(c.key, dependencyKey(ns, dep)) {
+				lost = append(lost, dep)
+			}
+		}
+		if len(lost) > 0 {
+			return errors.Errorf("layout %q already has Flux Kustomization %q for node %q with spec.dependsOn %q, which names %q only with entries that set no readyExpr, and a patch of a Flux Kustomization in the tree may reach it and add one: with the controller's additive CEL gate off an expression replaces the wait for the dependency's Ready, so the kept Kustomization may not wait for them; remove it, or remove the patch",
+				c.layout, c.key, c.node, c.dependsOn, lost)
+		}
+	}
+	return nil
 }
 
 // keptNodeDependencies is a node's Kustomization kept from the tree whose
@@ -418,10 +481,26 @@ func (p *integratedPlacement) keptNodeReadiness(root *layout.ManifestLayout) err
 // terminal sets: a dependsOn on an umbrella was written as one on its
 // terminal leaves, so an earlier integration with the setting kept those.
 type keptNodeDependencies struct {
+	// key is the kept Kustomization's own identity, which the build of a
+	// patched tree is asked about (provenHave).
+	key       string
 	namespace string
 	have      []string
 	missing   []string
 	refusal   error
+}
+
+// provenHave returns the entries of c.have the build of the tree shows plain
+// on the kept Kustomization: the others prove nothing once a patch may have
+// added a readyExpr (go-kure/kure#1214). Without a build, none.
+func (t *kustomizationTree) provenHave(c keptNodeDependencies) []string {
+	var out []string
+	for _, h := range c.have {
+		if t.snapshot().proves(c.key, dependencyKey(c.namespace, h)) {
+			out = append(out, h)
+		}
+	}
+	return out
 }
 
 // check refuses the kept Kustomization unless each missing dependency is an

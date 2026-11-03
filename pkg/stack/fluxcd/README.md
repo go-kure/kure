@@ -682,15 +682,49 @@ a sibling from the leaves, and a dependent could proceed before that sibling is 
 entry is read as a wait for `Ready`, as before, whether or not anything depends on it; the
 standalone `UmbrellaTerminals` queries run no such check.
 
-Both readings take a Kustomization as the tree holds it, not as a patch applies it, and a patch
-may add a `readyExpr` to a plain entry, directly or by adding patches to another Kustomization.
-So when any Kustomization of the tree sets `spec.patches` or `spec.components` (an unreadable copy
-counts as one), no plain entry proves anything: the dependency stays a terminal leaf, so a
-dependent is written onto more leaves, and a kept node Kustomization is refused for a dependency it
-names only by such an entry. kure does not narrow this to the directories a patch builds, as one
-patch can add patches elsewhere. Trees without a patch read as before. The other direction is not handled: a `"true"` entry that
-a patch changes is still read as a wait for `Ready`, and a patch that adds a `Ready` `dependsOn`
-to an umbrella is never rewritten.
+On a tree that patches, the standalone `UmbrellaTerminals` queries and the "umbrellas do not wait"
+integration read each `dependsOn` entry as the build of the tree shows it, with every patch
+applied (go-kure/kure#1226). The integration builds the tree twice, once before the rewrite and
+once after it. Each entry has a class: 2 for an entry with no `readyExpr`, 1 for any other
+`readyExpr`, 0 for `readyExpr: "true"` where `AdditiveCELDependencyCheckOff` is set (it waits for
+existence only). The integration admits a patched tree when, for every Kustomization, the build
+after the rewrite waits for at least what the build before it waited for, each umbrella replaced
+by its terminal leaves. It refuses the tree when:
+
+- a build gives any Kustomization a `dependsOn` entry that waits for `Ready` or an expression and
+  whose target is an umbrella of the tree (a patch added it); the rewrite never sees such an
+  entry;
+- a build gives any Kustomization a `dependsOn` entry, that waits for `Ready` or an expression, on
+  a Flux Kustomization it makes but the tree does not hold, and that one applies Flux
+  Kustomizations (a renamed copy of an umbrella, say);
+- a positional or copying patch lands differently on the rewritten list than on the list as
+  written, and the build after the rewrite waits for less than the one before it (`remove
+  /spec/dependsOn/1`, say), or for the same target with a weaker class;
+- a build makes a Kustomization under a name the build before the rewrite does not;
+- one of the fields the reconcile-order checks read (`path`, `sourceRef`, `kubeConfig`, `patches`,
+  `healthChecks`, `wait` and the other graph fields, but not `dependsOn`) differs between the two
+  builds, other than the `wait` and `healthChecks` the rewrite clears on an umbrella; or an umbrella
+  regains a `wait` or health check.
+
+A tree whose build before the rewrite fails, or that holds a Flux Kustomization the build cannot
+read (an unreadable copy, or a patching non-member on a member's Source that no build reads as a
+writer), falls back to the earlier blanket: no entry proves anything and the checks refuse more.
+The fallback asks the build after the rewrite to keep every entry each member held, and to keep
+the terminal leaves written for an umbrella among them.
+
+These refusals are deliberate. kure cannot tell the author's intent from a lost wait, so it refuses
+these trees, though some of them are fine:
+
+- a patch that removes a held entry by its index in the rewritten list, when the build before the
+  rewrite cannot be made;
+- a patch that removes an entry on a dependency that exists nowhere, since kure cannot prove a
+  target absent;
+- a held Kustomization that is no member, with a copy a build makes under its name, whose applied
+  copy differs from it in a field the checks read, on the fallback path (it is not trusted as a
+  stand-in for the copy).
+
+Not handled: two CEL expressions are never compared, so an entry of class 1 only has to stay of
+class 1.
 
 #### With `AdditiveCELDependencyCheckOff`
 
@@ -713,13 +747,11 @@ operator running the default controller sets it to true. kure cannot see the gat
 - **Where it applies:** Kustomizations kure generates carry no `readyExpr`, so the field changes
   only how Kustomizations an application emits, or a caller keeps, patches or substitutes, are
   judged, in every check: the members' check, the tree's, and the "umbrellas do not wait" rewrite
-  (an existence wait on an umbrella is kept as written). That rewrite reads each Kustomization as
-  the tree holds it, not as a patch applies it: when a Flux Kustomization of the tree sets
-  `spec.patches` or `spec.components`, which may rewrite a `readyExpr`, it reads every entry as
-  waiting for `Ready` in the checks that look for a cycle, as without the setting. Terminal leaves
-  do not depend on it: an entry with a `readyExpr` never makes a sibling depended on, and a patch
-  that adds a `readyExpr` to a plain entry is not read, so a plain entry proves nothing in a tree
-  that holds a patch (see below).
+  (an existence wait on an umbrella is kept as written). That rewrite reads each entry as the
+  build of the tree shows it, patches applied (above): an existence-only entry on a patched tree is
+  admitted when the built class is existence-only, and refused when a patch makes it anything else.
+  Terminal leaves do not depend on the setting: an entry with a `readyExpr` never makes a sibling
+  depended on.
   No entry point refuses it. A v1beta2 Kustomization's `dependsOn` has no `readyExpr` field, so
   it still waits for `Ready`.
 
@@ -1779,11 +1811,12 @@ instead of nested waits:
   the dependency to exist, so it is none of these: it is kept as written and judged by no rule
   here. When terminal leaves are picked, an entry with any `readyExpr`, with the setting or
   without, makes no Kustomization it names depended on: Flux skips its own readiness check for
-  it, so a dependent of the umbrella also waits for that Kustomization. These rules read each
-  Kustomization as the tree holds it, so once a Flux Kustomization of the tree sets `spec.patches`
-  or `spec.components`, which may rewrite such an expression, they read every entry as waiting for
-  `Ready`, as without the setting, wherever that decides a refusal; the terminal leaves are the
-  same.
+  it, so a dependent of the umbrella also waits for that Kustomization. Where a Flux
+  Kustomization of the tree sets `spec.patches` or `spec.components`, which may rewrite such an
+  expression, these rules read each entry as the build of the tree shows it, patches applied. Only
+  when that build cannot be made do they read the tree as it holds it, and then every entry counts
+  as waiting for `Ready`, as without the setting, wherever that decides a refusal; the terminal
+  leaves follow the same reading.
 
 These checks read a Flux Kustomization in its context. One the integration places or keeps builds
 the directory of the tree its `spec.path` names. For any other (an application's, or the

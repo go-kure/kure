@@ -89,9 +89,17 @@ type kustomizationTree struct {
 	// read deps (readExistence): deps then leaves out an entry that waits only
 	// for its dependency to exist. patched records that a Flux Kustomization
 	// the tree holds, at any occurrence, patches what it builds (patchesBuild),
-	// or that a copy cannot be read in typed form and may.
+	// or that a copy cannot be read in typed form and may. Where patched, an
+	// entry is read as the tree builds it (pre, the snapshot of the build of the
+	// tree as it stands), and as the blanket says when there is none: no entry
+	// proves Ready, and none is existence-only (go-kure/kure#1214).
 	existenceOnly bool
 	patched       bool
+	// opaque records that a copy cannot be read in typed form, so that a patch
+	// it carries is invisible to any build: the blanket then stands whatever
+	// pre holds (snapshot).
+	opaque bool
+	pre    *depSnapshot
 	// dropped lists, per layout, the keys of the Flux Kustomizations it holds
 	// that a build drops as local config (builtItems), and droppedObjs each
 	// object. They are no member, other or writer here; the reconcile-order
@@ -184,6 +192,7 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 				// carries may rewrite a readyExpr all the same; one that
 				// cannot be read in typed form may carry one.
 				spec, err := typedKustomization(obj)
+				t.opaque = t.opaque || err != nil
 				t.patched = t.patched || err != nil || patchesBuild(spec)
 				t.addCopy(key, spec, err)
 				continue
@@ -200,7 +209,7 @@ func indexKustomizationTree(root *layout.ManifestLayout, members memberFilter) (
 				}
 				// A copy that cannot be read may carry patches, as a member's
 				// other copy does above.
-				t.patched = true
+				t.opaque, t.patched = true, true
 				continue
 			}
 			t.otherSpecs[key] = spec
@@ -390,11 +399,20 @@ func (t *kustomizationTree) deps(key string) []string {
 	}
 	var out []string
 	for _, d := range refs {
-		if !(t.existenceOnly && d.exist) {
+		if !t.existEntry(key, d) {
 			out = append(out, d.key)
 		}
 	}
 	return out
+}
+
+// existEntry reports whether d, an entry of the spec.dependsOn of the
+// Kustomization with key owner, waits only for its dependency to exist: it is
+// held so (specDeps, with existenceOnly), and, where the tree holds a patch,
+// every build of the tree shows it so too (depSnapshot.existence): a patch may
+// have rewritten the readyExpr.
+func (t *kustomizationTree) existEntry(owner string, d depRef) bool {
+	return t.existenceOnly && d.exist && (!t.patched || t.snapshot().existence(owner, d.key))
 }
 
 // readyDeps returns, as keys, the entries of the spec.dependsOn of the
@@ -407,11 +425,14 @@ func (t *kustomizationTree) deps(key string) []string {
 // Ready check. It does not depend on existenceOnly. A patch can add a
 // readyExpr to an entry the held spec shows plain, and a patch can itself be
 // added by another patch, so where the tree holds any Kustomization that
-// patches what it builds (patched) no entry is counted: that leaves the
-// Kustomizations they name terminal and makes a dependent wait for more
-// leaves, never fewer (go-kure/kure#1214). The patched spec is not read.
+// patches what it builds (patched) the held spec is not enough: an entry
+// proves the dependency Ready only when every build of the tree (pre) holds
+// all of the Kustomization's entries on it plain, and with no such build none
+// is counted. That leaves the Kustomizations they name terminal and makes a
+// dependent wait for more leaves, never fewer (go-kure/kure#1214,
+// go-kure/kure#1226).
 func (t *kustomizationTree) readyDeps(key string) []string {
-	if t.patched {
+	if t.patched && t.snapshot() == nil {
 		return nil
 	}
 	refs := t.otherDeps[key]
@@ -420,7 +441,7 @@ func (t *kustomizationTree) readyDeps(key string) []string {
 	}
 	var out []string
 	for _, d := range refs {
-		if d.plain {
+		if d.plain && (!t.patched || t.snapshot().proves(key, d.key)) {
 			out = append(out, d.key)
 		}
 	}
@@ -428,15 +449,31 @@ func (t *kustomizationTree) readyDeps(key string) []string {
 }
 
 // readExistence sets existenceOnly to on, unless the tree holds a Flux
-// Kustomization that patches what it builds (patched). The tree reads every
-// spec as it holds it, and a patch may rewrite a readyExpr held as "true"
-// into one that waits for Ready: read as an existence wait, that entry would
-// be admitted where its apply waits for Ready. With such a patch every entry
-// is read as waiting for Ready, as without the setting, which may refuse an
-// entry the patch makes an existence wait, and admits none the default
-// refuses.
+// Kustomization that patches what it builds (patched) and no build of it is
+// known (pre). The tree reads every spec as it holds it, and a patch may
+// rewrite a readyExpr held as "true" into one that waits for Ready: read as an
+// existence wait, that entry would be admitted where its apply waits for
+// Ready. So an entry counts as one only where every build of the tree shows it
+// so (existEntry); without a build every entry is read as waiting for Ready, as
+// without the setting, which may refuse an entry the patch makes an existence
+// wait, and admits none the default refuses.
 func (t *kustomizationTree) readExistence(on bool) {
-	t.existenceOnly = on && !t.patched
+	t.existenceOnly = on && (!t.patched || t.snapshot() != nil)
+}
+
+// snapshot returns the build of the tree that classifies entries where the tree
+// holds a patch: nil where none is known or a copy is unreadable (opaque),
+// which leaves the blanket.
+func (t *kustomizationTree) snapshot() *depSnapshot {
+	if t.opaque {
+		return nil
+	}
+	return t.pre
+}
+
+// hasUmbrella reports whether the tree holds an umbrella.
+func (t *kustomizationTree) hasUmbrella() bool {
+	return slices.ContainsFunc(t.kusts, func(k *kustv1.Kustomization) bool { return t.isUmbrella(crKey(k.Namespace, k.Name)) })
 }
 
 // mayBeKept reports whether a build that is the tree's and patches what it
@@ -629,6 +666,10 @@ func (t *kustomizationTree) within(u, d string) bool {
 // plain wrapped sentinel, not a typed resource error. Nil roots are skipped;
 // no umbrella gives an empty map.
 //
+// A tree that patches is read as its build shows it, patches applied, when
+// the build can be made (go-kure/kure#1226); otherwise a plain entry proves
+// nothing in it.
+//
 // It counts only a dependsOn entry with no readyExpr as a wait for Ready
 // (readyDeps): a sibling that another one names with a readyExpr is a
 // terminal leaf, with or without ResourceGenerator.AdditiveCELDependencyCheckOff.
@@ -660,6 +701,11 @@ func umbrellaTerminals(existenceOnly bool, roots []*layout.ManifestLayout) (map[
 		}
 		t, err := indexKustomizationTree(root, recordedMembers)
 		if err == nil {
+			// A tree that patches is read as it builds (readyDeps); one that
+			// cannot be built is read by the blanket.
+			if t.patched && t.hasUmbrella() {
+				t.pre, _ = newDepSnapshot(t, existenceOnly)
+			}
 			t.readExistence(existenceOnly)
 			err = t.otherErr
 		}

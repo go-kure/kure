@@ -369,10 +369,12 @@ func TestUmbrellaTerminals_PatchedTreeKeepsReadyExprEntryAsLeaf(t *testing.T) {
 }
 
 // The integration keeps web in place of its own, depending on the umbrella
-// platform with "true", and patching its build so that its own dependsOn
-// waits for Ready. The umbrella pass reads web as the tree holds it, not as
-// the patch applies it, so with the setting too it reads the entry as a Ready
-// wait on an umbrella, which is not rewritten: refused (ErrUmbrellaDependency).
+// platform with "true", and giving it a patch that would make its own
+// dependsOn wait for Ready. The patch lands on what web's build applies, which
+// holds no Kustomization named web: it reaches nothing, the build shows the
+// entry as existence-only (class 0) and the rewrite keeps it as existence
+// entries on the terminal leaves. Admitted (go-kure/kure#1226; the blanket of
+// go-kure/kure#1225 refused it).
 func TestReadyExprTrue_PatchedKeptDependsOnUmbrella(t *testing.T) {
 	build := func() *stack.Cluster {
 		return noWaitCluster(srBundle("platform", objApp("platform-app", handWritten("h"))), false)
@@ -388,8 +390,8 @@ func TestReadyExprTrue_PatchedKeptDependsOnUmbrella(t *testing.T) {
 				g := noWaitGenerator()
 				g.AdditiveCELDependencyCheckOff = true
 				err := fluxstack.NewLayoutIntegrator(g).IntegrateWithLayout(ml, c, rules)
-				if !errors.Is(err, fluxstack.ErrUmbrellaDependency) || !strings.Contains(err.Error(), "is kept from the tree") {
-					t.Fatalf("got %v, want web's dependsOn on platform refused", err)
+				if err != nil {
+					t.Fatalf("got %v, want web's dependsOn on platform admitted", err)
 				}
 			})
 		}

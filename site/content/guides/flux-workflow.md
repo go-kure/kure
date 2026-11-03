@@ -908,6 +908,16 @@ integrator := fluxcd.NewLayoutIntegrator(gen)
   on an umbrella, and a `dependsOn` on one in a Flux Kustomization an
   application emits: the integration rewrites neither.
 
+The pass reads each `dependsOn` entry as the build of the tree shows it, with
+patches applied, before and after the rewrite. A patch that works on the
+rewritten list (`remove /spec/dependsOn/1`, say), that adds a `Ready` entry on
+an umbrella, or that copies a `dependsOn` name into another field, is refused
+when the build after the rewrite waits for less than the build before it. A
+patch that never touches `dependsOn` no longer refuses a tree that holds a
+`readyExpr: "true"` entry. A tree the build before the rewrite cannot read keeps
+the earlier, blunter refusal of every patched tree that holds such an entry
+(go-kure/kure#1226).
+
 The integrated placements apply all three rules. `GenerateForBundle` applies
 the first two to the one Kustomization it returns, and `GenerateFromLayout`,
 `GenerateFromCluster` and `FluxSeparate` refuse the setting.
@@ -1028,15 +1038,17 @@ admit a tree that never becomes Ready
 ([details](/api-reference/flux-engine/#with-additiveceldependencycheckoff)).
 Picking terminal leaves counts only a `dependsOn` entry with no `readyExpr` as
 a wait for `Ready`, with the setting or without: Flux skips its own readiness
-check for an entry with an expression. The pass reads a `dependsOn` as the tree
-holds it, not as a patch applies it, so when any Kustomization in the tree sets
-`spec.patches` or `spec.components` an entry with no `readyExpr` proves nothing
-either: a patch may add one, directly or by adding patches to another
-Kustomization. The dependency then stays a terminal leaf, so a dependent is
-written onto more leaves, and a kept node Kustomization is refused for a
-dependency it names only that way. Trees without a patch read as before. A `"true"` entry on
-a patched tree is still read as a wait for `Ready`, which can refuse a tree
-Flux would converge.
+check for an entry with an expression. Where the tree holds a patch
+(`spec.patches` or `spec.components` on any Kustomization), the pass reads each
+`dependsOn` as the build of the tree shows it, patches applied, so an entry with
+no `readyExpr` still proves a wait for `Ready` unless a patch adds an expression
+to it, and a `"true"` entry on a patched tree stays an existence wait unless a
+patch changes it. When that build cannot be made, the pass reads the tree as it
+holds it and no entry with no `readyExpr` proves anything: the dependency stays
+a terminal leaf, so a dependent is written onto more leaves, a kept node
+Kustomization is refused for a dependency it names only that way, and a `"true"`
+entry is read as a wait for `Ready`, which can refuse a tree Flux would
+converge. Trees without a patch read as before.
 `fluxcd.UmbrellaTerminals` returns each umbrella's terminal leaves, for a
 dependency written from outside the tree, for trees as an integration returned
 them: only a Kustomization the integration recorded, still on the recorded
