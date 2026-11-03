@@ -1,6 +1,7 @@
 package fluxcd
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -321,22 +322,12 @@ func TestBuildGuard_LoadedKindsStepsASharedSequenceOnce(t *testing.T) {
 		if len(file) < 1<<20-64<<10 {
 			t.Fatalf("the file is %d bytes, not megabyte-sized", len(file))
 		}
-		type result struct {
-			why          string
-			items, walks int
+		g := newBuildGuard(nil, "")
+		if why := g.loadedKinds([]byte(file)); why != "" {
+			t.Fatalf("refused: %s", why)
 		}
-		done := make(chan result, 1)
-		go func() {
-			g := newBuildGuard(nil, "")
-			done <- result{g.loadedKinds([]byte(file)), g.kindItems, g.kindVisits}
-		}()
-		select {
-		case r := <-done:
-			if r.why != "" || r.items != m+n+1 || r.walks != m+2 {
-				t.Errorf("refusal %q, stepped %d items, walked %d mappings, want none, %d and %d", r.why, r.items, r.walks, m+n+1, m+2)
-			}
-		case <-time.After(10 * time.Second):
-			t.Fatal("the walk did not end in 10 s")
+		if g.kindItems != m+n+1 || g.kindVisits != m+2 {
+			t.Errorf("stepped %d items, walked %d mappings, want %d and %d", g.kindItems, g.kindVisits, m+n+1, m+2)
 		}
 	})
 	t.Run("Lists at different depths read as the expansion", func(t *testing.T) {
@@ -378,4 +369,102 @@ func TestBuildGuard_LoadedKindsStepsASharedSequenceOnce(t *testing.T) {
 			t.Error("a List nested past the bound inside an object was not refused")
 		}
 	})
+}
+
+// TestBuildGuard_LoadedKindsReadsAMergeSourceOnce: what a mapping merges in
+// through a merge key is read once for each source node and call, so n
+// mappings that merge one source of m keys cost n plus m key reads and not n
+// times m (go-kure/kure#1240: 44 s for a file of 1.25 MB, under the build
+// lock). kindKeys counts the keys loadedKinds reads.
+func TestBuildGuard_LoadedKindsReadsAMergeSourceOnce(t *testing.T) {
+	// mergedList is a file with one anchored mapping of m keys and a List of n
+	// mappings, each holding that mapping through its merge key.
+	mergedList := func(n, m int, merge string) string {
+		var b strings.Builder
+		b.WriteString("b: &b {")
+		for i := range m {
+			fmt.Fprintf(&b, "k%d: 1, ", i)
+		}
+		b.WriteString("z: 1}\nc: &c {y: 1}\nq: &q [*b, *c]\napiVersion: v1\nkind: List\nitems:\n")
+		for range n {
+			b.WriteString("  - {" + merge + ", a: 1}\n")
+		}
+		return b.String()
+	}
+	t.Run("one source, pinned exactly", func(t *testing.T) {
+		g := newBuildGuard(nil, "")
+		if why := g.loadedKinds([]byte(mergedList(5, 7, "<<: *b"))); why != "" {
+			t.Fatalf("refused: %s", why)
+		}
+		// The root reads its 6 keys, each item its 2, and the source its 8,
+		// once.
+		if want := 6 + 5*2 + 8; g.kindKeys != want {
+			t.Errorf("read %d keys, want %d", g.kindKeys, want)
+		}
+	})
+	t.Run("a shared sequence of sources", func(t *testing.T) {
+		g := newBuildGuard(nil, "")
+		if why := g.loadedKinds([]byte(mergedList(5, 7, "<<: *q"))); why != "" {
+			t.Fatalf("refused: %s", why)
+		}
+		// The two sources of the sequence, 8 keys and 1, are read once.
+		if want := 6 + 5*2 + 8 + 1; g.kindKeys != want {
+			t.Errorf("read %d keys, want %d", g.kindKeys, want)
+		}
+	})
+	t.Run("a file of about a megabyte", func(t *testing.T) {
+		const n, m = 29000, 65000
+		file := mergedList(n, m, "<<: *b")
+		if len(file) < 1<<20 {
+			t.Fatalf("the file is %d bytes, under a megabyte", len(file))
+		}
+		g := newBuildGuard(nil, "")
+		if why := g.loadedKinds([]byte(file)); why != "" {
+			t.Fatalf("refused: %s", why)
+		}
+		if want := 6 + n*2 + m + 1; g.kindKeys != want {
+			t.Errorf("read %d keys, want %d", g.kindKeys, want)
+		}
+	})
+	// The cases below hold the result of reading a merge source: they pass
+	// with a read of the source for every mapping, and must go on passing.
+	for _, tc := range []struct {
+		name, file string
+		want       []kindKey
+		refused    bool
+	}{
+		{"an own key beats a merged one", "b: &b {apiVersion: v1, kind: Base}\n" +
+			"apiVersion: v1\nkind: List\nitems:\n  - {kind: Own, <<: *b}\n",
+			[]kindKey{{"v1", "Own"}, {"v1", "List"}}, false},
+		{"the first source that has a key gives it", "b1: &b1 {kind: A}\nb2: &b2 {kind: B, apiVersion: x/v1}\n" +
+			"apiVersion: v1\nkind: List\nitems:\n  - {<<: [*b1, *b2]}\n",
+			[]kindKey{{"x/v1", "A"}, {"v1", "List"}}, false},
+		{"an empty own value hides the merged one", "b: &b {apiVersion: v1, kind: Base}\n" +
+			"apiVersion: v1\nkind: List\nitems:\n  - {kind: \"\", <<: *b}\n",
+			[]kindKey{{"v1", "List"}}, false},
+		{"a source that merges another is not followed", "c: &c {kind: Deep}\nb: &b {<<: *c, apiVersion: v1}\n" +
+			"apiVersion: v1\nkind: List\nitems:\n  - {<<: *b}\n",
+			[]kindKey{{"v1", "List"}}, false},
+		{"a source that merges another, in an object, is refused", "c: &c {kind: Deep}\nb: &b {<<: *c, apiVersion: v1}\n" +
+			"apiVersion: v1\nkind: List\nitems:\n  - {metadata: {name: m}, <<: *b}\n",
+			nil, true},
+		{"a source met directly, by alias and inline", "b: &b {apiVersion: v1, kind: Base}\n" +
+			"apiVersion: v1\nkind: List\nitems:\n" +
+			"  - {<<: *b}\n  - {<<: [*b, *b]}\n  - {<<: {apiVersion: v1, kind: Inline}}\n",
+			[]kindKey{{"v1", "Base"}, {"v1", "Inline"}, {"v1", "List"}}, false},
+		{"a source that holds items", "b: &b {kind: WidgetList, apiVersion: v1, items: [{apiVersion: x/v1, kind: Item}]}\n" +
+			"apiVersion: v1\nkind: List\nitems:\n  - {<<: *b}\n",
+			[]kindKey{{"x/v1", "Item"}, {"v1", "WidgetList"}, {"v1", "List"}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newBuildGuard(nil, "")
+			why := g.loadedKinds([]byte(tc.file))
+			if (why != "") != tc.refused {
+				t.Fatalf("refusal %q, want refused %v", why, tc.refused)
+			}
+			if !tc.refused && !slices.Equal(g.kinds, tc.want) {
+				t.Errorf("kinds %v, want %v", g.kinds, tc.want)
+			}
+		})
+	}
 }
