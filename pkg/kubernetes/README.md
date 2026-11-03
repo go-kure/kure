@@ -926,6 +926,37 @@ fmt.Println(err)
 ```
 <!-- doc-example:end -->
 
+The two validators check the securityContext rules of the Pod Security Standards
+(Kubernetes 1.37) and the host namespaces. A nil error means those rules hold. It
+does not mean admission accepts the pod: host ports, volume types, host probes and
+lifecycle hooks, and the legacy seccomp and AppArmor annotations are not checked.
+
+- **Baseline:** `hostNetwork`, `hostPID`, `hostIPC`; `privileged`; `capabilities.add`
+  limited to the baseline list; `procMount`; `windowsOptions.hostProcess`;
+  `seccompProfile` and `appArmorProfile` types other than `RuntimeDefault` and
+  `Localhost`; `seLinuxOptions` (allowed types, no user or role); pod `sysctls` outside
+  the safe list.
+- **Restricted** adds: `allowPrivilegeEscalation: false`; `runAsNonRoot: true`;
+  `runAsUser` other than 0; `capabilities.drop: [ALL]` with only `NET_BIND_SERVICE`
+  added; `seccompProfile` of `RuntimeDefault` or `Localhost`. A pod value for
+  `runAsNonRoot` or `seccompProfile` satisfies every container that leaves its own
+  unset, and a container value overrides the pod value.
+
+`ValidatePodSpecPSA` honours two pod-level exemptions of the standard. With
+`spec.hostUsers: false`, `runAsNonRoot` and `runAsUser` are not checked, and `procMount`
+is not checked at the baseline level. With `spec.os.name: windows`,
+`allowPrivilegeEscalation`, `capabilities` and `seccompProfile` are not checked at the
+restricted level. `ValidateContainerPSA` has no pod, so it inherits nothing from a pod
+`securityContext` and applies neither exemption: at the restricted level the container
+must set `runAsNonRoot` and a seccomp profile itself.
+
+**Behaviour change.** The validators accept and refuse more than before. A restricted
+pod that sets `runAsNonRoot` and `seccompProfile` on its containers only is now accepted.
+A container with a `securityContext` that sets `runAsUser: 0`, a baseline-listed
+capability such as `CHOWN` at the restricted level, `Unconfined` seccomp or AppArmor,
+an unsafe pod sysctl, `procMount: Unmasked`, `hostProcess: true`, or a disallowed SELinux
+option is now refused where it passed before.
+
 ### ResourceRequirements
 
 <!-- doc-example: pkg/kubernetes ExampleSetResourceRequest -->

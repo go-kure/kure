@@ -321,9 +321,23 @@ func TestValidatePodSpecPSA(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "restricted missing pod RunAsNonRoot",
+			// The standard accepts runAsNonRoot on every container in place of
+			// the pod value; this row was a false refusal.
+			name: "restricted pod without RunAsNonRoot when the container sets it",
 			spec: &corev1.PodSpec{
 				SecurityContext: &corev1.PodSecurityContext{
+					SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+				},
+				Containers: []corev1.Container{restrictedContainer},
+			},
+			level:   PSARestricted,
+			wantErr: false,
+		},
+		{
+			name: "restricted pod with RunAsNonRoot false",
+			spec: &corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					RunAsNonRoot:   boolPtr(false),
 					SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 				},
 				Containers: []corev1.Container{restrictedContainer},

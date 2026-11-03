@@ -69,5 +69,7 @@
 // [BaselineSecurityContext] and [PrivilegedSecurityContext] do the same for
 // containers. [PodSecurityContextForLevel] and [SecurityContextForLevel]
 // select by [PSALevel]. [ValidateContainerPSA] and [ValidatePodSpecPSA] are
-// explicit, opt-in checks; nothing in this package calls them for you.
+// explicit, opt-in checks of the securityContext rules of the Pod Security
+// Standards and the host namespaces; they do not cover volumes, host ports or
+// host probes. Nothing in this package calls them for you.
 package kubernetes
