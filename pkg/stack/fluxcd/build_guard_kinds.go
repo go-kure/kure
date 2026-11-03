@@ -48,14 +48,14 @@ const (
 // The false refusal left is a List that deep, or an object with a merge chain
 // that deep, in a file that is no resource.
 func (g *buildGuard) loadedKinds(b []byte) string {
-	seen := map[kindVisit]bool{}
+	w := newKindWalk()
 	for _, part := range splitDocuments(string(b)) {
 		var doc kyaml.Node
 		if err := kyaml.NewDecoder(strings.NewReader(part)).Decode(&doc); err != nil {
 			continue
 		}
 		if doc.Kind == kyaml.DocumentNode && len(doc.Content) == 1 {
-			if why := g.noteKinds(doc.Content[0], 0, false, seen); why != "" {
+			if why := g.noteKinds(doc.Content[0], 0, false, w); why != "" {
 				return why
 			}
 		}
@@ -95,38 +95,91 @@ type kindVisit struct {
 	object bool
 }
 
+// kindWalk is what one loadedKinds call remembers, and forgets with the call,
+// so concurrent builds share nothing: the visits made, the mappings each
+// merge key names, and what each mapping a merge key names contributes.
+type kindWalk struct {
+	seen         map[kindVisit]bool
+	sources      map[*kyaml.Node][]*kyaml.Node
+	contributing map[*kyaml.Node]mergeContribution
+}
+
+func newKindWalk() *kindWalk {
+	return &kindWalk{
+		seen:         map[kindVisit]bool{},
+		sources:      map[*kyaml.Node][]*kyaml.Node{},
+		contributing: map[*kyaml.Node]mergeContribution{},
+	}
+}
+
+// mergeContribution is what a mapping a merge key names gives the mapping that
+// names it: the fields of its own keys, read as a mapping on its own, and
+// whether it has a merge key itself (which is not followed). It depends on the
+// mapping alone, never on the one that names it.
+type mergeContribution struct {
+	meta   objectMeta
+	deeper bool
+}
+
+// mergeSources is mergeSources(v), once for each node v names.
+func (w *kindWalk) mergeSources(v *kyaml.Node) []*kyaml.Node {
+	v = resolve(v)
+	if v == nil {
+		return nil
+	}
+	if srcs, ok := w.sources[v]; ok {
+		return srcs
+	}
+	srcs := mergeSources(v)
+	w.sources[v] = srcs
+	return srcs
+}
+
+// contribution reads the keys of the mapping src once for every call.
+func (w *kindWalk) contribution(g *buildGuard, src *kyaml.Node) mergeContribution {
+	if c, ok := w.contributing[src]; ok {
+		return c
+	}
+	var c mergeContribution
+	var merges []*kyaml.Node
+	g.readKeys(&c.meta, src, &merges)
+	c.deeper = len(merges) > 0
+	w.contributing[src] = c
+	return c
+}
+
 // noteKinds records the kind of the node n when it is a mapping, and of its
 // items when its kind ends in List. object is whether n, or a List it sits in,
 // has a metadata key: only then is a bound that stops the read a refusal.
 //
-// seen holds the visits of one loadedKinds call: of a mapping, and of the
+// w.seen holds the visits of one loadedKinds call: of a mapping, and of the
 // sequence of items of a List. A visit met again gives the result of the
 // first: a refusal ended the call, and the kinds it recorded are recorded. So
 // a mapping or a sequence many aliases name is read once per depth and object
 // flag, and the Lists are walked in at most (maxListDepth+1) times 2 reads of
-// each node of the file, not in the paths through its aliases. What each
-// mapping visit reads of itself (its keys and the mappings its merge keys
-// name) is not memoized. The memo lives one call, so concurrent builds share
-// nothing.
-func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, seen map[kindVisit]bool) string {
+// each node of the file, not in the paths through its aliases. A mapping a
+// merge key names is read once for the call, however many mappings name it, so
+// the keys read are those of each mapping visited plus those of each mapping
+// named once. The memos live one call, so concurrent builds share nothing.
+func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWalk) string {
 	n = resolve(n)
 	if n == nil || n.Kind != kyaml.MappingNode {
 		return ""
 	}
 	visit := kindVisit{n, depth, object}
-	if seen[visit] {
+	if w.seen[visit] {
 		return ""
 	}
-	seen[visit] = true
+	w.seen[visit] = true
 	g.kindVisits++
 	m := objectMeta{}
 	var merges []*kyaml.Node
-	m.read(n, &merges)
+	g.readKeys(&m, n, &merges)
 	for _, v := range merges {
-		for _, src := range mergeSources(v) {
-			var deeper []*kyaml.Node
-			m.read(src, &deeper)
-			m.deepMerge = m.deepMerge || len(deeper) > 0
+		for _, src := range w.mergeSources(v) {
+			c := w.contribution(g, src)
+			m.absorb(c.meta)
+			m.deepMerge = m.deepMerge || c.deeper
 		}
 	}
 	if m.deepMerge && m.hasMetadata {
@@ -142,11 +195,11 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, seen map[k
 				return ""
 			}
 			// The Lists that hold one sequence step over it once.
-			if step := (kindVisit{items, depth, object}); !seen[step] {
-				seen[step] = true
+			if step := (kindVisit{items, depth, object}); !w.seen[step] {
+				w.seen[step] = true
 				for _, item := range items.Content {
 					g.kindItems++
-					if why := g.noteKinds(item, depth+1, object, seen); why != "" {
+					if why := g.noteKinds(item, depth+1, object, w); why != "" {
 						return why
 					}
 				}
@@ -155,6 +208,12 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, seen map[k
 	}
 	g.note(m.apiVersion, m.kind)
 	return ""
+}
+
+// readKeys is m.read(n, merges), counting the keys of n it reads.
+func (g *buildGuard) readKeys(m *objectMeta, n *kyaml.Node, merges *[]*kyaml.Node) {
+	g.kindKeys += len(n.Content) / 2
+	m.read(n, merges)
 }
 
 // note records the kind once, in the order met.
@@ -210,6 +269,21 @@ func (m *objectMeta) read(n *kyaml.Node, merges *[]*kyaml.Node) {
 			m.hasMetadata = true
 		}
 	}
+}
+
+// absorb takes from s, the fields of a mapping a merge key names, what m has
+// not got yet: the same as m.read of that mapping.
+func (m *objectMeta) absorb(s objectMeta) {
+	if !m.hasAPIVersion && s.hasAPIVersion {
+		m.hasAPIVersion, m.apiVersion = true, s.apiVersion
+	}
+	if !m.hasKind && s.hasKind {
+		m.hasKind, m.kind = true, s.kind
+	}
+	if m.items == nil {
+		m.items = s.items
+	}
+	m.hasMetadata = m.hasMetadata || s.hasMetadata
 }
 
 // mergeSources is the mappings the value v of a merge key names: v itself, or
