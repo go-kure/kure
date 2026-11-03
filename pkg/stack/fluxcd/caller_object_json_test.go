@@ -737,3 +737,27 @@ func TestCallerObject_TypedNilListItemDoesNotPanic(t *testing.T) {
 	_, err := fluxstack.NewResourceGenerator().GenerateFromLayout(ml, &stack.Cluster{Node: &stack.Node{Name: "root"}})
 	t.Logf("GenerateFromLayout: %v", err)
 }
+
+// A resource that embeds a nil pointer has a non-nil outer pointer, and the
+// method it promotes from the nil one panics. It is refused, naming the layout,
+// the resource's place in it and its Go type, and does not panic.
+func TestCallerObject_ResourceEmbeddingNilPointerIsRefusedNamingIt(t *testing.T) {
+	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{
+		unstructuredObj("v1", "ConfigMap", "default", "first"),
+		&struct{ *corev1.ConfigMap }{},
+	}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("GenerateFromLayout panicked: %v", r)
+		}
+	}()
+	_, err := fluxstack.NewResourceGenerator().GenerateFromLayout(ml, &stack.Cluster{Node: &stack.Node{Name: "root"}})
+	if err == nil {
+		t.Fatal("got no error, want a refusal")
+	}
+	for _, want := range []string{"layout", "resource 1", "struct { *v1.ConfigMap }"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q", err, want)
+		}
+	}
+}
