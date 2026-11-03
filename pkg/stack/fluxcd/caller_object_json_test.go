@@ -1,6 +1,7 @@
 package fluxcd_test
 
 import (
+	"encoding"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -626,6 +627,28 @@ func TestCallerObject_MapKeyThatMarshalsItselfIsRefused(t *testing.T) {
 	cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
 	cm.Object["spec"] = map[string]any{"m": panicMarshaler{}}
 	o := &keyedMarshaler{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Thing"}, Keyed: map[key]any{{U: cm}: nil}}
+	o.Name, o.Namespace = "holder", "default"
+	refusedWithoutPanic(t, o, "fluxcd_test.key")
+	if panicMarshalCalls != 0 {
+		t.Errorf("the marshaler was called %d times", panicMarshalCalls)
+	}
+}
+
+// ifaceKeyed holds a map whose key type is an interface and whose values are
+// scalars, so nothing but its keys can hold a marshaler.
+type ifaceKeyed struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Keyed             map[encoding.TextMarshaler]string `json:"keyed,omitempty"`
+}
+
+func (o *ifaceKeyed) DeepCopyObject() runtime.Object { c := *o; return &c }
+
+func TestCallerObject_InterfaceMapKeyThatMarshalsItselfIsRefused(t *testing.T) {
+	panicMarshalCalls = 0
+	cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
+	cm.Object["spec"] = map[string]any{"m": panicMarshaler{}}
+	o := &ifaceKeyed{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Thing"}, Keyed: map[encoding.TextMarshaler]string{key{U: cm}: "v"}}
 	o.Name, o.Namespace = "holder", "default"
 	refusedWithoutPanic(t, o, "fluxcd_test.key")
 	if panicMarshalCalls != 0 {
