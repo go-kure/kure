@@ -406,3 +406,52 @@ func TestCallerObject_NestedTypedListItemMarshalerIsRefusedNotCalled(t *testing.
 		t.Errorf("the marshaler was called %d times", panicMarshalCalls)
 	}
 }
+
+// objectItems is a typed List whose Items are runtime.Objects, as a list of
+// mixed kinds has them.
+type objectItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []runtime.Object `json:"items"`
+}
+
+func (l *objectItems) DeepCopyObject() runtime.Object { c := *l; return &c }
+
+// apimachinery cannot read the items of a List that holds a nil one, and it
+// panics. The held objects after the nil are still found and checked, and not
+// marshalled with the List.
+func TestCallerObject_ListWithNilItemStillChecksItsObjects(t *testing.T) {
+	panicMarshalCalls = 0
+	cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
+	cm.Object["spec"] = map[string]any{"m": panicMarshaler{}}
+	l := &objectItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}, Items: []runtime.Object{nil, cm}}
+	l.Name, l.Namespace = "holder", "default"
+	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{l}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("UmbrellaTerminals panicked: %v", r)
+		}
+	}()
+	_, err := fluxstack.UmbrellaTerminals(ml)
+	if err == nil || !strings.Contains(err.Error(), "marshals itself") {
+		t.Errorf("got %v, want a refusal naming the marshaler", err)
+	}
+	if panicMarshalCalls != 0 {
+		t.Errorf("the marshaler was called %d times", panicMarshalCalls)
+	}
+}
+
+// A List that holds itself under a nil item ends the walk that finds its
+// objects.
+func TestCallerObject_ListWithNilItemHoldingItselfDoesNotRecurse(t *testing.T) {
+	l := &objectItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}}
+	l.Name, l.Namespace = "holder", "default"
+	l.Items = []runtime.Object{nil, l}
+	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{l}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("UmbrellaTerminals panicked: %v", r)
+		}
+	}()
+	_, _ = fluxstack.UmbrellaTerminals(ml)
+}
