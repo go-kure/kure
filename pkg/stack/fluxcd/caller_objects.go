@@ -158,6 +158,11 @@ func callerObjects(r client.Object) (objs []*unstructured.Unstructured, bad *uns
 		}
 		return []*unstructured.Unstructured{o}, nil, nil
 	}
+	// A typed nil holds no object, and a method called on it may panic: the
+	// checks of the layout answer for it, as they did.
+	if v := reflect.ValueOf(r); v.Kind() == reflect.Pointer && v.IsNil() {
+		return nil, nil, nil
+	}
 	// The walk is bounded, so it goes first: the cycle check below revisits a
 	// List held twice each time it is held.
 	if bad, err := walkHeld(r); err != nil {
