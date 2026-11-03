@@ -1,11 +1,13 @@
 package fluxcd_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -544,5 +546,82 @@ func TestCallerObject_UnstructuredUnderAnotherFieldIsChecked(t *testing.T) {
 	refusedWithoutPanic(t, o, "marshals itself")
 	if panicMarshalCalls != 0 {
 		t.Errorf("the marshaler was called %d times", panicMarshalCalls)
+	}
+}
+
+// keyedField is a typed object with a map whose key holds itself.
+type keyedField struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Keyed             map[*map[string]any]any `json:"keyed,omitempty"`
+}
+
+func (o *keyedField) DeepCopyObject() runtime.Object { c := *o; return &c }
+
+// The walk does not format a map key: a key that holds itself has no end when
+// formatted.
+func TestCallerObject_MapKeyThatHoldsItselfDoesNotOverflow(t *testing.T) {
+	m := map[string]any{}
+	m["self"] = m
+	o := &keyedField{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Thing"}, Keyed: map[*map[string]any]any{&m: nil}}
+	o.Name, o.Namespace = "holder", "default"
+	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{o}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("UmbrellaTerminals panicked: %v", r)
+		}
+	}()
+	_, _ = fluxstack.UmbrellaTerminals(ml)
+}
+
+// hidingItem holds an unstructured object in a private field and writes it
+// through its own marshaler, so marshalling reaches what no other type's
+// private field would.
+type hidingItem struct{ u *unstructured.Unstructured }
+
+func (h hidingItem) MarshalJSON() ([]byte, error) { return json.Marshal(h.u) }
+
+type hidingHolder struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Hidden            hidingItem `json:"hidden"`
+}
+
+func (o *hidingHolder) DeepCopyObject() runtime.Object { c := *o; return &c }
+
+func TestCallerObject_PrivateFieldOfSelfMarshalingTypeIsRefused(t *testing.T) {
+	panicMarshalCalls = 0
+	cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
+	cm.Object["spec"] = map[string]any{"m": panicMarshaler{}}
+	o := &hidingHolder{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Thing"}, Hidden: hidingItem{u: cm}}
+	o.Name, o.Namespace = "holder", "default"
+	refusedWithoutPanic(t, o, "cannot be read")
+	if panicMarshalCalls != 0 {
+		t.Errorf("the marshaler was called %d times", panicMarshalCalls)
+	}
+}
+
+// A chain of Lists that each hold the next twice is 2^n Lists to a walk that
+// does not remember where it has been: it is refused, and at once.
+func TestCallerObject_ListsHeldTwiceAreRefusedAtOnce(t *testing.T) {
+	var next runtime.Object = &metav1.List{}
+	for i := 0; i < 60; i++ {
+		l := &objectItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}, Items: []runtime.Object{next, next}}
+		l.Name, l.Namespace = "holder", "default"
+		next = l
+	}
+	done := make(chan error, 1)
+	go func() {
+		ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{next.(client.Object)}}
+		_, err := fluxstack.UmbrellaTerminals(ml)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "more than") {
+			t.Errorf("got %v, want a refusal naming the value limit", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("the call did not end")
 	}
 }
