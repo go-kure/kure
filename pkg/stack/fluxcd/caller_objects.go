@@ -565,8 +565,11 @@ func trustedPackage(t reflect.Type) bool {
 	return trustedPath(t.PkgPath())
 }
 
-// trustedType reports whether t is one of trustedTypes.
+// trustedType reports whether t, or the type it points to, is one of trustedTypes.
 func trustedType(t reflect.Type) bool {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
 	return t.Name() != "" && slices.Contains(trustedTypes, t.PkgPath()+"."+t.Name())
 }
 
