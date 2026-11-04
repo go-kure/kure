@@ -44,7 +44,8 @@ const (
 // mappings a merge key (<<) names; an object kustomize reads through more, or a
 // kind that ends in List (kustomize reads one as its items) holding Lists more
 // than maxListDepth deep, is not read, but only when it looks like an object
-// (it has a metadata key), so a data file with a deep merge chain still builds.
+// (it has a metadata key, or sits in a List that has one), so a data file with
+// a deep merge chain still builds.
 // The false refusal left is a List that deep, or an object with a merge chain
 // that deep, in a file that is no resource.
 func (g *buildGuard) loadedKinds(b []byte) string {
@@ -182,7 +183,7 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWal
 			m.deepMerge = m.deepMerge || c.deeper
 		}
 	}
-	if m.deepMerge && m.hasMetadata {
+	if m.deepMerge && (object || m.hasMetadata) {
 		return "which holds an object whose apiVersion or kind may come through merge keys more than one level deep, which kure does not follow to check the scope of its kind"
 	}
 	object = object || m.hasMetadata
