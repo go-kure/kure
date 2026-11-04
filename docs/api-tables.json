@@ -921,7 +921,7 @@
       "goType": "BFDProfile",
       "importPath": "go.universe.tf/metallb/api/v1beta1",
       "module": "go.universe.tf/metallb",
-      "moduleVersion": "v0.16.1",
+      "moduleVersion": "v0.16.2",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -932,7 +932,7 @@
       "goType": "BGPAdvertisement",
       "importPath": "go.universe.tf/metallb/api/v1beta1",
       "module": "go.universe.tf/metallb",
-      "moduleVersion": "v0.16.1",
+      "moduleVersion": "v0.16.2",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -943,7 +943,7 @@
       "goType": "BGPPeer",
       "importPath": "go.universe.tf/metallb/api/v1beta1",
       "module": "go.universe.tf/metallb",
-      "moduleVersion": "v0.16.1",
+      "moduleVersion": "v0.16.2",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -954,7 +954,7 @@
       "goType": "BGPPeer",
       "importPath": "go.universe.tf/metallb/api/v1beta2",
       "module": "go.universe.tf/metallb",
-      "moduleVersion": "v0.16.1",
+      "moduleVersion": "v0.16.2",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -965,7 +965,7 @@
       "goType": "Community",
       "importPath": "go.universe.tf/metallb/api/v1beta1",
       "module": "go.universe.tf/metallb",
-      "moduleVersion": "v0.16.1",
+      "moduleVersion": "v0.16.2",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -976,7 +976,7 @@
       "goType": "ConfigurationState",
       "importPath": "go.universe.tf/metallb/api/v1beta1",
       "module": "go.universe.tf/metallb",
-      "moduleVersion": "v0.16.1",
+      "moduleVersion": "v0.16.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -987,7 +987,7 @@
       "goType": "IPAddressPool",
       "importPath": "go.universe.tf/metallb/api/v1beta1",
       "module": "go.universe.tf/metallb",
-      "moduleVersion": "v0.16.1",
+      "moduleVersion": "v0.16.2",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -998,7 +998,7 @@
       "goType": "L2Advertisement",
       "importPath": "go.universe.tf/metallb/api/v1beta1",
       "module": "go.universe.tf/metallb",
-      "moduleVersion": "v0.16.1",
+      "moduleVersion": "v0.16.2",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -1009,7 +1009,7 @@
       "goType": "ServiceBGPStatus",
       "importPath": "go.universe.tf/metallb/api/v1beta1",
       "module": "go.universe.tf/metallb",
-      "moduleVersion": "v0.16.1",
+      "moduleVersion": "v0.16.2",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -1020,7 +1020,7 @@
       "goType": "ServiceL2Status",
       "importPath": "go.universe.tf/metallb/api/v1beta1",
       "module": "go.universe.tf/metallb",
-      "moduleVersion": "v0.16.1",
+      "moduleVersion": "v0.16.2",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -1936,7 +1936,7 @@
       "goField": "DisableMP",
       "stability": "deprecated",
       "module": "go.universe.tf/metallb",
-      "moduleVersion": "v0.16.1"
+      "moduleVersion": "v0.16.2"
     },
     {
       "importPath": "k8s.io/api/apps/v1",
