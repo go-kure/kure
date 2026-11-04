@@ -10,10 +10,6 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 )
 
-// maxEmbedNodes bounds the embedded structs embeddedUnstructured looks at, for
-// a type that embeds many others.
-const maxEmbedNodes = 1024
-
 // embedStep is one struct type reached through embedded fields: the type, the
 // index of the field path that reaches it from the wrapper, and that path by
 // field name.
@@ -38,8 +34,7 @@ type embedStep struct {
 // embedded on the way to the object, or beside it at or above its depth,
 // declares (isPromotion tells the compiler's wrapper from a method of the
 // source). It is refused as well when it embeds a nil pointer, when the object
-// cannot be reached or when the embedding is too deep or too wide to follow.
-// Where this cannot be told, the wrapper is refused.
+// cannot be reached. Where this cannot be told, the wrapper is refused.
 func embeddedUnstructured(r apiruntime.Object) (objs []*unstructured.Unstructured, st reflect.Type, err error) {
 	if r == nil {
 		return nil, nil, nil
@@ -57,10 +52,7 @@ func embeddedUnstructured(r apiruntime.Object) (objs []*unstructured.Unstructure
 	if st.Kind() != reflect.Struct || st == unstructuredType || st == unstructuredListType {
 		return nil, nil, nil
 	}
-	found, above, err := shallowestEmbeds(st)
-	if err != nil {
-		return nil, st, errors.Wrapf(err, "a %s", st)
-	}
+	found, above := shallowestEmbeds(st)
 	if len(found) == 0 {
 		return nil, nil, nil
 	}
@@ -107,15 +99,18 @@ func embeddedUnstructured(r apiruntime.Object) (objs []*unstructured.Unstructure
 // that has any, and the embedded struct types at the depths above it and at its
 // own. More than one is returned when several share that depth. None is
 // returned when st embeds none.
-func shallowestEmbeds(st reflect.Type) (found, above []embedStep, err error) {
+//
+// The search has no limit of its own: it is linear in the types st reaches. A
+// type is followed at the depth it is first reached, and at most twice there,
+// as a third path to it adds nothing to the two that already make it ambiguous.
+// So a level holds at most two steps per type, and there are at most as many
+// levels as types.
+func shallowestEmbeds(st reflect.Type) (found, above []embedStep) {
 	level := []embedStep{{typ: st}}
-	nodes := 0
 	seen := map[reflect.Type]int{st: 0}
 	for depth := 0; len(level) > 0; depth++ {
-		if depth > maxEmbedDepth {
-			return nil, nil, errors.New("embeds structs too deep to follow")
-		}
 		var next []embedStep
+		paths := map[reflect.Type]int{}
 		for _, step := range level {
 			for i := 0; i < step.typ.NumField(); i++ {
 				f := step.typ.Field(i)
@@ -142,8 +137,8 @@ func shallowestEmbeds(st reflect.Type) (found, above []embedStep, err error) {
 					} else if !ok {
 						seen[ft] = depth + 1
 					}
-					if nodes++; nodes > maxEmbedNodes {
-						return nil, nil, errors.New("embeds too many structs to follow")
+					if paths[ft]++; paths[ft] > 2 {
+						continue
 					}
 					at.typ = ft
 					next = append(next, at)
@@ -153,12 +148,12 @@ func shallowestEmbeds(st reflect.Type) (found, above []embedStep, err error) {
 		if len(found) > 0 {
 			// A struct that is embedded at this depth declares methods Go ranks
 			// with the object's, so it counts with the ones above.
-			return found, append(above, next...), nil
+			return found, append(above, next...)
 		}
 		above = append(above, next...)
 		level = next
 	}
-	return nil, nil, nil
+	return nil, nil
 }
 
 // declaresDeepCopyObject reports whether the struct type st declares a
