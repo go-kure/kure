@@ -992,7 +992,9 @@ build, for the scope of every kind the build made and of every kind in a file or
 inline patch it read, an object an overlay deletes later included, and does not
 read a build in which one differs from the built-in schema's. It does not read a
 build either when it cannot follow an object to its kind: an object that
-reaches a merge chain that leads back to itself; a List nested more than eight
+reaches a merge chain that leads back to itself; any mapping that reaches a
+merge cycle whose members offer different values of an `apiVersion`, `kind` or
+`items` that one of them lacks; a List nested more than eight
 deep that holds an object (a mapping with a `metadata` key, of its own or
 through merge keys); or an object with an `apiVersion` or `kind` of more than
 1024 bytes. The package README states the full contract, including what is not
