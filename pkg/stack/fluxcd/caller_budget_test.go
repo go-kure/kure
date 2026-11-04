@@ -106,6 +106,27 @@ func TestNormalizeCallerObjects_ConversionBudgetIsPerCall(t *testing.T) {
 	})
 }
 
+// A map with more entries than the budget has left is refused before its keys
+// are collected and sorted, as a slice is refused before it is copied: the
+// work is not in proportion to a map that must be refused. Collecting the keys
+// of a map of strings allocates once for each.
+func TestJSONContentOf_MapOverBudgetIsRefusedBeforeItsKeysAreCollected(t *testing.T) {
+	defer SetMaxJSONNodesForTest(1 << 12)()
+	big := make(map[string]int, 1<<14)
+	for i := 0; i < 1<<14; i++ {
+		big[strings.Repeat("k", 1+i%7)+string(rune('a'+i%26))+strings.Repeat("x", i/26)] = i
+	}
+	m := map[string]any{"big": big}
+	var err error
+	allocs := testing.AllocsPerRun(3, func() { _, err = jsonContentOf(m, &convBudget{}) })
+	if err == nil || !strings.Contains(err.Error(), "holds more than") {
+		t.Fatalf("got %v, want a refusal for a map over the bound", err)
+	}
+	if allocs > 256 {
+		t.Errorf("the refusal made %.0f allocations, want it before the keys are collected", allocs)
+	}
+}
+
 // A large layout of plain JSON objects holds nothing that needs the converter,
 // so it is charged nothing: origin/main builds it, and so does this.
 func TestNormalizeCallerObjects_LargePlainJSONLayoutIsNotRefused(t *testing.T) {

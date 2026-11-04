@@ -416,6 +416,39 @@ func TestCallerObject_NestedTypedListItemMarshalerIsRefusedNotCalled(t *testing.
 	}
 }
 
+// nilMarshalerWrapper embeds an interface from a trusted package and leaves it
+// nil: MarshalJSON is promoted from the interface, and calling it panics.
+type nilMarshalerWrapper struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	json.Marshaler
+}
+
+func (w *nilMarshalerWrapper) DeepCopyObject() runtime.Object { c := *w; return &c }
+
+// The type is judged trusted for the package of the interface it embeds, and
+// the method that runs is the one of the value the field holds, which a nil
+// one has none of. The call panics, and the read guard recovers it: the entry
+// point refuses the object, naming its type, and never panics.
+func TestCallerObject_EmbeddedNilMarshalerInterfaceIsRefused(t *testing.T) {
+	w := &nilMarshalerWrapper{
+		TypeMeta:   metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Wrapper"},
+		ObjectMeta: metav1.ObjectMeta{Name: "w", Namespace: "default"},
+	}
+	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{w}}
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("UmbrellaTerminals panicked: %v", r)
+			}
+		}()
+		_, err := fluxstack.UmbrellaTerminals(ml)
+		if err == nil || !strings.Contains(err.Error(), "nilMarshalerWrapper") || !strings.Contains(err.Error(), "cannot be read") {
+			t.Errorf("got %v, want a refusal naming the wrapper and saying it cannot be read", err)
+		}
+	}()
+}
+
 // objectItems is a typed List whose Items are runtime.Objects, as a list of
 // mixed kinds has them.
 type objectItems struct {

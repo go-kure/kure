@@ -779,6 +779,11 @@ func (c *converter) convertMap(v reflect.Value, path string, depth int) (any, er
 	}
 	c.open[key] = true
 	defer delete(c.open, key)
+	// The count is checked before the keys are collected and sorted, as for a
+	// slice: the work is not in proportion to a map that must be refused.
+	if v.Len() > maxJSONNodes-c.budget.used {
+		return nil, errors.Errorf("%s holds more than %d values", where(path), maxJSONNodes)
+	}
 	keys := v.MapKeys()
 	slices.SortFunc(keys, func(a, b reflect.Value) int {
 		switch x, y := a.String(), b.String(); {
