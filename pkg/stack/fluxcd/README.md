@@ -1895,11 +1895,11 @@ changed. The accepted shapes are a closed list. A `string`, `int64`, `float64`, 
 element type (`[]string`, `map[string]string`) are converted element by element. Anything else is refused instead of converted: a struct, a pointer, an array, a channel, a
 function, a complex number, a map with other keys, a `uint64` above the largest `int64`, and every type
 with a `MarshalJSON` or `MarshalText` method (`json.RawMessage` and `net.IP` among them). So is a value
-that holds itself through maps and slices, one nested deeper than 1000 levels, one with more than 4
-million values and a byte slice of more than 4 million bytes. A refusal names the layout, the object
+that holds itself through maps and slices, one nested deeper than 10,000 levels (the depth `encoding/json` takes), a call whose objects
+need more than 4 million values converted or checked in all, and a byte slice of more than 4 million bytes. A refusal names the layout, the object
 and the field, and replaces no object. kure never calls a method of a caller's value, a marshaler
 included, also not to read a typed `List` that holds such an object. A typed object is walked, field by
-field, before it is written, and refused when it holds itself, when it is nested deeper than 4000
+field, before it is written, and refused when it holds itself, when it is nested deeper than 40,000
 steps, when the walk meets more than 4 million values or when an unstructured object in it holds a
 value that would call a method when written. A typed object that holds a type with a `MarshalJSON`,
 `MarshalText` or `MarshalYAML` method, as a field, an element or a map key, is refused, naming the

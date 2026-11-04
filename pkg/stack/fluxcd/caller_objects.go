@@ -22,9 +22,12 @@ import (
 )
 
 const (
-	// maxJSONDepth is how deep a value is followed, as encoding/json counts
-	// a nesting before it takes it for a cycle.
-	maxJSONDepth = 1000
+	// maxJSONDepth is how deep a value is followed: the nesting encoding/json
+	// takes, 10,000 levels. Deeper, origin/main's own write of the object fails
+	// with an error ("exceeded max depth"), so a refusal there loses nothing; up
+	// to it main reads and writes the object, so a lower limit would refuse what
+	// main accepts.
+	maxJSONDepth = 10000
 
 	// maxHeldDepth is how deep walkHeld follows a typed object, counted in the
 	// pointers, interfaces, fields, elements and values it steps through, which
