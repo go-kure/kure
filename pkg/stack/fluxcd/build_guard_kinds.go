@@ -48,11 +48,15 @@ const (
 // (kustomize reads one as its items) holding Lists more than maxListDepth deep,
 // but only when it looks like an object (it has a metadata key, or sits in a
 // List that has one, or holds below the depth cap an item that has one), so a
-// data file with a cyclic merge chain or deep Lists still builds. An apiVersion
-// or kind over maxKindBytes on an object is not read either, and a data file
-// with one is skipped.
-// The false refusal left is a List that deep, or an object that reaches a
-// cyclic merge chain, in a file that is no resource.
+// data file with a cyclic merge chain or deep Lists still builds. A member of a
+// merge cycle takes the apiVersion, kind and items it lacks from the other
+// members when they offer one value, whichever member the file enters by; when
+// they offer several, any mapping that reaches the cycle is not read, data or
+// object. An apiVersion or kind over maxKindBytes on an object is not read
+// either, and a data file with one is skipped.
+// The false refusal left is a List that deep, an object that reaches a cyclic
+// merge chain, or a mapping that reaches an ambiguous one, in a file that is no
+// resource.
 func (g *buildGuard) loadedKinds(b []byte) string {
 	w := newKindWalk()
 	for _, part := range splitDocuments(string(b)) {
@@ -132,25 +136,94 @@ func newKindWalk() *kindWalk {
 // mergeContribution is what a mapping, with the mappings its merge keys name
 // at any depth, gives the mapping that names it: the first value found of each
 // key and whether a metadata key is found anywhere. cyclic is whether the
-// chain leads back to itself, which is then no chain with an end to read: its
-// fields hold what was found before it closed on itself, and hasMetadata is
-// exact.
+// chain leads back to itself, which is then no chain with an end to read:
+// hasMetadata is exact, and a field a member of the cycle lacks is the one
+// value the cycle offers of it, whichever member was reached first. When the
+// cycle offers several, ambiguous says the mapping cannot be read: whatever it
+// holds first would depend on the order the file is read in.
 type mergeContribution struct {
-	meta   objectMeta
-	cyclic bool
+	meta      objectMeta
+	cyclic    bool
+	ambiguous bool
+}
+
+// offered is the value the mappings of a merge cycle offer of one field: the
+// first, and whether another differs. Values are told apart by key, which is
+// cheap to compare.
+type offered[K comparable, V any] struct {
+	key           K
+	val           V
+	set, conflict bool
+}
+
+func (o *offered[K, V]) add(k K, v V) {
+	if !o.set {
+		o.key, o.val, o.set = k, v, true
+	} else if o.key != k {
+		o.conflict = true
+	}
+}
+
+func (o *offered[K, V]) join(p offered[K, V]) {
+	if p.set {
+		o.add(p.key, p.val)
+	}
+	o.conflict = o.conflict || p.conflict
+}
+
+// stringKey tells two strings apart in constant time however long they are:
+// by length, the first maxKindBytes+1 bytes and whether they end in List,
+// which is all a string over maxKindBytes is asked: it names no kind
+// whichever it is, but a kind that ends in List is still read as its items.
+type stringKey struct {
+	n    int
+	head string
+	list bool
+}
+
+func keyOf(s string) stringKey {
+	return stringKey{len(s), s[:min(len(s), maxKindBytes+1)], strings.HasSuffix(s, "List")}
 }
 
 // chainFrame is a node of the merge graph in mergeChain's walk. A mapping has
 // an edge to the value of each of its merge keys, in order, and a sequence one
-// to each mapping it holds.
+// to each mapping it holds. own is what the mapping sets itself; meta adds what
+// the nodes it has settled give, first found first; the offers are the values
+// of own and of those nodes, which a cycle shares between its members.
 type chainFrame struct {
-	node   *kyaml.Node
-	meta   objectMeta
-	succ   []*kyaml.Node
-	next   int
-	index  int
-	low    int
-	cyclic bool
+	node      *kyaml.Node
+	own, meta objectMeta
+	api, kind offered[stringKey, string]
+	items     offered[*kyaml.Node, *kyaml.Node]
+	succ      []*kyaml.Node
+	next      int
+	index     int
+	low       int
+	// looped is whether the frame names itself or a node still open; cyclic
+	// whether the chain reaches a cycle at all.
+	looped, cyclic, ambiguous bool
+}
+
+// offer adds the fields m sets to the values f offers.
+func (f *chainFrame) offer(m objectMeta) {
+	if m.hasAPIVersion {
+		f.api.add(keyOf(m.apiVersion), m.apiVersion)
+	}
+	if m.hasKind {
+		f.kind.add(keyOf(m.kind), m.kind)
+	}
+	if m.items != nil {
+		n := resolve(m.items)
+		f.items.add(n, n)
+	}
+}
+
+// take absorbs a settled node's contribution c into f.
+func (f *chainFrame) take(c mergeContribution) {
+	f.meta.absorb(c.meta)
+	f.offer(c.meta)
+	f.cyclic = f.cyclic || c.cyclic
+	f.ambiguous = f.ambiguous || c.ambiguous
 }
 
 // mergeChain is the contribution of the mapping or sequence root with its
@@ -168,6 +241,13 @@ type chainFrame struct {
 // closes, its members are all cyclic if any of them is, and they all get a
 // hasMetadata that is the OR over the members, so no member of a cycle misses a
 // metadata key another one holds, whichever it was reached from.
+//
+// A cycle has no first member, so what a member lacks of apiVersion, kind and
+// items is not what a fold from the node it was entered at finds. Each member
+// keeps its own keys; a field it lacks is the one value the whole component
+// offers (the members' own keys and what they have settled), computed once for
+// the component. When the component offers several, the member is ambiguous,
+// and so is every node that reaches it.
 func (w *kindWalk) mergeChain(g *buildGuard, root *kyaml.Node) mergeContribution {
 	if c, ok := w.merged[root]; ok {
 		return c
@@ -180,6 +260,8 @@ func (w *kindWalk) mergeChain(g *buildGuard, root *kyaml.Node) mergeContribution
 		if n.Kind == kyaml.MappingNode {
 			var merges []*kyaml.Node
 			g.readKeys(&f.meta, n, &merges)
+			f.own = f.meta
+			f.offer(f.own)
 			for _, v := range merges {
 				if v = resolve(v); v != nil && (v.Kind == kyaml.MappingNode || v.Kind == kyaml.SequenceNode) {
 					f.succ = append(f.succ, v)
@@ -200,10 +282,9 @@ func (w *kindWalk) mergeChain(g *buildGuard, root *kyaml.Node) mergeContribution
 			f.next++
 			g.kindAbsorbs++
 			if c, ok := w.merged[s]; ok {
-				f.meta.absorb(c.meta)
-				f.cyclic = f.cyclic || c.cyclic
+				f.take(c)
 			} else if sf, ok := w.gray[s]; ok {
-				f.cyclic = true
+				f.cyclic, f.looped = true, true
 				f.low = min(f.low, sf.index)
 			} else {
 				enter(s)
@@ -219,22 +300,57 @@ func (w *kindWalk) mergeChain(g *buildGuard, root *kyaml.Node) mergeContribution
 			}
 			members := open[at:]
 			open = open[:at]
-			cyclic, metadata := false, false
+			looped := len(members) > 1 || f.looped
+			var cyclic, metadata, ambiguous bool
+			var api, kind offered[stringKey, string]
+			var items offered[*kyaml.Node, *kyaml.Node]
+			var lacksAPI, lacksKind, lacksItems bool
 			for _, mf := range members {
 				cyclic = cyclic || mf.cyclic
 				metadata = metadata || mf.meta.hasMetadata
+				ambiguous = ambiguous || mf.ambiguous
+				api.join(mf.api)
+				kind.join(mf.kind)
+				items.join(mf.items)
+				// A sequence of merge values sets no key, so it lacks all three:
+				// what it gives is cached for whoever merges it later.
+				lacksAPI = lacksAPI || !mf.own.hasAPIVersion
+				lacksKind = lacksKind || !mf.own.hasKind
+				lacksItems = lacksItems || mf.own.items == nil
+			}
+			// A cycle has no first member: each member keeps its own keys and
+			// takes of the others only the one value the cycle offers, since a
+			// fold from where the walk entered would depend on that. When a
+			// member lacks a field the cycle offers several values of, the cycle
+			// is ambiguous, and so are all its members and what reaches them.
+			// So a fold that found a value of a field the member lacks found
+			// the one the cycle offers, and what is left to fill is what the
+			// fold did not reach.
+			if looped {
+				ambiguous = ambiguous || api.conflict && lacksAPI || kind.conflict && lacksKind || items.conflict && lacksItems
 			}
 			for _, mf := range members {
-				mf.meta.hasMetadata = metadata
-				w.merged[mf.node] = mergeContribution{meta: mf.meta, cyclic: cyclic}
+				m := mf.meta
+				if looped {
+					if !m.hasAPIVersion && api.set && !api.conflict {
+						m.hasAPIVersion, m.apiVersion = true, api.val
+					}
+					if !m.hasKind && kind.set && !kind.conflict {
+						m.hasKind, m.kind = true, kind.val
+					}
+					if m.items == nil && items.set && !items.conflict {
+						m.items = items.val
+					}
+				}
+				m.hasMetadata = metadata
+				w.merged[mf.node] = mergeContribution{meta: m, cyclic: cyclic, ambiguous: ambiguous}
 				delete(w.gray, mf.node)
 			}
 		}
 		if len(calls) > 0 {
 			p := calls[len(calls)-1]
 			if c, ok := w.merged[f.node]; ok {
-				p.meta.absorb(c.meta)
-				p.cyclic = p.cyclic || c.cyclic
+				p.take(c)
 			} else {
 				// Still open: f and p are in one component.
 				p.meta.absorb(f.meta)
@@ -273,6 +389,9 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWal
 	g.kindVisits++
 	c := w.mergeChain(g, n)
 	m := c.meta
+	if c.ambiguous {
+		return "which holds a mapping whose merge cycle leaves its apiVersion, kind or items ambiguous, so kure cannot tell the scope of its kind"
+	}
 	if c.cyclic && (object || m.hasMetadata) {
 		return "which holds an object whose merge keys lead back to themselves, which kure does not follow to check the scope of its kind"
 	}
@@ -325,10 +444,11 @@ func (g *buildGuard) holdsObject(n *kyaml.Node, w *kindWalk) bool {
 			}
 		}
 	case kyaml.MappingNode:
-		m := w.mergeChain(g, n).meta
-		if m.hasMetadata {
+		c := w.mergeChain(g, n)
+		if c.ambiguous || c.meta.hasMetadata {
 			return true
 		}
+		m := c.meta
 		if strings.HasSuffix(m.kind, "List") {
 			return g.holdsObject(m.items, w)
 		}
