@@ -73,8 +73,7 @@ func inList(items ...runtime.Object) *wrapperList {
 }
 
 // The wrapper's embedded object is the one Go promotes the methods of: the
-// shallowest, and a tie at that depth is refused with both paths named
-// (round 26).
+// shallowest, and a tie at that depth is refused with both paths named.
 func TestEmbeddedUnstructured_FollowsGoPromotion(t *testing.T) {
 	run := func(t *testing.T, r client.Object) error {
 		t.Helper()
@@ -107,7 +106,7 @@ func TestEmbeddedUnstructured_FollowsGoPromotion(t *testing.T) {
 
 // An embedded struct on the way to the object that declares a DeepCopyObject of
 // its own makes the wrapper's DeepCopyObject caller code, though the compiler
-// wrote the wrapper's own (round 26).
+// wrote the wrapper's own.
 func TestEmbeddedUnstructured_IntermediateWithItsOwnMethod(t *testing.T) {
 	t.Run("an intermediate DeepCopyObject of its own is refused", func(t *testing.T) {
 		w := &outerOfOwn{ownCopy{wrapperObj(int64(1))}}
@@ -132,7 +131,7 @@ func TestEmbeddedUnstructured_IntermediateWithItsOwnMethod(t *testing.T) {
 }
 
 // A wrapper around an unstructured List is a wrapper wherever it is held, also
-// as an item of a typed List, which reads its items as copies (round 26).
+// as an item of a typed List, which reads its items as copies.
 func TestHeldWrapper_OverAnUnstructuredList(t *testing.T) {
 	t.Run("a wrapper over a List in a typed List holds a plain int and is refused", func(t *testing.T) {
 		l := &layout.ManifestLayout{Name: "l", Resources: []client.Object{inList(promotesTrusted{listObj(7)})}}
@@ -180,7 +179,7 @@ func realList(n any) *unstructured.UnstructuredList {
 
 // A wrapper whose embedded object is reached through an unexported
 // intermediate pointer is judged like any other: kept when clean, refused when
-// not, and never refused for being unreachable (round 27).
+// not, and never refused for being unreachable.
 func TestEmbeddedUnstructured_ThroughAnUnexportedIntermediate(t *testing.T) {
 	run := func(r client.Object) error {
 		return normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{r}})
@@ -200,7 +199,7 @@ func TestEmbeddedUnstructured_ThroughAnUnexportedIntermediate(t *testing.T) {
 
 // An embedded unstructured.UnstructuredList is a wrapper too: its items are
 // held by value, and a read of a typed List that holds it returns copies, so it
-// is refused when an item needs conversion and kept when none does (round 27).
+// is refused when an item needs conversion and kept when none does.
 func TestHeldWrapper_OverAnUnstructuredListType(t *testing.T) {
 	t.Run("an item with a plain int is refused, naming the wrapper", func(t *testing.T) {
 		l := &layout.ManifestLayout{Name: "l", Resources: []client.Object{inList(listWrapper{realList(7)})}}
@@ -229,7 +228,7 @@ func TestHeldWrapper_OverAnUnstructuredListType(t *testing.T) {
 
 // recursiveTyped embeds its own type by pointer, next to a typed object and no
 // unstructured one. Its embedding is finite (the pointer is nil), and the type
-// holds nothing to check, so it is no concern of the wrapper check (round 28).
+// holds nothing to check, so it is no concern of the wrapper check.
 type recursiveTyped struct {
 	*corev1.ConfigMap
 	*recursiveTyped
