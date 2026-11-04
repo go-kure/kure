@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -129,6 +130,16 @@ func hostileCases() map[string]func() client.Object {
 			return l
 		},
 		"typed nil wrapper embedding Unstructured": func() client.Object { return (*embedsUnstructured)(nil) },
+		// A typed object that is no List holds an Unstructured with a plain int in
+		// a RawExtension: its copy follows Object whatever Raw holds, and the
+		// copy panics on the int (go-kure/kure#1252).
+		"unstructured with a plain int held in a raw extension": func() client.Object {
+			u := unstructuredObj("v1", "ConfigMap", "default", "cm")
+			u.Object["spec"] = map[string]any{"n": 7}
+			cr := &appsv1.ControllerRevision{Data: runtime.RawExtension{Raw: []byte("{}"), Object: u}}
+			cr.Name, cr.Namespace = "held", "default"
+			return cr
+		},
 		"embedded nil pointer": func() client.Object {
 			return &struct{ *corev1.ConfigMap }{}
 		},

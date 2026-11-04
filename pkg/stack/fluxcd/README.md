@@ -1881,15 +1881,19 @@ a port say, is read like any other field, before and after substitution (go-kure
 unstructured object a caller builds in Go should hold JSON-typed values, as apimachinery's
 `Unstructured` requires: an `int64`, not an `int`, because its `Nested*` reads and `DeepCopy`
 panic on any other. kure reads such an object as its JSON, so it does not panic on one
-(go-kure/kure#1201), except one held in the `Object` of a `RawExtension` of a typed object that is
-not a List, which still panics when the integration copies that object (go-kure/kure#1252).
+(go-kure/kure#1201, go-kure/kure#1252).
 `IntegrateWithLayout`, `CreateLayoutWithResources` (through it),
 `GenerateFromLayout`, `GenerateFromCluster` (through it) and `UmbrellaTerminals` first replace the
 `Object` map of each unstructured object in the layouts they are given, a `List`'s items included
 (also the unstructured items of a typed `List`, and of the typed Lists it holds, an unstructured `List`
-among them, whose own `Object` map is replaced like its items'), that holds another value with a copy that holds JSON-typed values. This changes the
-object the caller passed: its `Object` field holds a new map, and the map the caller built is not
-changed. The accepted shapes are a closed list. A `string`, `int64`, `float64`, `bool`, `nil`,
+among them, whose own `Object` map is replaced like its items', and an unstructured object that a
+typed object that is no `List` holds in a field, the `Object` of a `RawExtension` included), that
+holds another value with a copy that holds JSON-typed values. This changes the object the caller
+passed: its `Object` field holds a new map, and the map the caller built is not changed. A typed
+`List` is read from the items it writes, so an object it holds and does not write is left as it is.
+An unstructured object held by value in a map or in an interface of a typed object, which cannot be
+replaced, is refused when it holds a value that is not JSON typed. The accepted shapes are a closed
+list. A `string`, `int64`, `float64`, `bool`, `nil`,
 `json.Number`, `map[string]interface{}` and `[]interface{}` are kept as they are. A Go integer kind
 (`int`, `int8` to `int32`, `uint`, `uint8` to `uint32`, `uintptr`, and a `uint64` up to the largest
 `int64`) becomes an `int64`, so an integer above 2^53 stays exact. A `float32` becomes the
@@ -1900,7 +1904,7 @@ element type (`[]string`, `map[string]string`) are converted element by element.
 function, a complex number, a map with other keys, a `uint64` above the largest `int64`, and every type
 with a `MarshalJSON` or `MarshalText` method (`json.RawMessage` and `net.IP` among them). So is a value
 that holds itself through maps and slices, one nested deeper than 10,000 levels (the depth `encoding/json` takes), a call whose objects
-need more than 4 million values converted or checked in all, and a byte slice of more than 4 million bytes. This is a contract of every entry point, stricter than the code before it (go-kure/kure#1201): everything a caller passes is normalized at entry, including a value that no path of that entry point reads, so an unstructured object holding a byte slice of more than 4 million bytes is refused by an entry point that never reads the slice. The objects of one call that need conversion or a check share the one budget of 4 million values (the bytes of a byte slice count as values each time the slice is converted or checked, and an object of a typed `List` is checked before the `List` is written); an unstructured object that holds JSON-typed values only is kept as it is and is not charged to it. A value past a bound of this section is refused even where origin/main would accept it: the bounds are part of the contract of the package, not a measure of what main takes. A refusal names the layout, the object
+need more than 4 million values converted or checked in all, and a byte slice of more than 4 million bytes. This is a contract of every entry point, stricter than the code before it (go-kure/kure#1201): everything a caller passes is normalized at entry, including a value that no path of that entry point reads, so an unstructured object holding a byte slice of more than 4 million bytes is refused by an entry point that never reads the slice. The objects of one call that need conversion or a check share the one budget of 4 million values (the bytes of a byte slice count as values each time the slice is converted or checked, and an object of a typed `List` is checked before the `List` is written); an unstructured object that holds JSON-typed values only is kept as it is and is not charged to it. An unstructured object held in a field of a typed object, which needs conversion, is checked and then converted, so each of its values counts twice, as the values of a `List`'s items do. A value past a bound of this section is refused even where origin/main would accept it: the bounds are part of the contract of the package, not a measure of what main takes. A refusal names the layout, the object
 and the field, and replaces no object. kure never calls a method of a caller's value, a marshaler
 included, also not to read a typed `List` that holds such an object. A typed object is walked, field by
 field, before it is written, and refused when it holds itself, when it is nested deeper than 40,000

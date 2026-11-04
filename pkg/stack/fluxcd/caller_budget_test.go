@@ -119,13 +119,13 @@ func TestWalkHeld_SharedByteSliceOfTypedListItemsIsChargedBeforeMarshalling(t *t
 	for i := 0; i < 8; i++ {
 		l.Items = append(l.Items, cmWith("cm", map[string]any{"raw": raw}))
 	}
-	_, err := walkHeld(l, &convBudget{})
+	_, _, err := walkHeld(l, &convBudget{})
 	if err == nil || !strings.Contains(err.Error(), "more than") {
 		t.Errorf("got %v, want the walk to refuse with the value limit", err)
 	}
 	// One item alone is under the bound and is not refused.
 	one := &typedList{TypeMeta: l.TypeMeta, Items: l.Items[:1]}
-	if _, err := walkHeld(one, &convBudget{}); err != nil {
+	if _, _, err := walkHeld(one, &convBudget{}); err != nil {
 		t.Errorf("one item: got %v, want it accepted", err)
 	}
 }

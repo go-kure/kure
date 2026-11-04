@@ -95,6 +95,14 @@ func HeldItems(r runtime.Object) ([]*unstructured.Unstructured, error) {
 	return out, err
 }
 
+// IsList reports whether the typed object r is a List as Objects defines one:
+// one that is read from the items it writes. An unstructured r is read from its
+// own map and is reported as a List only when its kind says so.
+func IsList(r runtime.Object) (bool, error) {
+	_, isList, err := listItems(r)
+	return isList, err
+}
+
 // HeldObjects is HeldItems that also returns the other objects the typed List r
 // holds as its own items, and those of the typed Lists it holds: each item that
 // is no unstructured object, a type that embeds an unstructured object say. An
