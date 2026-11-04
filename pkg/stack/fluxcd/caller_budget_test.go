@@ -87,6 +87,18 @@ func TestNormalizeCallerObjects_ConversionBudgetIsPerCall(t *testing.T) {
 		}
 	})
 
+	t.Run("separate resources that share one byte slice", func(t *testing.T) {
+		raw := make([]byte, 1<<11) // half the bound, and base64 text for each resource.
+		var rs []client.Object
+		for i := 0; i < 8; i++ {
+			rs = append(rs, cmWith("cm", map[string]any{"raw": raw}))
+		}
+		err := normalizeWithin(t, rs...)
+		if err == nil || !strings.Contains(err.Error(), "more than") {
+			t.Errorf("got %v, want a refusal naming the value limit", err)
+		}
+	})
+
 	t.Run("one resource alone, under the bound, is accepted", func(t *testing.T) {
 		if err := normalizeWithin(t, cmWith("cm", shared)); err != nil {
 			t.Errorf("got %v, want it accepted", err)
