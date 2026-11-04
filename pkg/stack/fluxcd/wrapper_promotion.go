@@ -23,11 +23,13 @@ type embedStep struct {
 	path  string
 }
 
-// embeddedUnstructured returns the unstructured object that r embeds, for a
-// named struct that does: by pointer or by value, directly or through other
-// embedded structs, so that its methods are promoted from the object. The
-// object is nil, with no error, when r is no such wrapper. st is the type of
-// the wrapper's struct.
+// embeddedUnstructured returns the unstructured objects that r embeds, for a
+// named struct that does: an unstructured.Unstructured or an
+// unstructured.UnstructuredList, by pointer or by value, directly or through
+// other embedded structs, so that its methods are promoted from it. For an
+// Unstructured it returns that one object; for a List the List's own map as an
+// object, then each of its items. None are returned, with no error, when r is no
+// such wrapper. st is the type of the wrapper's struct.
 //
 // The object is the one Go promotes the methods of: the shallowest. Two at the
 // shallowest depth promote neither, and the wrapper is refused naming both
@@ -38,7 +40,7 @@ type embedStep struct {
 // source). It is refused as well when it embeds a nil pointer, when the object
 // cannot be reached or when the embedding is too deep or too wide to follow.
 // Where this cannot be told, the wrapper is refused.
-func embeddedUnstructured(r apiruntime.Object) (u *unstructured.Unstructured, st reflect.Type, err error) {
+func embeddedUnstructured(r apiruntime.Object) (objs []*unstructured.Unstructured, st reflect.Type, err error) {
 	if r == nil {
 		return nil, nil, nil
 	}
@@ -81,11 +83,22 @@ func embeddedUnstructured(r apiruntime.Object) (u *unstructured.Unstructured, st
 	for v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
-	u, reached := reachEmbedded(v, found[0].index)
+	p, reached := reachEmbedded(v, found[0].index)
 	if !reached {
 		return nil, st, errors.Errorf("a %s embeds a nil *unstructured.Unstructured or an unstructured object that cannot be reached", st)
 	}
-	return u, st, nil
+	switch e := p.(type) {
+	case *unstructured.Unstructured:
+		return []*unstructured.Unstructured{e}, st, nil
+	case *unstructured.UnstructuredList:
+		// The list's own map, then its items, which it holds by value.
+		objs = []*unstructured.Unstructured{{Object: e.Object}}
+		for i := range e.Items {
+			objs = append(objs, &e.Items[i])
+		}
+		return objs, st, nil
+	}
+	return nil, st, errors.Errorf("a %s embeds an unstructured object that cannot be reached", st)
 }
 
 // shallowestEmbeds looks through the embedded fields of the struct type st,
@@ -114,10 +127,10 @@ func shallowestEmbeds(st reflect.Type) (found, above []embedStep, err error) {
 					ft = ft.Elem()
 				}
 				switch {
-				case ft == unstructuredType:
+				case ft == unstructuredType || ft == unstructuredListType:
 					at.typ = ft
 					found = append(found, at)
-				case ft.Kind() == reflect.Struct && ft != unstructuredListType:
+				case ft.Kind() == reflect.Struct:
 					if nodes++; nodes > maxEmbedNodes {
 						return nil, nil, errors.New("embeds too many structs to follow")
 					}
@@ -162,25 +175,30 @@ func joinPath(path, name string) string {
 // index path. It reports false when a pointer on the way is nil, when the
 // object cannot be reached or when v is not addressable where the object is held
 // by value.
-func reachEmbedded(v reflect.Value, index []int) (*unstructured.Unstructured, bool) {
+//
+// Only the object itself has to be interfaced. A field on the way may be
+// unexported, as the embedded field of an unexported struct type is, and reflect
+// still follows it.
+func reachEmbedded(v reflect.Value, index []int) (any, bool) {
 	for n, i := range index {
 		fv := v.Field(i)
 		last := n == len(index)-1
 		if fv.Kind() == reflect.Pointer {
-			if fv.IsNil() || !fv.CanInterface() {
+			if fv.IsNil() {
 				return nil, false
 			}
 			if last {
-				u, ok := fv.Interface().(*unstructured.Unstructured)
-				return u, ok
+				if !fv.CanInterface() {
+					return nil, false
+				}
+				return fv.Interface(), true
 			}
 			fv = fv.Elem()
 		} else if last {
 			if !fv.CanAddr() || !fv.Addr().CanInterface() {
 				return nil, false
 			}
-			u, ok := fv.Addr().Interface().(*unstructured.Unstructured)
-			return u, ok
+			return fv.Addr().Interface(), true
 		}
 		v = fv
 	}
