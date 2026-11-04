@@ -159,11 +159,13 @@ func layoutPathNamed(t *testing.T, build func() *stack.Cluster, rules layout.Lay
 
 // The node apps asks for platform, and its Kustomization is kept from the tree
 // with a dependsOn entry on platform that sets no readyExpr. Where the tree
-// holds a Kustomization that patches what it builds, the patch may add a
+// holds a Kustomization that patches what it builds, a patch may add a
 // readyExpr to that entry (directly, or by adding patches to another
-// Kustomization), so it no longer proves platform Ready and the kept apps is
-// refused (go-kure/kure#1214), whichever directory the patch builds. With no
-// patch it is admitted as before.
+// Kustomization), so the entry proves platform Ready only where a build of the
+// tree shows it still plain (go-kure/kure#1226). In the cases below it does
+// not, and the kept apps is refused (go-kure/kure#1214): a patch reaches the
+// kept Kustomization, builds another directory, or sits in a copy that cannot
+// be read. With no patch it is admitted as before.
 func TestKeptNode_PlainEntryProvesNothingWherePatched(t *testing.T) {
 	build := keptApps(&stack.Node{Name: "cert-manager", Bundle: srBundle("cert-manager", cmApp("cert-manager-app"))})
 	for _, reach := range []string{"none", "reaches the kept CR", "reaches another directory", "unreadable non-member patcher"} {
@@ -213,8 +215,10 @@ func TestKeptNode_PlainEntryProvesNothingWherePatched(t *testing.T) {
 // Under UmbrellasDoNotWait the kept apps names the leaves a and b of the
 // umbrella p with entries that set no readyExpr, the form an earlier
 // integration wrote (R3). Where the tree holds a patch it may add a readyExpr
-// to them, so they no longer prove the leaves Ready and the kept apps is
-// refused (go-kure/kure#1214); with no patch it is admitted as before.
+// to them, so an entry proves its leaf Ready only where a build of the tree
+// shows it still plain (go-kure/kure#1226). In the cases below it does not, and
+// the kept apps is refused (go-kure/kure#1214); with no patch it is admitted as
+// before.
 func TestKeptNode_UmbrellaLeafEntriesProveNothingWherePatched(t *testing.T) {
 	build := keptApps(&stack.Node{Name: "p", Bundle: srBundle("p", objApp("a-app", handWritten("a")), objApp("b-app", handWritten("b", "a")))})
 	for _, reach := range []string{"none", "reaches the kept CR", "reaches another directory"} {
