@@ -30,9 +30,17 @@ const (
 	maxJSONDepth = 10000
 
 	// maxHeldDepth is how deep walkHeld follows a typed object, counted in the
-	// pointers, interfaces, fields, elements and values it steps through, which
-	// are several for each level of a value.
+	// fields, elements and values it steps through, which are one or a few for
+	// each level of a value. A pointer or an interface is no level and is not
+	// counted: a chain of them is bounded by maxHeldChain.
 	maxHeldDepth = 4 * maxJSONDepth
+
+	// maxHeldChain is how many pointers and interfaces in a row walkHeld follows.
+	// The walk itself takes any number, but origin/main's own write of a chain
+	// ends in a stack overflow nothing recovers (measured with the Go 1.27
+	// encoding/json: a chain of 2.09 million does), so a chain longer than this
+	// is refused where the write would end the process.
+	maxHeldChain = 1 << 20
 )
 
 // maxJSONNodes is how many values are visited in one object. An object
@@ -310,6 +318,10 @@ func jsonContentOf(m map[string]any, budget *convBudget) (map[string]any, error)
 var (
 	unstructuredType     = reflect.TypeFor[unstructured.Unstructured]()
 	unstructuredListType = reflect.TypeFor[unstructured.UnstructuredList]()
+
+	// rawExtensionType is the one type whose json:"-" fields are read anyway: its
+	// marshaler writes Object when Raw is nil, and a copy follows Object always.
+	rawExtensionType = reflect.TypeFor[apiruntime.RawExtension]()
 )
 
 // walkHeld walks every value reachable from the typed object r, before
@@ -362,35 +374,54 @@ func scalarKind(k reflect.Kind) bool {
 }
 
 func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
-	if w.nodes++; w.nodes > maxJSONNodes {
-		return errors.Errorf("%s holds more than %d values", whereTyped(path), maxJSONNodes)
-	}
-	if depth > maxHeldDepth {
-		return errors.Errorf("%s holds a value nested deeper than %d steps", whereTyped(path), maxHeldDepth)
-	}
-	switch v.Kind() {
-	case reflect.Invalid:
-		return nil
-	case reflect.Interface:
-		if v.IsNil() {
+	// A pointer or an interface is no level of the JSON: encoding/json writes a
+	// chain of them with no limit, so they are not counted in the depth. They are
+	// followed in a loop and not by recursion, since a chain of millions would
+	// end a recursive walk in a stack overflow that nothing recovers; the pointers
+	// stay open until the value under them is walked.
+	var opened []heldKey
+	defer func() {
+		for _, key := range opened {
+			delete(w.open, key)
+		}
+	}()
+	for hops := 0; ; hops++ {
+		if hops > maxHeldChain {
+			return errors.Errorf("%s holds more than %d pointers and interfaces in a row", whereTyped(path), maxHeldChain)
+		}
+		if w.nodes++; w.nodes > maxJSONNodes {
+			return errors.Errorf("%s holds more than %d values", whereTyped(path), maxJSONNodes)
+		}
+		if depth > maxHeldDepth {
+			return errors.Errorf("%s holds a value nested deeper than %d steps", whereTyped(path), maxHeldDepth)
+		}
+		if v.Kind() == reflect.Invalid {
 			return nil
 		}
-		return w.walk(v.Elem(), path, depth)
-	default:
-	}
-	if err := w.checkType(v.Type(), path); err != nil {
-		return err
-	}
-	switch v.Kind() {
-	case reflect.Pointer:
-		if v.IsNil() {
-			return nil
+		if v.Kind() == reflect.Interface {
+			if v.IsNil() {
+				return nil
+			}
+			v = v.Elem()
+			continue
 		}
-		if done, err := w.enter(v, heldKey{typ: v.Type(), ptr: v.Pointer()}, path); done || err != nil {
+		if err := w.checkType(v.Type(), path); err != nil {
 			return err
 		}
-		defer delete(w.open, heldKey{typ: v.Type(), ptr: v.Pointer()})
-		return w.walk(v.Elem(), path, depth+1)
+		if v.Kind() != reflect.Pointer {
+			break
+		}
+		if v.IsNil() {
+			return nil
+		}
+		key := heldKey{typ: v.Type(), ptr: v.Pointer()}
+		if done, err := w.enter(v, key, path); done || err != nil {
+			return err
+		}
+		opened = append(opened, key)
+		v = v.Elem()
+	}
+	switch v.Kind() {
 	case reflect.Map:
 		// A key is written by its marshaler, if it has one, and a type is checked
 		// before any shortcut. A key is not formatted: it may hold itself.
@@ -632,6 +663,12 @@ func (w *heldWalk) walkStruct(v reflect.Value, path string, depth int) error {
 	for i := 0; i < v.NumField(); i++ {
 		f := v.Type().Field(i)
 		if !f.IsExported() && !f.Anonymous {
+			continue
+		}
+		// encoding/json leaves out a field tagged exactly json:"-" and never reads
+		// it, so it is not walked ("-," names a field "-", which is written). A
+		// RawExtension is the exception: see rawExtensionType.
+		if f.Tag.Get("json") == "-" && v.Type() != rawExtensionType {
 			continue
 		}
 		if err := w.walk(v.Field(i), path+"."+f.Name, depth+1); err != nil {
