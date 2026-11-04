@@ -97,19 +97,20 @@ type kindVisit struct {
 }
 
 // kindWalk is what one loadedKinds call remembers, and forgets with the call,
-// so concurrent builds share nothing: the visits made, the mappings each
-// merge key names, and what each mapping a merge key names contributes.
+// so concurrent builds share nothing: the visits made, what each mapping a
+// merge key names contributes, and what the mappings a merge value names
+// contribute together.
 type kindWalk struct {
 	seen         map[kindVisit]bool
-	sources      map[*kyaml.Node][]*kyaml.Node
 	contributing map[*kyaml.Node]mergeContribution
+	aggregates   map[*kyaml.Node]mergeContribution
 }
 
 func newKindWalk() *kindWalk {
 	return &kindWalk{
 		seen:         map[kindVisit]bool{},
-		sources:      map[*kyaml.Node][]*kyaml.Node{},
 		contributing: map[*kyaml.Node]mergeContribution{},
+		aggregates:   map[*kyaml.Node]mergeContribution{},
 	}
 }
 
@@ -122,18 +123,30 @@ type mergeContribution struct {
 	deeper bool
 }
 
-// mergeSources is mergeSources(v), once for each node v names.
-func (w *kindWalk) mergeSources(v *kyaml.Node) []*kyaml.Node {
+// aggregate is what the mappings the merge value v names give together, worked
+// out once for every call however many mappings name v: the first value found
+// of each key, and a merge key or a metadata key in any of them. It is the same
+// as absorbing the mappings in order into the mapping that names v, because
+// absorb takes the first value of a key and ORs the flags, so the mappings a
+// merge value names cost one absorb each for the call, and each mapping that
+// names it one.
+func (w *kindWalk) aggregate(g *buildGuard, v *kyaml.Node) mergeContribution {
 	v = resolve(v)
 	if v == nil {
-		return nil
+		return mergeContribution{}
 	}
-	if srcs, ok := w.sources[v]; ok {
-		return srcs
+	if c, ok := w.aggregates[v]; ok {
+		return c
 	}
-	srcs := mergeSources(v)
-	w.sources[v] = srcs
-	return srcs
+	var c mergeContribution
+	for _, src := range mergeSources(v) {
+		s := w.contribution(g, src)
+		c.meta.absorb(s.meta)
+		g.kindAbsorbs++
+		c.deeper = c.deeper || s.deeper
+	}
+	w.aggregates[v] = c
+	return c
 }
 
 // contribution reads the keys of the mapping src once for every call.
@@ -161,7 +174,10 @@ func (w *kindWalk) contribution(g *buildGuard, src *kyaml.Node) mergeContributio
 // each node of the file, not in the paths through its aliases. A mapping a
 // merge key names is read once for the call, however many mappings name it, so
 // the keys read are those of each mapping visited plus those of each mapping
-// named once. The memos live one call, so concurrent builds share nothing.
+// named once. What the mappings a merge value names give together is worked
+// out once as well (aggregate), so the absorbs are one for each mapping a merge
+// value names plus one for each merge key that uses it, not their product.
+// The memos live one call, so concurrent builds share nothing.
 func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWalk) string {
 	n = resolve(n)
 	if n == nil || n.Kind != kyaml.MappingNode {
@@ -177,11 +193,10 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWal
 	var merges []*kyaml.Node
 	g.readKeys(&m, n, &merges)
 	for _, v := range merges {
-		for _, src := range w.mergeSources(v) {
-			c := w.contribution(g, src)
-			m.absorb(c.meta)
-			m.deepMerge = m.deepMerge || c.deeper
-		}
+		c := w.aggregate(g, v)
+		m.absorb(c.meta)
+		g.kindAbsorbs++
+		m.deepMerge = m.deepMerge || c.deeper
 	}
 	if m.deepMerge && (object || m.hasMetadata) {
 		return "which holds an object whose apiVersion or kind may come through merge keys more than one level deep, which kure does not follow to check the scope of its kind"
