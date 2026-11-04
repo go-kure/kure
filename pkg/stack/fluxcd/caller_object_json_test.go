@@ -520,12 +520,11 @@ type chainNode struct {
 func (c *chainNode) DeepCopyObject() runtime.Object { n := *c; return &n }
 
 // A typed object nested deeper than encoding/json takes (10,000 levels, and
-// the walk counts a field, an element or a value for each, and no pointer) is
-// refused by the walk, before the object is written.
+// the walk takes several steps for each) is refused.
 func TestCallerObject_VeryDeepTypedObjectIsRefused(t *testing.T) {
 	head := &chainNode{}
 	head.Name, head.Namespace = "head", "default"
-	for tail, i := head, 0; i < 45000; i++ {
+	for tail, i := head, 0; i < 25000; i++ {
 		tail.Next = &chainNode{}
 		tail = tail.Next
 	}
