@@ -1784,7 +1784,11 @@ instead of nested waits:
 - **R3: a dependency on an umbrella is one on its terminal leaves.** A `dependsOn` entry that
   names an umbrella is replaced by entries naming its terminal leaves: the Kustomizations it
   applies that no other one it applies depends on, an umbrella among them replaced by its own
-  terminal leaves in turn, each listed once. Dependencies are compared as R3 writes them: a
+  terminal leaves in turn, each listed once. R3 writes a plain entry (no `readyExpr`) on each
+  terminal leaf. The rewrite's result check demands a plain entry on every leaf wherever the
+  caller's entry on the umbrella waited for `Ready` or an expression; an existence-only entry is
+  satisfied by the umbrella entry kept as it is, or by any entry on each leaf. Dependencies are
+  compared as R3 writes them: a
   generated Kustomization's `dependsOn` entry naming an umbrella of the subtree stands for its
   terminal leaves, and a Kustomization whose entries together await every terminal leaf of an
   umbrella depends on it, so a tree the setting wrote has the same terminal leaves. A Flux
