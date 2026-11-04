@@ -298,8 +298,11 @@ var refusalNames = map[string]string{
 }
 
 // heavyCases are the cases that run to a bound of the walk (maxJSONNodes): each
-// entry point reads millions of values before it refuses, and under -race that
-// is most of the matrix's run time. The bound is enforced by one code path,
+// entry point reads that many values before it refuses, and at the real bound
+// (four million) under -race that was most of the matrix's run time. The child
+// lowers the bound to heavyBound, so the case still ends at the bound on every
+// entry point; TestCallerObject_ListsHeldTwiceAreRefusedAtOnce keeps one walk
+// at the real bound. The bound is enforced by one code path,
 // walkHeld, which the three entry points below reach through
 // normalizeCallerObjects, each by its own call, so each is still checked:
 //   - GenerateFromLayout (resource_generator.go),
@@ -310,8 +313,12 @@ var refusalNames = map[string]string{
 // resource does not depend on the placement), the hand-built layouts (the same
 // three entry points, on a layout without origins) and
 // CreateLayoutWithResources (a WalkCluster followed by IntegrateWithLayout).
-// The depth stays: the walk to maxJSONNodes values is what the case proves.
+// The depth stays: the walk to the bound is what the case proves.
 var heavyCases = map[string]bool{"lists held twice": true}
+
+// heavyBound is the bound a heavy case runs at in its child process: far below
+// the 2^60 values the case holds, so it still ends at the bound.
+const heavyBound = 1 << 14
 
 const hostileChildEnv = "KURE_HOSTILE_CASE"
 
@@ -324,6 +331,9 @@ func TestHostileResources_Child(t *testing.T) {
 	r, ok := hostileCases()[name]
 	if !ok {
 		t.Fatalf("no case %q", name)
+	}
+	if heavyCases[name] {
+		defer fluxstack.SetMaxJSONNodesForTest(heavyBound)()
 	}
 	for _, a := range runHostile(r, heavyCases[name]) {
 		fmt.Println("ANSWER " + a)

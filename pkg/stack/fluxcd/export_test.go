@@ -24,6 +24,17 @@ func SetAfterFirstDefinitionsCheck(f func()) (restore func()) {
 	return func() { afterFirstDefinitionsCheck = orig }
 }
 
+// SetMaxJSONNodesForTest lowers the number of values one object may hold until
+// the returned function restores the real bound, so that a test proves a
+// refusal at the bound without visiting four million values. It sets a package
+// variable: the caller must defer the restore and must not be t.Parallel. A
+// child process of the external tests may call it freely.
+func SetMaxJSONNodesForTest(n int) (restore func()) {
+	orig := maxJSONNodes
+	maxJSONNodes = n
+	return func() { maxJSONNodes = orig }
+}
+
 // SetBuildInfo makes the binary report info as its build information until
 // the returned function restores the real one.
 func SetBuildInfo(info *debug.BuildInfo) (restore func()) {

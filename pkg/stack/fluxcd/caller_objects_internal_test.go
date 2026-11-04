@@ -227,6 +227,9 @@ func TestNormalizeCallerObjects(t *testing.T) {
 	})
 
 	t.Run("values shared 60 levels deep are refused, not walked", func(t *testing.T) {
+		// At the real bound each variant walks four million values; the shape
+		// holds 2^60, so a bound of 16384 proves the same refusal.
+		defer SetMaxJSONNodesForTest(1 << 14)()
 		for name, leaf := range map[string]any{"JSON typed": "x", "not JSON typed": 53} {
 			m := map[string]any{"leaf": leaf}
 			for range 60 {
@@ -496,7 +499,10 @@ func TestNormalizeCallerObjects_OversizedByteSliceIsRefused(t *testing.T) {
 // after one value needs converting: an interface and the value it holds are
 // one value, as jsonTyped counts them.
 func TestNormalizeCallerObjects_InterfaceValuesCountOnce(t *testing.T) {
-	const n = 3_000_000
+	// n stays between the bound and half of it: a value counted twice would
+	// pass the bound, a value counted once does not.
+	defer SetMaxJSONNodesForTest(1 << 14)()
+	const n = 12_000
 	list := make([]any, n, n+1)
 	for i := range list {
 		list[i] = int64(i)
