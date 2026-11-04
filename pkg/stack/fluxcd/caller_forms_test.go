@@ -106,6 +106,28 @@ func TestCallerObjects_EnvoyResourceWithoutOrUnresolvableAny(t *testing.T) {
 	}
 }
 
+// The trust is the type's, so a pointer to it is as trusted as the value: a
+// field of *XDSResource is read as a field of XDSResource is.
+type xdsPointerHolder struct {
+	corev1.ConfigMap
+	Resource  *ciliumv2.XDSResource   `json:"resource"`
+	Resources []*ciliumv2.XDSResource `json:"resources"`
+}
+
+func (h *xdsPointerHolder) DeepCopyObject() runtime.Object { c := *h; return &c }
+
+func TestCallerObjects_PointerToATrustedTypeIsNotRefused(t *testing.T) {
+	res := listenerResource(t)
+	r := func() client.Object {
+		h := &xdsPointerHolder{Resource: &res, Resources: []*ciliumv2.XDSResource{&res}}
+		h.APIVersion, h.Kind, h.Name, h.Namespace = "v1", "ConfigMap", "cm", "default"
+		return h
+	}
+	if answers := refusals(r); len(answers) > 0 {
+		t.Errorf("an entry point refused a pointer to a trusted type:\n%s", strings.Join(answers, "\n"))
+	}
+}
+
 // XDSResource is trusted by its exact type, not by its package: a type of
 // another package that has its name and marshals itself stays refused.
 type XDSResource struct{ N int }
