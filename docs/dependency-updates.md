@@ -431,12 +431,13 @@ rendered bootstrap changed and needs a person to read it: the script puts every 
 output back as it was, prints the diff and exits non-zero, so the bot's PR stays red on
 `test`. Review the change, then regenerate by hand with `GOWORK=off go test ./pkg/stack/fluxcd/ -update`.
 
-`go test -run` exits 0 when its pattern matches no test, so a golden test that is renamed
-or removed would leave its stored output on the old digest while the script reported
-success. The script therefore runs `go test -v` and requires a `=== RUN` line for each
-test it names (`GOLDEN_TEST_NAMES`); if one is missing it restores the stored outputs,
-prints the log and the missing names and exits non-zero. After renaming a golden test,
-update that list (go-kure/kure#1259).
+`go test -run` exits 0 when its pattern matches no test, or when a test skips itself, so a
+golden test that is renamed, removed or skipped would leave its stored output on the old
+digest while the script reported success. The script therefore runs `go test -v` and
+requires a `=== RUN` line and a `--- PASS:` line for each test it names
+(`GOLDEN_TEST_NAMES`); if either is missing it restores the stored outputs, prints the
+log and the affected names and exits non-zero. After renaming a golden test, update that
+list (go-kure/kure#1259).
 
 It is wired as a command of the shared `gomod`/`mise` rule's `postUpgradeTasks` in
 `renovate.json`, not as its own rule (`postUpgradeTasks` has no merge semantics, so a

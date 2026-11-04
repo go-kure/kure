@@ -21,9 +21,13 @@
 #   missing as digest, but the first test of the -run alternation prints no
 #           "=== RUN" line and writes nothing, like a renamed test: go matches
 #           none for it and exits 0
+#   skipped as digest, but the first test prints "=== RUN" and "--- SKIP" and
+#           no "--- PASS", and writes nothing, like a test that calls t.Skip:
+#           go exits 0
 #
-# The script runs it with -v, and the output (a "=== RUN   <name>" line per test
-# that ran, then an ok line) is what the script checks.
+# The script runs it with -v, and the output (a "=== RUN   <name>" line and a
+# "--- PASS: <name> (0.00s)" line per test that passed, then an ok line) is what
+# the script checks.
 #
 # Any other invocation -- another subcommand or package, no -update, a
 # working directory that is not the fixture root, or GOWORK other than off
@@ -45,10 +49,13 @@ fi
 mode="${STUB_PIN_GO_MODE:-digest}"
 dir="pkg/stack/fluxcd/testdata/bootstrap-output"
 
-# A real `go test -v` prints "=== RUN   <name>" for each test it runs. The -run
-# value is a plain alternation, ^(A|B|C)$, of the tests the script expects; each
-# is "run" here, except the first in mode missing, which stands for a test that
-# was renamed or removed: go matches nothing for it, exits 0 and writes nothing.
+# A real `go test -v` prints "=== RUN   <name>" for each test it runs and
+# "--- PASS: <name> (<time>)" for each that passes (a skip prints "--- SKIP"
+# instead). The -run value is a plain alternation, ^(A|B|C)$, of the tests the
+# script expects; each runs and passes here, except the first in mode missing,
+# which stands for a test that was renamed or removed (go matches nothing for it,
+# exits 0 and writes nothing), and the first in mode skipped, which runs and
+# skips.
 run_re=""
 go_args=("$@")
 for ((i = 0; i < ${#go_args[@]} - 1; i++)); do
@@ -65,6 +72,11 @@ if [[ "$mode" == missing ]]; then
 fi
 for name in "${want[@]:skip}"; do
     printf '=== RUN   %s\n' "$name"
+    if [[ "$mode" == skipped && "$name" == "${want[0]}" ]]; then
+        printf -- '--- SKIP: %s (0.00s)\n' "$name"
+    else
+        printf -- '--- PASS: %s (0.00s)\n' "$name"
+    fi
 done
 digest="$(sha256sum pkg/stack/fluxcd/flux_operator_install.yaml | cut -d' ' -f1)"
 
@@ -142,7 +154,7 @@ case "$mode" in
         late_writer
         exit 1
         ;;
-    missing) ;;
+    missing | skipped) ;;
     *)
         echo "stub-pin go: unknown STUB_PIN_GO_MODE '$mode'" >&2
         exit 1
