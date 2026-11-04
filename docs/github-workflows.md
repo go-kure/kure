@@ -17,7 +17,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Release / Publish](/contributing/releasing/) (automatic on tag) | `release-publish.yml` | tag push, `workflow_dispatch` | GoReleaser (release object only — no artifacts, see [Releasing](#releasing)), docs deploy, proxy refresh |
 | [Release / State](/contributing/releasing/) | `release-state.yml` | `workflow_dispatch` (tag) | Read-only report of what a tag's publish run did, in the job summary |
 | [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request, merge_group | AI code review via the shared workflow; see [Shared Workflows](/contributing/shared-workflows/) |
-| [Claude](/contributing/shared-workflows/) | `claude.yml` | issue/PR comments, reviews, issues opened or assigned | `@claude` assistant via the shared workflow |
+| [Claude](/contributing/shared-workflows/) | `claude.yml` | issue and PR conversation comments, issues opened or assigned (no review events) | `@claude` assistant via the shared workflow |
 
 ---
 
