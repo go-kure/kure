@@ -26,16 +26,18 @@ const (
 	// a nesting before it takes it for a cycle.
 	maxJSONDepth = 1000
 
-	// maxJSONNodes is how many values are visited in one object. An object
-	// is far smaller (the API server stores 1.5 MiB at most); a larger count
-	// is a value that shares its parts so often that its tree is huge.
-	maxJSONNodes = 1 << 22
-
 	// maxHeldDepth is how deep walkHeld follows a typed object, counted in the
 	// pointers, interfaces, fields, elements and values it steps through, which
 	// are several for each level of a value.
 	maxHeldDepth = 4 * maxJSONDepth
 )
+
+// maxJSONNodes is how many values are visited in one object. An object
+// is far smaller (the API server stores 1.5 MiB at most); a larger count
+// is a value that shares its parts so often that its tree is huge.
+// It is a var only so that a test can lower it (SetMaxJSONNodesForTest in
+// export_test.go); no in-process test that does so may be t.Parallel.
+var maxJSONNodes = 1 << 22
 
 // normalizeCallerObjects makes every unstructured object a caller put in the
 // layouts of roots, and of the layouts below them, one kure can read
