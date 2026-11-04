@@ -412,7 +412,7 @@ made, and of every kind in a file or inline patch it read, an object an overlay 
 included (kustomize reads a kind's scope as it loads the object), and is not read when one differs
 from the built-in schema's. A kind only a generator made and an overlay deleted is not asked. Kinds are read from the YAML nodes of each file, with aliases and merge keys followed one
 hop; an object whose kind may come through a deeper merge chain, or a List nested more than eight deep,
-makes the build not read (a file with no `metadata` key is no object and is never refused for it). It orders only its own goroutines:
+makes the build not read (a mapping with no `metadata` key, in no List that has one, is no object and is never refused for it). It orders only its own goroutines:
 another user's concurrent set or reset of the schema races with a build (go-kure/kure#1166).
 
 **An integration never fetches; a remote reference is reported as not read.**

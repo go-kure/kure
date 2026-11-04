@@ -105,10 +105,19 @@ func TestBuildGuard_LoadedKindsRefusesWhatItCannotFollow(t *testing.T) {
 		file    string
 		refused bool
 	}{
-		"an object through a deep merge chain":             {chain + "<<: *b\nmetadata: {name: w}\n", true},
-		"a data file through a deep merge chain":           {chain + "<<: *b\ndata: {x: y}\n", false},
-		"quoted << keys nested in a ConfigMap":             {"apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c}\n\"<<\": {\"<<\": {}}\n", false},
-		"an object through a one-hop merge":                {chain + "<<: *a\nmetadata: {name: w}\n", false},
+		"an object through a deep merge chain":   {chain + "<<: *b\nmetadata: {name: w}\n", true},
+		"a data file through a deep merge chain": {chain + "<<: *b\ndata: {x: y}\n", false},
+		"quoted << keys nested in a ConfigMap":   {"apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c}\n\"<<\": {\"<<\": {}}\n", false},
+		"an object through a one-hop merge":      {chain + "<<: *a\nmetadata: {name: w}\n", false},
+		// The List has a metadata key, so its items are objects (kubectl
+		// writes one): an item whose kind comes through a deep chain is
+		// refused though it has no metadata key itself.
+		"an item of an object List through a deep merge chain": {chain +
+			"apiVersion: v1\nkind: List\nmetadata: {resourceVersion: \"\"}\nitems:\n  - {<<: *b}\n", true},
+		"an item of a List with no metadata through a deep chain": {chain +
+			"apiVersion: v1\nkind: List\nitems:\n  - {<<: *b}\n", false},
+		"an item of an object List through a one-hop merge": {chain +
+			"apiVersion: v1\nkind: List\nmetadata: {resourceVersion: \"\"}\nitems:\n  - {<<: *a}\n", false},
 		"Lists nested past the bound, no metadata":         {lists(maxListDepth+1, -1), false},
 		"Lists nested past the bound, outer metadata":      {lists(maxListDepth+1, 0), true},
 		"Lists nested past the bound, inner metadata":      {lists(maxListDepth+1, maxListDepth-1), true},
@@ -464,6 +473,33 @@ func TestBuildGuard_LoadedKindsReadsAMergeSourceOnce(t *testing.T) {
 			}
 			if !tc.refused && !slices.Equal(g.kinds, tc.want) {
 				t.Errorf("kinds %v, want %v", g.kinds, tc.want)
+			}
+		})
+	}
+}
+
+// TestBuildGuard_ReadsTheKindsOfInlinePatches: the kinds of the inline patches
+// of a kustomization are asked about too, with no resource file naming them
+// (go-kure/kure#1235). The Widget occurs only in the patches here, so a guard
+// that does not read the inline patches records no Widget.
+func TestBuildGuard_ReadsTheKindsOfInlinePatches(t *testing.T) {
+	const widget = "apiVersion: example.com/v1\nkind: Widget\nmetadata:\n  name: w\n"
+	indent := func(s string, n int) string {
+		pad := strings.Repeat(" ", n)
+		return pad + strings.ReplaceAll(strings.TrimSuffix(s, "\n"), "\n", "\n"+pad)
+	}
+	deletion := widget + "$patch: delete\n"
+	for name, file := range map[string]string{
+		"patches":               "patches:\n  - patch: |-\n" + indent(deletion, 6) + "\n",
+		"patchesStrategicMerge": "patchesStrategicMerge:\n  - |-\n" + indent(deletion, 4) + "\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			g := newBuildGuard(nil, "")
+			if why := g.kustomization("app/kustomization.yaml", []byte(file)); why != "" {
+				t.Fatalf("refused: %s", why)
+			}
+			if want := []kindKey{{"example.com/v1", "Widget"}}; !slices.Equal(g.kinds, want) {
+				t.Errorf("kinds %v, want %v", g.kinds, want)
 			}
 		})
 	}
