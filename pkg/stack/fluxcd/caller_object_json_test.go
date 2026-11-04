@@ -396,7 +396,10 @@ func TestCallerObject_NestedTypedListItemMarshalerIsRefusedNotCalled(t *testing.
 	panicMarshalCalls = 0
 	cm := unstructuredObj("v1", "ConfigMap", "default", "cm")
 	cm.Object["spec"] = map[string]any{"m": panicMarshaler{}}
-	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{typedListOf("List", cm)}}
+	// The object is an item of an inner typed List, which is an item of an outer one.
+	outer := &objectItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}, Items: []runtime.Object{typedListOf("List", cm)}}
+	outer.Name, outer.Namespace = "outer", "default"
+	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{outer}}
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
