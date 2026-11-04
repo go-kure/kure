@@ -81,3 +81,37 @@ func TestCallerObject_HeldUnstructuredInRawExtensionDoesNotPanic(t *testing.T) {
 		}
 	}
 }
+
+// heldItemList is a typed List whose items are raw extensions that hold objects.
+type heldItemList struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []runtime.RawExtension `json:"items"`
+}
+
+func (l *heldItemList) DeepCopyObject() runtime.Object { c := *l; return &c }
+
+// The same object as an item that a typed List writes: the List is read from
+// its items, which are copied whole, so the panic must not come back through
+// one (go-kure/kure#1252).
+func TestCallerObject_HeldUnstructuredInTypedListItemDoesNotPanic(t *testing.T) {
+	t.Parallel()
+	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		t.Run(string(placement), func(t *testing.T) {
+			t.Parallel()
+			u := unstructuredObj("v1", "ConfigMap", "default", "cm")
+			u.Object["n"] = 1
+			list := &heldItemList{
+				TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"},
+				Items:    []runtime.RawExtension{{Object: sourceNamedRevision(u)}},
+			}
+			list.Name, list.Namespace = "holder", "default"
+			err := integrateHolding(list, placement)
+			// The item has the identity of the derived Source, so the answer is the
+			// duplicate refusal, as it is for the same object held outside a List.
+			if err == nil || strings.HasPrefix(err.Error(), "panic") || !strings.Contains(err.Error(), "already has GitRepository") {
+				t.Errorf("got %v, want the refusal of the Source held twice", err)
+			}
+		})
+	}
+}

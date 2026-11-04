@@ -256,7 +256,7 @@ func callerObjects(r client.Object, budget *convBudget) (objs []*unstructured.Un
 	}
 	// The walk is bounded, so it goes first: the cycle check below revisits a
 	// List held twice each time it is held.
-	found, bad, err := walkHeld(r, budget)
+	held, bad, err := walkHeld(r, budget, false)
 	if err != nil {
 		return nil, nil, bad, err
 	}
@@ -264,21 +264,43 @@ func callerObjects(r client.Object, budget *convBudget) (objs []*unstructured.Un
 		return nil, nil, nil, err
 	}
 	objs, others, err = built.HeldObjects(r)
-	if err != nil || len(found) == 0 {
+	if err != nil || len(held.found) == 0 && held.refusal == nil {
 		return objs, others, nil, err
 	}
-	// A typed List is read from the items it writes, which HeldObjects returned:
-	// an object it holds and does not write is read by nothing, and refuses
-	// nothing. Any other typed object is copied whole, so the objects it holds in
+	// Any typed object that is no List is copied whole, so the objects it holds in
 	// a field are normalized as the items of a List are: the caller's own object
-	// is changed, with the same undo on a refusal. seenObject skips one that is
+	// is changed, with the same undo on a refusal, and one that cannot be
+	// replaced and needs a change is refused. seenObject skips one that is
 	// returned twice.
 	isList, err := built.IsList(r)
 	if err != nil {
 		return objs, others, nil, err
 	}
 	if !isList {
-		objs = append(objs, found...)
+		if held.refusal != nil {
+			return objs, others, held.refusal.bad, held.refusal.err
+		}
+		return append(objs, held.found...), others, nil, nil
+	}
+	// A typed List is read from the items it writes, which HeldObjects returned:
+	// what it holds in another field is read by nothing, and refuses nothing. An
+	// item that is no List is copied whole as any other typed object is, so it is
+	// looked at the same way. An item that is a List has its own items among
+	// these.
+	for _, o := range others {
+		if isList, err := built.IsList(o); err != nil {
+			return objs, others, nil, err
+		} else if isList {
+			continue
+		}
+		inner, bad, err := walkHeld(o, budget, true)
+		if err != nil {
+			return objs, others, bad, err
+		}
+		if inner.refusal != nil {
+			return objs, others, inner.refusal.bad, inner.refusal.err
+		}
+		objs = append(objs, inner.found...)
 	}
 	return objs, others, nil, nil
 }
@@ -387,14 +409,37 @@ var (
 // an unstructured object fails, bad is a wrapper of its Object map, to name it
 // in the refusal.
 //
-// found are the *unstructured.Unstructured objects r holds in a field, a
+// held has the *unstructured.Unstructured objects r holds in a field, a
 // runtime.RawExtension's Object included, that the walk reached and checked.
 // A copy of r follows each of them, so the caller normalizes them as it does the
-// items of a typed List (go-kure/kure#1252).
-func walkHeld(r client.Object, budget *convBudget) (found []*unstructured.Unstructured, bad *unstructured.Unstructured, err error) {
-	w := &heldWalk{open: map[heldKey]bool{}, budget: budget}
+// items of a typed List (go-kure/kure#1252). Whether r is copied is for the
+// caller to say: a typed List is read from the items it writes, so what it holds
+// elsewhere is neither copied nor refused. So the walk only reports, in
+// held.refusal, an object that cannot be replaced and needs a change.
+//
+// With collect set the walk does not charge the objects it reaches to budget: it
+// is a second walk of a value that the first one has checked and charged.
+func walkHeld(r apiruntime.Object, budget *convBudget, collect bool) (held heldFields, bad *unstructured.Unstructured, err error) {
+	w := &heldWalk{open: map[heldKey]bool{}, budget: budget, collect: collect}
 	err = w.walk(reflect.ValueOf(r), nil, 0)
-	return w.found, w.bad, err
+	return heldFields{found: w.found, refusal: w.refusal}, w.bad, err
+}
+
+// heldFields is what walkHeld reports of the unstructured objects held in a
+// field of a typed object.
+type heldFields struct {
+	// found are the objects a copy of the typed object follows, held by pointer
+	// or in a field of a value that is addressed, so that the caller can replace
+	// the Object map of each.
+	found []*unstructured.Unstructured
+	// refusal is the first object held by value in a map or an interface, which
+	// cannot be replaced, and holds a value that is not JSON typed: bad names it.
+	refusal *heldRefusal
+}
+
+type heldRefusal struct {
+	bad *unstructured.Unstructured
+	err error
 }
 
 // trail is where a value is in the object being read, for a refusal that names
@@ -465,10 +510,13 @@ type heldWalk struct {
 	checked map[reflect.Type]bool
 	bad     *unstructured.Unstructured
 	found   []*unstructured.Unstructured
+	refusal *heldRefusal
 
 	// budget is the call's: reachable charges the unstructured objects this walk
 	// finds to it. nodes counts the typed values of this one resource.
 	budget *convBudget
+	// collect makes the walk charge nothing to budget (see walkHeld).
+	collect bool
 }
 
 // scalarKind reports whether a value of kind k holds nothing to walk into.
@@ -752,9 +800,11 @@ func (w *heldWalk) walkStruct(v reflect.Value, at *trail, depth int) error {
 			return errors.Errorf("%s holds an unstructured object that cannot be read", whereTyped(at))
 		}
 		m, _ := v.FieldByName("Object").Interface().(map[string]any)
-		if err := reachable(m, w.budget); err != nil {
-			w.bad = &unstructured.Unstructured{Object: m}
-			return err
+		if !w.collect {
+			if err := reachable(m, w.budget); err != nil {
+				w.bad = &unstructured.Unstructured{Object: m}
+				return err
+			}
 		}
 		if v.Type() == unstructuredListType {
 			return w.walk(v.FieldByName("Items"), at.then(".Items"), depth+1)
@@ -765,12 +815,16 @@ func (w *heldWalk) walkStruct(v reflect.Value, at *trail, depth int) error {
 		// items of a typed List are: the caller's object is changed the same way,
 		// its Object map replaced, and put back with the same undo when the call
 		// is refused. One that is not addressable (held by value in a map or an
-		// interface) cannot be replaced, so it is refused unless it needs no change.
+		// interface) cannot be replaced, so it is to be refused unless it needs no
+		// change: the walk records it, and the caller refuses it once it knows that
+		// the typed object is copied.
 		if v.CanAddr() {
 			w.found = append(w.found, v.Addr().Interface().(*unstructured.Unstructured))
-		} else if !jsonTyped(m, 0) {
-			w.bad = &unstructured.Unstructured{Object: m}
-			return errors.Errorf("%s holds an unstructured object by value, with a value that is not JSON typed: hold it as a *unstructured.Unstructured to have it normalized", whereTyped(at))
+		} else if w.refusal == nil && !jsonTyped(m, 0) {
+			w.refusal = &heldRefusal{
+				bad: &unstructured.Unstructured{Object: m},
+				err: errors.Errorf("%s holds an unstructured object by value, with a value that is not JSON typed: hold it as a *unstructured.Unstructured to have it normalized", whereTyped(at)),
+			}
 		}
 		return nil
 	}

@@ -226,3 +226,108 @@ func TestNormalizeCallerObjects_HeldUnstructuredInField(t *testing.T) {
 		}
 	})
 }
+
+// rawItemList is a typed List whose items are raw extensions that hold objects.
+type rawItemList struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []runtime.RawExtension `json:"items"`
+}
+
+func (l *rawItemList) DeepCopyObject() runtime.Object { c := *l; return &c }
+
+// hiddenFieldList is a typed List that writes its Items and holds an object in a
+// field it does not write.
+type hiddenFieldList struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []*unstructured.Unstructured `json:"items"`
+	Hidden            any                          `json:"-"`
+}
+
+func (l *hiddenFieldList) DeepCopyObject() runtime.Object { c := *l; return &c }
+
+// A typed List is read from the items it writes. What it holds in another field
+// is read by nothing, so it is left as it is and refuses nothing. An item that
+// is no List is copied whole as any other typed object is, so what it holds in a
+// field is normalized, or refused, as it is for a resource of its own
+// (go-kure/kure#1252).
+func TestNormalizeCallerObjects_HeldUnstructuredInTypedList(t *testing.T) {
+	t.Parallel()
+	typedList := func(items ...runtime.Object) *rawItemList {
+		l := &rawItemList{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}}
+		l.Name, l.Namespace = "holder", "default"
+		for _, o := range items {
+			l.Items = append(l.Items, runtime.RawExtension{Object: o})
+		}
+		return l
+	}
+	t.Run("an item that is no List is normalized", func(t *testing.T) {
+		t.Parallel()
+		u := heldCM(7)
+		cr := revisionHolding(u, "{}")
+		l := typedList(cr)
+		if err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{l}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := specN(u).(int64); !ok {
+			t.Errorf("spec.n = %#v, want an int64", specN(u))
+		}
+		if _, err := comparableContent(cr); err != nil {
+			t.Errorf("the copy of the item: %v", err)
+		}
+	})
+	t.Run("an item of a List held by the List is normalized", func(t *testing.T) {
+		t.Parallel()
+		u := heldCM(7)
+		l := typedList(typedList(revisionHolding(u, "{}")))
+		if err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{l}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := specN(u).(int64); !ok {
+			t.Errorf("spec.n = %#v, want an int64", specN(u))
+		}
+	})
+	t.Run("an item that holds an object by value that cannot be replaced is refused", func(t *testing.T) {
+		t.Parallel()
+		l := typedList(holderOf(func(h *fieldHolder) { h.Iface = *heldCM(3) }))
+		err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{l}})
+		if err == nil || !strings.Contains(err.Error(), "by value") {
+			t.Errorf("got %v, want a refusal naming the value", err)
+		}
+	})
+	t.Run("an object in a field the List does not write is left as it is", func(t *testing.T) {
+		t.Parallel()
+		hidden := heldCM(7)
+		l := &hiddenFieldList{
+			TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"},
+			Items:    []*unstructured.Unstructured{heldCM(int64(1))},
+			Hidden:   *hidden, // by value, with a plain int: refused if it were copied
+		}
+		l.Name, l.Namespace = "holder", "default"
+		held := hidden.Object
+		if err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{l}}); err != nil {
+			t.Fatal(err)
+		}
+		if !sameMap(hidden.Object, held) {
+			t.Error("an object the List does not write was replaced")
+		}
+	})
+	t.Run("an object held by pointer in a field the List does not write is not replaced", func(t *testing.T) {
+		t.Parallel()
+		hidden := heldCM(7)
+		l := &hiddenFieldList{
+			TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"},
+			Items:    []*unstructured.Unstructured{heldCM(int64(1))},
+			Hidden:   hidden,
+		}
+		l.Name, l.Namespace = "holder", "default"
+		held := hidden.Object
+		if err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{l}}); err != nil {
+			t.Fatal(err)
+		}
+		if !sameMap(hidden.Object, held) {
+			t.Error("an object the List does not write was replaced")
+		}
+	})
+}
