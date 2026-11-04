@@ -431,11 +431,19 @@ rendered bootstrap changed and needs a person to read it: the script puts every 
 output back as it was, prints the diff and exits non-zero, so the bot's PR stays red on
 `test`. Review the change, then regenerate by hand with `GOWORK=off go test ./pkg/stack/fluxcd/ -update`.
 
+`go test -run` exits 0 when its pattern matches no test, so a golden test that is renamed
+or removed would leave its stored output on the old digest while the script reported
+success. The script therefore runs `go test -v` and requires a `=== RUN` line for each
+test it names (`GOLDEN_TEST_NAMES`); if one is missing it restores the stored outputs,
+prints the log and the missing names and exits non-zero. After renaming a golden test,
+update that list (go-kure/kure#1259).
+
 It is wired as a command of the shared `gomod`/`mise` rule's `postUpgradeTasks` in
 `renovate.json`, not as its own rule (`postUpgradeTasks` has no merge semantics, so a
 second matching rule would replace the command list), and every path it writes, the stored
 `flux-operator-*.txt` outputs included, is in that rule's `fileFilters` — an unlisted path
-is dropped from the bot's commit silently.
+is dropped from the bot's commit silently. The script test matrix runs the script on a
+fixture and fails when a file it changed matches no glob of that rule.
 Run it by hand after bumping the module yourself:
 
 ```bash
