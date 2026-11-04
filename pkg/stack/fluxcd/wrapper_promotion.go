@@ -110,6 +110,7 @@ func embeddedUnstructured(r apiruntime.Object) (objs []*unstructured.Unstructure
 func shallowestEmbeds(st reflect.Type) (found, above []embedStep, err error) {
 	level := []embedStep{{typ: st}}
 	nodes := 0
+	seen := map[reflect.Type]int{st: 0}
 	for depth := 0; len(level) > 0; depth++ {
 		if depth > maxEmbedDepth {
 			return nil, nil, errors.New("embeds structs too deep to follow")
@@ -131,6 +132,16 @@ func shallowestEmbeds(st reflect.Type) (found, above []embedStep, err error) {
 					at.typ = ft
 					found = append(found, at)
 				case ft.Kind() == reflect.Struct:
+					// A type already reached at a shallower depth, or the one being
+					// searched, adds nothing deeper: Go ranks its methods by the
+					// shallower embed. Following it would never end for a type that
+					// embeds itself. At the same depth it is followed, since two
+					// paths to one type are an ambiguity.
+					if d, ok := seen[ft]; ok && d <= depth {
+						continue
+					} else if !ok {
+						seen[ft] = depth + 1
+					}
 					if nodes++; nodes > maxEmbedNodes {
 						return nil, nil, errors.New("embeds too many structs to follow")
 					}

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -223,4 +225,42 @@ func TestHeldWrapper_OverAnUnstructuredListType(t *testing.T) {
 			t.Errorf("the item's spec.n = %#v, want int64(7)", n)
 		}
 	})
+}
+
+// recursiveTyped embeds its own type by pointer, next to a typed object and no
+// unstructured one. Its embedding is finite (the pointer is nil), and the type
+// holds nothing to check, so it is no concern of the wrapper check (round 28).
+type recursiveTyped struct {
+	*corev1.ConfigMap
+	*recursiveTyped
+}
+
+func TestEmbeddedUnstructured_RecursiveTypeWithoutAnUnstructuredObjectIsNoWrapper(t *testing.T) {
+	r := &recursiveTyped{ConfigMap: &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "default"}}, recursiveTyped: nil}
+	objs, _, err := embeddedUnstructured(r)
+	if err != nil || len(objs) != 0 {
+		t.Fatalf("got %v, %v; want no wrapper and no error", objs, err)
+	}
+}
+
+// shared is reached through two parents at the same depth: one type, two paths,
+// which is still an ambiguity.
+type (
+	shared  struct{ *unstructured.Unstructured }
+	parentA struct{ shared }
+	parentB struct{ shared }
+	viaTwo  struct {
+		parentA
+		parentB
+	}
+)
+
+func (v *viaTwo) GetObjectKind() schema.ObjectKind { return schema.EmptyObjectKind }
+func (v *viaTwo) DeepCopyObject() runtime.Object   { c := *v; return &c }
+
+func TestEmbeddedUnstructured_OneTypeReachedByTwoPathsAtTheSameDepthIsAmbiguous(t *testing.T) {
+	_, _, err := embeddedUnstructured(&viaTwo{parentA{shared{wrapperObj(int64(1))}}, parentB{shared{wrapperObj(int64(1))}}})
+	if err == nil || !strings.Contains(err.Error(), "parentA.shared.Unstructured") || !strings.Contains(err.Error(), "parentB.shared.Unstructured") {
+		t.Fatalf("got %v, want a refusal naming both paths", err)
+	}
 }
