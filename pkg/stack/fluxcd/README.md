@@ -1887,13 +1887,14 @@ panic on any other. kure reads such an object as its JSON, so it does not panic 
 `Object` map of each unstructured object in the layouts they are given, a `List`'s items included
 (also the unstructured items of a typed `List`, and of the typed Lists it holds, an unstructured `List`
 among them, whose own `Object` map is replaced like its items', and an unstructured object that a
-typed object that is no `List` holds in a field, the `Object` of a `RawExtension` included), that
-holds another value with a copy that holds JSON-typed values. This changes the object the caller
-passed: its `Object` field holds a new map, and the map the caller built is not changed. A typed
-`List` is read from the items it writes, so an object it holds and does not write is left as it is.
-An unstructured object held by value in a map or in an interface of a typed object, which cannot be
-replaced, is refused when it holds a value that is not JSON typed. The accepted shapes are a closed
-list. A `string`, `int64`, `float64`, `bool`, `nil`,
+typed object that is no `List` holds in a field, the `Object` of a `RawExtension` included, such a
+typed object as an item of a typed `List` too), that holds another value with a copy that holds
+JSON-typed values. This changes the object the caller passed: its `Object` field holds a new map, and
+the map the caller built is not changed. A typed `List` is read from the items it writes, so an object
+it holds in a field and does not write is left as it is. An unstructured object held by value in a
+map or in an interface of a typed object that is copied, which cannot be replaced, is refused when it
+holds a value that is not JSON typed. The accepted shapes are a closed list. A `string`, `int64`,
+`float64`, `bool`, `nil`,
 `json.Number`, `map[string]interface{}` and `[]interface{}` are kept as they are. A Go integer kind
 (`int`, `int8` to `int32`, `uint`, `uint8` to `uint32`, `uintptr`, and a `uint64` up to the largest
 `int64`) becomes an `int64`, so an integer above 2^53 stays exact. A `float32` becomes the

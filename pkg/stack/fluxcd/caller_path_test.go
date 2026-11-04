@@ -63,7 +63,7 @@ func TestHeldWalk_PathIsNotCopiedAtEveryLevel(t *testing.T) {
 		tail = tail.AFieldWhoseNameIsLongEnoughThatCopyingItsPathAtEveryLevelCostsTheSquareOfTheDepth
 	}
 	var err error
-	got := allocatedBy(func() { _, _, err = walkHeld(head, &convBudget{}) })
+	got := allocatedBy(func() { _, _, err = walkHeld(head, &convBudget{}, false) })
 	if err != nil {
 		t.Fatalf("got %v, want the chain accepted", err)
 	}
@@ -116,7 +116,7 @@ func TestPaths_RefusalsNameTheExactPath(t *testing.T) {
 	t.Run("typed walk", func(t *testing.T) {
 		n := &pinNode{}
 		n.Items = []*pinNode{n}
-		_, _, err := walkHeld(n, &convBudget{})
+		_, _, err := walkHeld(n, &convBudget{}, false)
 		want := "the typed object.Items[0] holds itself"
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("got %v, want one containing %q", err, want)
