@@ -306,6 +306,7 @@ func jsonContentOf(m map[string]any) (map[string]any, error) {
 var (
 	unstructuredType     = reflect.TypeFor[unstructured.Unstructured]()
 	unstructuredListType = reflect.TypeFor[unstructured.UnstructuredList]()
+	rawExtensionType     = reflect.TypeFor[apiruntime.RawExtension]()
 )
 
 // walkHeld walks every value reachable from the typed object r, before
@@ -460,7 +461,7 @@ func (w *heldWalk) checkType(t reflect.Type, path string) error {
 	if w.checked == nil {
 		w.checked = map[reflect.Type]bool{}
 	}
-	if !hasMarshaler(t) || trustedPackage(t) || promotedFromTrusted(t) {
+	if !hasMarshaler(t) || trustedPackage(t) || trustedType(t) || promotedFromTrusted(t) {
 		w.checked[t] = true
 		return nil
 	}
@@ -474,6 +475,13 @@ var (
 	// trustedStdPackages are the standard library packages that define a
 	// marshaler. A path with no dot is not enough: package main and a caller's
 	// module of a short name have none.
+	// trustedTypes are single types of a package that is not trusted, whose
+	// marshaler was read and calls no caller code. XDSResource (a Cilium Envoy
+	// config's resource) writes its embedded protobuf Any with protojson and
+	// nothing else. Add a type here only after reading its marshaler; a whole
+	// package is never trusted for one type.
+	trustedTypes = []string{"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2.XDSResource"}
+
 	trustedStdPackages = []string{"encoding/json", "encoding/json/jsontext", "encoding/json/v2", "log/slog", "math/big", "net", "net/netip", "net/url", "regexp", "time"}
 )
 
@@ -556,6 +564,11 @@ func trustedPackage(t reflect.Type) bool {
 	return trustedPath(t.PkgPath())
 }
 
+// trustedType reports whether t is one of trustedTypes.
+func trustedType(t reflect.Type) bool {
+	return t.Name() != "" && slices.Contains(trustedTypes, t.PkgPath()+"."+t.Name())
+}
+
 func trustedPath(p string) bool {
 	switch {
 	case p == "" || strings.HasSuffix(p, "_test"):
@@ -591,6 +604,12 @@ func (w *heldWalk) walkStruct(v reflect.Value, path string, depth int) error {
 			return w.walk(v.FieldByName("Items"), path+".Items", depth+1)
 		}
 		return nil
+	case rawExtensionType:
+		// RawExtension.MarshalJSON writes Raw when it is set and never looks at
+		// Object then, so an Object that points back at its holder is no cycle.
+		if !v.FieldByName("Raw").IsNil() {
+			return nil
+		}
 	}
 	// Marshalling leaves out the private fields of a struct. A type that
 	// marshals itself and could write one is refused by checkType.
