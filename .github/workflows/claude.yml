@@ -1,14 +1,14 @@
 name: Claude Code
 
+# No pull_request_review or pull_request_review_comment trigger: Copilot fires both on
+# every push, GitHub holds a bot-triggered run as action_required until a human
+# approves it (before any job `if:` is read), and that left the pull request
+# not clean. @claude still reaches a pull request through issue_comment.
 on:
   issue_comment:
     types: [created]
-  pull_request_review_comment:
-    types: [created]
   issues:
     types: [opened, assigned]
-  pull_request_review:
-    types: [submitted]
 
 permissions:
   contents: read
