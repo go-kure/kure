@@ -51,8 +51,10 @@ var maxJSONNodes = 1 << 22
 //
 // A value of any other shape refuses the call, with the layout, the object
 // and the field named, and no object is replaced then. So does a value that
-// holds itself, one nested deeper than maxJSONDepth and one with more than
-// maxJSONNodes values. No method of a value the caller built is ever called,
+// holds itself, one nested deeper than maxJSONDepth and a call whose objects
+// need more than maxJSONNodes values converted or checked in all: that count is
+// one for the whole call, as a map shared by many objects is expanded once for
+// each. No method of a value the caller built is ever called,
 // also not to read a typed List that holds it: a marshaler could not be
 // stopped on a value that holds itself.
 //
@@ -80,6 +82,7 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 	var replace []replacement
 	seenLayout := map[*layout.ManifestLayout]bool{}
 	seenObject := map[*unstructured.Unstructured]bool{}
+	budget := &convBudget{}
 	refuse := func(l *layout.ManifestLayout, u *unstructured.Unstructured, cause error) error {
 		kind, namespace, name := identityOf(u)
 		return errors.Wrapf(cause, "layout %q: %s %q", l.FullRepoPath(), kind, crKey(namespace, name))
@@ -91,24 +94,24 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 		}
 		seenLayout[l] = true
 		for i, r := range l.Resources {
-			if err := refuseWrapper(l, i, r); err != nil {
+			if err := refuseWrapper(l, i, r, budget); err != nil {
 				return err
 			}
-			objs, others, bad, err := callerObjects(r)
+			objs, others, bad, err := callerObjects(r, budget)
 			if err != nil {
 				if bad != nil {
 					return refuse(l, bad, err)
 				}
 				// Name the object or field that is the cause, when an item is.
 				for _, u := range objs {
-					if _, convErr := jsonContentOf(u.Object); convErr != nil {
+					if _, convErr := jsonContentOf(u.Object, budget); convErr != nil {
 						return refuse(l, u, convErr)
 					}
 				}
 				return errors.Wrapf(err, "layout %q: read list items of resource %d", l.FullRepoPath(), i)
 			}
 			for _, o := range others {
-				if err := refuseWrapper(l, i, o); err != nil {
+				if err := refuseWrapper(l, i, o, budget); err != nil {
 					return err
 				}
 			}
@@ -117,7 +120,7 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 					continue
 				}
 				seenObject[u] = true
-				content, err := jsonContentOf(u.Object)
+				content, err := jsonContentOf(u.Object, budget)
 				if err != nil {
 					return refuse(l, u, err)
 				}
@@ -166,13 +169,13 @@ func sameMap(a, b map[string]any) bool {
 // wrapper. So it is refused, naming its type, and a wrapper that holds only
 // JSON typed values is left as it is. An object that is no wrapper is no
 // concern of this check.
-func refuseWrapper(l *layout.ManifestLayout, i int, r apiruntime.Object) error {
+func refuseWrapper(l *layout.ManifestLayout, i int, r apiruntime.Object, budget *convBudget) error {
 	embedded, st, err := embeddedUnstructured(r)
 	if err != nil {
 		return errors.Wrapf(err, "layout %q: resource %d", l.FullRepoPath(), i)
 	}
 	for _, obj := range embedded {
-		content, err := jsonContentOf(obj.Object)
+		content, err := jsonContentOf(obj.Object, budget)
 		if err == nil && content == nil {
 			continue
 		}
@@ -198,7 +201,7 @@ func refuseWrapper(l *layout.ManifestLayout, i int, r apiruntime.Object) error {
 // others are the objects a typed List holds that are not unstructured, Lists
 // included, which the caller looks at for a wrapper that embeds an unstructured
 // object or List.
-func callerObjects(r client.Object) (objs []*unstructured.Unstructured, others []apiruntime.Object, bad *unstructured.Unstructured, err error) {
+func callerObjects(r client.Object, budget *convBudget) (objs []*unstructured.Unstructured, others []apiruntime.Object, bad *unstructured.Unstructured, err error) {
 	if r == nil {
 		return nil, nil, nil, nil
 	}
@@ -213,7 +216,7 @@ func callerObjects(r client.Object) (objs []*unstructured.Unstructured, others [
 	}
 	// The walk is bounded, so it goes first: the cycle check below revisits a
 	// List held twice each time it is held.
-	if bad, err := walkHeld(r); err != nil {
+	if bad, err := walkHeld(r, budget); err != nil {
 		return nil, nil, bad, err
 	}
 	if err := built.RefuseItemCycle(r); err != nil {
@@ -287,12 +290,12 @@ func jsonTypedCount(v any, depth int, nodes *int) bool {
 // array, a channel, a function, a map with other keys, and any type with a
 // marshaler (json.RawMessage and net.IP among them). The conversion is made
 // from the Go values and never marshals one, so it ends on every value. A slice
-// longer than the values left of maxJSONNodes is refused before it is copied.
-func jsonContentOf(m map[string]any) (map[string]any, error) {
+// longer than the values left of the budget is refused before it is copied.
+func jsonContentOf(m map[string]any, budget *convBudget) (map[string]any, error) {
 	if jsonTyped(m, 0) {
 		return nil, nil
 	}
-	c := &converter{open: map[openKey]bool{}}
+	c := &converter{open: map[openKey]bool{}, budget: budget}
 	v, err := c.convert(reflect.ValueOf(m), "", 0)
 	if err != nil {
 		return nil, err
@@ -318,8 +321,8 @@ var (
 // a value that cannot be read. When
 // an unstructured object fails, bad is a wrapper of its Object map, to name it
 // in the refusal.
-func walkHeld(r client.Object) (bad *unstructured.Unstructured, err error) {
-	w := &heldWalk{open: map[heldKey]bool{}}
+func walkHeld(r client.Object, budget *convBudget) (bad *unstructured.Unstructured, err error) {
+	w := &heldWalk{open: map[heldKey]bool{}, budget: budget}
 	err = w.walk(reflect.ValueOf(r), "", 0)
 	return w.bad, err
 }
@@ -336,6 +339,10 @@ type heldWalk struct {
 	open    map[heldKey]bool
 	checked map[reflect.Type]bool
 	bad     *unstructured.Unstructured
+
+	// budget is the call's: reachable charges the unstructured objects this walk
+	// finds to it. nodes counts the typed values of this one resource.
+	budget *convBudget
 }
 
 // scalarKind reports whether a value of kind k holds nothing to walk into.
@@ -598,7 +605,7 @@ func (w *heldWalk) walkStruct(v reflect.Value, path string, depth int) error {
 			return errors.Errorf("%s holds an unstructured object that cannot be read", whereTyped(path))
 		}
 		m, _ := v.FieldByName("Object").Interface().(map[string]any)
-		if err := reachable(m); err != nil {
+		if err := reachable(m, w.budget); err != nil {
 			w.bad = &unstructured.Unstructured{Object: m}
 			return err
 		}
@@ -633,11 +640,11 @@ func whereTyped(path string) string {
 // too deep or with too many values, and a struct, a pointer or an array, which
 // marshalling follows into fields that may hold any of those. It leaves the
 // shapes that marshalling only fails on, a channel say, to the conversion.
-func reachable(m map[string]any) error {
+func reachable(m map[string]any, budget *convBudget) error {
 	if jsonTyped(m, 0) {
 		return nil
 	}
-	c := &converter{open: map[openKey]bool{}, reach: true}
+	c := &converter{open: map[openKey]bool{}, reach: true, budget: budget}
 	_, err := c.convert(reflect.ValueOf(m), "", 0)
 	return err
 }
@@ -649,9 +656,18 @@ type openKey struct {
 	len int
 }
 
+// convBudget counts the values the converter visits in one call of
+// normalizeCallerObjects, for every object it converts or checks (jsonContentOf
+// and reachable). The converter expands a shared map once per occurrence, so
+// the work is the size of the expansion, not of what the caller allocated, and
+// N objects that share one map would each pay for all of it. One budget for the
+// call bounds them together. Plain JSON objects (jsonTyped) are not charged:
+// they are kept as they are, and the layout of them is the caller's to size.
+type convBudget struct{ used int }
+
 type converter struct {
-	nodes int
-	open  map[openKey]bool
+	budget *convBudget
+	open   map[openKey]bool
 
 	// reach makes the walk the check of reachable: it refuses what marshalling
 	// would call or not end on, and converts nothing else.
@@ -681,7 +697,7 @@ func (c *converter) convert(v reflect.Value, path string, depth int) (any, error
 	if v.Kind() == reflect.Interface && !v.IsNil() {
 		v = v.Elem()
 	}
-	if c.nodes++; c.nodes > maxJSONNodes {
+	if c.budget.used++; c.budget.used > maxJSONNodes {
 		return nil, errors.Errorf("%s holds more than %d values", where(path), maxJSONNodes)
 	}
 	if v.Kind() == reflect.Invalid || v.Kind() == reflect.Interface {
@@ -793,7 +809,7 @@ func (c *converter) convertSlice(v reflect.Value, path string, depth int) (any, 
 	}
 	// The count is checked before the allocation: a slice of a type that needs no
 	// storage can be as long as an int holds.
-	if v.Len() > maxJSONNodes-c.nodes {
+	if v.Len() > maxJSONNodes-c.budget.used {
 		return nil, errors.Errorf("%s holds more than %d values", where(path), maxJSONNodes)
 	}
 	if v.Len() > 0 {
