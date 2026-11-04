@@ -18,6 +18,12 @@
 #           appends to a flux-operator file for 8 s unless stopped
 #   orphan  as digest, then exits 1 leaving that same child, like go killed
 #           on its own while its test binary carries on
+#   missing as digest, but the first test of the -run alternation prints no
+#           "=== RUN" line and writes nothing, like a renamed test: go matches
+#           none for it and exits 0
+#
+# The script runs it with -v, and the output (a "=== RUN   <name>" line per test
+# that ran, then an ok line) is what the script checks.
 #
 # Any other invocation -- another subcommand or package, no -update, a
 # working directory that is not the fixture root, or GOWORK other than off
@@ -38,6 +44,28 @@ fi
 
 mode="${STUB_PIN_GO_MODE:-digest}"
 dir="pkg/stack/fluxcd/testdata/bootstrap-output"
+
+# A real `go test -v` prints "=== RUN   <name>" for each test it runs. The -run
+# value is a plain alternation, ^(A|B|C)$, of the tests the script expects; each
+# is "run" here, except the first in mode missing, which stands for a test that
+# was renamed or removed: go matches nothing for it, exits 0 and writes nothing.
+run_re=""
+go_args=("$@")
+for ((i = 0; i < ${#go_args[@]} - 1; i++)); do
+    if [[ "${go_args[i]}" == -run ]]; then
+        run_re="${go_args[i + 1]}"
+    fi
+done
+run_names="${run_re#^(}"
+run_names="${run_names%)\$}"
+IFS='|' read -ra want <<< "$run_names"
+skip=0
+if [[ "$mode" == missing ]]; then
+    skip=1
+fi
+for name in "${want[@]:skip}"; do
+    printf '=== RUN   %s\n' "$name"
+done
 digest="$(sha256sum pkg/stack/fluxcd/flux_operator_install.yaml | cut -d' ' -f1)"
 
 # set_header FILE COUNT -- replace FILE's first line with the summary line.
@@ -114,8 +142,10 @@ case "$mode" in
         late_writer
         exit 1
         ;;
+    missing) ;;
     *)
         echo "stub-pin go: unknown STUB_PIN_GO_MODE '$mode'" >&2
         exit 1
         ;;
 esac
+printf 'ok  \tfixture/pkg/stack/fluxcd\t0.01s\n'
