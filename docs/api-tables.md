@@ -97,16 +97,16 @@ for the kinds whose scope the API server defines.
 | `image.toolkit.fluxcd.io/v1` | `ImageRepository` | Namespaced | `marker` | `ImageRepository` | `github.com/fluxcd/image-reflector-controller/api@v1.3.0` |
 | `image.toolkit.fluxcd.io/v1` | `ImageUpdateAutomation` | Namespaced | `marker` | `ImageUpdateAutomation` | `github.com/fluxcd/image-automation-controller/api@v1.3.0` |
 | `kustomize.toolkit.fluxcd.io/v1` | `Kustomization` | Namespaced | `marker` | `Kustomization` | `github.com/fluxcd/kustomize-controller/api@v1.10.1` |
-| `metallb.io/v1beta1` | `BFDProfile` | Namespaced | `crd` | `BFDProfile` | `go.universe.tf/metallb@v0.16.1` |
-| `metallb.io/v1beta1` | `BGPAdvertisement` | Namespaced | `crd` | `BGPAdvertisement` | `go.universe.tf/metallb@v0.16.1` |
-| `metallb.io/v1beta1` | `BGPPeer` | Namespaced | `crd` | `BGPPeer` | `go.universe.tf/metallb@v0.16.1` |
-| `metallb.io/v1beta2` | `BGPPeer` | Namespaced | `crd` | `BGPPeer` | `go.universe.tf/metallb@v0.16.1` |
-| `metallb.io/v1beta1` | `Community` | Namespaced | `crd` | `Community` | `go.universe.tf/metallb@v0.16.1` |
-| `metallb.io/v1beta1` | `ConfigurationState` | Namespaced | `marker` | `ConfigurationState` | `go.universe.tf/metallb@v0.16.1` |
-| `metallb.io/v1beta1` | `IPAddressPool` | Namespaced | `crd` | `IPAddressPool` | `go.universe.tf/metallb@v0.16.1` |
-| `metallb.io/v1beta1` | `L2Advertisement` | Namespaced | `crd` | `L2Advertisement` | `go.universe.tf/metallb@v0.16.1` |
-| `metallb.io/v1beta1` | `ServiceBGPStatus` | Namespaced | `crd` | `ServiceBGPStatus` | `go.universe.tf/metallb@v0.16.1` |
-| `metallb.io/v1beta1` | `ServiceL2Status` | Namespaced | `crd` | `ServiceL2Status` | `go.universe.tf/metallb@v0.16.1` |
+| `metallb.io/v1beta1` | `BFDProfile` | Namespaced | `crd` | `BFDProfile` | `go.universe.tf/metallb@v0.16.2` |
+| `metallb.io/v1beta1` | `BGPAdvertisement` | Namespaced | `crd` | `BGPAdvertisement` | `go.universe.tf/metallb@v0.16.2` |
+| `metallb.io/v1beta1` | `BGPPeer` | Namespaced | `crd` | `BGPPeer` | `go.universe.tf/metallb@v0.16.2` |
+| `metallb.io/v1beta2` | `BGPPeer` | Namespaced | `crd` | `BGPPeer` | `go.universe.tf/metallb@v0.16.2` |
+| `metallb.io/v1beta1` | `Community` | Namespaced | `crd` | `Community` | `go.universe.tf/metallb@v0.16.2` |
+| `metallb.io/v1beta1` | `ConfigurationState` | Namespaced | `marker` | `ConfigurationState` | `go.universe.tf/metallb@v0.16.2` |
+| `metallb.io/v1beta1` | `IPAddressPool` | Namespaced | `crd` | `IPAddressPool` | `go.universe.tf/metallb@v0.16.2` |
+| `metallb.io/v1beta1` | `L2Advertisement` | Namespaced | `crd` | `L2Advertisement` | `go.universe.tf/metallb@v0.16.2` |
+| `metallb.io/v1beta1` | `ServiceBGPStatus` | Namespaced | `crd` | `ServiceBGPStatus` | `go.universe.tf/metallb@v0.16.2` |
+| `metallb.io/v1beta1` | `ServiceL2Status` | Namespaced | `crd` | `ServiceL2Status` | `go.universe.tf/metallb@v0.16.2` |
 | `monitoring.coreos.com/v1` | `Alertmanager` | Namespaced | `marker` | `Alertmanager` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
 | `monitoring.coreos.com/v1` | `PodMonitor` | Namespaced | `marker` | `PodMonitor` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
 | `monitoring.coreos.com/v1` | `Probe` | Namespaced | `marker` | `Probe` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
@@ -209,7 +209,7 @@ by a caller.
 | `monitoring/v1.ShardingStrategy` | `mode` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
 | `monitoring/v1.StorageSpec` | `ephemeral` | beta | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
 | `monitoring/v1.ThanosRulerSpec` | `prometheusRulesExcludedFromEnforce` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.2` |
-| `api/v1beta2.BGPPeerSpec` | `disableMP` | deprecated | — | `go.universe.tf/metallb@v0.16.1` |
+| `api/v1beta2.BGPPeerSpec` | `disableMP` | deprecated | — | `go.universe.tf/metallb@v0.16.2` |
 | `apps/v1.RollingUpdateStatefulSetStrategy` | `maxUnavailable` | beta | `MaxUnavailableStatefulSet` | `k8s.io/api@v0.37.2` |
 | `autoscaling/v2.HPAScalingRules` | `tolerance` | stable | `HPAConfigurableTolerance` | `k8s.io/api@v0.37.2` |
 | `batch/v1.JobSpec` | `scheduling` | alpha | `WorkloadWithJob` | `k8s.io/api@v0.37.2` |
