@@ -67,6 +67,15 @@ func goItems(obj runtime.Object) (items []runtime.Object, isList, nilEntry bool,
 				nilEntry = true
 				continue
 			}
+			// An item held by value is returned as the pointer to its slot, as the
+			// default case does: a copy holds the same objects at other addresses,
+			// so one held by value in it could not be replaced there.
+			if elem.Kind() == reflect.Struct && elem.CanAddr() {
+				if o, ok := elem.Addr().Interface().(runtime.Object); ok {
+					items[i] = o
+					continue
+				}
+			}
 			items[i] = elem.Interface().(runtime.Object)
 		default:
 			// The pointer to the element is an object, checked above.

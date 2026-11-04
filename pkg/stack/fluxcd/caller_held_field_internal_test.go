@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -247,6 +248,26 @@ type hiddenFieldList struct {
 
 func (l *hiddenFieldList) DeepCopyObject() runtime.Object { c := *l; return &c }
 
+// valueItem is a runtime.Object by value that holds an Unstructured by value in
+// a field it does not write.
+type valueItem struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Held              unstructured.Unstructured `json:"-"`
+}
+
+func (v valueItem) GetObjectKind() schema.ObjectKind { return &v.TypeMeta }
+func (v valueItem) DeepCopyObject() runtime.Object   { return v }
+
+// valueItemList is a typed List whose Items hold the objects themselves.
+type valueItemList struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []valueItem `json:"items"`
+}
+
+func (l *valueItemList) DeepCopyObject() runtime.Object { c := *l; return &c }
+
 // A typed List is read from the items it writes. What it holds in another field
 // is read by nothing, so it is left as it is and refuses nothing. An item that
 // is no List is copied whole as any other typed object is, so what it holds in a
@@ -294,6 +315,20 @@ func TestNormalizeCallerObjects_HeldUnstructuredInTypedList(t *testing.T) {
 		err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{l}})
 		if err == nil || !strings.Contains(err.Error(), "by value") {
 			t.Errorf("got %v, want a refusal naming the value", err)
+		}
+	})
+	t.Run("an item held by value is normalized where it lies", func(t *testing.T) {
+		t.Parallel()
+		l := &valueItemList{
+			TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"},
+			Items:    []valueItem{{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Item"}, Held: *heldCM(7)}},
+		}
+		l.Name, l.Namespace = "holder", "default"
+		if err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{l}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := specN(&l.Items[0].Held).(int64); !ok {
+			t.Errorf("spec.n = %#v, want an int64", specN(&l.Items[0].Held))
 		}
 	})
 	t.Run("an object in a field the List does not write is left as it is", func(t *testing.T) {
