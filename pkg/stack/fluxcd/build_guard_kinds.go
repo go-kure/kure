@@ -44,8 +44,9 @@ const (
 // mappings a merge key (<<) names; an object kustomize reads through more, or a
 // kind that ends in List (kustomize reads one as its items) holding Lists more
 // than maxListDepth deep, is not read, but only when it looks like an object
-// (it has a metadata key, or sits in a List that has one), so a data file with
-// a deep merge chain still builds.
+// (it has a metadata key, or sits in a List that has one, or holds below the
+// depth cap an item that has one), so a data file with a deep merge chain or
+// deep Lists still builds.
 // The false refusal left is a List that deep, or an object with a merge chain
 // that deep, in a file that is no resource.
 func (g *buildGuard) loadedKinds(b []byte) string {
@@ -104,6 +105,16 @@ type kindWalk struct {
 	seen         map[kindVisit]bool
 	contributing map[*kyaml.Node]mergeContribution
 	aggregates   map[*kyaml.Node]mergeContribution
+	// held is the set of nodes holdsObject has read, apart from seen: what lies
+	// below the depth cap is asked about without being walked, so a node met
+	// there is still walked when an alias brings it to a shallower depth.
+	held map[*kyaml.Node]bool
+	// chained is the set of mappings holdsObject has followed a merge chain
+	// through, for the same reason.
+	chained map[*kyaml.Node]bool
+	// chainDone is the set of merge values chainHoldsMetadata has been asked
+	// about, so a sequence many mappings name is walked once.
+	chainDone map[*kyaml.Node]bool
 }
 
 func newKindWalk() *kindWalk {
@@ -111,6 +122,9 @@ func newKindWalk() *kindWalk {
 		seen:         map[kindVisit]bool{},
 		contributing: map[*kyaml.Node]mergeContribution{},
 		aggregates:   map[*kyaml.Node]mergeContribution{},
+		held:         map[*kyaml.Node]bool{},
+		chained:      map[*kyaml.Node]bool{},
+		chainDone:    map[*kyaml.Node]bool{},
 	}
 }
 
@@ -205,7 +219,7 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWal
 	if strings.HasSuffix(m.kind, "List") && m.items != nil {
 		if items := resolve(m.items); items != nil && items.Kind == kyaml.SequenceNode {
 			if depth >= maxListDepth {
-				if object {
+				if object || g.holdsObject(items, w) {
 					return "which holds Lists nested deeper than kure follows to check the scope of their kinds"
 				}
 				return ""
@@ -224,6 +238,92 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWal
 	}
 	g.note(m.apiVersion, m.kind)
 	return ""
+}
+
+// holdsObject says whether a node of the sequence or mapping n, or an item of
+// the Lists below it, is an object: it has a metadata key, of its own or from a
+// merge key, through a chain of any depth (chainHoldsMetadata). It is asked at
+// the depth cap, where the Lists are not walked, so that what they hold is not
+// dropped when it may be an object. w.held is the
+// set of nodes read for the call (noteKinds does not read it), so each is read
+// once and the cost is that of the nodes of the file. A true ends the call in a
+// refusal, so a node read without finding an object is the only answer the set
+// needs to keep, and Lists that hold themselves end the read without a cycle
+// walk: a node met again was, or is being, read.
+func (g *buildGuard) holdsObject(n *kyaml.Node, w *kindWalk) bool {
+	n = resolve(n)
+	if n == nil || w.held[n] {
+		return false
+	}
+	w.held[n] = true
+	g.kindScans++
+	switch n.Kind {
+	case kyaml.SequenceNode:
+		for _, item := range n.Content {
+			if g.holdsObject(item, w) {
+				return true
+			}
+		}
+	case kyaml.MappingNode:
+		m := objectMeta{}
+		var merges []*kyaml.Node
+		g.readKeys(&m, n, &merges)
+		deeper := false
+		for _, v := range merges {
+			c := w.aggregate(g, v)
+			m.absorb(c.meta)
+			g.kindAbsorbs++
+			deeper = deeper || c.deeper
+		}
+		if m.hasMetadata {
+			return true
+		}
+		if deeper {
+			for _, v := range merges {
+				if g.chainHoldsMetadata(v, w) {
+					return true
+				}
+			}
+		}
+		if strings.HasSuffix(m.kind, "List") {
+			return g.holdsObject(m.items, w)
+		}
+	default:
+		// A scalar holds no object.
+	}
+	return false
+}
+
+// chainHoldsMetadata says whether a metadata key comes through the merge value
+// v at any depth: noteKinds follows a merge key one level, and a mapping below
+// the depth cap whose metadata lies deeper would otherwise be taken for data.
+// A merge value is asked about once for the call (w.chainDone), and a mapping
+// is read once (w.chained), which also ends a chain that leads back to itself.
+func (g *buildGuard) chainHoldsMetadata(v *kyaml.Node, w *kindWalk) bool {
+	v = resolve(v)
+	if v == nil || w.chainDone[v] {
+		return false
+	}
+	w.chainDone[v] = true
+	for _, src := range mergeSources(v) {
+		g.kindScans++
+		if w.chained[src] {
+			continue
+		}
+		w.chained[src] = true
+		m := objectMeta{}
+		var merges []*kyaml.Node
+		g.readKeys(&m, src, &merges)
+		if m.hasMetadata {
+			return true
+		}
+		for _, next := range merges {
+			if g.chainHoldsMetadata(next, w) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // readKeys is m.read(n, merges), counting the keys of n it reads.
