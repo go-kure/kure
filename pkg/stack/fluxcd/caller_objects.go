@@ -161,7 +161,8 @@ const maxEmbedDepth = 8
 
 // refuseWrapper refuses r, resource i of layout l or an item of it, when it is
 // a wrapper that embeds an unstructured object (embeddedUnstructured) whose map
-// holds a value that is not JSON typed. Such a wrapper cannot be normalized:
+// holds a value that is not JSON typed, or one that embeds an unstructured List
+// with such a value in its own map or in an item. Such a wrapper cannot be normalized:
 // the layout and the records the walker made of its origin hold the wrapper,
 // and a copy put in its place would no longer carry what is done to the
 // wrapper. So it is refused, naming its type, and a wrapper that holds only
@@ -172,18 +173,18 @@ func refuseWrapper(l *layout.ManifestLayout, i int, r apiruntime.Object) error {
 	if err != nil {
 		return errors.Wrapf(err, "layout %q: resource %d", l.FullRepoPath(), i)
 	}
-	if embedded == nil {
-		return nil
+	for _, obj := range embedded {
+		content, err := jsonContentOf(obj.Object)
+		if err == nil && content == nil {
+			continue
+		}
+		if err == nil {
+			err = errors.New("holds a value that is not JSON typed")
+		}
+		kind, namespace, name := identityOf(obj)
+		return errors.Wrapf(err, "layout %q: %s %q is held by a %s that embeds it, and is not normalized; hold it as a *unstructured.Unstructured to have it normalized", l.FullRepoPath(), kind, crKey(namespace, name), st)
 	}
-	content, err := jsonContentOf(embedded.Object)
-	if err == nil && content == nil {
-		return nil
-	}
-	if err == nil {
-		err = errors.New("holds a value that is not JSON typed")
-	}
-	kind, namespace, name := identityOf(embedded)
-	return errors.Wrapf(err, "layout %q: %s %q is held by a %s that embeds it, and is not normalized; hold it as a *unstructured.Unstructured to have it normalized", l.FullRepoPath(), kind, crKey(namespace, name), st)
+	return nil
 }
 
 // callerObjects returns the unstructured objects r holds as a caller's own: r

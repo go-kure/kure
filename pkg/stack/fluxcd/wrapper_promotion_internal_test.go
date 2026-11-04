@@ -157,3 +157,70 @@ func TestHeldWrapper_OverAnUnstructuredList(t *testing.T) {
 		}
 	})
 }
+
+// privInner is an unexported struct that embeds the *Unstructured; privOuter
+// embeds it by pointer, so the intermediate field cannot be interfaced.
+type privInner struct{ *unstructured.Unstructured }
+type privOuter struct{ *privInner }
+
+// listWrapper embeds an unstructured.UnstructuredList, whose items are held by
+// value in Items.
+type listWrapper struct{ *unstructured.UnstructuredList }
+
+// realList is an unstructured.UnstructuredList with one ConfigMap item that
+// holds n.
+func realList(n any) *unstructured.UnstructuredList {
+	return &unstructured.UnstructuredList{
+		Object: map[string]any{"apiVersion": "v1", "kind": "List"},
+		Items:  []unstructured.Unstructured{*wrapperObj(n)},
+	}
+}
+
+// A wrapper whose embedded object is reached through an unexported
+// intermediate pointer is judged like any other: kept when clean, refused when
+// not, and never refused for being unreachable (round 27).
+func TestEmbeddedUnstructured_ThroughAnUnexportedIntermediate(t *testing.T) {
+	run := func(r client.Object) error {
+		return normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{r}})
+	}
+	t.Run("a clean wrapper is kept", func(t *testing.T) {
+		if err := run(&privOuter{&privInner{wrapperObj(int64(1))}}); err != nil {
+			t.Fatalf("got %v, want the wrapper kept", err)
+		}
+	})
+	t.Run("a wrapper that holds a plain int is refused, naming its type", func(t *testing.T) {
+		err := run(&privOuter{&privInner{wrapperObj(7)}})
+		if err == nil || !strings.Contains(err.Error(), "fluxcd.privOuter") || strings.Contains(err.Error(), "cannot be reached") {
+			t.Fatalf("got %v, want a refusal naming fluxcd.privOuter for the value", err)
+		}
+	})
+}
+
+// An embedded unstructured.UnstructuredList is a wrapper too: its items are
+// held by value, and a read of a typed List that holds it returns copies, so it
+// is refused when an item needs conversion and kept when none does (round 27).
+func TestHeldWrapper_OverAnUnstructuredListType(t *testing.T) {
+	t.Run("an item with a plain int is refused, naming the wrapper", func(t *testing.T) {
+		l := &layout.ManifestLayout{Name: "l", Resources: []client.Object{inList(listWrapper{realList(7)})}}
+		err := normalizeForTest(l)
+		if err == nil || !strings.Contains(err.Error(), "fluxcd.listWrapper") {
+			t.Fatalf("got %v, want a refusal naming fluxcd.listWrapper", err)
+		}
+	})
+	t.Run("clean items are kept", func(t *testing.T) {
+		l := &layout.ManifestLayout{Name: "l", Resources: []client.Object{inList(listWrapper{realList(int64(7))})}}
+		if err := normalizeForTest(l); err != nil {
+			t.Fatalf("got %v, want the wrapper kept", err)
+		}
+	})
+	t.Run("a plain UnstructuredList with a plain int is still converted", func(t *testing.T) {
+		ul := realList(7)
+		l := &layout.ManifestLayout{Name: "l", Resources: []client.Object{inList(ul)}}
+		if err := normalizeForTest(l); err != nil {
+			t.Fatal(err)
+		}
+		if n := ul.Items[0].Object["spec"].(map[string]any)["n"]; n != int64(7) {
+			t.Errorf("the item's spec.n = %#v, want int64(7)", n)
+		}
+	})
+}
