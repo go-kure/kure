@@ -182,6 +182,8 @@ See the [FluxCD Builders reference](/api-reference/fluxcd-builders) for all avai
 
 Beyond FluxCD, the [Kubernetes Builders](/api-reference/kubernetes-builders) package provides typed constructors for core resources (Deployment, Service, Ingress, CronJob, NetworkPolicy, HTTPRoute), PSA security context helpers, ResourceRequirements builders, and more. The constructors write identity only, so fields the API server requires in context are yours to set: a Job from `kubernetes.CreateJob` needs `Spec.Template.Spec.RestartPolicy` set to `Never` or `OnFailure`, or the server defaults it to `Always` and rejects the Job. The [Prometheus Builders](/api-reference/prometheus-builders) sub-package covers ServiceMonitor, PodMonitor, and PrometheusRule CRDs.
 
+`kubernetes.ValidateContainerPSA` and `kubernetes.ValidatePodSpecPSA` are opt-in checks of the Pod Security Standards securityContext rules at the baseline and restricted levels. `ValidatePodSpecPSA` also honors the `hostUsers: false` and Windows exemptions of the standard. They refuse more specs than earlier releases did, so code that called them can now see a violation. The [PSA security contexts](/api-reference/kubernetes-builders/#psa-security-contexts) section of the Kubernetes Builders reference lists the rules, the exemptions and the checks that stay out of scope.
+
 ## Generating YAML
 
 Use the `io` package to serialize resources. `io.Marshal` and `io.PrintObjectsAsYAML` write to
