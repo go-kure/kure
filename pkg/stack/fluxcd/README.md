@@ -411,8 +411,8 @@ each build also asks kyaml, through its public `IsNamespaceScoped`, for the scop
 made, and of every kind in a file or inline patch it read, an object an overlay deletes later
 included (kustomize reads a kind's scope as it loads the object), and is not read when one differs
 from the built-in schema's. A kind only a generator made and an overlay deleted is not asked. Kinds are read from the YAML nodes of each file, with aliases and merge keys followed one
-hop, each shared node read once, so the work grows with the size of the file and not with the paths through its aliases or the mappings that share a merge key's sequence; an object whose kind may come through a deeper merge chain, or a List nested more than eight deep,
-makes the build not read (a mapping with no `metadata` key, in no List that has one, is no object and is never refused for it). It orders only its own goroutines:
+hop, each shared node read once, so the work grows with the size of the file and not with the paths through its aliases or the mappings that share a merge key's sequence; an object whose kind may come through a deeper merge chain, or a List nested more than eight deep that holds an object (a mapping with a `metadata` key, of its own or through merge keys at any depth, at any depth below the eighth List),
+makes the build not read (a mapping with no `metadata` key, in no List that has one and holding none below the eighth, is no object and is never refused for it; deep Lists of such data are not read). It orders only its own goroutines:
 another user's concurrent set or reset of the schema races with a build (go-kure/kure#1166).
 
 **An integration never fetches; a remote reference is reported as not read.**

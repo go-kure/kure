@@ -562,6 +562,155 @@ func TestBuildGuard_LoadedKindsAbsorbsAMergeSequenceOnce(t *testing.T) {
 	})
 }
 
+// listWith is a file whose root List holds item, and prefix is put before it
+// for anchors.
+func listWith(prefix, item string) string {
+	return prefix + "apiVersion: v1\nkind: List\nitems:\n  - " + item + "\n"
+}
+
+// listsAround is leaf inside Lists so that the leaf is read at depth depth,
+// the root List being depth 0: as flow YAML, the item of the root List.
+func listsAround(depth int, leaf string) string {
+	doc := leaf
+	for range depth - 1 {
+		doc = "{apiVersion: v1, kind: List, items: [" + doc + "]}"
+	}
+	return doc
+}
+
+// TestBuildGuard_LoadedKindsRefusesAnObjectBelowTheListDepthCap: Lists nested
+// more than maxListDepth deep are not read, and the build is not read when what
+// they hold may be an object, though no List above it has a metadata key: an
+// object of the Lists is one with a metadata key of its own (go-kure/kure#1239:
+// a ConfigMap nine Lists deep was dropped without a refusal).
+func TestBuildGuard_LoadedKindsRefusesAnObjectBelowTheListDepthCap(t *testing.T) {
+	const (
+		object = "{apiVersion: v1, kind: Leaf, metadata: {name: x}}"
+		plain  = "{apiVersion: v1, kind: Leaf}"
+	)
+	for _, tc := range []struct {
+		name, file string
+		refused    bool
+		read       bool // the leaf kind is recorded
+	}{
+		{"an object at the cap is read", listWith("", listsAround(maxListDepth, object)), false, true},
+		{"an object below the cap", listWith("", listsAround(maxListDepth+1, object)), true, false},
+		{"an object far below the cap", listWith("", listsAround(maxListDepth+4, object)), true, false},
+		{"no object below the cap", listWith("", listsAround(maxListDepth+1, plain)), false, false},
+		{"no object far below the cap", listWith("", listsAround(maxListDepth+4, plain)), false, false},
+		{"an object with its metadata through a merge key",
+			listWith("m: &m {metadata: {name: x}}\n", listsAround(maxListDepth+1, "{apiVersion: v1, kind: Leaf, <<: *m}")), true, false},
+		{"an object with its metadata behind a second merge hop",
+			listWith("a: &a {metadata: {name: x}}\nb: &b {<<: *a}\n", listsAround(maxListDepth+1, "{apiVersion: v1, kind: Leaf, <<: *b}")), true, false},
+		{"a merge chain that leads back to itself, with no metadata",
+			listWith("a: &a {<<: *a}\n", listsAround(maxListDepth+1, "{apiVersion: v1, kind: Leaf, <<: *a}")), false, false},
+		{"Lists without end that hold data", listWith("", "&a {apiVersion: v1, kind: List, items: [*a]}"), false, false},
+		{"Lists without end that hold an object", listWith("", "&a {apiVersion: v1, kind: List, items: [*a, "+object+"]}"), true, false},
+		{"an object among plain items of a List below the cap",
+			listWith("", listsAround(maxListDepth, "{apiVersion: v1, kind: List, items: ["+plain+", "+object+"]}")), true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newBuildGuard(nil, "")
+			why := g.loadedKinds([]byte(tc.file))
+			if (why != "") != tc.refused {
+				t.Fatalf("refusal %q, want refused %v", why, tc.refused)
+			}
+			if read := slices.Contains(g.kinds, kindKey{"v1", "Leaf"}); !tc.refused && read != tc.read {
+				t.Errorf("leaf recorded %v, want %v (kinds %v)", read, tc.read, g.kinds)
+			}
+		})
+	}
+}
+
+// TestBuildGuard_LoadedKindsScansBelowTheCapApart: the read of what lies below
+// the depth cap keeps its own memo, so a List first met below the cap is still
+// walked when an alias brings it to a shallower depth, and the reverse. With
+// one memo for both, the second visit would skip the List and its kinds would
+// be lost.
+func TestBuildGuard_LoadedKindsScansBelowTheCapApart(t *testing.T) {
+	// d is a List with one plain item, anchored where it is first met.
+	const anchored = "&d {apiVersion: v1, kind: List, items: [{apiVersion: v1, kind: Leaf}]}"
+	for _, tc := range []struct{ name, items string }{
+		{"met below the cap first", listsAround(maxListDepth, anchored) + "\n  - *d"},
+		{"met shallow first", anchored + "\n  - " + listsAround(maxListDepth, "*d")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newBuildGuard(nil, "")
+			if why := g.loadedKinds([]byte(listWith("", tc.items))); why != "" {
+				t.Fatalf("refused: %s", why)
+			}
+			if !slices.Contains(g.kinds, kindKey{"v1", "Leaf"}) {
+				t.Errorf("the leaf the shallow visit reads was not recorded: %v", g.kinds)
+			}
+		})
+	}
+}
+
+// TestBuildGuard_LoadedKindsScansBelowTheCapOnce: the read of what lies below
+// the cap keeps to the nodes of the file, however many Lists name the same
+// items: k Lists at the cap that hold one sequence of s items read the s items
+// once, not k times.
+func TestBuildGuard_LoadedKindsScansBelowTheCapOnce(t *testing.T) {
+	const k, s = 200, 200
+	var b strings.Builder
+	b.WriteString("s: &s [")
+	for range s {
+		b.WriteString("{apiVersion: v1, kind: Leaf}, ")
+	}
+	b.WriteString("{apiVersion: v1, kind: Leaf}]\napiVersion: v1\nkind: List\nitems:\n")
+	for range k {
+		b.WriteString("  - " + listsAround(maxListDepth, "{apiVersion: v1, kind: List, items: *s}") + "\n")
+	}
+	g := newBuildGuard(nil, "")
+	if why := g.loadedKinds([]byte(b.String())); why != "" {
+		t.Fatalf("refused: %s", why)
+	}
+	// Each of the k chains reads its 8 Lists of 3 keys each, and the s+1 items
+	// of the sequence have 2 keys each: well under the k times s items read
+	// again for each List.
+	if limit := k*8*3 + 2*(s+1) + 100; g.kindKeys > limit {
+		t.Errorf("read %d keys, want at most %d", g.kindKeys, limit)
+	}
+	// The scan itself reads the sequence and its s+1 items once, for all k
+	// Lists at the cap, and it did read them.
+	if want := 1 + s + 1; g.kindScans != want {
+		t.Errorf("scan read %d nodes, want %d", g.kindScans, want)
+	}
+	if want := []kindKey{{"v1", "List"}}; !slices.Equal(g.kinds, want) {
+		t.Errorf("kinds %v, want %v", g.kinds, want)
+	}
+}
+
+// TestBuildGuard_LoadedKindsScansAMergeChainOnce: n mappings below the depth
+// cap that name one sequence of m mappings, each with a merge key of its own,
+// walk the sequence once, not n times, and a chain that leads back to itself
+// ends.
+func TestBuildGuard_LoadedKindsScansAMergeChainOnce(t *testing.T) {
+	const n, m = 2000, 2000
+	var b strings.Builder
+	b.WriteString("z: &z {}\nc: &c {<<: *z}\nq: &q [")
+	for range m {
+		b.WriteString("*c, ")
+	}
+	b.WriteString("*c]\n")
+	var items strings.Builder
+	for range n {
+		items.WriteString("{<<: *q}, ")
+	}
+	file := listWith(b.String(), listsAround(maxListDepth, "{apiVersion: v1, kind: List, items: ["+items.String()+"]}"))
+	g := newBuildGuard(nil, "")
+	if why := g.loadedKinds([]byte(file)); why != "" {
+		t.Fatalf("refused: %s", why)
+	}
+	// The n mappings and their sequence, the m+1 references once, and c, z.
+	if limit := n + m + 20; g.kindScans < n || g.kindScans > limit {
+		t.Errorf("scan read %d nodes, want %d to %d", g.kindScans, n, limit)
+	}
+	if want := []kindKey{{"v1", "List"}}; !slices.Equal(g.kinds, want) {
+		t.Errorf("kinds %v, want %v", g.kinds, want)
+	}
+}
+
 // TestBuildGuard_ReadsTheKindsOfInlinePatches: the kinds of the inline patches
 // of a kustomization are asked about too, with no resource file naming them
 // (go-kure/kure#1235). The Widget occurs only in the patches here, so a guard
