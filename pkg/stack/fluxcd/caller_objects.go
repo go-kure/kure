@@ -157,10 +157,6 @@ func sameMap(a, b map[string]any) bool {
 	return a != nil && b != nil && reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
 }
 
-// maxEmbedDepth is how many levels of embedded structs embeddedUnstructured
-// follows to an unstructured object.
-const maxEmbedDepth = 8
-
 // refuseWrapper refuses r, resource i of layout l or an item of it, when it is
 // a wrapper that embeds an unstructured object (embeddedUnstructured) whose map
 // holds a value that is not JSON typed, or one that embeds an unstructured List
