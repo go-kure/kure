@@ -14,7 +14,7 @@ import (
 // ConfigMap is not expanded (kyaml's de-anchoring recurses without end on it),
 // a document that is no mapping holds no kind and does not end the read, a
 // value or a mapping given as an alias is read through one hop, a merge key
-// brings the fields the mapping lacks, and a kind that ends in List holds the
+// brings the fields the mapping lacks from its whole chain, and a kind that ends in List holds the
 // kinds of its items (go-kure/kure#1235).
 func TestBuildGuard_LoadedKindsReadsNodesNotObjects(t *testing.T) {
 	const widget = "apiVersion: example.com/v1\nkind: Widget\nmetadata:\n  name: w\n"
@@ -81,9 +81,10 @@ func TestBuildGuard_LoadedKindsReadsNodesNotObjects(t *testing.T) {
 }
 
 // TestBuildGuard_LoadedKindsRefusesWhatItCannotFollow: a build is not read
-// when an object's kind may come through a merge chain deeper than one hop, or
-// through Lists nested deeper than maxListDepth, never silently skipped. A file
-// with no metadata key, which is no object, is not refused for the merge chain.
+// when an object sits in Lists nested deeper than maxListDepth, never silently
+// skipped. A merge chain of any depth is followed, so it refuses nothing by
+// itself (go-kure/kure#1253); TestBuildGuard_LoadedKindsFollowsAMergeChainInFull
+// holds the kinds it gives.
 func TestBuildGuard_LoadedKindsRefusesWhatItCannotFollow(t *testing.T) {
 	chain := "a: &a {apiVersion: example.com/v1, kind: Widget}\nb: &b {<<: *a}\n"
 	// lists is levels Lists, each inside the items of the one before; the
@@ -105,15 +106,15 @@ func TestBuildGuard_LoadedKindsRefusesWhatItCannotFollow(t *testing.T) {
 		file    string
 		refused bool
 	}{
-		"an object through a deep merge chain":   {chain + "<<: *b\nmetadata: {name: w}\n", true},
+		"an object through a deep merge chain":   {chain + "<<: *b\nmetadata: {name: w}\n", false},
 		"a data file through a deep merge chain": {chain + "<<: *b\ndata: {x: y}\n", false},
 		"quoted << keys nested in a ConfigMap":   {"apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c}\n\"<<\": {\"<<\": {}}\n", false},
 		"an object through a one-hop merge":      {chain + "<<: *a\nmetadata: {name: w}\n", false},
 		// The List has a metadata key, so its items are objects (kubectl
 		// writes one): an item whose kind comes through a deep chain is
-		// refused though it has no metadata key itself.
+		// followed to it.
 		"an item of an object List through a deep merge chain": {chain +
-			"apiVersion: v1\nkind: List\nmetadata: {resourceVersion: \"\"}\nitems:\n  - {<<: *b}\n", true},
+			"apiVersion: v1\nkind: List\nmetadata: {resourceVersion: \"\"}\nitems:\n  - {<<: *b}\n", false},
 		"an item of a List with no metadata through a deep chain": {chain +
 			"apiVersion: v1\nkind: List\nitems:\n  - {<<: *b}\n", false},
 		"an item of an object List through a one-hop merge": {chain +
@@ -171,8 +172,9 @@ func TestBuildGuard_LoadedKindsSharesTheStringsOfAnAlias(t *testing.T) {
 }
 
 // TestTreeBuilds_AGeneratorDataFileWithAMergeChainStillBuilds: a data file a
-// configMapGenerator copies is no object, so a merge chain or a cyclic anchor
-// in it is neither followed nor refused.
+// configMapGenerator copies is no object, so a cyclic anchor in it is not
+// refused, and the kinds a merge chain gives are recorded and asked about
+// like any other.
 func TestTreeBuilds_AGeneratorDataFileWithAMergeChainStillBuilds(t *testing.T) {
 	files := map[string]string{
 		"app/kustomization.yaml": "configMapGenerator:\n  - name: data\n    files:\n      - data.yaml\n",
@@ -451,12 +453,12 @@ func TestBuildGuard_LoadedKindsReadsAMergeSourceOnce(t *testing.T) {
 		{"an empty own value hides the merged one", "b: &b {apiVersion: v1, kind: Base}\n" +
 			"apiVersion: v1\nkind: List\nitems:\n  - {kind: \"\", <<: *b}\n",
 			[]kindKey{{"v1", "List"}}, false},
-		{"a source that merges another is not followed", "c: &c {kind: Deep}\nb: &b {<<: *c, apiVersion: v1}\n" +
+		{"a source that merges another is followed", "c: &c {kind: Deep}\nb: &b {<<: *c, apiVersion: v1}\n" +
 			"apiVersion: v1\nkind: List\nitems:\n  - {<<: *b}\n",
-			[]kindKey{{"v1", "List"}}, false},
-		{"a source that merges another, in an object, is refused", "c: &c {kind: Deep}\nb: &b {<<: *c, apiVersion: v1}\n" +
+			[]kindKey{{"v1", "Deep"}, {"v1", "List"}}, false},
+		{"a source that merges another, in an object, is followed", "c: &c {kind: Deep}\nb: &b {<<: *c, apiVersion: v1}\n" +
 			"apiVersion: v1\nkind: List\nitems:\n  - {metadata: {name: m}, <<: *b}\n",
-			nil, true},
+			[]kindKey{{"v1", "Deep"}, {"v1", "List"}}, false},
 		{"a source met directly, by alias and inline", "b: &b {apiVersion: v1, kind: Base}\n" +
 			"apiVersion: v1\nkind: List\nitems:\n" +
 			"  - {<<: *b}\n  - {<<: [*b, *b]}\n  - {<<: {apiVersion: v1, kind: Inline}}\n",
@@ -552,12 +554,16 @@ func TestBuildGuard_LoadedKindsAbsorbsAMergeSequenceOnce(t *testing.T) {
 		if want := []kindKey{{"x/v1", "First"}, {"v1", "List"}}; !slices.Equal(g.kinds, want) {
 			t.Errorf("kinds %v, want %v", g.kinds, want)
 		}
-		// The metadata of the second source makes each item an object, so a
-		// deep merge key refuses it.
+		// The metadata of the source makes each item an object, and the kind
+		// it merges from c is followed to, not refused.
 		const deep = "c: &c {kind: Deep}\nb: &b {<<: *c, metadata: {name: m}}\n" +
 			"q: &q [*b]\napiVersion: v1\nkind: List\nitems:\n  - {<<: *q, apiVersion: v1}\n"
-		if why := newBuildGuard(nil, "").loadedKinds([]byte(deep)); why == "" {
-			t.Error("a deep merge in a source with metadata was not refused")
+		g = newBuildGuard(nil, "")
+		if why := g.loadedKinds([]byte(deep)); why != "" {
+			t.Errorf("a deep merge in a source with metadata was refused: %s", why)
+		}
+		if want := []kindKey{{"v1", "Deep"}, {"v1", "List"}}; !slices.Equal(g.kinds, want) {
+			t.Errorf("kinds %v, want %v", g.kinds, want)
 		}
 	})
 }
@@ -682,10 +688,10 @@ func TestBuildGuard_LoadedKindsScansBelowTheCapOnce(t *testing.T) {
 }
 
 // TestBuildGuard_LoadedKindsRefusesAListWhoseItemsMayBeDeep: the items of a
-// List are read through one merge hop. A List with a merge chain deeper than
-// that and no items found may hold them behind it, where metadata cannot be
-// seen either, so it is refused; a List whose items are found is not, and
-// neither is data that is no List (go-kure/kure#1239).
+// List are read through its whole merge chain (go-kure/kure#1253), so items
+// behind two hops are walked, and an object among them below the depth cap is
+// refused as one directly in the List is; data that is no List is not
+// (go-kure/kure#1239).
 func TestBuildGuard_LoadedKindsRefusesAListWhoseItemsMayBeDeep(t *testing.T) {
 	const deep = "a: &a {items: [{apiVersion: v1, kind: ConfigMap, metadata: {name: x}}]}\nb: &b {<<: *a}\n"
 	for _, tc := range []struct {
@@ -693,7 +699,7 @@ func TestBuildGuard_LoadedKindsRefusesAListWhoseItemsMayBeDeep(t *testing.T) {
 		refused    bool
 		want       []kindKey
 	}{
-		{"items behind two merge hops", deep + "apiVersion: v1\nkind: List\n<<: *b\n", true, nil},
+		{"items behind two merge hops", deep + "apiVersion: v1\nkind: List\n<<: *b\n", false, []kindKey{{"v1", "ConfigMap"}, {"v1", "List"}}},
 		{"items behind two merge hops below the List depth cap",
 			listWith(deep, listsAround(maxListDepth+1, "{apiVersion: v1, kind: List, <<: *b}")), true, nil},
 		{"items behind two merge hops at the List depth cap",
@@ -771,8 +777,15 @@ func TestBuildGuard_LoadedKindsRefusesAnOverLongKindOnAnObject(t *testing.T) {
 		{"a normal kind beside a merge chain two hops deep is recorded", "a: &a {metadata: {name: x}}\nb: &b {<<: *a}\napiVersion: v1\nkind: Foo\n<<: *b\n", false, []kindKey{{"v1", "Foo"}}},
 		{"a long apiVersion beside a merge chain two hops deep, on a List at the depth cap",
 			listWith("a: &a {metadata: {name: x}}\nb: &b {<<: *a}\n", listsAround(maxListDepth, "{apiVersion: "+long+", kind: List, <<: *b, items: []}")), true, nil},
-		{"a normal apiVersion beside a merge chain two hops deep, on a List at the depth cap",
-			listWith("a: &a {metadata: {name: x}}\nb: &b {<<: *a}\n", listsAround(maxListDepth, "{apiVersion: v1, kind: List, <<: *b, items: []}")), false, []kindKey{{"v1", "List"}}},
+		// An object List at the depth cap is refused, and the metadata two hops
+		// down is the metadata of the List now that the chain is followed: the
+		// same as a metadata key on the List itself (go-kure/kure#1253).
+		{"a normal apiVersion beside a merge chain two hops deep, on a List at the depth cap, is an object List and refused",
+			listWith("a: &a {metadata: {name: x}}\nb: &b {<<: *a}\n", listsAround(maxListDepth, "{apiVersion: v1, kind: List, <<: *b, items: []}")), true, nil},
+		{"a normal apiVersion beside a merge chain one hop deep, on a List at the depth cap, is an object List and refused",
+			listWith("a: &a {metadata: {name: x}}\n", listsAround(maxListDepth, "{apiVersion: v1, kind: List, <<: *a, items: []}")), true, nil},
+		{"a normal apiVersion on a List at the depth cap with no metadata is recorded",
+			listWith("a: &a {x: y}\nb: &b {<<: *a}\n", listsAround(maxListDepth, "{apiVersion: v1, kind: List, <<: *b, items: []}")), false, []kindKey{{"v1", "List"}}},
 		{"the longest kind on an object is recorded", "apiVersion: v1\nkind: " + exact + "\nmetadata: {name: x}\n", false, []kindKey{{"v1", exact}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

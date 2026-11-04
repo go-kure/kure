@@ -991,13 +991,12 @@ definitions as they were and still changes a build, so kure also asks, in each
 build, for the scope of every kind the build made and of every kind in a file or
 inline patch it read, an object an overlay deletes later included, and does not
 read a build in which one differs from the built-in schema's. It does not read a
-build either when it cannot follow an object to its kind: an object whose kind
-may come through a merge chain more than one level deep; a List with such a
-chain and no items found; a List nested more than eight deep that holds an
-object (a mapping with a `metadata` key, of its own or through merge keys); or
-an object, or a mapping beside such a chain, with an `apiVersion` or `kind` of
-more than 1024 bytes. The package README states the full contract, including
-what is not refused.
+build either when it cannot follow an object to its kind: an object that
+reaches a merge chain that leads back to itself; a List nested more than eight
+deep that holds an object (a mapping with a `metadata` key, of its own or
+through merge keys); or an object with an `apiVersion` or `kind` of more than
+1024 bytes. The package README states the full contract, including what is not
+refused.
 One
 without `wait` that health-checks any other object waits for the Kustomization
 that applies it, whatever its expression says, when that writer is certain,

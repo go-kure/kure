@@ -40,19 +40,19 @@ const (
 // operations, a scalar, an empty document), or has no scalar apiVersion and
 // kind, holds no kind and is skipped; so is a part that fails to parse, since
 // kustomize fails a resource file at such a part, and reads no kind from a
-// data file. A value given as an alias,
-// and a mapping given as an alias, are read through one hop, as are the
-// mappings a merge key (<<) names; an object kustomize reads through more, or a
-// kind that ends in List (kustomize reads one as its items) holding Lists more
-// than maxListDepth deep, is not read, but only when it looks like an object
-// (it has a metadata key, or sits in a List that has one, or holds below the
-// depth cap an item that has one), so a data file with a deep merge chain or
-// deep Lists still builds. A List with a merge chain deeper than one hop and no
-// items found is refused as well, since its items may lie behind the chain. An
-// apiVersion or kind over maxKindBytes on an object, or on a mapping with such a
-// chain, is not read either, and a data file with one is skipped.
-// The false refusal left is a List that deep, or an object with a merge chain
-// that deep, in a file that is no resource.
+// data file. A value given as an alias, and a mapping given as an alias, are
+// read through one hop. The mappings a merge key (<<) names are followed
+// through their whole chain (mergeChain), for the fields apiVersion, kind and
+// items and for a metadata key. A merge chain that leads back to itself ends,
+// and an object that reaches one is not read; so is a kind that ends in List
+// (kustomize reads one as its items) holding Lists more than maxListDepth deep,
+// but only when it looks like an object (it has a metadata key, or sits in a
+// List that has one, or holds below the depth cap an item that has one), so a
+// data file with a cyclic merge chain or deep Lists still builds. An apiVersion
+// or kind over maxKindBytes on an object is not read either, and a data file
+// with one is skipped.
+// The false refusal left is a List that deep, or an object that reaches a
+// cyclic merge chain, in a file that is no resource.
 func (g *buildGuard) loadedKinds(b []byte) string {
 	w := newKindWalk()
 	for _, part := range splitDocuments(string(b)) {
@@ -102,82 +102,147 @@ type kindVisit struct {
 }
 
 // kindWalk is what one loadedKinds call remembers, and forgets with the call,
-// so concurrent builds share nothing: the visits made, what each mapping a
-// merge key names contributes, and what the mappings a merge value names
-// contribute together.
+// so concurrent builds share nothing: the visits made, and what each mapping
+// and each merge value gives together with everything it merges, however deep.
 type kindWalk struct {
-	seen         map[kindVisit]bool
-	contributing map[*kyaml.Node]mergeContribution
-	aggregates   map[*kyaml.Node]mergeContribution
+	seen map[kindVisit]bool
+	// merged is what a mapping, or a sequence of mappings a merge key names,
+	// gives with its whole merge chain: black in the walk of mergeChain. It
+	// depends on the node alone, never on the visit that asked for it.
+	merged map[*kyaml.Node]mergeContribution
+	// gray is the nodes mergeChain has reached and not yet settled, during one
+	// of its calls and empty between them. A node in neither merged nor gray is
+	// white.
+	gray map[*kyaml.Node]*chainFrame
 	// held is the set of nodes holdsObject has read, apart from seen: what lies
 	// below the depth cap is asked about without being walked, so a node met
 	// there is still walked when an alias brings it to a shallower depth.
 	held map[*kyaml.Node]bool
-	// chained is the set of mappings holdsObject has followed a merge chain
-	// through, for the same reason.
-	chained map[*kyaml.Node]bool
-	// chainDone is the set of merge values chainHoldsMetadata has been asked
-	// about, so a sequence many mappings name is walked once.
-	chainDone map[*kyaml.Node]bool
 }
 
 func newKindWalk() *kindWalk {
 	return &kindWalk{
-		seen:         map[kindVisit]bool{},
-		contributing: map[*kyaml.Node]mergeContribution{},
-		aggregates:   map[*kyaml.Node]mergeContribution{},
-		held:         map[*kyaml.Node]bool{},
-		chained:      map[*kyaml.Node]bool{},
-		chainDone:    map[*kyaml.Node]bool{},
+		seen:   map[kindVisit]bool{},
+		merged: map[*kyaml.Node]mergeContribution{},
+		gray:   map[*kyaml.Node]*chainFrame{},
+		held:   map[*kyaml.Node]bool{},
 	}
 }
 
-// mergeContribution is what a mapping a merge key names gives the mapping that
-// names it: the fields of its own keys, read as a mapping on its own, and
-// whether it has a merge key itself (which is not followed). It depends on the
-// mapping alone, never on the one that names it.
+// mergeContribution is what a mapping, with the mappings its merge keys name
+// at any depth, gives the mapping that names it: the first value found of each
+// key and whether a metadata key is found anywhere. cyclic is whether the
+// chain leads back to itself, which is then no chain with an end to read: its
+// fields hold what was found before it closed on itself, and hasMetadata is
+// exact.
 type mergeContribution struct {
 	meta   objectMeta
-	deeper bool
+	cyclic bool
 }
 
-// aggregate is what the mappings the merge value v names give together, worked
-// out once for every call however many mappings name v: the first value found
-// of each key, and a merge key or a metadata key in any of them. It is the same
-// as absorbing the mappings in order into the mapping that names v, because
-// absorb takes the first value of a key and ORs the flags, so the mappings a
-// merge value names cost one absorb each for the call, and each mapping that
-// names it one.
-func (w *kindWalk) aggregate(g *buildGuard, v *kyaml.Node) mergeContribution {
-	v = resolve(v)
-	if v == nil {
-		return mergeContribution{}
-	}
-	if c, ok := w.aggregates[v]; ok {
-		return c
-	}
-	var c mergeContribution
-	for _, src := range mergeSources(v) {
-		s := w.contribution(g, src)
-		c.meta.absorb(s.meta)
-		g.kindAbsorbs++
-		c.deeper = c.deeper || s.deeper
-	}
-	w.aggregates[v] = c
-	return c
+// chainFrame is a node of the merge graph in mergeChain's walk. A mapping has
+// an edge to the value of each of its merge keys, in order, and a sequence one
+// to each mapping it holds.
+type chainFrame struct {
+	node   *kyaml.Node
+	meta   objectMeta
+	succ   []*kyaml.Node
+	next   int
+	index  int
+	low    int
+	cyclic bool
 }
 
-// contribution reads the keys of the mapping src once for every call.
-func (w *kindWalk) contribution(g *buildGuard, src *kyaml.Node) mergeContribution {
-	if c, ok := w.contributing[src]; ok {
+// mergeChain is the contribution of the mapping or sequence root with its
+// merge chain followed in full, worked out once for the call. It is the same as
+// absorbing the mappings in order, each with its own merge keys followed, so a
+// mapping that is named many times, or a sequence of mappings, costs its edges
+// once.
+//
+// The merge graph may lead back to itself, and a chain may be long, so the
+// walk is Tarjan's strongly connected components with an explicit stack, not
+// recursion: a node is white (in neither w.merged nor w.gray), gray (reached,
+// its component not closed) or black (in w.merged), and never judged by how
+// deep the walk is. A merge key that names a gray node closes a cycle, and a
+// merge key that names a cyclic node reaches one. When the component of a node
+// closes, its members are all cyclic if any of them is, and they all get a
+// hasMetadata that is the OR over the members, so no member of a cycle misses a
+// metadata key another one holds, whichever it was reached from.
+func (w *kindWalk) mergeChain(g *buildGuard, root *kyaml.Node) mergeContribution {
+	if c, ok := w.merged[root]; ok {
 		return c
 	}
-	var c mergeContribution
-	var merges []*kyaml.Node
-	g.readKeys(&c.meta, src, &merges)
-	c.deeper = len(merges) > 0
-	w.contributing[src] = c
-	return c
+	var calls, open []*chainFrame
+	index := 0
+	enter := func(n *kyaml.Node) {
+		f := &chainFrame{node: n, index: index, low: index}
+		index++
+		if n.Kind == kyaml.MappingNode {
+			var merges []*kyaml.Node
+			g.readKeys(&f.meta, n, &merges)
+			for _, v := range merges {
+				if v = resolve(v); v != nil && (v.Kind == kyaml.MappingNode || v.Kind == kyaml.SequenceNode) {
+					f.succ = append(f.succ, v)
+				}
+			}
+		} else {
+			f.succ = mergeSources(n)
+		}
+		w.gray[n] = f
+		calls = append(calls, f)
+		open = append(open, f)
+	}
+	enter(root)
+	for len(calls) > 0 {
+		f := calls[len(calls)-1]
+		if f.next < len(f.succ) {
+			s := f.succ[f.next]
+			f.next++
+			g.kindAbsorbs++
+			if c, ok := w.merged[s]; ok {
+				f.meta.absorb(c.meta)
+				f.cyclic = f.cyclic || c.cyclic
+			} else if sf, ok := w.gray[s]; ok {
+				f.cyclic = true
+				f.low = min(f.low, sf.index)
+			} else {
+				enter(s)
+			}
+			continue
+		}
+		calls = calls[:len(calls)-1]
+		if f.low == f.index {
+			// The component of f is closed: the nodes opened since f.
+			at := len(open) - 1
+			for open[at] != f {
+				at--
+			}
+			members := open[at:]
+			open = open[:at]
+			cyclic, metadata := false, false
+			for _, mf := range members {
+				cyclic = cyclic || mf.cyclic
+				metadata = metadata || mf.meta.hasMetadata
+			}
+			for _, mf := range members {
+				mf.meta.hasMetadata = metadata
+				w.merged[mf.node] = mergeContribution{meta: mf.meta, cyclic: cyclic}
+				delete(w.gray, mf.node)
+			}
+		}
+		if len(calls) > 0 {
+			p := calls[len(calls)-1]
+			if c, ok := w.merged[f.node]; ok {
+				p.meta.absorb(c.meta)
+				p.cyclic = p.cyclic || c.cyclic
+			} else {
+				// Still open: f and p are in one component.
+				p.meta.absorb(f.meta)
+				p.low = min(p.low, f.low)
+			}
+		}
+	}
+	return w.merged[root]
 }
 
 // noteKinds records the kind of the node n when it is a mapping, and of its
@@ -189,13 +254,12 @@ func (w *kindWalk) contribution(g *buildGuard, src *kyaml.Node) mergeContributio
 // first: a refusal ended the call, and the kinds it recorded are recorded. So
 // a mapping or a sequence many aliases name is read once per depth and object
 // flag, and the Lists are walked in at most (maxListDepth+1) times 2 reads of
-// each node of the file, not in the paths through its aliases. A mapping a
-// merge key names is read once for the call, however many mappings name it, so
-// the keys read are those of each mapping visited plus those of each mapping
-// named once. What the mappings a merge value names give together is worked
-// out once as well (aggregate), so the absorbs are one for each mapping a merge
-// value names plus one for each merge key that uses it, not their product.
-// The memos live one call, so concurrent builds share nothing.
+// each node of the file, not in the paths through its aliases. What a mapping
+// gives with its whole merge chain is worked out once for the call
+// (mergeChain), however many mappings name it, so the keys read are those of
+// each mapping met once, and the absorbs are one for each merge edge. The
+// object flag is an argument of the visit and never part of that memo. The
+// memos live one call, so concurrent builds share nothing.
 func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWalk) string {
 	n = resolve(n)
 	if n == nil || n.Kind != kyaml.MappingNode {
@@ -207,20 +271,10 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWal
 	}
 	w.seen[visit] = true
 	g.kindVisits++
-	m := objectMeta{}
-	var merges []*kyaml.Node
-	g.readKeys(&m, n, &merges)
-	for _, v := range merges {
-		c := w.aggregate(g, v)
-		m.absorb(c.meta)
-		g.kindAbsorbs++
-		m.deepMerge = m.deepMerge || c.deeper
-	}
-	if m.deepMerge && (object || m.hasMetadata) {
-		return "which holds an object whose apiVersion or kind may come through merge keys more than one level deep, which kure does not follow to check the scope of its kind"
-	}
-	if m.deepMerge && m.items == nil && strings.HasSuffix(m.kind, "List") {
-		return "which holds a List whose items may come through merge keys more than one level deep, which kure does not follow to check the scope of their kinds"
+	c := w.mergeChain(g, n)
+	m := c.meta
+	if c.cyclic && (object || m.hasMetadata) {
+		return "which holds an object whose merge keys lead back to themselves, which kure does not follow to check the scope of its kind"
 	}
 	object = object || m.hasMetadata
 	if strings.HasSuffix(m.kind, "List") && m.items != nil {
@@ -229,7 +283,7 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWal
 				if object || g.holdsObject(items, w) {
 					return "which holds Lists nested deeper than kure follows to check the scope of their kinds"
 				}
-				return g.note(m.apiVersion, m.kind, m.deepMerge)
+				return g.note(m.apiVersion, m.kind, false)
 			}
 			// The Lists that hold one sequence step over it once.
 			if step := (kindVisit{items, depth, object}); !w.seen[step] {
@@ -243,21 +297,19 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWal
 			}
 		}
 	}
-	// Beside a deeper merge chain a mapping may be an object (its metadata may
-	// lie behind the chain), so an over-long value there is refused too.
-	return g.note(m.apiVersion, m.kind, object || m.deepMerge)
+	return g.note(m.apiVersion, m.kind, object)
 }
 
 // holdsObject says whether a node of the sequence or mapping n, or an item of
-// the Lists below it, is an object: it has a metadata key, of its own or from a
-// merge key, through a chain of any depth (chainHoldsMetadata). It is asked at
-// the depth cap, where the Lists are not walked, so that what they hold is not
-// dropped when it may be an object. w.held is the
-// set of nodes read for the call (noteKinds does not read it), so each is read
-// once and the cost is that of the nodes of the file. A true ends the call in a
-// refusal, so a node read without finding an object is the only answer the set
-// needs to keep, and Lists that hold themselves end the read without a cycle
-// walk: a node met again was, or is being, read.
+// the Lists below it, is an object: it has a metadata key, of its own or from
+// its merge chain at any depth (mergeChain). It is asked at the depth cap,
+// where the Lists are not walked, so that what they hold is not dropped when
+// it may be an object. w.held is the set of nodes read for the call (noteKinds
+// does not read it), so each is read once and the cost is that of the nodes of
+// the file. A true ends the call in a refusal, so a node read without finding
+// an object is the only answer the set needs to keep, and Lists that hold
+// themselves end the read without a cycle walk: a node met again was, or is
+// being, read.
 func (g *buildGuard) holdsObject(n *kyaml.Node, w *kindWalk) bool {
 	n = resolve(n)
 	if n == nil || w.held[n] {
@@ -273,66 +325,15 @@ func (g *buildGuard) holdsObject(n *kyaml.Node, w *kindWalk) bool {
 			}
 		}
 	case kyaml.MappingNode:
-		m := objectMeta{}
-		var merges []*kyaml.Node
-		g.readKeys(&m, n, &merges)
-		deeper := false
-		for _, v := range merges {
-			c := w.aggregate(g, v)
-			m.absorb(c.meta)
-			g.kindAbsorbs++
-			deeper = deeper || c.deeper
-		}
+		m := w.mergeChain(g, n).meta
 		if m.hasMetadata {
 			return true
-		}
-		if deeper && m.items == nil && strings.HasSuffix(m.kind, "List") {
-			return true
-		}
-		if deeper {
-			for _, v := range merges {
-				if g.chainHoldsMetadata(v, w) {
-					return true
-				}
-			}
 		}
 		if strings.HasSuffix(m.kind, "List") {
 			return g.holdsObject(m.items, w)
 		}
 	default:
 		// A scalar holds no object.
-	}
-	return false
-}
-
-// chainHoldsMetadata says whether a metadata key comes through the merge value
-// v at any depth: noteKinds follows a merge key one level, and a mapping below
-// the depth cap whose metadata lies deeper would otherwise be taken for data.
-// A merge value is asked about once for the call (w.chainDone), and a mapping
-// is read once (w.chained), which also ends a chain that leads back to itself.
-func (g *buildGuard) chainHoldsMetadata(v *kyaml.Node, w *kindWalk) bool {
-	v = resolve(v)
-	if v == nil || w.chainDone[v] {
-		return false
-	}
-	w.chainDone[v] = true
-	for _, src := range mergeSources(v) {
-		g.kindScans++
-		if w.chained[src] {
-			continue
-		}
-		w.chained[src] = true
-		m := objectMeta{}
-		var merges []*kyaml.Node
-		g.readKeys(&m, src, &merges)
-		if m.hasMetadata {
-			return true
-		}
-		for _, next := range merges {
-			if g.chainHoldsMetadata(next, w) {
-				return true
-			}
-		}
 	}
 	return false
 }
@@ -373,7 +374,6 @@ type objectMeta struct {
 	hasAPIVersion    bool
 	hasKind          bool
 	hasMetadata      bool
-	deepMerge        bool // a mapping a merge key names has a merge key itself
 }
 
 // read takes from the mapping n what m has not got yet, and appends the values
