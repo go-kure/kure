@@ -35,8 +35,8 @@ const (
 // maxJSONNodes is how many values are visited in one object. An object
 // is far smaller (the API server stores 1.5 MiB at most); a larger count
 // is a value that shares its parts so often that its tree is huge.
-// It is a var only so that a test can lower it (SetMaxJSONNodesForTest in
-// export_test.go); no in-process test that does so may be t.Parallel.
+// It is a var only so that a test can lower it through the setter in
+// export_test.go; no in-process test that does so may be t.Parallel.
 var maxJSONNodes = 1 << 22
 
 // normalizeCallerObjects makes every unstructured object a caller put in the
