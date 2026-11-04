@@ -1839,8 +1839,10 @@ build makes it, its own `wait` included. A built object is read as its JSON, so 
 a port say, is read like any other field, before and after substitution (go-kure/kure#1199). An
 unstructured object a caller builds in Go should hold JSON-typed values, as apimachinery's
 `Unstructured` requires: an `int64`, not an `int`, because its `Nested*` reads and `DeepCopy`
-panic on any other. kure reads such an object as its JSON, so it never panics on one
-(go-kure/kure#1201). `IntegrateWithLayout`, `CreateLayoutWithResources` (through it),
+panic on any other. kure reads such an object as its JSON, so it does not panic on one
+(go-kure/kure#1201), except one held in the `Object` of a `RawExtension` of a typed object that is
+not a List, which still panics when the integration copies that object (go-kure/kure#1252).
+`IntegrateWithLayout`, `CreateLayoutWithResources` (through it),
 `GenerateFromLayout`, `GenerateFromCluster` (through it) and `UmbrellaTerminals` first replace the
 `Object` map of each unstructured object in the layouts they are given, a `List`'s items included
 (also the unstructured items of a typed `List`, and of the typed Lists it holds, an unstructured `List`

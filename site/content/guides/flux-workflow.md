@@ -937,8 +937,9 @@ source, a kustomize failure) is now refused. A built object is
 read as its JSON, so a number in it, a port say, is read like any other field,
 before and after substitution. An unstructured object you build in Go should hold
 JSON-typed values, as apimachinery's `Unstructured` requires: an `int64`, not an
-`int`. kure reads such an object as its JSON and never panics on one: the
-integration entry points replace a plain Go integer, `[]string`, `map[string]string`
+`int`. kure reads such an object as its JSON and does not panic on one, except one
+held in the `Object` of a `RawExtension` of a typed object that is not a List
+(go-kure/kure#1252). The integration entry points replace a plain Go integer, `[]string`, `map[string]string`
 or other accepted shape in an `Object` map with a JSON-typed copy (the caller's
 map is not changed), and refuse a value they cannot convert, such as a struct,
 a pointer, a channel or a type that marshals itself, naming the layout, the
