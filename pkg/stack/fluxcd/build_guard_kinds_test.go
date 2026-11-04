@@ -711,6 +711,41 @@ func TestBuildGuard_LoadedKindsScansAMergeChainOnce(t *testing.T) {
 	}
 }
 
+// TestBuildGuard_LoadedKindsRefusesAnOverLongKindOnAnObject: an apiVersion or
+// kind longer than maxKindBytes names no kind, and is not recorded; on an
+// object it is refused too, since the object is one kustomize reads and kure
+// cannot ask about (go-kure/kure#1239: it was dropped without a refusal).
+func TestBuildGuard_LoadedKindsRefusesAnOverLongKindOnAnObject(t *testing.T) {
+	long := strings.Repeat("A", maxKindBytes+1)
+	exact := strings.Repeat("A", maxKindBytes)
+	for _, tc := range []struct {
+		name, file string
+		refused    bool
+		want       []kindKey
+	}{
+		{"a long kind on an object", "apiVersion: v1\nkind: " + long + "\nmetadata: {name: x}\n", true, nil},
+		{"a long apiVersion on an object", "apiVersion: " + long + "\nkind: Foo\nmetadata: {name: x}\n", true, nil},
+		{"a long kind through a merge key on an object", "m: &m {kind: " + long + "}\napiVersion: v1\nmetadata: {name: x}\n<<: *m\n", true, nil},
+		{"a long kind on an item of an object List", "apiVersion: v1\nkind: List\nmetadata: {}\nitems:\n  - {apiVersion: v1, kind: " + long + "}\n", true, nil},
+		{"a long kind with no apiVersion on an object", "kind: " + long + "\nmetadata: {name: x}\n", true, nil},
+		{"a long apiVersion with no kind on an object", "apiVersion: " + long + "\nmetadata: {name: x}\n", true, nil},
+		{"a long kind on no object", "apiVersion: v1\nkind: " + long + "\n", false, nil},
+		{"a long kind on an item of a List that is no object", "apiVersion: v1\nkind: List\nitems:\n  - {apiVersion: v1, kind: " + long + "}\n", false, []kindKey{{"v1", "List"}}},
+		{"the longest kind on an object is recorded", "apiVersion: v1\nkind: " + exact + "\nmetadata: {name: x}\n", false, []kindKey{{"v1", exact}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newBuildGuard(nil, "")
+			why := g.loadedKinds([]byte(tc.file))
+			if (why != "") != tc.refused {
+				t.Fatalf("refusal %q, want refused %v", why, tc.refused)
+			}
+			if !tc.refused && !slices.Equal(g.kinds, tc.want) {
+				t.Errorf("kinds %v, want %v", g.kinds, tc.want)
+			}
+		})
+	}
+}
+
 // TestBuildGuard_ReadsTheKindsOfInlinePatches: the kinds of the inline patches
 // of a kustomization are asked about too, with no resource file naming them
 // (go-kure/kure#1235). The Widget occurs only in the patches here, so a guard
