@@ -957,6 +957,10 @@ object and the field. A type of your own that embeds an unstructured object
 (by pointer or by value, also as an item of a typed List) is not replaced by a
 copy: it is refused, naming its Go type, when its map holds such a value, so
 hold the object as a plain `*unstructured.Unstructured` to have it converted.
+This holds for every integration entry point: all a caller passes is normalized
+and charged to the call's budget at entry, also a value that entry point never
+reads, so an object holding a byte slice of more than 4 million bytes is refused
+even where no path reads the slice (go-kure/kure#1201).
 A type that embeds two such objects at the same depth, or that has a
 `DeepCopyObject` of its own (or one in a type it embeds), is refused too.
 A typed object whose method panics, and a typed nil
