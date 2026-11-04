@@ -86,8 +86,9 @@ type buildGuard struct {
 	kindVisits int // mappings loadedKinds walked: a count the tests pin
 	kindItems  int // List items loadedKinds stepped over: a count the tests pin
 	kindKeys   int // keys loadedKinds read of the mappings it walked: a count the tests pin
-	// kindAbsorbs counts the fields loadedKinds took from a merged mapping or
-	// from the sum of a merge key's mappings: a count the tests pin.
+	// kindAbsorbs counts the edges of the merge graph loadedKinds followed: a
+	// merge key to the mapping or sequence it names, and a sequence to each
+	// mapping it holds, once each for the call: a count the tests pin.
 	kindAbsorbs int
 	// kindScans counts the nodes loadedKinds read below the List depth cap to
 	// tell an object from data: a count the tests pin.
