@@ -996,11 +996,8 @@ may come through a merge chain more than one level deep; a List with such a
 chain and no items found; a List nested more than eight deep that holds an
 object (a mapping with a `metadata` key, of its own or through merge keys); or
 an object, or a mapping beside such a chain, with an `apiVersion` or `kind` of
-more than 1024 bytes. A mapping with no `metadata` key, in no List that has
-one, is data and not an object: it is not refused for being nested deep or for
-an over-long `apiVersion` or `kind`, but a List with a deep merge chain and no
-items found, and an over-long value beside such a chain, are refused whether or
-not any `metadata` shows. The package README states the full contract.
+more than 1024 bytes. The package README states the full contract, including
+what is not refused.
 One
 without `wait` that health-checks any other object waits for the Kustomization
 that applies it, whatever its expression says, when that writer is certain,
