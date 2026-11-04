@@ -681,6 +681,42 @@ func TestBuildGuard_LoadedKindsScansBelowTheCapOnce(t *testing.T) {
 	}
 }
 
+// TestBuildGuard_LoadedKindsRefusesAListWhoseItemsMayBeDeep: the items of a
+// List are read through one merge hop. A List with a merge chain deeper than
+// that and no items found may hold them behind it, where metadata cannot be
+// seen either, so it is refused; a List whose items are found is not, and
+// neither is data that is no List (go-kure/kure#1239).
+func TestBuildGuard_LoadedKindsRefusesAListWhoseItemsMayBeDeep(t *testing.T) {
+	const deep = "a: &a {items: [{apiVersion: v1, kind: ConfigMap, metadata: {name: x}}]}\nb: &b {<<: *a}\n"
+	for _, tc := range []struct {
+		name, file string
+		refused    bool
+		want       []kindKey
+	}{
+		{"items behind two merge hops", deep + "apiVersion: v1\nkind: List\n<<: *b\n", true, nil},
+		{"items behind two merge hops below the List depth cap",
+			listWith(deep, listsAround(maxListDepth+1, "{apiVersion: v1, kind: List, <<: *b}")), true, nil},
+		{"items behind two merge hops at the List depth cap",
+			listWith(deep, listsAround(maxListDepth, "{apiVersion: v1, kind: List, <<: *b}")), true, nil},
+		{"items found directly beside a deep merge chain",
+			deep + "apiVersion: v1\nkind: List\nitems: [{apiVersion: v1, kind: Leaf}]\n<<: *b\n", false, []kindKey{{"v1", "Leaf"}, {"v1", "List"}}},
+		{"items behind one merge hop",
+			"m: &m {items: [{apiVersion: v1, kind: Leaf}]}\napiVersion: v1\nkind: List\n<<: *m\n", false, []kindKey{{"v1", "Leaf"}, {"v1", "List"}}},
+		{"a deep merge chain on data that is no List", deep + "apiVersion: v1\nkind: Leaf\n<<: *b\n", false, []kindKey{{"v1", "Leaf"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newBuildGuard(nil, "")
+			why := g.loadedKinds([]byte(tc.file))
+			if (why != "") != tc.refused {
+				t.Fatalf("refusal %q, want refused %v", why, tc.refused)
+			}
+			if !tc.refused && !slices.Equal(g.kinds, tc.want) {
+				t.Errorf("kinds %v, want %v", g.kinds, tc.want)
+			}
+		})
+	}
+}
+
 // TestBuildGuard_LoadedKindsScansAMergeChainOnce: n mappings below the depth
 // cap that name one sequence of m mappings, each with a merge key of its own,
 // walk the sequence once, not n times, and a chain that leads back to itself
@@ -731,6 +767,12 @@ func TestBuildGuard_LoadedKindsRefusesAnOverLongKindOnAnObject(t *testing.T) {
 		{"a long apiVersion with no kind on an object", "apiVersion: " + long + "\nmetadata: {name: x}\n", true, nil},
 		{"a long kind on no object", "apiVersion: v1\nkind: " + long + "\n", false, nil},
 		{"a long kind on an item of a List that is no object", "apiVersion: v1\nkind: List\nitems:\n  - {apiVersion: v1, kind: " + long + "}\n", false, []kindKey{{"v1", "List"}}},
+		{"a long kind beside a merge chain two hops deep", "a: &a {metadata: {name: x}}\nb: &b {<<: *a}\napiVersion: v1\nkind: " + long + "\n<<: *b\n", true, nil},
+		{"a normal kind beside a merge chain two hops deep is recorded", "a: &a {metadata: {name: x}}\nb: &b {<<: *a}\napiVersion: v1\nkind: Foo\n<<: *b\n", false, []kindKey{{"v1", "Foo"}}},
+		{"a long apiVersion beside a merge chain two hops deep, on a List at the depth cap",
+			listWith("a: &a {metadata: {name: x}}\nb: &b {<<: *a}\n", listsAround(maxListDepth, "{apiVersion: "+long+", kind: List, <<: *b, items: []}")), true, nil},
+		{"a normal apiVersion beside a merge chain two hops deep, on a List at the depth cap",
+			listWith("a: &a {metadata: {name: x}}\nb: &b {<<: *a}\n", listsAround(maxListDepth, "{apiVersion: v1, kind: List, <<: *b, items: []}")), false, []kindKey{{"v1", "List"}}},
 		{"the longest kind on an object is recorded", "apiVersion: v1\nkind: " + exact + "\nmetadata: {name: x}\n", false, []kindKey{{"v1", exact}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

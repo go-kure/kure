@@ -47,8 +47,10 @@ const (
 // than maxListDepth deep, is not read, but only when it looks like an object
 // (it has a metadata key, or sits in a List that has one, or holds below the
 // depth cap an item that has one), so a data file with a deep merge chain or
-// deep Lists still builds. An apiVersion or kind over maxKindBytes on an
-// object is not read either, and a data file with one is skipped.
+// deep Lists still builds. A List with a merge chain deeper than one hop and no
+// items found is refused as well, since its items may lie behind the chain. An
+// apiVersion or kind over maxKindBytes on an object, or on a mapping with such a
+// chain, is not read either, and a data file with one is skipped.
 // The false refusal left is a List that deep, or an object with a merge chain
 // that deep, in a file that is no resource.
 func (g *buildGuard) loadedKinds(b []byte) string {
@@ -217,6 +219,9 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWal
 	if m.deepMerge && (object || m.hasMetadata) {
 		return "which holds an object whose apiVersion or kind may come through merge keys more than one level deep, which kure does not follow to check the scope of its kind"
 	}
+	if m.deepMerge && m.items == nil && strings.HasSuffix(m.kind, "List") {
+		return "which holds a List whose items may come through merge keys more than one level deep, which kure does not follow to check the scope of their kinds"
+	}
 	object = object || m.hasMetadata
 	if strings.HasSuffix(m.kind, "List") && m.items != nil {
 		if items := resolve(m.items); items != nil && items.Kind == kyaml.SequenceNode {
@@ -224,7 +229,7 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWal
 				if object || g.holdsObject(items, w) {
 					return "which holds Lists nested deeper than kure follows to check the scope of their kinds"
 				}
-				return ""
+				return g.note(m.apiVersion, m.kind, m.deepMerge)
 			}
 			// The Lists that hold one sequence step over it once.
 			if step := (kindVisit{items, depth, object}); !w.seen[step] {
@@ -238,7 +243,9 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWal
 			}
 		}
 	}
-	return g.note(m.apiVersion, m.kind, object)
+	// Beside a deeper merge chain a mapping may be an object (its metadata may
+	// lie behind the chain), so an over-long value there is refused too.
+	return g.note(m.apiVersion, m.kind, object || m.deepMerge)
 }
 
 // holdsObject says whether a node of the sequence or mapping n, or an item of
@@ -277,6 +284,9 @@ func (g *buildGuard) holdsObject(n *kyaml.Node, w *kindWalk) bool {
 			deeper = deeper || c.deeper
 		}
 		if m.hasMetadata {
+			return true
+		}
+		if deeper && m.items == nil && strings.HasSuffix(m.kind, "List") {
 			return true
 		}
 		if deeper {
