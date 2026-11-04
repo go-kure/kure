@@ -35,6 +35,11 @@ func SetMaxJSONNodesForTest(n int) (restore func()) {
 	return func() { maxJSONNodes = orig }
 }
 
+// PromotedFromTrusted exposes promotedFromTrusted to the external tests: the
+// types it tells apart must be of a package that is not trusted, and a type of
+// the internal tests' package is trusted by its path.
+var PromotedFromTrusted = promotedFromTrusted
+
 // SetBuildInfo makes the binary report info as its build information until
 // the returned function restores the real one.
 func SetBuildInfo(info *debug.BuildInfo) (restore func()) {
