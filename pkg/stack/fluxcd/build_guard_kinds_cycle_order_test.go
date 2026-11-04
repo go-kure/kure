@@ -204,6 +204,27 @@ func TestBuildGuard_LoadedKindsMergeCycleOverLongKindsEndingInList(t *testing.T)
 	}
 }
 
+// TestBuildGuard_LoadedKindsMergeCycleSequenceLacksEachField: a sequence of
+// merge values in a cycle lacks apiVersion, kind and items each by itself, so
+// the two mappings on either side of it, which set all three, make the cycle
+// ambiguous when they differ in any one of them.
+func TestBuildGuard_LoadedKindsMergeCycleSequenceLacksEachField(t *testing.T) {
+	const prefix = "it: &it [{apiVersion: v1, kind: Leaf}]\nit2: &it2 [{apiVersion: v1, kind: Other}]\n"
+	for _, tc := range []struct{ name, a, b string }{
+		{"apiVersion", "{apiVersion: v1, kind: K, items: *it", "{apiVersion: v2, kind: K, items: *it"},
+		{"kind", "{apiVersion: v1, kind: K1, items: *it", "{apiVersion: v1, kind: K2, items: *it"},
+		{"items", "{apiVersion: v1, kind: K, items: *it", "{apiVersion: v1, kind: K, items: *it2"},
+	} {
+		file := prefix + "a: &a " + tc.a + ", inner: &b " + tc.b + ", <<: *a}, <<: &s [*b]}\n"
+		for _, entry := range []string{"a", "b", "s"} {
+			g := newBuildGuard(nil, "")
+			if why := g.loadedKinds([]byte(file + "<<: *" + entry + "\n")); !strings.Contains(why, "ambiguous") {
+				t.Errorf("%s, entered by %s: refusal %q, want the ambiguity", tc.name, entry, why)
+			}
+		}
+	}
+}
+
 // TestBuildGuard_LoadedKindsAmbiguousCycleBelowTheDepthCap: a mapping below the
 // Lists kure walks that reaches an ambiguous cycle is refused, though it has no
 // metadata key and no List above it has one.
