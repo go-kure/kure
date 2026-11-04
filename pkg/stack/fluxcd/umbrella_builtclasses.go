@@ -237,10 +237,6 @@ func (s *depSnapshot) every(owner, target string, c int) bool {
 type rewriteFacts struct {
 	// terminals holds the terminal leaves of every umbrella of the tree.
 	terminals map[string][]string
-	// wrote holds, per member the pass rewrote, the class of the entry the
-	// final dependsOn holds on each terminal leaf the rewrite names: plain,
-	// unless an earlier entry of the caller on that leaf was kept in its place.
-	wrote map[string]map[string]int
 	// held holds, per member of the tree, the classes of every dependsOn entry
 	// it held before the rewrite, on each dependency: what the fallback
 	// (checkWrittenEntries) asks the built tree to keep.
@@ -407,15 +403,8 @@ func (t *kustomizationTree) checkObligations(p, q *viewSnapshot, f rewriteFacts)
 				return refuseRewrite("Flux Kustomization %q depends on %q, which applies Flux Kustomizations, before the rewrite and on neither it nor its terminal leaves %q after it: a patch landing on the rewritten dependsOn drops it", x, target, terms)
 			}
 			for _, term := range terms {
-				n := need
-				// A caller's earlier entry on the leaf was kept in the place of
-				// a plain one (the pass's own deduplication): that weaker entry
-				// is what it wrote, and is not made weaker here.
-				if w, ok := f.wrote[x][term]; ok && w < n {
-					n = w
-				}
-				if !q.classes[x][term].holds(n) {
-					return refuseRewrite("Flux Kustomization %q depends on %q, which applies Flux Kustomizations, before the rewrite and does not wait for its terminal leaf %q after it (class %d required, %s held): a patch landing on the rewritten dependsOn drops it, and %q would become Ready before %q", x, target, term, n, describeClasses(q.classes[x][term]), x, term)
+				if !q.classes[x][term].holds(need) {
+					return refuseRewrite("Flux Kustomization %q depends on %q, which applies Flux Kustomizations, before the rewrite and does not wait for its terminal leaf %q after it (class %d required, %s held): a patch landing on the rewritten dependsOn drops it, and %q would become Ready before %q", x, target, term, need, describeClasses(q.classes[x][term]), x, term)
 				}
 			}
 		}

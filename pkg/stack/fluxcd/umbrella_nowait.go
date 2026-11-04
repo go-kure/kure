@@ -193,16 +193,12 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 	// rewritten lists every dependsOn edge R3 writes onto a terminal leaf, so
 	// that the graph after the rewrite can be checked for a cycle it closes.
 	var rewritten []rewrittenDep
-	// wrote records, per member, the class of the entry its final dependsOn
-	// holds on each terminal leaf the rewrite names (checkRewriteResult).
-	wrote := map[string]map[string]int{}
 	heldDeps := map[string]map[string]classSet{}
 	for _, k := range t.kusts {
 		key := crKey(k.Namespace, k.Name)
 		created := p.created[key]
 		var deps []kustv1.DependencyReference
 		seen := map[string]bool{}
-		held := map[string]int{}
 		for _, d := range k.Spec.DependsOn {
 			ns := d.Namespace
 			if ns == "" {
@@ -221,7 +217,6 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 				if !seen[target] {
 					seen[target] = true
 					deps = append(deps, d)
-					held[target] = classOf(depRef{exist: exist, plain: d.ReadyExpr == ""})
 				}
 				continue
 			}
@@ -235,15 +230,16 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 				// Checked also when an earlier entry already names the
 				// leaf: that entry was the caller's, judged by no check.
 				rewritten = append(rewritten, rewrittenDep{from: key, umbrella: target, to: term})
+				// The entry written is plain, and where the caller's entry on
+				// the umbrella waited for Ready or an expression the result
+				// check demands a plain one on every leaf. If a generator ever
+				// writes a readyExpr on an entry here, write the plain entry
+				// beside it: kustomize-controller evaluates each entry on its
+				// own, so both together mean Ready and the expression.
 				if !seen[term] {
 					seen[term] = true
 					deps = append(deps, dependencyOn(k.Namespace, term))
-					held[term] = classPlain
 				}
-				if wrote[key] == nil {
-					wrote[key] = map[string]int{}
-				}
-				wrote[key][term] = held[term]
 			}
 		}
 		if created == nil {
@@ -286,7 +282,7 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 			return err
 		}
 	}
-	return t.checkRewriteResult(pre, views, rewriteFacts{terminals: terminals, wrote: wrote, held: heldDeps})
+	return t.checkRewriteResult(pre, views, rewriteFacts{terminals: terminals, held: heldDeps})
 }
 
 // preSnapshot returns the snapshot of the build of the tree t indexes as it
