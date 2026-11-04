@@ -19,7 +19,8 @@ const (
 
 	// maxKindBytes is the longest apiVersion or kind loadedKinds records. A
 	// longer one names no kind (a Kubernetes group is at most 253 bytes), and
-	// every kind recorded is hashed and asked about.
+	// every kind recorded is hashed and asked about. One met on an object is
+	// refused, and on any other mapping skipped.
 	maxKindBytes = 1024
 )
 
@@ -46,7 +47,8 @@ const (
 // than maxListDepth deep, is not read, but only when it looks like an object
 // (it has a metadata key, or sits in a List that has one, or holds below the
 // depth cap an item that has one), so a data file with a deep merge chain or
-// deep Lists still builds.
+// deep Lists still builds. An apiVersion or kind over maxKindBytes on an
+// object is not read either, and a data file with one is skipped.
 // The false refusal left is a List that deep, or an object with a merge chain
 // that deep, in a file that is no resource.
 func (g *buildGuard) loadedKinds(b []byte) string {
@@ -236,8 +238,7 @@ func (g *buildGuard) noteKinds(n *kyaml.Node, depth int, object bool, w *kindWal
 			}
 		}
 	}
-	g.note(m.apiVersion, m.kind)
-	return ""
+	return g.note(m.apiVersion, m.kind, object)
 }
 
 // holdsObject says whether a node of the sequence or mapping n, or an item of
@@ -332,15 +333,24 @@ func (g *buildGuard) readKeys(m *objectMeta, n *kyaml.Node, merges *[]*kyaml.Nod
 	m.read(n, merges)
 }
 
-// note records the kind once, in the order met.
-func (g *buildGuard) note(apiVersion, kind string) {
-	if apiVersion == "" || kind == "" || len(apiVersion) > maxKindBytes || len(kind) > maxKindBytes {
-		return
+// note records the kind once, in the order met. An apiVersion or kind longer
+// than maxKindBytes names no kind and is not recorded, but on an object it is a
+// refusal: kustomize reads the object and kure cannot ask about its kind.
+func (g *buildGuard) note(apiVersion, kind string, object bool) string {
+	if len(apiVersion) > maxKindBytes || len(kind) > maxKindBytes {
+		if object {
+			return "which holds an object whose apiVersion or kind is longer than kure records to check the scope of its kind"
+		}
+		return ""
+	}
+	if apiVersion == "" || kind == "" {
+		return ""
 	}
 	if key := (kindKey{apiVersion, kind}); !g.kindSeen[key] {
 		g.kindSeen[key] = true
 		g.kinds = append(g.kinds, key)
 	}
+	return ""
 }
 
 // objectMeta is what loadedKinds reads of a mapping: the first value found of
