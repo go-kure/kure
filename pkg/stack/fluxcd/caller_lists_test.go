@@ -99,15 +99,15 @@ func TestWalkHeld_ScalarItemsThatAreObjectsAreCountedAgainstTheBound(t *testing.
 	defer SetMaxJSONNodesForTest(1 << 12)()
 	meta := metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}
 	over := &scalarItems{TypeMeta: meta, Items: make([]scalarObject, 1<<13)}
-	if _, err := walkHeld(over, &convBudget{}); err == nil || !strings.Contains(err.Error(), "more than") {
+	if _, _, err := walkHeld(over, &convBudget{}); err == nil || !strings.Contains(err.Error(), "more than") {
 		t.Errorf("got %v, want a refusal with the value limit", err)
 	}
 	under := &scalarItems{TypeMeta: meta, Items: make([]scalarObject, 1<<10)}
-	if _, err := walkHeld(under, &convBudget{}); err != nil {
+	if _, _, err := walkHeld(under, &convBudget{}); err != nil {
 		t.Errorf("a slice under the bound: got %v, want it accepted", err)
 	}
 	plain := &plainScalarItems{TypeMeta: meta, Items: make([]int8, 1<<13)}
-	if _, err := walkHeld(plain, &convBudget{}); err != nil {
+	if _, _, err := walkHeld(plain, &convBudget{}); err != nil {
 		t.Errorf("an ordinary scalar slice: got %v, want it skipped", err)
 	}
 }
