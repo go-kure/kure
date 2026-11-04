@@ -10,6 +10,7 @@ import (
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	listenerv3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	"google.golang.org/protobuf/types/known/anypb"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -76,7 +77,9 @@ func TestCallerObjects_EnvoyConfigsAreNotRefused(t *testing.T) {
 }
 
 // An XDSResource with no Any, and one whose Any names a type nobody
-// registered, must give an error or a refusal and never a panic.
+// registered, is no trust refusal and never a panic: the type is trusted, so no
+// entry point refuses it for marshalling itself, and what an entry point does
+// answer is an error of the protobuf or of the layout.
 func TestCallerObjects_EnvoyResourceWithoutOrUnresolvableAny(t *testing.T) {
 	cases := map[string]ciliumv2.XDSResource{
 		"nil Any":              {},
@@ -89,8 +92,11 @@ func TestCallerObjects_EnvoyResourceWithoutOrUnresolvableAny(t *testing.T) {
 					t.Fatalf("panicked: %v", r)
 				}
 			}()
-			// Every answer is an error; reaching here without a panic is the point.
-			_ = runHostile(func() client.Object { return envoyConfig(false, res) }, false)
+			for _, a := range refusals(func() client.Object { return envoyConfig(false, res) }) {
+				if strings.Contains(a, "marshals itself") || strings.Contains(a, "trusted package") {
+					t.Errorf("refused for its marshaler, though the type is trusted: %s", a)
+				}
+			}
 			var obj client.Object = envoyConfig(false, res)
 			_, err := kureio.EncodeObjectsToYAML([]*client.Object{&obj})
 			if name == "unresolvable TypeUrl" && err == nil {
@@ -203,29 +209,47 @@ func rawSelfListOf(raw []byte) client.Object {
 	return l
 }
 
-// A RawExtension with raw JSON is written from the JSON, and its Object is
-// never looked at, so an Object that is the List itself is no cycle: every
-// entry point, in every placement, runs to its end and the List is written.
-func TestCallerObjects_RawExtensionWithRawJSONIgnoresItsObject(t *testing.T) {
-	if answers := refusals(func() client.Object { return rawSelfListOf([]byte(rawConfigMapJSON)) }); len(answers) > 0 {
-		t.Errorf("an entry point refused a RawExtension whose raw JSON is set:\n%s", strings.Join(answers, "\n"))
-	}
-	obj := rawSelfListOf([]byte(rawConfigMapJSON))
-	data, err := kureio.EncodeObjectsToYAML([]*client.Object{&obj})
-	if err != nil {
-		t.Fatalf("writing the List: %v", err)
-	}
-	if !strings.Contains(string(data), "name: raw") {
-		t.Errorf("the List is not written from the raw JSON:\n%s", data)
+// A RawExtension whose Object is the List that holds it is refused whatever Raw
+// holds. Writing the List uses Raw and not Object, but a copy of the List (the
+// generated DeepCopyInto of RawExtension) follows Object whatever Raw holds,
+// and a stack overflow cannot be recovered.
+func TestCallerObjects_RawExtensionHoldingItsListIsRefusedWhateverRawHolds(t *testing.T) {
+	for name, raw := range map[string][]byte{"raw JSON set": []byte(rawConfigMapJSON), "no raw JSON": nil} {
+		t.Run(name, func(t *testing.T) {
+			answers := refusals(func() client.Object { return rawSelfListOf(raw) })
+			if len(answers) == 0 {
+				t.Fatal("no entry point refused a List that holds itself through a RawExtension")
+			}
+			for _, a := range answers {
+				if !strings.Contains(a, "holds itself") {
+					t.Errorf("refused for another reason: %s", a)
+				}
+			}
+		})
 	}
 }
 
-// Without raw JSON the Object is what is written, so an Object that is the List
-// itself has no end and stays refused.
-func TestCallerObjects_RawExtensionWithoutRawJSONHoldingItsListIsRefused(t *testing.T) {
-	answers := refusals(func() client.Object { return rawSelfListOf(nil) })
+// A ControllerRevision of the name and kind of a Flux Source holds, in its
+// Data, a List whose RawExtension points back at the List, with Raw JSON set
+// on Data. The integration compares a typed object of a derived Source's
+// identity with the Source by copying it (DeepCopyObject follows
+// RawExtension.Object whatever Raw holds), so a pass here would end in an
+// unrecoverable stack overflow: every entry point refuses the revision, and
+// the test runs to its end.
+func TestCallerObjects_ControllerRevisionWhoseDataHoldsAListThatHoldsItselfIsRefused(t *testing.T) {
+	r := func() client.Object {
+		list := &metav1.List{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "List"}}
+		list.Items = []runtime.RawExtension{{Object: list}}
+		cr := &appsv1.ControllerRevision{
+			TypeMeta:   metav1.TypeMeta{APIVersion: "source.toolkit.fluxcd.io/v1", Kind: "OCIRepository"},
+			ObjectMeta: metav1.ObjectMeta{Name: "app", Namespace: "default"},
+			Data:       runtime.RawExtension{Raw: []byte("{}"), Object: list},
+		}
+		return cr
+	}
+	answers := refusals(r)
 	if len(answers) == 0 {
-		t.Fatal("no entry point refused a List that holds itself through a RawExtension")
+		t.Fatal("no entry point refused a ControllerRevision whose Data holds a List that holds itself")
 	}
 	for _, a := range answers {
 		if !strings.Contains(a, "holds itself") {
