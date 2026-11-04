@@ -669,7 +669,8 @@ type openKey struct {
 	len int
 }
 
-// convBudget counts the values the converter visits in one call of
+// convBudget counts the values, and the bytes of byte slices, the converter
+// visits in one call of
 // normalizeCallerObjects, for every object it converts or checks (jsonContentOf
 // and reachable). The converter expands a shared map once per occurrence, so
 // the work is the size of the expansion, not of what the caller allocated, and
@@ -818,6 +819,12 @@ func (c *converter) convertSlice(v reflect.Value, path string, depth int) (any, 
 		if c.reach {
 			return nil, nil
 		}
+		// The text is made once for each occurrence of the slice, so its bytes
+		// count against the call's budget as values do.
+		if v.Len() > maxJSONNodes-c.budget.used {
+			return nil, errors.Errorf("%s holds more than %d bytes", where(path), maxJSONNodes)
+		}
+		c.budget.used += v.Len()
 		return base64.StdEncoding.EncodeToString(v.Bytes()), nil
 	}
 	// The count is checked before the allocation: a slice of a type that needs no
