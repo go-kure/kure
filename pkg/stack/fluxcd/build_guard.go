@@ -86,6 +86,9 @@ type buildGuard struct {
 	kindVisits int // mappings loadedKinds walked: a count the tests pin
 	kindItems  int // List items loadedKinds stepped over: a count the tests pin
 	kindKeys   int // keys loadedKinds read of the mappings it walked: a count the tests pin
+	// kindAbsorbs counts the fields loadedKinds took from a merged mapping or
+	// from the sum of a merge key's mappings: a count the tests pin.
+	kindAbsorbs int
 	// decrypting is set when the Kustomization sets spec.decryption
 	// (decrypts): Flux decrypts the files and the objects of its build.
 	decrypting bool

@@ -478,6 +478,90 @@ func TestBuildGuard_LoadedKindsReadsAMergeSourceOnce(t *testing.T) {
 	}
 }
 
+// TestBuildGuard_LoadedKindsAbsorbsAMergeSequenceOnce: what the sources of one
+// merge value give together is worked out once for the call, so n mappings
+// that merge a sequence of m sources cost m plus n absorbs and not n times m
+// (go-kure/kure#1239: a file of 516 KB took 8.9 s under the build lock). The
+// kinds recorded are the ones a read of the sources for every mapping gives,
+// which the cases that follow pin beside the count.
+func TestBuildGuard_LoadedKindsAbsorbsAMergeSequenceOnce(t *testing.T) {
+	// sequence is a List of n mappings that each merge one anchored sequence of
+	// m+1 references to one source.
+	sequence := func(n, m int) string {
+		var b strings.Builder
+		b.WriteString("c: &c {apiVersion: g/v1, kind: K}\nq: &q [")
+		for range m {
+			b.WriteString("*c, ")
+		}
+		b.WriteString("*c]\napiVersion: v1\nkind: List\nitems:\n")
+		for i := range n {
+			fmt.Fprintf(&b, "  - {<<: *q, a: %d}\n", i)
+		}
+		return b.String()
+	}
+	wantKinds := []kindKey{{"g/v1", "K"}, {"v1", "List"}}
+	for _, tc := range []struct{ n, m int }{{5, 5}, {2000, 2000}} {
+		t.Run(fmt.Sprintf("n=%d m=%d", tc.n, tc.m), func(t *testing.T) {
+			g := newBuildGuard(nil, "")
+			if why := g.loadedKinds([]byte(sequence(tc.n, tc.m))); why != "" {
+				t.Fatalf("refused: %s", why)
+			}
+			if want := (tc.m + 1) + tc.n; g.kindAbsorbs != want {
+				t.Errorf("absorbed %d times, want %d", g.kindAbsorbs, want)
+			}
+			if !slices.Equal(g.kinds, wantKinds) {
+				t.Errorf("kinds %v, want %v", g.kinds, wantKinds)
+			}
+		})
+	}
+	// Two merge values, each shared by half of the mappings: the sources of
+	// each are worked out once, and every mapping takes one aggregate.
+	t.Run("two shared merge values", func(t *testing.T) {
+		const n = 50
+		var b strings.Builder
+		b.WriteString("c: &c {apiVersion: g/v1, kind: K}\nd: &d {apiVersion: h/v1, kind: Late, metadata: {name: m}}\n" +
+			"q: &q [*c, *c, *c]\nr: &r [*d, *d]\napiVersion: v1\nkind: List\nitems:\n")
+		for i := range n {
+			merge := "*q"
+			if i%2 == 1 {
+				merge = "*r"
+			}
+			fmt.Fprintf(&b, "  - {<<: %s, a: %d}\n", merge, i)
+		}
+		g := newBuildGuard(nil, "")
+		if why := g.loadedKinds([]byte(b.String())); why != "" {
+			t.Fatalf("refused: %s", why)
+		}
+		if want := 3 + 2 + n; g.kindAbsorbs != want {
+			t.Errorf("absorbed %d times, want %d", g.kindAbsorbs, want)
+		}
+		if want := []kindKey{{"g/v1", "K"}, {"h/v1", "Late"}, {"v1", "List"}}; !slices.Equal(g.kinds, want) {
+			t.Errorf("kinds %v, want %v", g.kinds, want)
+		}
+	})
+	// The first source that has a key gives it, and a flag any source has
+	// holds: the aggregate of several sources is what absorbing them in order
+	// gives.
+	t.Run("the aggregate is first-wins for fields and any for flags", func(t *testing.T) {
+		const file = "a: &a {kind: First}\nb: &b {kind: Second, apiVersion: x/v1, metadata: {name: m}}\n" +
+			"q: &q [*a, *b]\napiVersion: v1\nkind: List\nitems:\n  - {<<: *q}\n  - {<<: *q}\n"
+		g := newBuildGuard(nil, "")
+		if why := g.loadedKinds([]byte(file)); why != "" {
+			t.Fatalf("refused: %s", why)
+		}
+		if want := []kindKey{{"x/v1", "First"}, {"v1", "List"}}; !slices.Equal(g.kinds, want) {
+			t.Errorf("kinds %v, want %v", g.kinds, want)
+		}
+		// The metadata of the second source makes each item an object, so a
+		// deep merge key refuses it.
+		const deep = "c: &c {kind: Deep}\nb: &b {<<: *c, metadata: {name: m}}\n" +
+			"q: &q [*b]\napiVersion: v1\nkind: List\nitems:\n  - {<<: *q, apiVersion: v1}\n"
+		if why := newBuildGuard(nil, "").loadedKinds([]byte(deep)); why == "" {
+			t.Error("a deep merge in a source with metadata was not refused")
+		}
+	})
+}
+
 // TestBuildGuard_ReadsTheKindsOfInlinePatches: the kinds of the inline patches
 // of a kustomization are asked about too, with no resource file naming them
 // (go-kure/kure#1235). The Widget occurs only in the patches here, so a guard
