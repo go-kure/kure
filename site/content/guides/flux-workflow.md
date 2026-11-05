@@ -973,7 +973,17 @@ map is not changed), also in an unstructured object or List that a typed object 
 field, the `Object` of a `RawExtension` included (such a typed object as an item of a typed List too),
 and refuse a value they cannot convert, such as a struct,
 a pointer, a channel or a type that marshals itself, naming the layout, the
-object and the field. A type of your own that embeds an unstructured object
+object and the field. A typed object whose field has the `omitzero` tag and a
+type of your own with an `IsZero` method is refused as well, since
+`encoding/json` would call that method. An embedded struct with no name in its
+tag is not refused for this, since `encoding/json` flattens it and calls no
+`IsZero` there. A nil pointer, and an interface that holds one, are not judged,
+since `encoding/json` calls no `IsZero` on them. A field tagged `json:"-"` is
+judged like any other, with what it holds: `encoding/json` does not write it,
+but a marshaler or kure's own code can. The check does not
+copy every rule of `encoding/json` for picking fields. A field that shares its
+JSON name with a shallower field, and an embedded struct under an invalid tag
+name, are still refused, which is the safe side. A type of your own that embeds an unstructured object
 (by pointer or by value, also as an item of a typed List) is not replaced by a
 copy: it is refused, naming its Go type, when its map holds such a value, so
 hold the object as a plain `*unstructured.Unstructured` to have it converted.

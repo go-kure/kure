@@ -525,10 +525,12 @@ type heldWalk struct {
 	nodes   int
 	open    map[heldKey]bool
 	checked map[reflect.Type]bool
-	bad     *unstructured.Unstructured
-	found   []*unstructured.Unstructured
-	lists   []*unstructured.UnstructuredList
-	refusal *heldRefusal
+	// zeroChecked holds the types whose IsZero method is trusted (checkZero).
+	zeroChecked map[reflect.Type]bool
+	bad         *unstructured.Unstructured
+	found       []*unstructured.Unstructured
+	lists       []*unstructured.UnstructuredList
+	refusal     *heldRefusal
 
 	// budget is the call's: reachable charges the unstructured objects this walk
 	// finds to it. nodes counts the typed values of this one resource.
@@ -680,13 +682,19 @@ var (
 	trustedPackagePrefixes = []string{"k8s.io/", "sigs.k8s.io/", "github.com/fluxcd/", "github.com/go-kure/"}
 
 	// trustedTypes are single types of a package that is not trusted, whose
-	// marshaler was read. XDSResource (a Cilium Envoy config's resource) writes
-	// its embedded protobuf Any with protojson and nothing else of the Envoy
-	// config's. protojson resolves the Any's type URL in the global protobuf
-	// registry, so a message type a caller registered there is still run, as it
-	// is for the same config on main. Add a type here only after reading its
-	// marshaler; a whole package is never trusted for one type.
-	trustedTypes = []string{"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2.XDSResource"}
+	// marshaler or IsZero method was read. XDSResource (a Cilium Envoy config's
+	// resource) writes its embedded protobuf Any with protojson and nothing else
+	// of the Envoy config's. protojson resolves the Any's type URL in the global
+	// protobuf registry, so a message type a caller registered there is still
+	// run, as it is for the same config on main. EndpointSelector (a Cilium
+	// policy's selector, which kure's own CiliumNetworkPolicy builders emit) has
+	// an IsZero that only tests one field for nil: `n.LabelSelector == nil`
+	// (cilium v1.20.4, pkg/policy/api/selector.go). Add a type here only after
+	// reading its method; a whole package is never trusted for one type.
+	trustedTypes = []string{
+		"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2.XDSResource",
+		"github.com/cilium/cilium/pkg/policy/api.EndpointSelector",
+	}
 
 	// trustedStdPackages are the standard library packages that define a
 	// marshaler. A path with no dot is not enough: package main and a caller's
@@ -860,11 +868,97 @@ func (w *heldWalk) walkStruct(v reflect.Value, at *trail, depth int) error {
 		if !f.IsExported() && !f.Anonymous {
 			continue
 		}
-		if err := w.walk(v.Field(i), at.then("."+f.Name), depth+1); err != nil {
+		fat := at.then("." + f.Name)
+		if err := w.checkZero(f, v.Field(i), fat); err != nil {
+			return err
+		}
+		// A field tagged json:"-" is judged like any other. The default encoder
+		// would not write it, but a marshaler may (RawExtension writes its Object),
+		// and so may kure's own code (a List compares the items it writes with
+		// Items). Standing down there is where two holes were found.
+		if err := w.walk(v.Field(i), fat, depth+1); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+var isZeroerType = reflect.TypeFor[interface{ IsZero() bool }]()
+
+// checkZero refuses the field f, of value fv, when marshalling would call the
+// IsZero method of a type that is not trusted: encoding/json calls it for a
+// field tagged omitzero, as it calls a marshaler. A caller's method may not end
+// (it may format a map that holds itself), and that is a stack overflow, which
+// nothing recovers. So the method is not called: the object is refused.
+//
+// The judged type is the one whose method runs: the field's type, or for a
+// field of an interface type that declares IsZero, the type of the value the
+// interface holds (a nil interface is not called). The judgment depends on that
+// type alone, so each is judged once and the work stays linear in the types
+// reached. A type that only promotes IsZero from an embedded type is judged by
+// its own package, so it is refused unless it is trusted itself.
+func (w *heldWalk) checkZero(f reflect.StructField, fv reflect.Value, at *trail) error {
+	tag := f.Tag.Get("json")
+	if !omitzeroTag(tag) {
+		return nil
+	}
+	t := f.Type
+	if f.Anonymous {
+		// encoding/json: "Anonymous struct fields are usually marshaled as if their
+		// inner exported fields were fields in the outer struct", so an embedded
+		// struct, or pointer to one, with no name in its tag is flattened, and its
+		// own IsZero is not called (an unexported one too, for it may have exported
+		// fields). "An anonymous struct field with a name given in its JSON tag is
+		// treated as having that name, rather than being anonymous", and "anonymous
+		// struct fields of interface type are treated the same as having that type
+		// as the name": both are fields, so they are judged. An unexported embedded
+		// field that is not a struct is ignored.
+		et := t
+		if et.Kind() == reflect.Pointer {
+			et = et.Elem()
+		}
+		name, _, _ := strings.Cut(tag, ",")
+		if (!f.IsExported() && et.Kind() != reflect.Struct) || (name == "" && et.Kind() == reflect.Struct) {
+			return nil
+		}
+	} else if !f.IsExported() {
+		// encoding/json writes no unexported field that is not embedded.
+		return nil
+	}
+	// encoding/json does not call IsZero on a nil pointer, nor on an interface
+	// that is nil or holds a nil pointer: the field is zero without it.
+	switch {
+	case t.Kind() == reflect.Interface:
+		if !t.Implements(isZeroerType) || fv.IsNil() || (fv.Elem().Kind() == reflect.Pointer && fv.Elem().IsNil()) {
+			return nil
+		}
+		t = fv.Elem().Type()
+	case t.Kind() == reflect.Pointer && fv.IsNil():
+		return nil
+	case !t.Implements(isZeroerType) && !reflect.PointerTo(t).Implements(isZeroerType):
+		return nil
+	}
+	if w.zeroChecked[t] {
+		return nil
+	}
+	if !trustedPackage(t) && !trustedType(t) {
+		return errors.Errorf("%s holds a %s, whose IsZero method is called for its omitzero tag and is not from a trusted package", whereTyped(at), t)
+	}
+	if w.zeroChecked == nil {
+		w.zeroChecked = map[reflect.Type]bool{}
+	}
+	w.zeroChecked[t] = true
+	return nil
+}
+
+// omitzeroTag reports whether the json tag of a field makes encoding/json call
+// its IsZero: a tag of "-" leaves the field out, and the options follow the name.
+func omitzeroTag(tag string) bool {
+	if tag == "-" {
+		return false
+	}
+	_, opts, _ := strings.Cut(tag, ",")
+	return slices.Contains(strings.Split(opts, ","), "omitzero")
 }
 
 func whereTyped(at *trail) string {
