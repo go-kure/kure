@@ -175,7 +175,7 @@ infrastructure:
       A v1beta1 BGPPeer is still parsed.
   prometheus-operator:
     go_module: "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring"
-    supported_range: "0.75 - 0.94"
+    supported_range: "0.75 - 0.95"
     notes: |
       Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
       Only the /pkg/apis/monitoring submodule is imported — not the full operator.
@@ -194,6 +194,7 @@ infrastructure:
       thanos_types.go has no removed lines, and types.go removes only six malformed struct
       tags on TracingConfig, where omitempty sat outside the json tag string and is now
       inside it. kure does not reference TracingConfig. Nothing removed, nothing retyped.
+      v0.95 (from v0.94.2) changes no API type kure imports in a way kure uses. ServiceMonitorSpec and PodMonitorSpec gain an optional ExtraScrapeMetrics *bool, which kure does not set and has no dedicated helper for (a caller can still assign it on the struct the builders return). PrometheusRule types are unchanged. WebTLSConfig.ClientAuthType is retyped from *string to *ClientAuthType, and the Alertmanager config gains AlertmanagerConfigFileSystemMode and Telegram botToken and botTokenFile fields; kure references none of WebTLSConfig, ClientAuthType or the Alertmanager config types, so only external callers that assign those fields would fail to compile. Wire format (monitoring.coreos.com/v1 JSON) is unchanged for generated ServiceMonitor, PodMonitor and PrometheusRule YAML.
   external-secrets:
     go_module: "github.com/external-secrets/external-secrets/apis"
     upstream_repo: "external-secrets/external-secrets"

@@ -104,7 +104,8 @@ A widening can also change the Go types a caller writes to. kure's builders hand
 structs, and a module that requires kure builds against at least the dependency version kure
 pins, so a release that removes or retypes a field breaks a caller's assignment to it even when
 kure's own code uses none of them (gateway-api v1.7.0 reshapes the experimental-channel
-`SessionPersistence` and retypes `ForwardBodyConfig.MaxSize`). The widening's note in
+`SessionPersistence` and retypes `ForwardBodyConfig.MaxSize`; prometheus-operator v0.95.0
+retypes `WebTLSConfig.ClientAuthType` from `*string` to `*ClientAuthType`). The widening's note in
 `docs/compatibility.md` names such fields.
 
 An MVS-floor entry (`FloorModule != ""`) moves on a different trigger: its pin tracks
