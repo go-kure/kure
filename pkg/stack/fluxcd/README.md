@@ -720,9 +720,11 @@ these trees, though some of them are fine:
 - a patch that removes an entry on a dependency that exists nowhere, since kure cannot prove a
   target absent;
 - a held Kustomization that is no member, with a copy a build makes under its name, whose applied
-  copy differs from it in a field the checks read, or has the fields of a member other than
-  `dependsOn`, `wait` and `healthChecks`, on the fallback path (it is not trusted as a stand-in for
-  the copy: the copy may be a member's, with a wait a patch took from it).
+  copy differs from it in a field the checks read, or is written by a Kustomization that patches,
+  renames or substitutes (`spec.patches`, `spec.components`, `spec.namePrefix`, `spec.nameSuffix`,
+  `spec.targetNamespace` or `spec.postBuild`), on the fallback path (it is not trusted as a
+  stand-in for the copy: the copy may be one a build made from a member, with a wait a patch took
+  from it, and no comparison of fields can tell the two apart).
 
 Not handled: two CEL expressions are never compared, so an entry of class 1 only has to stay of
 class 1.

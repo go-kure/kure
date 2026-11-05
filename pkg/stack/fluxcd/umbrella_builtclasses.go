@@ -352,13 +352,15 @@ func (t *kustomizationTree) checkBuiltUmbrellas(v *builtView, q *viewSnapshot) e
 // fallback is set where the tree could not be built before the rewrite
 // (checkWrittenEntries): no earlier build says which object the copy came from,
 // so a held object with the copy's graphFields may be a clone of the copy that
-// a member's build made, and a patch may have taken a wait from the copy
-// (go-kure/kure#1247). There the held object stands only if the copy is not a
-// copy of a member: it matches no member on the graphFields other than
-// dependsOn, wait and healthChecks. This refuses a tree that holds an
-// application's Kustomization with the spec of a member's copy and cannot be
-// built before the rewrite, both at once, though the held object is what the
-// controller applies; the refusal is the price of not guessing.
+// a build made, and a patch may have taken a wait from the copy
+// (go-kure/kure#1247). There the held object stands only if no build that may
+// have changed what its directory holds writes it: every occurrence of x is
+// written by the Flux bootstrap or by a Kustomization that transforms nothing
+// (transformsBuild) and substitutes nothing (spec.postBuild). A held object
+// whose applied copy a transforming Kustomization writes is refused, though the
+// controller applies the held object; the refusal is the price of not guessing,
+// and a comparison of the two on the graphFields cannot replace it, because a
+// patch may set a graphField that no object of the tree has.
 func (t *kustomizationTree) heldStandsFor(v *builtView, x string, fallback bool) (bool, error) {
 	held := t.otherObjs[x]
 	if held == nil {
@@ -372,36 +374,22 @@ func (t *kustomizationTree) heldStandsFor(v *builtView, x string, fallback bool)
 	if err != nil || len(differ) > 0 || !fallback {
 		return len(differ) == 0, err
 	}
-	copies, err := t.copiesAMember(v, applied)
-	return !copies, err
+	return v.writtenByPlainWritersOnly(x), nil
 }
 
-// copiesAMember reports whether applied, a Kustomization a build made, has the
-// graphFields of a member of the tree as v builds it, other than dependsOn,
-// wait and healthChecks: the three the rewrite changes on an umbrella and a
-// patch may move on a copy of one. healthCheckExprs is compared.
-func (t *kustomizationTree) copiesAMember(v *builtView, applied *kustv1.Kustomization) (bool, error) {
-	fields, err := specFields(applied)
-	if err != nil {
-		return false, err
-	}
-	for _, m := range t.kusts {
-		k, err := v.spec(crKey(m.Namespace, m.Name))
-		if err != nil {
-			return false, err
+// writtenByPlainWritersOnly reports whether x has an occurrence in v and every
+// one is written by the Flux bootstrap or by a Kustomization whose build
+// changes nothing it reads: no patch, component, name prefix or suffix, target
+// namespace (transformsBuild) or postBuild.
+func (v *builtView) writtenByPlainWritersOnly(x string) bool {
+	occ := v.occurrences[x]
+	return len(occ) > 0 && !slices.ContainsFunc(occ, func(o occurrence) bool {
+		if o.writer == "" {
+			return false
 		}
-		if k == nil {
-			continue
-		}
-		member, err := specFields(k)
-		if err != nil {
-			return false, err
-		}
-		if sameBesidesReadiness(fields, member) {
-			return true, nil
-		}
-	}
-	return false, nil
+		k := v.writerSpec[o.writer]
+		return k == nil || transformsBuild(k) || k.Spec.PostBuild != nil
+	})
 }
 
 // sameBesidesReadiness reports whether a and b, graphFields as specFields reads
