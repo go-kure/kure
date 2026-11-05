@@ -228,6 +228,85 @@ func TestNormalizeCallerObjects_HeldUnstructuredInField(t *testing.T) {
 	})
 }
 
+// heldList is a plain unstructured List with n in its own Object map.
+func heldList(n any) *unstructured.UnstructuredList {
+	return &unstructured.UnstructuredList{Object: map[string]any{"apiVersion": "v1", "kind": "List", "extra": n}}
+}
+
+// A plain unstructured List held in a field has an Object map of its own beside
+// its items, and the copy of the List panics on a plain int in it as the copy of
+// an Unstructured does (go-kure/kure#1252).
+func TestNormalizeCallerObjects_HeldUnstructuredListInField(t *testing.T) {
+	t.Parallel()
+	revisionHoldingList := func(l *unstructured.UnstructuredList) *appsv1.ControllerRevision {
+		cr := &appsv1.ControllerRevision{Data: runtime.RawExtension{Raw: []byte("{}"), Object: l}}
+		cr.Name, cr.Namespace = "held", "default"
+		return cr
+	}
+	t.Run("a plain int in its own map is replaced by an int64 and put back by the undo", func(t *testing.T) {
+		t.Parallel()
+		l := heldList(7)
+		held := l.Object
+		undo, err := normalizeCallerObjects(&layout.ManifestLayout{Name: "l", Resources: []client.Object{revisionHoldingList(l)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, ok := l.Object["extra"].(int64); !ok || got != 7 {
+			t.Fatalf("extra = %#v, want int64(7)", l.Object["extra"])
+		}
+		undo()
+		if !sameMap(l.Object, held) {
+			t.Error("undo did not put the caller's map back")
+		}
+	})
+	t.Run("the copy of the held List no longer panics", func(t *testing.T) {
+		t.Parallel()
+		cr := revisionHoldingList(heldList(7))
+		if err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{cr}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := comparableContent(cr); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("a clean map is left as it is", func(t *testing.T) {
+		t.Parallel()
+		l := heldList(int64(7))
+		held := l.Object
+		if err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{revisionHoldingList(l)}}); err != nil {
+			t.Fatal(err)
+		}
+		if !sameMap(l.Object, held) {
+			t.Error("a map that needs no change was replaced")
+		}
+	})
+	t.Run("a List held by value in an interface cannot be replaced, so it is refused", func(t *testing.T) {
+		t.Parallel()
+		h := holderOf(func(h *fieldHolder) { h.Iface = *heldList(3) })
+		err := normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{h}})
+		for _, want := range []string{"by value", `layout "`, "the typed object.Iface"} {
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("got %v, want a refusal that names %q", err, want)
+			}
+		}
+	})
+	t.Run("a later refusal puts its map back", func(t *testing.T) {
+		t.Parallel()
+		l := heldList(7)
+		bad := heldCM(1)
+		bad.Object["spec"] = map[string]any{"c": make(chan int)}
+		held := l.Object
+		undo, err := normalizeCallerObjects(&layout.ManifestLayout{Name: "l", Resources: []client.Object{revisionHoldingList(l), bad}})
+		if err == nil {
+			t.Fatal("want a refusal of the channel")
+		}
+		undo()
+		if !sameMap(l.Object, held) {
+			t.Error("a refused call did not leave the held List's map as the caller gave it")
+		}
+	})
+}
+
 // rawItemList is a typed List whose items are raw extensions that hold objects.
 type rawItemList struct {
 	metav1.TypeMeta   `json:",inline"`

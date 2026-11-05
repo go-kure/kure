@@ -62,8 +62,9 @@ var maxJSONNodes = 1 << 22
 //
 // The objects are those in each layout's Resources, and the unstructured
 // objects a typed List in them holds, directly or through the typed Lists it
-// holds (built.HeldObjects). A plain unstructured List such a List holds is
-// covered with its items and with its own Object map. Nil roots are skipped.
+// holds (built.HeldObjects). A plain unstructured List such a List holds, or a
+// typed object holds in a field, is covered with its items and with its own
+// Object map. Nil roots are skipped.
 //
 // A type that embeds an unstructured object, as a resource or as an item of a
 // typed List, is not normalized: the layout and the walker's records of an
@@ -264,7 +265,7 @@ func callerObjects(r client.Object, budget *convBudget) (objs []*unstructured.Un
 		return nil, nil, nil, err
 	}
 	objs, others, err = built.HeldObjects(r)
-	if err != nil || len(held.found) == 0 && held.refusal == nil {
+	if err != nil || len(held.found) == 0 && len(held.lists) == 0 && held.refusal == nil {
 		return objs, others, nil, err
 	}
 	// Any typed object that is no List is copied whole, so the objects it holds in
@@ -280,13 +281,14 @@ func callerObjects(r client.Object, budget *convBudget) (objs []*unstructured.Un
 		if held.refusal != nil {
 			return objs, others, held.refusal.bad, held.refusal.err
 		}
-		return append(objs, held.found...), others, nil, nil
+		return append(objs, held.found...), appendLists(others, held.lists), nil, nil
 	}
 	// A typed List is read from the items it writes, which HeldObjects returned:
 	// what it holds in another field is read by nothing, and refuses nothing. An
 	// item that is no List is copied whole as any other typed object is, so it is
 	// looked at the same way. An item that is a List has its own items among
 	// these.
+	var lists []*unstructured.UnstructuredList
 	for _, o := range others {
 		if isList, err := built.IsList(o); err != nil {
 			return objs, others, nil, err
@@ -301,8 +303,19 @@ func callerObjects(r client.Object, budget *convBudget) (objs []*unstructured.Un
 			return objs, others, inner.refusal.bad, inner.refusal.err
 		}
 		objs = append(objs, inner.found...)
+		lists = append(lists, inner.lists...)
 	}
-	return objs, others, nil, nil
+	return objs, appendLists(others, lists), nil, nil
+}
+
+// appendLists adds the plain unstructured Lists held in a field to others, where
+// normalizeCallerObjects covers the Object map of each as it does one that a
+// typed List holds.
+func appendLists(others []apiruntime.Object, lists []*unstructured.UnstructuredList) []apiruntime.Object {
+	for _, l := range lists {
+		others = append(others, l)
+	}
+	return others
 }
 
 // identityOf returns the kind, namespace and name of u for a refusal, read
@@ -422,7 +435,7 @@ var (
 func walkHeld(r apiruntime.Object, budget *convBudget, collect bool) (held heldFields, bad *unstructured.Unstructured, err error) {
 	w := &heldWalk{open: map[heldKey]bool{}, budget: budget, collect: collect}
 	err = w.walk(reflect.ValueOf(r), nil, 0)
-	return heldFields{found: w.found, refusal: w.refusal}, w.bad, err
+	return heldFields{found: w.found, lists: w.lists, refusal: w.refusal}, w.bad, err
 }
 
 // heldFields is what walkHeld reports of the unstructured objects held in a
@@ -432,6 +445,10 @@ type heldFields struct {
 	// or in a field of a value that is addressed, so that the caller can replace
 	// the Object map of each.
 	found []*unstructured.Unstructured
+	// lists are the plain unstructured Lists held the same way. Their items are
+	// in found; the Object map of the List itself is replaced as the one of a
+	// plain List that a typed List holds (normalizeCallerObjects).
+	lists []*unstructured.UnstructuredList
 	// refusal is the first object held by value in a map or an interface, which
 	// cannot be replaced, and holds a value that is not JSON typed: bad names it.
 	refusal *heldRefusal
@@ -510,6 +527,7 @@ type heldWalk struct {
 	checked map[reflect.Type]bool
 	bad     *unstructured.Unstructured
 	found   []*unstructured.Unstructured
+	lists   []*unstructured.UnstructuredList
 	refusal *heldRefusal
 
 	// budget is the call's: reachable charges the unstructured objects this walk
@@ -806,8 +824,11 @@ func (w *heldWalk) walkStruct(v reflect.Value, at *trail, depth int) error {
 				return err
 			}
 		}
-		if v.Type() == unstructuredListType {
-			return w.walk(v.FieldByName("Items"), at.then(".Items"), depth+1)
+		isList := v.Type() == unstructuredListType
+		if isList {
+			if err := w.walk(v.FieldByName("Items"), at.then(".Items"), depth+1); err != nil {
+				return err
+			}
 		}
 		// A copy of the typed object that holds this one follows it, and
 		// apimachinery's copy of an Unstructured panics on a value that is not JSON
@@ -819,7 +840,11 @@ func (w *heldWalk) walkStruct(v reflect.Value, at *trail, depth int) error {
 		// change: the walk records it, and the caller refuses it once it knows that
 		// the typed object is copied.
 		if v.CanAddr() {
-			w.found = append(w.found, v.Addr().Interface().(*unstructured.Unstructured))
+			if isList {
+				w.lists = append(w.lists, v.Addr().Interface().(*unstructured.UnstructuredList))
+			} else {
+				w.found = append(w.found, v.Addr().Interface().(*unstructured.Unstructured))
+			}
 		} else if w.refusal == nil && !jsonTyped(m, 0) {
 			w.refusal = &heldRefusal{
 				bad: &unstructured.Unstructured{Object: m},

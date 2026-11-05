@@ -82,6 +82,38 @@ func TestCallerObject_HeldUnstructuredInRawExtensionDoesNotPanic(t *testing.T) {
 	}
 }
 
+// A plain unstructured List held the same way has an Object map of its own beside
+// its items, and the copy of the List panics on a plain int in either one
+// (go-kure/kure#1252).
+func TestCallerObject_HeldUnstructuredListInRawExtensionDoesNotPanic(t *testing.T) {
+	t.Parallel()
+	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		for name, hold := range map[string]func(l *unstructured.UnstructuredList){
+			"own map": func(l *unstructured.UnstructuredList) { l.Object["n"] = 1 },
+			"item": func(l *unstructured.UnstructuredList) {
+				u := unstructuredObj("v1", "ConfigMap", "default", "cm")
+				u.Object["n"] = 1
+				l.Items = []unstructured.Unstructured{*u}
+			},
+		} {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				t.Parallel()
+				l := &unstructured.UnstructuredList{Object: map[string]any{"apiVersion": "v1", "kind": "List"}}
+				hold(l)
+				obj := &appsv1.ControllerRevision{
+					TypeMeta:   metav1.TypeMeta{APIVersion: "source.toolkit.fluxcd.io/v1", Kind: "GitRepository"},
+					ObjectMeta: metav1.ObjectMeta{Name: "web-git", Namespace: "flux-system"},
+					Data:       runtime.RawExtension{Raw: []byte("{}"), Object: l},
+				}
+				err := integrateHolding(obj, placement)
+				if err == nil || strings.HasPrefix(err.Error(), "panic") || !strings.Contains(err.Error(), "already has GitRepository") {
+					t.Errorf("got %v, want the refusal of the Source held twice", err)
+				}
+			})
+		}
+	}
+}
+
 // heldItemList is a typed List whose items are raw extensions that hold objects.
 type heldItemList struct {
 	metav1.TypeMeta   `json:",inline"`

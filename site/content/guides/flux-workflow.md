@@ -950,7 +950,7 @@ JSON-typed values, as apimachinery's `Unstructured` requires: an `int64`, not an
 `int`. kure reads such an object as its JSON and does not panic on one
 (go-kure/kure#1252). The integration entry points replace a plain Go integer, `[]string`, `map[string]string`
 or other accepted shape in an `Object` map with a JSON-typed copy (the caller's
-map is not changed), also in an unstructured object that a typed object that is no List holds in a
+map is not changed), also in an unstructured object or List that a typed object that is no List holds in a
 field, the `Object` of a `RawExtension` included (such a typed object as an item of a typed List too),
 and refuse a value they cannot convert, such as a struct,
 a pointer, a channel or a type that marshals itself, naming the layout, the
