@@ -290,7 +290,12 @@ func (p *integratedPlacement) umbrellasDoNotWait(root *layout.ManifestLayout) er
 // keptNodeReadiness and umbrellasDoNotWait run one after the other with no
 // change to the tree between them (placeBundlePatches has run), so they share
 // it. nil where the tree does not build as it stands; what reads it then falls
-// back to the tree as it holds it (checkAgainstHeld, the patched blanket).
+// back to the tree as it holds it (checkAgainstHeld, the patched blanket). The
+// build error is dropped on purpose: a patcher the tree cannot build before the
+// rewrite (unbuiltPatcher) makes this build fail, and the fallback is the
+// documented answer to that (go-kure/kure#1258). It refuses more than a
+// comparison of two builds would, since no build before the rewrite says what
+// the identities the tree builds were then.
 func (p *integratedPlacement) preSnapshot(t *kustomizationTree) *depSnapshot {
 	if !p.preDone {
 		p.preDone = true

@@ -332,7 +332,7 @@ func (t *kustomizationTree) checkBuiltUmbrellas(v *builtView, q *viewSnapshot) e
 		if by == "" {
 			continue
 		}
-		stands, err := t.heldStandsFor(v, x)
+		stands, err := t.heldStandsFor(v, x, false)
 		if err != nil {
 			return err
 		}
@@ -348,7 +348,18 @@ func (t *kustomizationTree) checkBuiltUmbrellas(v *builtView, q *viewSnapshot) e
 // application's own, a leaf by design) whose applied copy in v has the
 // graphFields it was held with, or has no applied copy at all: the copy is the
 // object the tree holds, not a Kustomization a build made under its name.
-func (t *kustomizationTree) heldStandsFor(v *builtView, x string) (bool, error) {
+//
+// fallback is set where the tree could not be built before the rewrite
+// (checkWrittenEntries): no earlier build says which object the copy came from,
+// so a held object with the copy's graphFields may be a clone of the copy that
+// a member's build made, and a patch may have taken a wait from the copy
+// (go-kure/kure#1247). There the held object stands only if the copy is not a
+// copy of a member: it matches no member on the graphFields other than
+// dependsOn, wait and healthChecks. This refuses a tree that holds an
+// application's Kustomization with the spec of a member's copy and cannot be
+// built before the rewrite, both at once, though the held object is what the
+// controller applies; the refusal is the price of not guessing.
+func (t *kustomizationTree) heldStandsFor(v *builtView, x string, fallback bool) (bool, error) {
 	held := t.otherObjs[x]
 	if held == nil {
 		return false, nil
@@ -358,7 +369,54 @@ func (t *kustomizationTree) heldStandsFor(v *builtView, x string) (bool, error) 
 		return err == nil, err
 	}
 	differ, err := differingFields(occurrence{obj: held}, occurrence{obj: applied})
-	return len(differ) == 0, err
+	if err != nil || len(differ) > 0 || !fallback {
+		return len(differ) == 0, err
+	}
+	copies, err := t.copiesAMember(v, applied)
+	return !copies, err
+}
+
+// copiesAMember reports whether applied, a Kustomization a build made, has the
+// graphFields of a member of the tree as v builds it, other than dependsOn,
+// wait and healthChecks: the three the rewrite changes on an umbrella and a
+// patch may move on a copy of one. healthCheckExprs is compared.
+func (t *kustomizationTree) copiesAMember(v *builtView, applied *kustv1.Kustomization) (bool, error) {
+	fields, err := specFields(applied)
+	if err != nil {
+		return false, err
+	}
+	for _, m := range t.kusts {
+		k, err := v.spec(crKey(m.Namespace, m.Name))
+		if err != nil {
+			return false, err
+		}
+		if k == nil {
+			continue
+		}
+		member, err := specFields(k)
+		if err != nil {
+			return false, err
+		}
+		if sameBesidesReadiness(fields, member) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// sameBesidesReadiness reports whether a and b, graphFields as specFields reads
+// them, agree on every field other than dependsOn, wait and healthChecks.
+func sameBesidesReadiness(a, b map[string]string) bool {
+	for _, field := range graphFields {
+		switch field {
+		case "dependsOn", "wait", "healthChecks":
+			continue
+		}
+		if a[field] != b[field] {
+			return false
+		}
+	}
+	return true
 }
 
 // checkSameIdentities refuses a view q that builds other identities than p,
@@ -434,9 +492,13 @@ func (t *kustomizationTree) checkReadinessFields(v *builtView, p, q *viewSnapsho
 		_, treeUmbrella := f.terminals[x]
 		// A build may make a copy of an umbrella, with the wait the pass
 		// cleared on the umbrella it copies; that wait may go, and no other
-		// field may differ. A Kustomization the tree holds as a leaf that
+		// field may differ. A copy is a non-member that applies Flux
+		// Kustomizations and, before the rewrite, had the fields of an
+		// umbrella of the tree other than dependsOn, wait and healthChecks
+		// (go-kure/kure#1247): a patch may rename it, and may not give it
+		// another path. A Kustomization the tree holds as a leaf that
 		// applies Flux Kustomizations keeps its own.
-		copied := !v.isMember(x) && len(v.written(x)) > 0
+		copied := !v.isMember(x) && len(v.written(x)) > 0 && copiesAnUmbrella(before, x, f.terminals)
 		if err := checkFields(x, before[x], q.fields[x], treeUmbrella, copied); err != nil {
 			return err
 		}
@@ -470,6 +532,24 @@ func allHold(by map[string]classSet, keys []string, need int) bool {
 		}
 	}
 	return len(keys) > 0
+}
+
+// copiesAnUmbrella reports whether x, in fields (each identity's fields before
+// the rewrite, without dependsOn), has the fields of an umbrella of the tree
+// other than dependsOn, wait and healthChecks. Without a recorded umbrella or
+// x, it is not a copy: a Kustomization that cannot be compared is judged as
+// one the tree keeps.
+func copiesAnUmbrella(fields map[string]map[string]string, x string, umbrellas map[string][]string) bool {
+	mine, ok := fields[x]
+	if !ok {
+		return false
+	}
+	for u := range umbrellas {
+		if theirs, ok := fields[u]; ok && u != x && sameBesidesReadiness(mine, theirs) {
+			return true
+		}
+	}
+	return false
 }
 
 // checkFields is U4 for identity x: before and after are its fields without
@@ -523,7 +603,7 @@ func (t *kustomizationTree) checkWrittenEntries(v *builtView, q *viewSnapshot, f
 		// build makes under its identity (U3 compares them). One an apply skips
 		// creates nothing, so a copy the controller does apply under that
 		// identity would go unjudged.
-		stands, err := t.heldStandsFor(v, id)
+		stands, err := t.heldStandsFor(v, id, true)
 		if err != nil {
 			return err
 		}
