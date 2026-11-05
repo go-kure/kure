@@ -871,12 +871,10 @@ func (c *converter) convertSlice(v reflect.Value, at *trail, depth int) (any, er
 	if v.IsNil() {
 		return nil, nil
 	}
-	// As for a map: the slice at depth maxJSONDepth is level maxJSONDepth+1.
-	if depth >= maxJSONDepth {
-		return nil, errors.Errorf("%s holds a value nested deeper than %d levels", where(at), maxJSONDepth)
-	}
 	if c.isByteSlice(v.Type()) {
-		// As encoding/json writes it: a base64 string. The text is made once for
+		// As encoding/json writes it: a base64 string, which is no level of
+		// nesting, so this goes before the depth check: one below maxJSONDepth
+		// maps is kept, as encoding/json keeps it. The text is made once for
 		// each occurrence of the slice, so its bytes count against the call's
 		// budget as values do, and the check (reach) charges them too: it ends
 		// the call as the conversion would, before the text is made.
@@ -888,6 +886,10 @@ func (c *converter) convertSlice(v reflect.Value, at *trail, depth int) (any, er
 			return nil, nil
 		}
 		return base64.StdEncoding.EncodeToString(v.Bytes()), nil
+	}
+	// As for a map: the slice at depth maxJSONDepth is level maxJSONDepth+1.
+	if depth >= maxJSONDepth {
+		return nil, errors.Errorf("%s holds a value nested deeper than %d levels", where(at), maxJSONDepth)
 	}
 	// The count is checked before the allocation: a slice of a type that needs no
 	// storage can be as long as an int holds.

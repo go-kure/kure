@@ -84,19 +84,33 @@ func (n *pinNode) DeepCopyObject() runtime.Object { c := *n; return &c }
 // The text of a refusal at depth is the path from the root, as it was when each
 // level copied it.
 func TestPaths_RefusalsNameTheExactPath(t *testing.T) {
-	t.Run("converted value", func(t *testing.T) {
-		m := map[string]any{"a": map[string]any{"b": []any{map[string]any{"c": make(chan int)}}}}
-		_, err := jsonContentOf(m, &convBudget{})
-		want := "a.b[0].c holds a chan int, which kure does not convert to JSON"
-		if err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("got %v, want one containing %q", err, want)
-		}
-	})
-	t.Run("the object itself", func(t *testing.T) {
-		_, err := jsonContentOf(map[string]any{"c": make(chan int)}, &convBudget{})
-		want := "c holds a chan int, which kure does not convert to JSON"
-		if err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("got %v, want one containing %q", err, want)
+	const tail = " holds a chan int, which kure does not convert to JSON"
+	// Each case is compared whole: a key that always took a leading dot, or a
+	// path that lost its root, would pass a test that looks for a part.
+	for name, tc := range map[string]struct {
+		m    map[string]any
+		want string
+	}{
+		"nested keys and a slice":     {map[string]any{"a": map[string]any{"b": []any{map[string]any{"c": make(chan int)}}}}, "a.b[0].c" + tail},
+		"a key of the root":           {map[string]any{"c": make(chan int)}, "c" + tail},
+		"a slice below a key":         {map[string]any{"a": []any{make(chan int)}}, "a[0]" + tail},
+		"an empty key of the root":    {map[string]any{"": make(chan int)}, "the object" + tail},
+		"a key below an empty key":    {map[string]any{"": map[string]any{"x": make(chan int)}}, "x" + tail},
+		"an empty key below a key":    {map[string]any{"a": map[string]any{"": make(chan int)}}, "a." + tail},
+		"an empty key below an index": {map[string]any{"a": []any{map[string]any{"": make(chan int)}}}, "a[0]." + tail},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := jsonContentOf(tc.m, &convBudget{})
+			if err == nil || err.Error() != tc.want {
+				t.Errorf("got %v, want %q", err, tc.want)
+			}
+		})
+	}
+	t.Run("the root, named as the object", func(t *testing.T) {
+		defer SetMaxJSONNodesForTest(2)()
+		_, err := jsonContentOf(map[string]any{"a": 1, "b": 2, "c": 3}, &convBudget{})
+		if want := "the object holds more than 2 values"; err == nil || err.Error() != want {
+			t.Errorf("got %v, want %q", err, want)
 		}
 	})
 	t.Run("typed walk", func(t *testing.T) {
