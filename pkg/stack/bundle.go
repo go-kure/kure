@@ -528,7 +528,10 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 			// The object's annotations stay as written: on an unstructured
 			// object a value need not be a string. The helper that adds them
 			// is a few map operations around the object's GetAnnotations and
-			// SetAnnotations, so the whole call is guarded.
+			// SetAnnotations, and on malformed unstructured metadata it falls
+			// back to GetAnnotations, which can format a caller's value. So
+			// the whole call is guarded, and a panic in the helper's own map
+			// operations on such an object is reported as the object's too.
 			if err := built.CallHeld(*r, func() { built.AddAnnotations(*r, a.Annotations) }); err != nil {
 				return nil, fmt.Errorf("bundle %q: %w", a.Name, err)
 			}

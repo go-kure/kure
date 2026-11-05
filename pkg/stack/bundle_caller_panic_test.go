@@ -6,6 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -80,6 +81,9 @@ func TestBundleGenerate_CallerMethodPanicIsARefusal(t *testing.T) {
 			if strings.Contains(msg, secretPanic) {
 				t.Errorf("the refusal carries the panic's text: %q", msg)
 			}
+			if !strings.Contains(msg, `bundle "web"`) {
+				t.Errorf("the refusal does not name the bundle: %q", msg)
+			}
 			if !strings.Contains(msg, "stack.panickyObject") {
 				t.Errorf("the refusal does not name the Go type of the object: %q", msg)
 			}
@@ -87,6 +91,64 @@ func TestBundleGenerate_CallerMethodPanicIsARefusal(t *testing.T) {
 				t.Errorf("the refusal does not name the Go type of the panic value: %q", msg)
 			}
 		})
+	}
+}
+
+// bomb is a value whose String method panics with a value that panics again
+// when formatted, so formatting it never returns.
+type bomb struct{}
+
+func (bomb) String() string { panic(bomb{}) }
+
+// TestBundleGenerate_UnstructuredMalformedMetadataIsARefusal: for an
+// unstructured object whose metadata is no map, the annotation helper falls
+// back to GetAnnotations, which formats the value metadata holds. That value is
+// a caller's, so a panic while formatting it is a refusal, not a crash.
+func TestBundleGenerate_UnstructuredMalformedMetadataIsARefusal(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "ConfigMap",
+		"metadata":   bomb{},
+	}}
+	obj := client.Object(u)
+	b := &Bundle{
+		Name:         "web",
+		Applications: []*Application{NewApplication("web", "default", &fakeConfig{objs: []*client.Object{&obj}})},
+		Annotations:  map[string]string{"owner": "shop"},
+	}
+	resources, err := b.Generate()
+	if err == nil {
+		t.Fatalf("Generate returned no error for metadata that cannot be formatted")
+	}
+	if resources != nil {
+		t.Errorf("Generate returned %d objects with its refusal, want none", len(resources))
+	}
+}
+
+// TestBundleGenerate_EarlierObjectsStayChanged: a refusal does not put back the
+// objects Generate handled before the refused one (decided in go-kure/kure#1267).
+func TestBundleGenerate_EarlierObjectsStayChanged(t *testing.T) {
+	first := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "first"}}
+	second := &panickyObject{
+		ConfigMap: &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "second"}},
+		panicOn:   "SetAnnotations",
+	}
+	o1, o2 := client.Object(first), client.Object(second)
+	b := &Bundle{
+		Name:         "web",
+		Applications: []*Application{NewApplication("web", "default", &fakeConfig{objs: []*client.Object{&o1, &o2}})},
+		Labels:       map[string]string{"team": "shop"},
+		Annotations:  map[string]string{"owner": "shop"},
+	}
+	resources, err := b.Generate()
+	if err == nil || resources != nil {
+		t.Fatalf("Generate = %d objects, %v; want a refusal and no objects", len(resources), err)
+	}
+	if got := first.GetLabels()["team"]; got != "shop" {
+		t.Errorf("earlier object label team = %q, want shop (it stays changed)", got)
+	}
+	if got := first.GetAnnotations()["owner"]; got != "shop" {
+		t.Errorf("earlier object annotation owner = %q, want shop (it stays changed)", got)
 	}
 }
 
