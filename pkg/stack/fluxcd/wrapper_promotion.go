@@ -100,11 +100,13 @@ func embeddedUnstructured(r apiruntime.Object) (objs []*unstructured.Unstructure
 // own. More than one is returned when several share that depth. None is
 // returned when st embeds none.
 //
-// The search has no limit of its own: it is linear in the types st reaches. A
-// type is followed at the depth it is first reached, and at most twice there,
-// as a third path to it adds nothing to the two that already make it ambiguous.
-// So a level holds at most two steps per type, and there are at most as many
-// levels as types.
+// The search has no limit of its own: the number of steps is linear in the
+// types st reaches. A type is followed at the depth it is first reached, and at
+// most twice there, as a third path to it adds nothing to the two that already
+// make it ambiguous. So a level holds at most two steps per type, and there are
+// at most as many levels as types. Each step holds the path to it, so the
+// memory is quadratic in the depth of embedding. That depth is the one of a Go
+// type the caller wrote, and no value of the caller's data makes it larger.
 func shallowestEmbeds(st reflect.Type) (found, above []embedStep) {
 	level := []embedStep{{typ: st}}
 	seen := map[reflect.Type]int{st: 0}

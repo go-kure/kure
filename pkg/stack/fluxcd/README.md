@@ -1883,7 +1883,7 @@ not a List, which still panics when the integration copies that object (go-kure/
 `GenerateFromLayout`, `GenerateFromCluster` (through it) and `UmbrellaTerminals` first replace the
 `Object` map of each unstructured object in the layouts they are given, a `List`'s items included
 (also the unstructured items of a typed `List`, and of the typed Lists it holds, an unstructured `List`
-among them), that holds another value with a copy that holds JSON-typed values. This changes the
+among them, whose own `Object` map is replaced like its items'), that holds another value with a copy that holds JSON-typed values. This changes the
 object the caller passed: its `Object` field holds a new map, and the map the caller built is not
 changed. The accepted shapes are a closed list. A `string`, `int64`, `float64`, `bool`, `nil`,
 `json.Number`, `map[string]interface{}` and `[]interface{}` are kept as they are. A Go integer kind
