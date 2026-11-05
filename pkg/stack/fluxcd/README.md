@@ -729,8 +729,9 @@ these trees, though some of them are fine:
   `spec.targetNamespace` or `spec.postBuild`), on the fallback path (it is not trusted as a
   stand-in for the copy: the copy may be one a build made from a member, with a wait a patch took
   from it, and no comparison of fields can tell the two apart);
-- a renamed copy of an umbrella whose own patches change any field of its spec (its `wait`,
-  `healthChecks` or `dependsOn`, say): the specs are compared as the typed Kustomization encodes
+- a renamed copy of an umbrella whose own patches change a field of its spec (its `wait`,
+  `healthChecks` or `dependsOn`, say) so that the spec equals neither the umbrella's as the build
+  shows it nor as the tree holds it: the specs are compared as the typed Kustomization encodes
   them, so a duration written `60s` or `1m`, and an empty or an absent list, compare equal, and
   only a value the typed form keeps can tell two specs apart. Such a copy is no copy of the
   umbrella, and the wait it loses is refused as a different `spec.wait` or `spec.healthChecks`.
