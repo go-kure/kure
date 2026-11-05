@@ -324,7 +324,7 @@ type deeperProvider struct {
 }
 
 // ownCopyStruct is a struct that declares its own DeepCopyObject.
-type ownCopyStruct struct{ n int }
+type ownCopyStruct struct{ n int } //nolint:unused // read by reflection in the embed search
 
 func (ownCopyStruct) DeepCopyObject() runtime.Object { return nil }
 
@@ -349,7 +349,7 @@ type (
 // offPathUnrelated embeds the object two levels down and, beside the path to
 // it, a struct that declares a method that is none of the object's.
 type (
-	unrelatedMethod  struct{ n int }
+	unrelatedMethod  struct{ n int } //nolint:unused // read by reflection in the embed search
 	offPathUnrelated struct {
 		nestedEmbed
 		unrelatedMethod
@@ -423,7 +423,7 @@ func TestEmbeddedUnstructured_DeepCopyObjectFromAnEmbeddedProvider(t *testing.T)
 // still returns the interface as a provider at the object's depth.
 type sameDepthCopier struct {
 	*unstructured.Unstructured
-	deepCopier
+	deepCopier //nolint:unused // an embedded field the embed search reads by reflection
 }
 
 type label string
@@ -431,17 +431,17 @@ type label string
 // otherHolder and twoHolders reach the one interface type deepCopier through two
 // structs at one depth: the search keeps one path to it.
 type (
-	otherHolder struct{ deepCopier }
+	otherHolder struct{ deepCopier } //nolint:unused // an embedded type the embed search reads by reflection
 	twoHolders  struct {
 		nestedTwice
-		holdsCopier
-		otherHolder
+		holdsCopier //nolint:unused // an embedded field the embed search reads by reflection
+		otherHolder //nolint:unused // an embedded field the embed search reads by reflection
 	}
 )
 
 type withLabel struct {
 	nestedEmbed
-	label
+	label //nolint:unused // an embedded field the embed search reads by reflection
 }
 
 func TestShallowestEmbeds_ProvidersAtOrAboveTheObject(t *testing.T) {
