@@ -372,6 +372,17 @@ func TestHostileResources_NoEntryPointPanics(t *testing.T) {
 			if want, ok := refusalNames[name]; ok && !slices.ContainsFunc(answers, func(a string) bool { return strings.Contains(a, want) }) {
 				t.Errorf("no entry point refused the resource naming %q; answers:\n%s", want, strings.Join(answers, "\n"))
 			}
+			// A layout built by hand keeps the resource whatever the walker skips,
+			// so each of the three entry points must refuse it by name: one that
+			// accepts it, or refuses it for another reason, is not hidden by the
+			// others that do.
+			if want, ok := refusalNames[name]; ok {
+				for _, entry := range []string{"hand-built GenerateFromLayout", "hand-built UmbrellaTerminals", "hand-built IntegrateWithLayout"} {
+					if !slices.ContainsFunc(answers, func(a string) bool { return strings.HasPrefix(a, entry+": ") && strings.Contains(a, want) }) {
+						t.Errorf("%s did not refuse the resource naming %q; answers:\n%s", entry, want, strings.Join(answers, "\n"))
+					}
+				}
+			}
 		})
 	}
 }

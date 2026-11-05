@@ -713,8 +713,16 @@ func TestCallerObject_SelfMarshalingTypesOfTrustedPackagesAreAccepted(t *testing
 	}
 	o.Name, o.Namespace = "holder", "default"
 	ml := &layout.ManifestLayout{Name: "root", Resources: []client.Object{o}}
-	if _, err := fluxstack.UmbrellaTerminals(ml); err != nil && strings.Contains(err.Error(), "trusted package") {
-		t.Errorf("got %v, want trusted types accepted", err)
+	// Whatever else the entry point answers for this layout, it is not a refusal
+	// of a type that marshals itself, nor of one of these four fields.
+	_, err := fluxstack.UmbrellaTerminals(ml)
+	if err == nil {
+		return
+	}
+	for _, refused := range []string{"trusted package", "marshals itself", "v1.Time", "resource.Quantity", "intstr.IntOrString", "json.RawMessage"} {
+		if strings.Contains(err.Error(), refused) {
+			t.Errorf("got %v, want trusted types accepted (it names %q)", err, refused)
+		}
 	}
 }
 
