@@ -62,8 +62,8 @@ var maxJSONNodes = 1 << 22
 //
 // The objects are those in each layout's Resources, and the unstructured
 // objects a typed List in them holds, directly or through the typed Lists it
-// holds (built.HeldObjects). An unstructured List's items are in its object,
-// so they are covered with it. Nil roots are skipped.
+// holds (built.HeldObjects). A plain unstructured List such a List holds is
+// covered with its items and with its own Object map. Nil roots are skipped.
 //
 // A type that embeds an unstructured object, as a resource or as an item of a
 // typed List, is not normalized: the layout and the walker's records of an
@@ -77,13 +77,10 @@ var maxJSONNodes = 1 << 22
 // object whose Object the caller has set to another map since is left with
 // that one, but a change inside the replacement is put back with it.
 func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err error) {
-	type replacement struct {
-		obj          *unstructured.Unstructured
-		held, parsed map[string]any
-	}
 	var replace []replacement
 	seenLayout := map[*layout.ManifestLayout]bool{}
 	seenObject := map[*unstructured.Unstructured]bool{}
+	seenList := map[*unstructured.UnstructuredList]bool{}
 	budget := &convBudget{}
 	refuse := func(l *layout.ManifestLayout, u *unstructured.Unstructured, cause error) error {
 		kind, namespace, name := identityOf(u)
@@ -117,6 +114,23 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 					return err
 				}
 			}
+			// A plain unstructured List a typed List holds has its own map beside
+			// its items. It is no client.Object, so it is never a resource.
+			for _, o := range others {
+				ul, ok := o.(*unstructured.UnstructuredList)
+				if !ok || seenList[ul] {
+					continue
+				}
+				seenList[ul] = true
+				own := &unstructured.Unstructured{Object: ul.Object}
+				content, err := jsonContentOf(own.Object, budget)
+				if err != nil {
+					return refuse(l, own, err)
+				}
+				if content != nil {
+					replace = append(replace, replacement{obj: own, list: ul, held: ul.Object, parsed: content})
+				}
+			}
 			for _, u := range objs {
 				if seenObject[u] {
 					continue
@@ -127,7 +141,7 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 					return refuse(l, u, err)
 				}
 				if content != nil {
-					replace = append(replace, replacement{u, u.Object, content})
+					replace = append(replace, replacement{obj: u, held: u.Object, parsed: content})
 				}
 			}
 		}
@@ -144,17 +158,41 @@ func normalizeCallerObjects(roots ...*layout.ManifestLayout) (undo func(), err e
 		}
 	}
 	for _, r := range replace {
-		r.obj.Object = r.parsed
+		r.set(r.parsed)
 	}
 	return func() {
 		for _, r := range replace {
 			// Only the replacement is put back: a caller who has set another
 			// map since keeps it.
-			if sameMap(r.obj.Object, r.parsed) {
-				r.obj.Object = r.held
+			if sameMap(r.current(), r.parsed) {
+				r.set(r.held)
 			}
 		}
 	}, nil
+}
+
+// replacement is the map of obj that normalizeCallerObjects replaced, with the
+// map it held. When list is set, obj only stands for the Object map of that
+// plain unstructured List, and the map is put in the List.
+type replacement struct {
+	obj          *unstructured.Unstructured
+	list         *unstructured.UnstructuredList
+	held, parsed map[string]any
+}
+
+func (r replacement) current() map[string]any {
+	if r.list != nil {
+		return r.list.Object
+	}
+	return r.obj.Object
+}
+
+func (r replacement) set(m map[string]any) {
+	if r.list != nil {
+		r.list.Object = m
+		return
+	}
+	r.obj.Object = m
 }
 
 // sameMap reports whether a and b are the same map, not two with equal content.
@@ -423,6 +461,14 @@ func scalarKind(k reflect.Kind) bool {
 	}
 }
 
+var runtimeObjectType = reflect.TypeFor[apiruntime.Object]()
+
+// isObjectType reports whether a value of type t, or the pointer to it, is a
+// runtime.Object, as the reader of a typed List's items takes it.
+func isObjectType(t reflect.Type) bool {
+	return t.Implements(runtimeObjectType) || reflect.PointerTo(t).Implements(runtimeObjectType)
+}
+
 func (w *heldWalk) walk(v reflect.Value, at *trail, depth int) error {
 	if w.nodes++; w.nodes > maxJSONNodes {
 		return errors.Errorf("%s holds more than %d values", whereTyped(at), maxJSONNodes)
@@ -488,7 +534,9 @@ func (w *heldWalk) walk(v reflect.Value, at *trail, depth int) error {
 		if err := w.checkType(v.Type().Elem(), at, "[]"); err != nil {
 			return err
 		}
-		if v.Kind() == reflect.Slice && v.IsNil() || scalarKind(v.Type().Elem().Kind()) {
+		// A scalar is walked only when it is an object: the reader then makes a
+		// slot for each, so each is counted.
+		if v.Kind() == reflect.Slice && v.IsNil() || scalarKind(v.Type().Elem().Kind()) && !isObjectType(v.Type().Elem()) {
 			return nil
 		}
 		if v.Len() > maxJSONNodes-w.nodes {
