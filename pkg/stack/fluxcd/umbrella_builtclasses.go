@@ -82,6 +82,13 @@ type viewSnapshot struct {
 	// spec holds, per identity, specJSON of its spec: the whole spec, dependsOn
 	// included. copiesAnUmbrella compares it.
 	spec map[string]string
+	// held holds, per identity, specJSON of its spec as the tree holds it: the
+	// Kustomization as the layout writes it, before any patch of a build is
+	// applied to it, where spec is the one the view shows (a patch of an
+	// ancestor's build has been applied). A copy a build makes from the
+	// directory that holds an umbrella has the held one, not the applied one
+	// (go-kure/kure#1272). copiesAnUmbrella compares it.
+	held map[string]string
 }
 
 // depSnapshot is the snapshot of every view of one tree
@@ -171,6 +178,7 @@ func snapshotView(v *builtView) (*viewSnapshot, error) {
 		classes: map[string]map[string]classSet{},
 		fields:  map[string]map[string]string{},
 		spec:    map[string]string{},
+		held:    map[string]string{},
 	}
 	for _, k := range v.t.kusts {
 		s.ids[crKey(k.Namespace, k.Name)] = true
@@ -203,6 +211,16 @@ func snapshotView(v *builtView) (*viewSnapshot, error) {
 		delete(fields, "dependsOn")
 		s.fields[id] = fields
 		if s.spec[id], err = specJSON(k); err != nil {
+			return nil, err
+		}
+		held := v.t.otherSpecs[id]
+		if v.isMember(id) {
+			held = v.t.byKey[id]
+		}
+		if held == nil {
+			continue
+		}
+		if s.held[id], err = specJSON(held); err != nil {
 			return nil, err
 		}
 	}
@@ -474,16 +492,17 @@ func (t *kustomizationTree) checkReadinessFields(v *builtView, p, q *viewSnapsho
 		// cleared on the umbrella it copies; that wait may go, and no other
 		// field may differ. A copy is a non-member that applies Flux
 		// Kustomizations and, before the rewrite, had the whole spec of an
-		// umbrella of the tree (go-kure/kure#1247): a patch may rename it,
+		// umbrella of the tree, applied or as the tree holds it
+		// (go-kure/kure#1247, go-kure/kure#1272): a patch may rename it,
 		// and may not give it another path, nor a wait, a health check or
 		// a dependency of its own, nor change any other field of its spec.
 		// A Kustomization the tree holds as a leaf that applies Flux
 		// Kustomizations keeps its own.
-		var specs map[string]string
+		var specs, held map[string]string
 		if p != nil {
-			specs = p.spec
+			specs, held = p.spec, p.held
 		}
-		copied := !v.isMember(x) && len(v.written(x)) > 0 && copiesAnUmbrella(specs, x, f.terminals)
+		copied := !v.isMember(x) && len(v.written(x)) > 0 && copiesAnUmbrella(specs, held, x, f.terminals)
 		if err := checkFields(x, before[x], q.fields[x], treeUmbrella, copied); err != nil {
 			return err
 		}
@@ -524,6 +543,9 @@ func allHold(by map[string]classSet, keys []string, need int) bool {
 // of an umbrella made by a build has the umbrella's spec as it was before the
 // rewrite, wait, health checks and dependencies included, so the ones it loses
 // are the ones it inherited; a Kustomization with a field of its own does not.
+// That spec is the umbrella's applied one (specs), or the one the tree holds it
+// with (held): a patch of an ancestor's build changes the first and not the copy
+// a build makes from the directory that holds the umbrella (go-kure/kure#1272).
 // The specs are compared as the typed Kustomization encodes them, with the keys
 // in the order encoding/json gives them: a duration written 60s or 1m, and an
 // empty or an absent list, compare equal, and only a value the typed form keeps
@@ -531,13 +553,19 @@ func allHold(by map[string]classSet, keys []string, need int) bool {
 // is a duplicate of it, and loses what the umbrella loses. Without a recorded
 // umbrella or x, it is not a copy: a Kustomization that cannot be compared is
 // judged as one the tree keeps.
-func copiesAnUmbrella(specs map[string]string, x string, umbrellas map[string][]string) bool {
+func copiesAnUmbrella(specs, held map[string]string, x string, umbrellas map[string][]string) bool {
 	mine, ok := specs[x]
 	if !ok {
 		return false
 	}
 	for u := range umbrellas {
-		if theirs, ok := specs[u]; ok && u != x && mine == theirs {
+		if u == x {
+			continue
+		}
+		if theirs, ok := specs[u]; ok && mine == theirs {
+			return true
+		}
+		if theirs, ok := held[u]; ok && mine == theirs {
 			return true
 		}
 	}
