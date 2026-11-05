@@ -657,6 +657,21 @@ func specFields(obj client.Object) (map[string]string, error) {
 	return out, nil
 }
 
+// specJSON returns the whole spec of obj as JSON, read from obj as written: every
+// field, not only graphFields, and dependsOn too. Two objects with the same
+// specJSON are applied alike whatever they are named.
+func specJSON(obj client.Object) (string, error) {
+	content, err := writtenContent(obj)
+	if err != nil {
+		return "", err
+	}
+	raw, err := json.Marshal(content["spec"])
+	if err != nil {
+		return "", errors.Wrapf(err, "read the spec of Flux Kustomization %q", crKey(obj.GetNamespace(), obj.GetName()))
+	}
+	return string(raw), nil
+}
+
 // zeroAsOmitted lists the graphFields whose zero value kustomize-controller
 // applies as the field omitted, each with the type the Kustomization CRD gives
 // it: a boolean's zero value is false, a list's is the empty list, an object's

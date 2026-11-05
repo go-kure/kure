@@ -703,8 +703,10 @@ by its terminal leaves. It refuses the tree when:
 - a build makes a Kustomization under a name the build before the rewrite does not;
 - one of the fields the reconcile-order checks read (`path`, `sourceRef`, `kubeConfig`, `patches`,
   `healthChecks`, `wait` and the other graph fields, but not `dependsOn`) differs between the two
-  builds, other than the `wait` and `healthChecks` the rewrite clears on an umbrella; or an umbrella
-  regains a `wait` or health check.
+  builds, other than the `wait` and `healthChecks` the rewrite clears on an umbrella, and on a
+  copy of one that a build makes (a Kustomization the tree does not hold, that applies Flux
+  Kustomizations and, before the rewrite, has the whole spec of an umbrella of the tree, every
+  field and `dependsOn` included); or an umbrella regains a `wait` or health check.
 
 A tree whose build before the rewrite fails, or that holds a Flux Kustomization the build cannot
 read (an unreadable copy, or a patching non-member on a member's Source that no build reads as a
@@ -724,7 +726,14 @@ these trees, though some of them are fine:
   renames or substitutes (`spec.patches`, `spec.components`, `spec.namePrefix`, `spec.nameSuffix`,
   `spec.targetNamespace` or `spec.postBuild`), on the fallback path (it is not trusted as a
   stand-in for the copy: the copy may be one a build made from a member, with a wait a patch took
-  from it, and no comparison of fields can tell the two apart).
+  from it, and no comparison of fields can tell the two apart);
+- a renamed copy of an umbrella whose own patches change any field of its spec (its `wait`,
+  `healthChecks` or `dependsOn`, say): the specs are compared as the typed Kustomization encodes
+  them, so a duration written `60s` or `1m`, and an empty or an absent list, compare equal, and
+  only a value the typed form keeps can tell two specs apart. Such a copy is no copy of the
+  umbrella, and the wait it loses is refused as a different `spec.wait` or `spec.healthChecks`.
+  A Kustomization with the whole spec of an umbrella is a duplicate of it and loses what the
+  umbrella loses.
 
 Not handled: two CEL expressions are never compared, so an entry of class 1 only has to stay of
 class 1.
