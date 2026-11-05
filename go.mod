@@ -82,7 +82,7 @@ require (
 	github.com/fluxcd/source-controller/api v1.10.1
 	github.com/fluxcd/source-watcher/api/v2 v2.3.1
 	github.com/google/gnostic-models v0.7.1
-	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.95.0
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.95.1
 	go.universe.tf/metallb v0.16.2
 	go.yaml.in/yaml/v2 v2.4.5
 	golang.org/x/tools v0.52.0
