@@ -121,6 +121,33 @@ type embedsUnstructured struct{ *unstructured.Unstructured }
 // embedsValue embeds the Unstructured itself.
 type embedsValue struct{ unstructured.Unstructured }
 
+// A wrapper holds a clean map and refuses only by its type, when the
+// DeepCopyObject it has comes from something other than the object it embeds:
+// an interface, a named type that is no struct, or a struct that is only a
+// promotion of an interface. Each is shallower than the Unstructured.
+type (
+	nestsUnstructured struct{ *unstructured.Unstructured }
+	copierIface       interface{ DeepCopyObject() runtime.Object }
+	namedCopy         map[string]string
+	holdsCopier       struct{ copierIface }
+	nestsDeeper       struct{ nestsUnstructured }
+
+	viaEmbeddedInterface struct {
+		nestsUnstructured
+		copierIface
+	}
+	viaNamedType struct {
+		nestsUnstructured
+		namedCopy
+	}
+	offPathPromotion struct {
+		nestsDeeper
+		holdsCopier
+	}
+)
+
+func (namedCopy) DeepCopyObject() runtime.Object { return nil }
+
 func hostileCases() map[string]func() client.Object {
 	list := func() *objectItems {
 		l := &objectItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}}
@@ -156,6 +183,20 @@ func hostileCases() map[string]func() client.Object {
 			u := unstructuredObj("v1", "ConfigMap", "default", "cm")
 			u.Object["spec"] = map[string]any{"n": 7}
 			return &embedsValue{*u}
+		},
+		"wrapper whose DeepCopyObject comes from an embedded interface": func() client.Object {
+			return &viaEmbeddedInterface{nestsUnstructured{unstructuredObj("v1", "ConfigMap", "default", "cm")}, nil}
+		},
+		"wrapper whose DeepCopyObject comes from a named non-struct type": func() client.Object {
+			return &viaNamedType{nestsUnstructured{unstructuredObj("v1", "ConfigMap", "default", "cm")}, nil}
+		},
+		"wrapper whose DeepCopyObject is an off-path promotion of an interface": func() client.Object {
+			return &offPathPromotion{nestsDeeper{nestsUnstructured{unstructuredObj("v1", "ConfigMap", "default", "cm")}}, holdsCopier{}}
+		},
+		"wrapper with an embedded interface among the items of a typed List": func() client.Object {
+			l := list()
+			l.Items = []runtime.Object{&viaEmbeddedInterface{nestsUnstructured{unstructuredObj("v1", "ConfigMap", "default", "cm")}, nil}}
+			return l
 		},
 		"wrapper among the items of a typed List holds a plain int": func() client.Object {
 			u := unstructuredObj("v1", "ConfigMap", "default", "cm")
@@ -340,18 +381,22 @@ func runHostile(r func() client.Object, heavy bool) (answers []string) {
 // refusalNames are the cases that every entry point must refuse, and what the
 // refusal names.
 var refusalNames = map[string]string{
-	"typed nil resource":                                        "nil *v1.ConfigMap",
-	"typed nil unstructured resource":                           "nil *unstructured.Unstructured",
-	"typed nil wrapper embedding Unstructured":                  "nil *fluxcd_test.embedsUnstructured",
-	"wrapper embedding Unstructured holds a plain int":          "fluxcd_test.embedsUnstructured",
-	"wrapper embedding Unstructured by value holds a plain int": "fluxcd_test.embedsValue",
-	"wrapper among the items of a typed List holds a plain int": "fluxcd_test.embedsUnstructured",
-	"embedded nil pointer":                                      "struct { *v1.ConfigMap }",
-	"GetObjectKind panics with a string":                        "fluxcd_test.kindPanics",
-	"GetObjectKind panics with a nil error":                     "fluxcd_test.kindPanics",
-	"marshaler of another package in a private field":           "hidingItem",
-	"omitzero IsZero formats a map that holds itself":           "fluxcd_test.probeZeroHolder, whose IsZero method is called for its omitzero tag",
-	"list whose hidden item formats a map that holds itself":    "fluxcd_test.probeZeroHolder, whose IsZero method is called for its omitzero tag",
+	"typed nil resource":                                                    "nil *v1.ConfigMap",
+	"typed nil unstructured resource":                                       "nil *unstructured.Unstructured",
+	"typed nil wrapper embedding Unstructured":                              "nil *fluxcd_test.embedsUnstructured",
+	"wrapper embedding Unstructured holds a plain int":                      "fluxcd_test.embedsUnstructured",
+	"wrapper embedding Unstructured by value holds a plain int":             "fluxcd_test.embedsValue",
+	"wrapper among the items of a typed List holds a plain int":             "fluxcd_test.embedsUnstructured",
+	"embedded nil pointer":                                                  "struct { *v1.ConfigMap }",
+	"wrapper whose DeepCopyObject comes from an embedded interface":         "fluxcd_test.viaEmbeddedInterface",
+	"wrapper whose DeepCopyObject comes from a named non-struct type":       "fluxcd_test.viaNamedType",
+	"wrapper whose DeepCopyObject is an off-path promotion of an interface": "fluxcd_test.offPathPromotion",
+	"wrapper with an embedded interface among the items of a typed List":    "fluxcd_test.viaEmbeddedInterface",
+	"GetObjectKind panics with a string":                                    "fluxcd_test.kindPanics",
+	"GetObjectKind panics with a nil error":                                 "fluxcd_test.kindPanics",
+	"marshaler of another package in a private field":                       "hidingItem",
+	"omitzero IsZero formats a map that holds itself":                       "fluxcd_test.probeZeroHolder, whose IsZero method is called for its omitzero tag",
+	"list whose hidden item formats a map that holds itself":                "fluxcd_test.probeZeroHolder, whose IsZero method is called for its omitzero tag",
 }
 
 // heavyCases are the cases that run to a bound of the walk (maxJSONNodes): each

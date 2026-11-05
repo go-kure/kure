@@ -97,7 +97,7 @@ func TestNormalizeCallerObjects_DeepTypedEmbedIsNotRefused(t *testing.T) {
 // The search ends at once on the ladder, which holds no unstructured object, and
 // refuses nothing.
 func TestShallowestEmbeds_LadderOfEmbedsEndsAtOnce(t *testing.T) {
-	found, _ := shallowestEmbeds(reflect.TypeFor[ladderTop]())
+	found, _, _ := shallowestEmbeds(reflect.TypeFor[ladderTop]())
 	if len(found) != 0 {
 		t.Errorf("found %d unstructured objects, want none", len(found))
 	}
