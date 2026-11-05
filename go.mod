@@ -95,7 +95,7 @@ require (
 	k8s.io/apiserver v0.37.2
 	k8s.io/cli-runtime v0.37.2
 	k8s.io/kube-aggregator v0.37.2
-	k8s.io/kube-openapi v0.0.0-20261014044854-ca3452a79603
+	k8s.io/kube-openapi v0.0.0-20261104182252-5bee61fc5225
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
 	sigs.k8s.io/controller-runtime v0.25.2
 	sigs.k8s.io/gateway-api v1.7.0
