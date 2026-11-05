@@ -499,6 +499,11 @@ line when a dependency needs a newer one. Remove both, the `replace` line and th
 the Kubernetes v0.38 GA bump, whose apimachinery moves to v7.
 That bump fails to compile while the pin is still in place, so it cannot be missed.
 
+The rule does not stop a security update: the shared preset enables `vulnerabilityAlerts`, and
+Renovate forces `enabled` back on for an alert, so a `[SECURITY]` PR for kube-openapi still opens.
+Treat it as a prompt to assess the advisory and to decide whether the `replace` commit should
+move, not as a change to merge as it stands.
+
 **When can replace directives be removed?** Only when ALL direct and transitive dependencies converge on the same `k8s.io/` minor version. Check with:
 
 ```bash
