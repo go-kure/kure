@@ -1,6 +1,7 @@
 package fluxcd_test
 
 import (
+	"fmt"
 	"testing"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
@@ -420,5 +421,81 @@ func TestStandIn_HeldLeafOfAPlainWriterStandsOnTheFallback(t *testing.T) {
 				t.Fatalf("got %v, want the tree admitted", err)
 			}
 		})
+	}
+}
+
+// The umbrella platform builds the umbrella mid (interval 1m), which builds the
+// leaf. A hand-written Kustomization builds the directory that holds mid, with
+// the name prefix x-: it makes x-mid, a renamed copy of the umbrella. A patch of
+// platform sets the interval of mid to 17m. That patch is platform's own spec:
+// it applies to the mid that platform builds, not to the copy, which is made
+// from the directory as written and keeps 1m. So before the rewrite the copy has
+// the spec the umbrella was held with, not the one it is applied with, and it
+// loses the wait the rewrite clears on mid, which is the loss the exemption for a
+// copy exists for. The tree is admitted (go-kure/kure#1272): a copy is judged
+// against the umbrella as the tree holds it as well as against the umbrella as
+// applied. A patch of the copy that gives it an interval of its own (33m, which
+// equals neither the held 1m nor the applied 17m) makes it a leaf with a spec of
+// its own, and the loss is refused: that row pins the refusal the README
+// documents. With one that gives it the applied 17m it is a duplicate of the
+// umbrella as applied, and is admitted.
+func TestStandIn_UntouchedCopyOfAPatchedUmbrellaIsAdmitted(t *testing.T) {
+	const interval = "- op: replace\n  path: /spec/interval\n  value: %s\n"
+	for name, tc := range map[string]struct {
+		platformPatch string
+		copyPatch     string
+		refused       bool
+	}{
+		"umbrella patched, copy untouched":         {"17m0s", "", false},
+		"umbrella patched, copy patched (ctl)":     {"17m0s", "33m0s", true},
+		"umbrella patched, copy equal (ctl)":       {"17m0s", "17m0s", false},
+		"umbrella untouched, copy untouched (ctl)": {"", "", false},
+		"umbrella untouched, copy patched (ctl)":   {"", "33m0s", true},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				rules := withPlacement(nodeOnly, placement)
+				build := func(host string) *stack.Cluster {
+					mid := srBundle("mid")
+					mid.Interval = "1m"
+					mid.Children = []*stack.Bundle{srBundle("leaf", cmApp("leaf-app"))}
+					platform := srBundle("platform")
+					platform.Children = []*stack.Bundle{mid}
+					if tc.platformPatch != "" {
+						platform.Patches = []stack.Patch{{
+							Patch:  fmt.Sprintf(interval, tc.platformPatch),
+							Target: &stack.PatchSelector{Kind: "Kustomization", Name: "mid"},
+						}}
+					}
+					n := &stack.Node{Name: "platform", Bundle: platform}
+					root := &stack.Node{Name: "demo", Children: []*stack.Node{n}}
+					n.SetParent(root)
+					c := &stack.Cluster{Name: "demo", Node: root}
+					if host != "" {
+						k := handWritten("hand-written")
+						k.Spec.Path, k.Spec.NamePrefix = host, "x-"
+						if tc.copyPatch != "" {
+							k.Spec.Patches = []kustomize.Patch{{
+								Patch:  fmt.Sprintf(interval, tc.copyPatch),
+								Target: &kustomize.Selector{Kind: "Kustomization", Name: "mid"},
+							}}
+						}
+						patcher := &stack.Node{Name: "patcher", Bundle: srBundle("patcher", objApp("patcher-app", k))}
+						patcher.SetParent(root)
+						root.Children = append(root.Children, patcher)
+					}
+					return c
+				}
+				host := hostPathOf(t, func() *stack.Cluster { return build("") }, rules, "mid")
+				_, err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).CreateLayoutWithResources(build(host), rules)
+				if tc.refused {
+					wantRefusedWith(t, err, `Flux Kustomization "flux-system/x-mid" has a different spec.wait after the rewrite than before it`)
+					return
+				}
+				if err != nil {
+					t.Fatalf("got %v, want the tree admitted", err)
+				}
+			})
+		}
 	}
 }

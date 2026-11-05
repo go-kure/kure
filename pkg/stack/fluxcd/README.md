@@ -706,7 +706,9 @@ by its terminal leaves. It refuses the tree when:
   builds, other than the `wait` and `healthChecks` the rewrite clears on an umbrella, and on a
   copy of one that a build makes (a Kustomization the tree does not hold, that applies Flux
   Kustomizations and, before the rewrite, has the whole spec of an umbrella of the tree, every
-  field and `dependsOn` included); or an umbrella regains a `wait` or health check.
+  field and `dependsOn` included, as the build shows the umbrella or as the tree holds it: a patch
+  of an ancestor's build changes the first and not a copy made from the umbrella's directory); or
+  an umbrella regains a `wait` or health check.
 
 A tree whose build before the rewrite fails, or that holds a Flux Kustomization the build cannot
 read (an unreadable copy, or a patching non-member on a member's Source that no build reads as a
@@ -732,8 +734,10 @@ these trees, though some of them are fine:
   them, so a duration written `60s` or `1m`, and an empty or an absent list, compare equal, and
   only a value the typed form keeps can tell two specs apart. Such a copy is no copy of the
   umbrella, and the wait it loses is refused as a different `spec.wait` or `spec.healthChecks`.
-  A Kustomization with the whole spec of an umbrella is a duplicate of it and loses what the
-  umbrella loses.
+  A Kustomization with the whole spec of an umbrella, as the build shows it or as the tree holds
+  it, is a duplicate of it and loses what the umbrella loses. A copy that equals neither (its own
+  patch changes a field the umbrella's patch did not, or sets one the umbrella's patch set to
+  another value) is refused.
 
 Not handled: two CEL expressions are never compared, so an entry of class 1 only has to stay of
 class 1.
