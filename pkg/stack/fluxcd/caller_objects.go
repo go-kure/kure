@@ -4,7 +4,6 @@ import (
 	"encoding"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"math"
 	"reflect"
 	"runtime"
@@ -260,6 +259,11 @@ func jsonTypedCount(v any, depth int, nodes *int) bool {
 	case string, int64, float64, bool, nil, json.Number:
 		return true
 	case map[string]any:
+		// The root is level 1, so a map at depth maxJSONDepth is level
+		// maxJSONDepth+1, which encoding/json does not take. A nil map is null.
+		if v != nil && depth >= maxJSONDepth {
+			return false
+		}
 		for _, e := range v {
 			if !jsonTypedCount(e, depth+1, nodes) {
 				return false
@@ -267,6 +271,9 @@ func jsonTypedCount(v any, depth int, nodes *int) bool {
 		}
 		return true
 	case []any:
+		if v != nil && depth >= maxJSONDepth {
+			return false
+		}
 		return !slices.ContainsFunc(v, func(e any) bool { return !jsonTypedCount(e, depth+1, nodes) })
 	}
 	return false
@@ -299,7 +306,7 @@ func jsonContentOf(m map[string]any, budget *convBudget) (map[string]any, error)
 		return nil, nil
 	}
 	c := &converter{open: map[openKey]bool{}, budget: budget}
-	v, err := c.convert(reflect.ValueOf(m), "", 0)
+	v, err := c.convert(reflect.ValueOf(m), nil, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -326,8 +333,63 @@ var (
 // in the refusal.
 func walkHeld(r client.Object, budget *convBudget) (bad *unstructured.Unstructured, err error) {
 	w := &heldWalk{open: map[heldKey]bool{}, budget: budget}
-	err = w.walk(reflect.ValueOf(r), "", 0)
+	err = w.walk(reflect.ValueOf(r), nil, 0)
 	return w.bad, err
+}
+
+// trail is where a value is in the object being read, for a refusal that names
+// it. A step holds its own text (or its index) and a link to its parent, so one
+// level deeper costs one small value: the path is made by String, when a
+// refusal needs it, not copied at every level, which costs the square of the
+// depth. The nil trail is the root.
+type trail struct {
+	parent  *trail
+	text    string
+	index   int
+	indexed bool
+
+	// blank is set while the path up to and including this step is empty, so a
+	// key below an empty key at the root is still the first of its path.
+	blank bool
+}
+
+// isBlank reports whether the path of t is empty.
+func (t *trail) isBlank() bool { return t == nil || t.blank }
+
+// then returns the place one step below t, which text adds to its path.
+func (t *trail) then(text string) *trail {
+	return &trail{parent: t, text: text, blank: t.isBlank() && text == ""}
+}
+
+// at returns the place of element i of the slice at t.
+func (t *trail) at(i int) *trail { return &trail{parent: t, index: i, indexed: true} }
+
+// key returns the place of the entry k of the map at t, joined to its path by
+// a dot unless the path is empty.
+func (t *trail) key(k string) *trail {
+	if t.isBlank() {
+		return t.then(k)
+	}
+	return t.then("." + k)
+}
+
+// String returns the path of t: the steps from the root, in order.
+func (t *trail) String() string {
+	var steps []*trail
+	for s := t; s != nil; s = s.parent {
+		steps = append(steps, s)
+	}
+	var b strings.Builder
+	for i := len(steps) - 1; i >= 0; i-- {
+		if s := steps[i]; s.indexed {
+			b.WriteByte('[')
+			b.WriteString(strconv.Itoa(s.index))
+			b.WriteByte(']')
+		} else {
+			b.WriteString(s.text)
+		}
+	}
+	return b.String()
 }
 
 // heldKey names a pointer, a map or a slice being walked.
@@ -361,12 +423,12 @@ func scalarKind(k reflect.Kind) bool {
 	}
 }
 
-func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
+func (w *heldWalk) walk(v reflect.Value, at *trail, depth int) error {
 	if w.nodes++; w.nodes > maxJSONNodes {
-		return errors.Errorf("%s holds more than %d values", whereTyped(path), maxJSONNodes)
+		return errors.Errorf("%s holds more than %d values", whereTyped(at), maxJSONNodes)
 	}
 	if depth > maxHeldDepth {
-		return errors.Errorf("%s holds a value nested deeper than %d steps", whereTyped(path), maxHeldDepth)
+		return errors.Errorf("%s holds a value nested deeper than %d steps", whereTyped(at), maxHeldDepth)
 	}
 	switch v.Kind() {
 	case reflect.Invalid:
@@ -375,10 +437,10 @@ func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
 		if v.IsNil() {
 			return nil
 		}
-		return w.walk(v.Elem(), path, depth)
+		return w.walk(v.Elem(), at, depth)
 	default:
 	}
-	if err := w.checkType(v.Type(), path); err != nil {
+	if err := w.checkType(v.Type(), at, ""); err != nil {
 		return err
 	}
 	switch v.Kind() {
@@ -386,18 +448,18 @@ func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
 		if v.IsNil() {
 			return nil
 		}
-		if done, err := w.enter(v, heldKey{typ: v.Type(), ptr: v.Pointer()}, path); done || err != nil {
+		if done, err := w.enter(v, heldKey{typ: v.Type(), ptr: v.Pointer()}, at); done || err != nil {
 			return err
 		}
 		defer delete(w.open, heldKey{typ: v.Type(), ptr: v.Pointer()})
-		return w.walk(v.Elem(), path, depth+1)
+		return w.walk(v.Elem(), at, depth+1)
 	case reflect.Map:
 		// A key is written by its marshaler, if it has one, and a type is checked
 		// before any shortcut. A key is not formatted: it may hold itself.
-		if err := w.checkType(v.Type().Key(), path+"[key]"); err != nil {
+		if err := w.checkType(v.Type().Key(), at, "[key]"); err != nil {
 			return err
 		}
-		if err := w.checkType(v.Type().Elem(), path+"[key]"); err != nil {
+		if err := w.checkType(v.Type().Elem(), at, "[key]"); err != nil {
 			return err
 		}
 		// An interface key holds any type: the keys are walked, as the values are.
@@ -406,46 +468,47 @@ func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
 			return nil
 		}
 		key := heldKey{typ: v.Type(), ptr: v.Pointer()}
-		if _, err := w.enter(v, key, path); err != nil {
+		if _, err := w.enter(v, key, at); err != nil {
 			return err
 		}
 		defer delete(w.open, key)
+		entry := at.then("[key]")
 		for it := v.MapRange(); it.Next(); {
 			if keys {
-				if err := w.walk(it.Key(), path+"[key]", depth+1); err != nil {
+				if err := w.walk(it.Key(), entry, depth+1); err != nil {
 					return err
 				}
 			}
-			if err := w.walk(it.Value(), path+"[key]", depth+1); err != nil {
+			if err := w.walk(it.Value(), entry, depth+1); err != nil {
 				return err
 			}
 		}
 		return nil
 	case reflect.Slice, reflect.Array:
-		if err := w.checkType(v.Type().Elem(), path+"[]"); err != nil {
+		if err := w.checkType(v.Type().Elem(), at, "[]"); err != nil {
 			return err
 		}
 		if v.Kind() == reflect.Slice && v.IsNil() || scalarKind(v.Type().Elem().Kind()) {
 			return nil
 		}
 		if v.Len() > maxJSONNodes-w.nodes {
-			return errors.Errorf("%s holds more than %d values", whereTyped(path), maxJSONNodes)
+			return errors.Errorf("%s holds more than %d values", whereTyped(at), maxJSONNodes)
 		}
 		if v.Kind() == reflect.Slice && v.Len() > 0 {
 			key := heldKey{typ: v.Type(), ptr: v.Pointer(), len: v.Len()}
-			if _, err := w.enter(v, key, path); err != nil {
+			if _, err := w.enter(v, key, at); err != nil {
 				return err
 			}
 			defer delete(w.open, key)
 		}
 		for i := 0; i < v.Len(); i++ {
-			if err := w.walk(v.Index(i), fmt.Sprintf("%s[%d]", path, i), depth+1); err != nil {
+			if err := w.walk(v.Index(i), at.at(i), depth+1); err != nil {
 				return err
 			}
 		}
 		return nil
 	case reflect.Struct:
-		return w.walkStruct(v, path, depth)
+		return w.walkStruct(v, at, depth)
 	default:
 		// A scalar, a channel, a function: nothing in it for marshalling to call.
 		return nil
@@ -461,7 +524,7 @@ func (w *heldWalk) walk(v reflect.Value, path string, depth int) error {
 // declares no marshaler and only promotes it from an embedded trusted type
 // (a type that embeds *unstructured.Unstructured) is trusted: the call is the
 // embedded type's.
-func (w *heldWalk) checkType(t reflect.Type, path string) error {
+func (w *heldWalk) checkType(t reflect.Type, at *trail, suffix string) error {
 	if t.Kind() == reflect.Interface || w.checked[t] {
 		return nil
 	}
@@ -472,7 +535,7 @@ func (w *heldWalk) checkType(t reflect.Type, path string) error {
 		w.checked[t] = true
 		return nil
 	}
-	return errors.Errorf("%s holds a %s, which marshals itself and is not from a trusted package", whereTyped(path), t)
+	return errors.Errorf("%s holds a %s, which marshals itself and is not from a trusted package", whereTyped(at)+suffix, t)
 }
 
 var (
@@ -603,19 +666,19 @@ func trustedPath(p string) bool {
 
 // enter marks the pointer, map or slice v, with its key, as open on the path.
 // A key already open is a value that holds itself: it is refused.
-func (w *heldWalk) enter(v reflect.Value, key heldKey, path string) (done bool, err error) {
+func (w *heldWalk) enter(v reflect.Value, key heldKey, at *trail) (done bool, err error) {
 	if w.open[key] {
-		return true, errors.Errorf("%s holds itself", whereTyped(path))
+		return true, errors.Errorf("%s holds itself", whereTyped(at))
 	}
 	w.open[key] = true
 	return false, nil
 }
 
-func (w *heldWalk) walkStruct(v reflect.Value, path string, depth int) error {
+func (w *heldWalk) walkStruct(v reflect.Value, at *trail, depth int) error {
 	switch v.Type() {
 	case unstructuredType, unstructuredListType:
 		if !v.CanInterface() {
-			return errors.Errorf("%s holds an unstructured object that cannot be read", whereTyped(path))
+			return errors.Errorf("%s holds an unstructured object that cannot be read", whereTyped(at))
 		}
 		m, _ := v.FieldByName("Object").Interface().(map[string]any)
 		if err := reachable(m, w.budget); err != nil {
@@ -623,7 +686,7 @@ func (w *heldWalk) walkStruct(v reflect.Value, path string, depth int) error {
 			return err
 		}
 		if v.Type() == unstructuredListType {
-			return w.walk(v.FieldByName("Items"), path+".Items", depth+1)
+			return w.walk(v.FieldByName("Items"), at.then(".Items"), depth+1)
 		}
 		return nil
 	}
@@ -634,18 +697,15 @@ func (w *heldWalk) walkStruct(v reflect.Value, path string, depth int) error {
 		if !f.IsExported() && !f.Anonymous {
 			continue
 		}
-		if err := w.walk(v.Field(i), path+"."+f.Name, depth+1); err != nil {
+		if err := w.walk(v.Field(i), at.then("."+f.Name), depth+1); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func whereTyped(path string) string {
-	if path == "" {
-		return "the typed object"
-	}
-	return "the typed object" + path
+func whereTyped(at *trail) string {
+	return "the typed object" + at.String()
 }
 
 // reachable reports a value in m that marshalling it would call a method of,
@@ -658,7 +718,7 @@ func reachable(m map[string]any, budget *convBudget) error {
 		return nil
 	}
 	c := &converter{open: map[openKey]bool{}, reach: true, budget: budget}
-	_, err := c.convert(reflect.ValueOf(m), "", 0)
+	_, err := c.convert(reflect.ValueOf(m), nil, 0)
 	return err
 }
 
@@ -706,13 +766,13 @@ func hasMarshaler(t reflect.Type) bool {
 	return false
 }
 
-func (c *converter) convert(v reflect.Value, path string, depth int) (any, error) {
+func (c *converter) convert(v reflect.Value, at *trail, depth int) (any, error) {
 	// An interface and the value it holds are one value, as jsonTyped counts them.
 	if v.Kind() == reflect.Interface && !v.IsNil() {
 		v = v.Elem()
 	}
 	if c.budget.used++; c.budget.used > maxJSONNodes {
-		return nil, errors.Errorf("%s holds more than %d values", where(path), maxJSONNodes)
+		return nil, errors.Errorf("%s holds more than %d values", where(at), maxJSONNodes)
 	}
 	if v.Kind() == reflect.Invalid || v.Kind() == reflect.Interface {
 		return nil, nil
@@ -721,7 +781,7 @@ func (c *converter) convert(v reflect.Value, path string, depth int) (any, error
 		return json.Number(v.String()), nil
 	}
 	if hasMarshaler(v.Type()) {
-		return nil, unsupported(path, v, "it marshals itself")
+		return nil, unsupported(at, v, "it marshals itself")
 	}
 	switch v.Kind() {
 	case reflect.Bool:
@@ -734,7 +794,7 @@ func (c *converter) convert(v reflect.Value, path string, depth int) (any, error
 			if c.reach {
 				return nil, nil
 			}
-			return nil, errors.Errorf("%s holds %d, which is above the largest int64", where(path), u)
+			return nil, errors.Errorf("%s holds %d, which is above the largest int64", where(at), u)
 		}
 		return int64(u), nil
 	case reflect.Float32:
@@ -742,7 +802,7 @@ func (c *converter) convert(v reflect.Value, path string, depth int) (any, error
 		// is 0.1, not 0.10000000149011612.
 		f, err := strconv.ParseFloat(strconv.FormatFloat(v.Float(), 'g', -1, 32), 64)
 		if err != nil {
-			return nil, errors.Wrapf(err, "%s holds a float32 that is no number", where(path))
+			return nil, errors.Wrapf(err, "%s holds a float32 that is no number", where(at))
 		}
 		return f, nil
 	case reflect.Float64:
@@ -750,39 +810,41 @@ func (c *converter) convert(v reflect.Value, path string, depth int) (any, error
 	case reflect.String:
 		return v.String(), nil
 	case reflect.Map:
-		return c.convertMap(v, path, depth)
+		return c.convertMap(v, at, depth)
 	case reflect.Slice:
-		return c.convertSlice(v, path, depth)
+		return c.convertSlice(v, at, depth)
 	case reflect.Chan, reflect.Func, reflect.Complex64, reflect.Complex128, reflect.UnsafePointer:
 		if c.reach {
 			return nil, nil
 		}
-		return nil, unsupported(path, v, "")
+		return nil, unsupported(at, v, "")
 	default:
-		return nil, unsupported(path, v, "")
+		return nil, unsupported(at, v, "")
 	}
 }
 
-func (c *converter) convertMap(v reflect.Value, path string, depth int) (any, error) {
+func (c *converter) convertMap(v reflect.Value, at *trail, depth int) (any, error) {
 	if hasMarshaler(v.Type().Key()) || (v.Type().Key().Kind() != reflect.String && !c.reach) {
-		return nil, unsupported(path, v, "its keys are no plain strings")
+		return nil, unsupported(at, v, "its keys are no plain strings")
 	}
 	if v.IsNil() {
 		return nil, nil
 	}
-	if depth > maxJSONDepth {
-		return nil, errors.Errorf("%s holds a value nested deeper than %d levels", where(path), maxJSONDepth)
+	// The root is level 1 (depth 0), so the map at depth maxJSONDepth is level
+	// maxJSONDepth+1: the first one encoding/json does not take.
+	if depth >= maxJSONDepth {
+		return nil, errors.Errorf("%s holds a value nested deeper than %d levels", where(at), maxJSONDepth)
 	}
 	key := openKey{ptr: v.Pointer()}
 	if c.open[key] {
-		return nil, errors.Errorf("%s holds itself", where(path))
+		return nil, errors.Errorf("%s holds itself", where(at))
 	}
 	c.open[key] = true
 	defer delete(c.open, key)
 	// The count is checked before the keys are collected and sorted, as for a
 	// slice: the work is not in proportion to a map that must be refused.
 	if v.Len() > maxJSONNodes-c.budget.used {
-		return nil, errors.Errorf("%s holds more than %d values", where(path), maxJSONNodes)
+		return nil, errors.Errorf("%s holds more than %d values", where(at), maxJSONNodes)
 	}
 	keys := v.MapKeys()
 	slices.SortFunc(keys, func(a, b reflect.Value) int {
@@ -796,11 +858,7 @@ func (c *converter) convertMap(v reflect.Value, path string, depth int) (any, er
 	})
 	out := make(map[string]any, len(keys))
 	for _, k := range keys {
-		p := k.String()
-		if path != "" {
-			p = path + "." + p
-		}
-		e, err := c.convert(v.MapIndex(k), p, depth+1)
+		e, err := c.convert(v.MapIndex(k), at.key(k.String()), depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -809,45 +867,44 @@ func (c *converter) convertMap(v reflect.Value, path string, depth int) (any, er
 	return out, nil
 }
 
-func (c *converter) convertSlice(v reflect.Value, path string, depth int) (any, error) {
+func (c *converter) convertSlice(v reflect.Value, at *trail, depth int) (any, error) {
 	if v.IsNil() {
 		return nil, nil
 	}
-	if depth > maxJSONDepth {
-		return nil, errors.Errorf("%s holds a value nested deeper than %d levels", where(path), maxJSONDepth)
+	// As for a map: the slice at depth maxJSONDepth is level maxJSONDepth+1.
+	if depth >= maxJSONDepth {
+		return nil, errors.Errorf("%s holds a value nested deeper than %d levels", where(at), maxJSONDepth)
 	}
 	if c.isByteSlice(v.Type()) {
-		// As encoding/json writes it: a base64 string.
-		if v.Len() > maxJSONNodes {
-			return nil, errors.Errorf("%s holds more than %d bytes", where(path), maxJSONNodes)
+		// As encoding/json writes it: a base64 string. The text is made once for
+		// each occurrence of the slice, so its bytes count against the call's
+		// budget as values do, and the check (reach) charges them too: it ends
+		// the call as the conversion would, before the text is made.
+		if v.Len() > maxJSONNodes-c.budget.used {
+			return nil, errors.Errorf("%s holds more than %d bytes", where(at), maxJSONNodes)
 		}
+		c.budget.used += v.Len()
 		if c.reach {
 			return nil, nil
 		}
-		// The text is made once for each occurrence of the slice, so its bytes
-		// count against the call's budget as values do.
-		if v.Len() > maxJSONNodes-c.budget.used {
-			return nil, errors.Errorf("%s holds more than %d bytes", where(path), maxJSONNodes)
-		}
-		c.budget.used += v.Len()
 		return base64.StdEncoding.EncodeToString(v.Bytes()), nil
 	}
 	// The count is checked before the allocation: a slice of a type that needs no
 	// storage can be as long as an int holds.
 	if v.Len() > maxJSONNodes-c.budget.used {
-		return nil, errors.Errorf("%s holds more than %d values", where(path), maxJSONNodes)
+		return nil, errors.Errorf("%s holds more than %d values", where(at), maxJSONNodes)
 	}
 	if v.Len() > 0 {
 		key := openKey{ptr: v.Pointer(), len: v.Len()}
 		if c.open[key] {
-			return nil, errors.Errorf("%s holds itself", where(path))
+			return nil, errors.Errorf("%s holds itself", where(at))
 		}
 		c.open[key] = true
 		defer delete(c.open, key)
 	}
 	out := make([]any, v.Len())
 	for i := range out {
-		e, err := c.convert(v.Index(i), fmt.Sprintf("%s[%d]", path, i), depth+1)
+		e, err := c.convert(v.Index(i), at.at(i), depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -863,16 +920,16 @@ func (c *converter) isByteSlice(t reflect.Type) bool {
 }
 
 // unsupported refuses a value of a shape jsonContentOf does not accept.
-func unsupported(path string, v reflect.Value, why string) error {
+func unsupported(at *trail, v reflect.Value, why string) error {
 	if why != "" {
 		why = ": " + why
 	}
-	return errors.Errorf("%s holds a %s, which kure does not convert to JSON%s", where(path), v.Type(), why)
+	return errors.Errorf("%s holds a %s, which kure does not convert to JSON%s", where(at), v.Type(), why)
 }
 
-func where(path string) string {
-	if path == "" {
-		return "the object"
+func where(at *trail) string {
+	if path := at.String(); path != "" {
+		return path
 	}
-	return path
+	return "the object"
 }

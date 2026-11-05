@@ -2,6 +2,7 @@ package built
 
 import (
 	"reflect"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -113,6 +114,24 @@ func TestGoItems_ItemsOfNoObjectAndAPrivateCycleAreRefusedNotFormatted(t *testin
 	_, isList, _, err := goItems(l)
 	if !isList || err == nil || !strings.Contains(err.Error(), "privateCycleList") {
 		t.Errorf("isList = %v, error %v, want a refusal naming the type", isList, err)
+	}
+}
+
+// Items of a type that is no object are refused before the slots for them are
+// allocated: a slice of bytes can be as long as the caller makes it, and a slot
+// for each is sixteen bytes.
+func TestGoItems_ItemsOfNoObjectAreRefusedBeforeTheirSlotsAreAllocated(t *testing.T) {
+	l := &genericList[[]byte]{Items: make([]byte, 1<<22)}
+	var before, after goruntime.MemStats
+	goruntime.ReadMemStats(&before)
+	_, isList, _, err := goItems(l)
+	goruntime.ReadMemStats(&after)
+	if !isList || err == nil || !strings.Contains(err.Error(), "not objects") {
+		t.Fatalf("isList = %v, error %v, want a refusal naming the items", isList, err)
+	}
+	// Slots for 4 Mi items are 64 MiB; the refusal allocates a message.
+	if got := after.TotalAlloc - before.TotalAlloc; got > 1<<20 {
+		t.Errorf("the refusal allocated %d bytes, want it before the slots are made", got)
 	}
 }
 

@@ -961,8 +961,9 @@ This holds for every integration entry point: all a caller passes is normalized
 at entry, also a value that entry point never reads, so an object holding a byte
 slice of more than 4 million bytes is refused even where no path reads the slice
 (go-kure/kure#1201). The objects of one call that need conversion or a check
-share one budget of 4 million values (the bytes of a byte slice it converts
-count as values). An unstructured object that holds
+share one budget of 4 million values (the bytes of a byte slice count as
+values each time the slice is converted or checked, and an object of a typed
+List is checked before the List is written). An unstructured object that holds
 JSON-typed values only is kept as it is and is not charged to it. A typed
 object is walked in steps (a pointer, a field, an element, a map value, a map
 key of interface type and an embedded struct are one step each, and an

@@ -44,6 +44,12 @@ func goItems(obj runtime.Object) (items []runtime.Object, isList, nilEntry bool,
 	elemType := slice.Type().Elem()
 	isRaw := elemType == rawExtensionType
 	implementsObject := elemType.Implements(objectType)
+	// Items of a type that is no object, and has none addressed, are refused
+	// before the slots for them are allocated: the length of a slice of bytes is
+	// the caller's to choose.
+	if !isRaw && !implementsObject && !reflect.PointerTo(elemType).Implements(objectType) {
+		return nil, true, false, errors.Errorf("a %T is a List whose items are %s, not objects", obj, elemType)
+	}
 	items = make([]runtime.Object, slice.Len())
 	for i := range items {
 		elem := slice.Index(i)
@@ -63,11 +69,8 @@ func goItems(obj runtime.Object) (items []runtime.Object, isList, nilEntry bool,
 			}
 			items[i] = elem.Interface().(runtime.Object)
 		default:
-			o, ok := elem.Addr().Interface().(runtime.Object)
-			if !ok {
-				return nil, true, false, errors.Errorf("a %T is a List whose items are %s, not objects", obj, elemType)
-			}
-			items[i] = o
+			// The pointer to the element is an object, checked above.
+			items[i] = elem.Addr().Interface().(runtime.Object)
 		}
 	}
 	return items, true, nilEntry, nil

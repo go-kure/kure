@@ -106,6 +106,30 @@ func TestNormalizeCallerObjects_ConversionBudgetIsPerCall(t *testing.T) {
 	})
 }
 
+// The walk of a typed List, which runs before anything marshals the List,
+// charges the bytes of the byte slices its unstructured items hold to the call's
+// budget, as the conversion that follows does: items that share one slice, each
+// under the bound, are refused together at the walk, before the List is
+// written.
+func TestWalkHeld_SharedByteSliceOfTypedListItemsIsChargedBeforeMarshalling(t *testing.T) {
+	defer SetMaxJSONNodesForTest(1 << 12)()
+	raw := make([]byte, 1<<11) // half the bound.
+	l := &typedList{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}}
+	l.Name, l.Namespace = "holder", "default"
+	for i := 0; i < 8; i++ {
+		l.Items = append(l.Items, cmWith("cm", map[string]any{"raw": raw}))
+	}
+	_, err := walkHeld(l, &convBudget{})
+	if err == nil || !strings.Contains(err.Error(), "more than") {
+		t.Errorf("got %v, want the walk to refuse with the value limit", err)
+	}
+	// One item alone is under the bound and is not refused.
+	one := &typedList{TypeMeta: l.TypeMeta, Items: l.Items[:1]}
+	if _, err := walkHeld(one, &convBudget{}); err != nil {
+		t.Errorf("one item: got %v, want it accepted", err)
+	}
+}
+
 // A map with more entries than the budget has left is refused before its keys
 // are collected and sorted, as a slice is refused before it is copied: the
 // work is not in proportion to a map that must be refused. Collecting the keys
