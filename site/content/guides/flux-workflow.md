@@ -918,6 +918,22 @@ patch that never touches `dependsOn` no longer refuses a tree that holds a
 the earlier, blunter refusal of every patched tree that holds such an entry
 (go-kure/kure#1226).
 
+A build can also make a Kustomization the tree does not hold, for example a
+renamed copy of an umbrella from a hand-written Kustomization with a
+`namePrefix`. Such a copy may lose the `wait` and `healthChecks` the rewrite
+clears on the umbrella only when its whole spec before the rewrite equals the
+spec of an umbrella of the tree, either as the build shows that umbrella or as
+the tree holds it (a patch on an ancestor changes the first, not a copy made
+from the umbrella's directory). If a patch of the copy changes any field of its
+spec, it is no copy but a Kustomization with a spec of its own, and the loss is
+refused as a different `spec.wait` or `spec.healthChecks`. When the tree cannot
+be built before the rewrite, a Kustomization the tree holds is trusted as the
+object the controller applies only if every writer of its applied copy is the
+Flux bootstrap or a Kustomization with no patches, components, name prefix or
+suffix, target namespace or `postBuild`. Any other writer could have changed
+what the directory holds, so the tree is refused with a message that it does
+not hold the Kustomization the build makes (go-kure/kure#1247).
+
 The integrated placements apply all three rules. `GenerateForBundle` applies
 the first two to the one Kustomization it returns, and `GenerateFromLayout`,
 `GenerateFromCluster` and `FluxSeparate` refuse the setting.

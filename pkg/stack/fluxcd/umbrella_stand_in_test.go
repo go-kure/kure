@@ -424,6 +424,62 @@ func TestStandIn_HeldLeafOfAPlainWriterStandsOnTheFallback(t *testing.T) {
 	}
 }
 
+// The tree of the plain-writer test above, in which the Kustomization l applies
+// the held Kustomization z, with one difference: l substitutes variables
+// (spec.postBuild) and transforms nothing else, so it has no patch, component,
+// name prefix, name suffix or target namespace. The substitution could rewrite
+// what the directory of z holds, so a held z does not prove it is the object the
+// controller applies: the postBuild clause of the fallback refuses it, on its
+// own. Without the postBuild (ctl) l is the plain writer of the test above and
+// the tree is admitted; that pair pins the clause, so that removing it cannot
+// silently widen the exemption.
+func TestStandIn_HeldLeafOfAPostBuildOnlyWriterIsRefusedOnTheFallback(t *testing.T) {
+	const keep = "- op: test\n  path: /spec/dependsOn/2/name\n  value: v\n"
+	for name, tc := range map[string]struct {
+		edit    func(*kustv1.Kustomization)
+		refused bool
+	}{
+		"postBuild only": {
+			func(l *kustv1.Kustomization) {
+				l.Spec.PostBuild = &kustv1.PostBuild{Substitute: map[string]string{"OTHER": "red"}}
+			},
+			true,
+		},
+		"no postBuild (ctl)": {nil, false},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				rules := withPlacement(nodeOnly, placement)
+				build := func(path string) *stack.Cluster {
+					c := builtClassCluster([]string{"v"}, patchOnS(keep))
+					if path != "" {
+						l := handWritten("l")
+						l.Spec.Path, l.Spec.Wait = path, true
+						if tc.edit != nil {
+							tc.edit(l)
+						}
+						c.Node.Children = append(c.Node.Children, &stack.Node{Name: "owner", Bundle: srBundle("owner", objApp("owner-app", l))})
+					}
+					return c
+				}
+				// The stray layout's path depends on the root layout alone.
+				stray := strayLayout(mustWalk(t, build(""), rules), handWritten("z")).FullRepoPath()
+				c := build(stray)
+				ml := mustWalk(t, c, rules)
+				strayLayout(ml, handWritten("z"))
+				err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules)
+				if tc.refused {
+					wantRefusedWith(t, err, `the build of the tree makes Flux Kustomization "flux-system/z", which the tree does not hold`)
+					return
+				}
+				if err != nil {
+					t.Fatalf("got %v, want the tree admitted", err)
+				}
+			})
+		}
+	}
+}
+
 // The umbrella platform builds the umbrella mid (interval 1m), which builds the
 // leaf. A hand-written Kustomization builds the directory that holds mid, with
 // the name prefix x-: it makes x-mid, a renamed copy of the umbrella. A patch of
