@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"testing"
@@ -68,6 +69,22 @@ type zeroItem struct {
 
 func (o *zeroItem) DeepCopyObject() runtime.Object { c := *o; return &c }
 
+// probeZeroHolder is a field whose IsZero formats a private map that holds
+// itself, which has no end: the stack overflows, and nothing recovers that.
+type probeZeroHolder struct{ held *unstructured.Unstructured }
+
+func (p probeZeroHolder) IsZero() bool { return fmt.Sprint(p.held.Object) == "" }
+
+// probeZeroResource holds that field with the omitzero tag, so encoding/json
+// calls its IsZero when it writes the resource.
+type probeZeroResource struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Probe             probeZeroHolder `json:"probe,omitzero"`
+}
+
+func (o *probeZeroResource) DeepCopyObject() runtime.Object { c := *o; return &c }
+
 // unwrittenItems is a typed List whose Items are not written, and which
 // writes another array of the same length under items.
 type unwrittenItems struct {
@@ -78,6 +95,17 @@ type unwrittenItems struct {
 }
 
 func (l *unwrittenItems) DeepCopyObject() runtime.Object { c := *l; return &c }
+
+// hiddenProbeItems is a typed List like unwrittenItems, whose hidden items
+// hold the field whose IsZero overflows the stack.
+type hiddenProbeItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []*probeZeroResource `json:"-"`
+	Written           []any                `json:"items"`
+}
+
+func (l *hiddenProbeItems) DeepCopyObject() runtime.Object { c := *l; return &c }
 
 // recursiveEmbed embeds itself and a trusted marshaler: checking whether its
 // marshaler is promoted from a trusted type must not recurse without end.
@@ -111,6 +139,13 @@ func hostileCases() map[string]func() client.Object {
 		"typed nil unstructured resource": func() client.Object { return (*unstructured.Unstructured)(nil) },
 		"type that embeds itself and a trusted marshaler": func() client.Object {
 			return &recursiveEmbed{Unstructured: unstructuredObj("v1", "ConfigMap", "default", "cm")}
+		},
+		"omitzero IsZero formats a map that holds itself": func() client.Object {
+			u := unstructuredObj("v1", "ConfigMap", "default", "cm")
+			u.Object["self"] = u.Object
+			o := &probeZeroResource{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Thing"}, Probe: probeZeroHolder{held: u}}
+			o.Name, o.Namespace = "holder", "default"
+			return o
 		},
 		"wrapper embedding Unstructured holds a plain int": func() client.Object {
 			u := unstructuredObj("v1", "ConfigMap", "default", "cm")
@@ -215,6 +250,15 @@ func hostileCases() map[string]func() client.Object {
 			l.Name, l.Namespace = "holder", "default"
 			return l
 		},
+		"list whose hidden item formats a map that holds itself": func() client.Object {
+			u := unstructuredObj("v1", "ConfigMap", "default", "cm")
+			u.Object["self"] = u.Object
+			item := &probeZeroResource{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Thing"}, Probe: probeZeroHolder{held: u}}
+			item.Name, item.Namespace = "item", "default"
+			l := &hiddenProbeItems{TypeMeta: metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "List"}, Items: []*probeZeroResource{item}, Written: []any{map[string]any{"apiVersion": "v1", "kind": "ConfigMap"}}}
+			l.Name, l.Namespace = "holder", "default"
+			return l
+		},
 		"map key that holds itself": func() client.Object {
 			m := map[string]any{}
 			m["self"] = m
@@ -306,6 +350,8 @@ var refusalNames = map[string]string{
 	"GetObjectKind panics with a string":                        "fluxcd_test.kindPanics",
 	"GetObjectKind panics with a nil error":                     "fluxcd_test.kindPanics",
 	"marshaler of another package in a private field":           "hidingItem",
+	"omitzero IsZero formats a map that holds itself":           "fluxcd_test.probeZeroHolder, whose IsZero method is called for its omitzero tag",
+	"list whose hidden item formats a map that holds itself":    "fluxcd_test.probeZeroHolder, whose IsZero method is called for its omitzero tag",
 }
 
 // heavyCases are the cases that run to a bound of the walk (maxJSONNodes): each
@@ -346,6 +392,9 @@ func TestHostileResources_Child(t *testing.T) {
 	if heavyCases[name] {
 		defer fluxstack.SetMaxJSONNodesForTest(heavyBound)()
 	}
+	// A case that overflows the stack must end soon, not after the default 1 GB
+	// of stack is used: lower the limit in this child only.
+	debug.SetMaxStack(64 << 20)
 	for _, a := range runHostile(r, heavyCases[name]) {
 		fmt.Println("ANSWER " + a)
 	}
