@@ -489,9 +489,14 @@ dependency requires one of them (external-secrets v2.14 does) the module no long
 The `replace` holds kube-openapi at its last v6 commit. Go applies `replace` directives only in
 the main module, so a module that requires kure and resolves the same versions does not inherit
 it: it needs the same `replace` in its own `go.mod`. A `renovate.json` rule disables updates
-to that line: Renovate reads every commit of an untagged module as a new digest and would
-otherwise move it into the `kubernetes` group's PR, which then fails to build. Remove both, the
-`replace` line and the rule, with the Kubernetes v0.38 GA bump, whose apimachinery moves to v7.
+to that line and to the `require` line of the same module: Renovate reads every commit of an
+untagged module as a new digest and would otherwise move the `replace` into the `kubernetes`
+group's PR, which then fails to build. A bump of the `require` line alone changes nothing that
+kure builds or tests, because the `replace` wins here. It raises the minimum
+kube-openapi version that kure requires, which matters to modules that do not inherit the
+`replace`, and no check here builds against it. `go mod tidy` raises the `require`
+line when a dependency needs a newer one. Remove both, the `replace` line and the rule, with
+the Kubernetes v0.38 GA bump, whose apimachinery moves to v7.
 That bump fails to compile while the pin is still in place, so it cannot be missed.
 
 **When can replace directives be removed?** Only when ALL direct and transitive dependencies converge on the same `k8s.io/` minor version. Check with:

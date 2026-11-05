@@ -39,10 +39,9 @@
       "enabled": false
     },
     {
-      "description": "go.mod's k8s.io/kube-openapi replace holds the last commit built on sigs.k8s.io/structured-merge-diff/v6, which apimachinery v0.37 uses; later commits need v7 and break the build. kube-openapi is untagged, so the gomod manager reads every upstream commit as a new digest and would move the replace into the kubernetes group's PR, red. Disable updates to that replace; remove this rule together with the replace line at the Kubernetes v0.38 GA bump (see docs/dependency-updates.md). The require line stays indirect, which Renovate does not update.",
+      "description": "go.mod's k8s.io/kube-openapi replace holds the last commit built on sigs.k8s.io/structured-merge-diff/v6, which apimachinery v0.37 uses; later commits need v7 and break the build. kube-openapi is untagged, so the gomod manager reads every upstream commit as a new digest and would move the replace into the kubernetes group's PR, red. Disable updates to that replace and to the require line; remove this rule together with the replace line at the Kubernetes v0.38 GA bump (see docs/dependency-updates.md). The require line is a direct requirement (kure imports kube-openapi), so the rule must match the require dependency type as well as the replace one (go-kure/kure#1268). A bump of the require line changes nothing that kure builds or tests, because the replace wins here. It raises the minimum kube-openapi version that kure requires, which matters to modules that do not inherit the replace, and no check here builds against it. go mod tidy raises the require line when a dependency needs a newer one.",
       "matchManagers": ["gomod"],
       "matchPackageNames": ["k8s.io/kube-openapi"],
-      "matchDepTypes": ["replace"],
       "enabled": false
     },
     {
