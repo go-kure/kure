@@ -27,7 +27,8 @@ func TestNestingLimit_IsExactlyWhatEncodingJSONTakes(t *testing.T) {
 		return map[string]any{"n": v}
 	}
 	for _, useSlices := range []bool{false, true} {
-		for _, leaf := range []any{"x", 53} {
+		// A byte slice is written as a string: it adds no level.
+		for _, leaf := range []any{"x", 53, []byte("x")} {
 			for _, levels := range []int{maxJSONDepth, maxJSONDepth + 1} {
 				m := nested(levels, useSlices, leaf)
 				_, marshalErr := json.Marshal(m)
