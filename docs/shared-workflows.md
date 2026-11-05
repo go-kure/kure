@@ -135,9 +135,15 @@ The full design, failure handling and reconciliation rules are in
 
 The calling repository's `claude.yml` calls
 [`claude.yml`](https://github.com/go-kure/.github/blob/main/.github/workflows/claude.yml) in
-`go-kure/.github` on new issue comments, pull-request review comments, submitted pull-request
-reviews, and opened or assigned issues. The job runs only when the comment, review body, issue
-body or issue title contains `@claude`.
+`go-kure/.github` on new issue comments (a pull request's conversation comments are issue
+comments) and on opened or assigned issues. The job runs only when the comment, issue body or
+issue title contains `@claude`.
+
+The calling workflow does not register `pull_request_review_comment` or `pull_request_review`,
+although the shared workflow still handles them. Copilot fires both on every push, GitHub holds a
+bot-triggered run as `action_required` until a human approves it, before any job condition is
+read, and that left the pull request not clean. So `@claude` in an inline diff thread or a review
+body does nothing: mention it in a pull-request conversation comment.
 
 It runs [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action) on
 the self-hosted runner, authenticated with the `CLAUDE_CODE_OAUTH_TOKEN` secret, with read
