@@ -41,6 +41,7 @@ import (
 func TestMain(m *testing.M) {
 	start := time.Now()
 	code := m.Run()
+	testsTook := time.Since(start)
 	// m.Run stops the -timeout alarm before it returns, so the replay keeps
 	// to what is left of the timeout under an alarm of its own, which fails
 	// as the testing package's does.
@@ -62,7 +63,7 @@ func TestMain(m *testing.M) {
 		}
 		alarm = time.AfterFunc(left, timedOut)
 	}
-	ok := buildsAsFlux()
+	ok := buildsAsFlux(testsTook)
 	// An alarm can be due and not yet run, or be running, when the replay
 	// ends, so whether it timed out is read from the clock, not the alarm.
 	if alarm != nil {
@@ -197,8 +198,11 @@ func buildResult(rm resmap.ResMap, err error, root string) string {
 // buildsAsFlux builds every tree in fluxInputs again with Flux's SecureBuild
 // and reports, on stderr, each build that gave something else than
 // buildLikeFlux did. It runs once no test runs, so the schema reset of
-// SecureBuild races with nothing.
-func buildsAsFlux() bool {
+// SecureBuild races with nothing. It prints how long the replay took beside
+// testsTook, how long the tests took, so a CI log shows what the replay costs
+// (go-kure/kure#1265).
+func buildsAsFlux(testsTook time.Duration) bool {
+	replayStart := time.Now()
 	ok, n := true, 0
 	fluxInputs.Range(func(_, v any) bool {
 		in := v.(fluxInput)
@@ -214,7 +218,7 @@ func buildsAsFlux() bool {
 		}
 		return true
 	})
-	fmt.Printf("buildsAsFlux: %d builds compared with Flux's SecureBuild\n", n)
+	fmt.Printf("buildsAsFlux: %d builds compared with Flux's SecureBuild in %.1fs (tests took %.1fs)\n", n, time.Since(replayStart).Seconds(), testsTook.Seconds())
 	return ok
 }
 
