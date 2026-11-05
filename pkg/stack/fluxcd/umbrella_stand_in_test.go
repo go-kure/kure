@@ -3,11 +3,13 @@ package fluxcd_test
 import (
 	"testing"
 
+	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"github.com/fluxcd/pkg/apis/kustomize"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 // Tests for go-kure/kure#1247: under UmbrellasDoNotWait a Kustomization the
@@ -186,6 +188,134 @@ func TestStandIn_HandWrittenLeafKeepsItsFields(t *testing.T) {
 			rules := withPlacement(nodeOnly, placement)
 			build := func(path string) *stack.Cluster {
 				c := builtClassCluster([]string{"v"})
+				if path != "" {
+					l := handWritten("l")
+					l.Spec.Path, l.Spec.Wait = path, true
+					c.Node.Children = append(c.Node.Children, &stack.Node{Name: "owner", Bundle: srBundle("owner", objApp("owner-app", l))})
+				}
+				return c
+			}
+			// The stray layout's path depends on the root layout alone.
+			stray := strayLayout(mustWalk(t, build(""), rules), handWritten("z")).FullRepoPath()
+			c := build(stray)
+			ml := mustWalk(t, c, rules)
+			strayLayout(ml, handWritten("z"))
+			if err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules); err != nil {
+				t.Fatalf("got %v, want the tree admitted", err)
+			}
+		})
+	}
+}
+
+// heldCloneOnTheFallback integrates the tree of the fallback tests above: a
+// hand-written Kustomization builds the directory holding s with the name prefix
+// x- and the patch on s, so the build before the rewrite fails (index 2 is out of
+// range for [platform v]) and the copy x-s is made after it. The tree also holds
+// a clone of the generated s named x-s in a directory no writer builds, whose
+// dependsOn is held and which edit may change. It returns the integration's error.
+func heldCloneOnTheFallback(t *testing.T, placement layout.FluxPlacement, patch string, held []string, edit func(*kustv1.Kustomization)) error {
+	t.Helper()
+	rules := withPlacement(nodeOnly, placement)
+	build := func(path string) *stack.Cluster {
+		c := builtClassCluster([]string{"v"})
+		if path != "" {
+			k := handWritten("hand-written")
+			k.Spec.Path, k.Spec.NamePrefix = path, "x-"
+			k.Spec.Patches = []kustomize.Patch{{Patch: patch, Target: &kustomize.Selector{Kind: "Kustomization", Name: "s"}}}
+			c.Node.Children = append(c.Node.Children, &stack.Node{Name: "patcher", Bundle: srBundle("patcher", objApp("patcher-app", k))})
+		}
+		return c
+	}
+	probed, err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).CreateLayoutWithResources(build(""), rules)
+	if err != nil {
+		t.Fatalf("CreateLayoutWithResources: %v", err)
+	}
+	generated := findKustomization(probed, "s")
+	if generated == nil {
+		t.Fatal("no generated Kustomization s")
+	}
+	clone := generated.DeepCopy()
+	clone.Name = "x-s"
+	clone.Spec.DependsOn = handWritten("held", held...).Spec.DependsOn
+	if edit != nil {
+		edit(clone)
+	}
+	var asObject client.Object = clone
+
+	c := build(hostPathOf(t, func() *stack.Cluster { return build("") }, rules, "s"))
+	ml := mustWalk(t, c, rules)
+	strayLayout(ml, asObject)
+	return fluxstack.NewLayoutIntegrator(noWaitGenerator()).IntegrateWithLayout(ml, c, rules)
+}
+
+// The same tree as the fallback test above, with a held clone whose dependsOn is
+// the copy's list after the patch, [y-infra y-services], so the copy loses its
+// wait on v. The patch also sets a graph field on the copy that no member of the
+// tree has, and the clone carries the same value: the clone has the copy's graph
+// fields besides dependsOn, and the copy matches no member on them. A held
+// object that matches the copy on every graph field is no proof that it was not
+// made by a build of a member, so it does not stand for the copy: the loss is
+// refused. Without the field on the clone it differs from the copy and is
+// refused as before (ctl).
+func TestStandIn_HeldCloneWithAPatchedGraphFieldDoesNotHideALostWaitOnTheFallback(t *testing.T) {
+	const drop = "- op: remove\n  path: /spec/dependsOn/2\n"
+	for name, tc := range map[string]struct {
+		patch string
+		edit  func(*kustv1.Kustomization)
+	}{
+		"ignoreMissingComponents": {
+			drop + "- op: add\n  path: /spec/ignoreMissingComponents\n  value: true\n",
+			func(k *kustv1.Kustomization) { k.Spec.IgnoreMissingComponents = true },
+		},
+		"targetNamespace": {
+			drop + "- op: add\n  path: /spec/targetNamespace\n  value: ns-x\n",
+			func(k *kustv1.Kustomization) { k.Spec.TargetNamespace = "ns-x" },
+		},
+		"ignoreMissingComponents, clone without it (ctl)": {
+			drop + "- op: add\n  path: /spec/ignoreMissingComponents\n  value: true\n",
+			nil,
+		},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				err := heldCloneOnTheFallback(t, placement, tc.patch, []string{"y-infra", "y-services"}, tc.edit)
+				wantRefusedWith(t, err, `the build of the tree makes Flux Kustomization "flux-system/x-s", which the tree does not hold`)
+			})
+		}
+	}
+}
+
+// The patch only tests index 2 (it fails on [platform v] and holds on
+// [y-infra y-services v]) and changes nothing, so the copy x-s loses no wait,
+// and the tree holds a clone of exactly the copy. The copy is a Kustomization a
+// build of a hand-written Kustomization with a name prefix made, so it is not
+// the held object, however equal they are: the tree is refused. A deliberate
+// over-refusal, the price of not guessing which of the two the controller
+// applies, stated in the README.
+func TestStandIn_HeldCloneEqualToTheCopyOfATransformingWriterIsRefusedOnTheFallback(t *testing.T) {
+	const keep = "- op: test\n  path: /spec/dependsOn/2/name\n  value: v\n"
+	for _, placement := range integratedPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			err := heldCloneOnTheFallback(t, placement, keep, []string{"y-infra", "y-services", "v"}, nil)
+			wantRefusedWith(t, err, `the build of the tree makes Flux Kustomization "flux-system/x-s", which the tree does not hold`)
+		})
+	}
+}
+
+// An application's own Kustomization l, a leaf that applies the Kustomization z
+// and waits, is written by the plain Kustomization of its bundle: no patch, no
+// name prefix, no target namespace, no postBuild. The tree cannot be built
+// before the rewrite (web patches s with a test of index 2, which fails on
+// [platform v] and holds on [y-infra y-services v], and changes nothing), so the
+// fallback judges what the build makes. l and z are the objects the tree holds,
+// written by Kustomizations that transform nothing: the tree is admitted.
+func TestStandIn_HeldLeafOfAPlainWriterStandsOnTheFallback(t *testing.T) {
+	const keep = "- op: test\n  path: /spec/dependsOn/2/name\n  value: v\n"
+	for _, placement := range integratedPlacements {
+		t.Run(string(placement), func(t *testing.T) {
+			rules := withPlacement(nodeOnly, placement)
+			build := func(path string) *stack.Cluster {
+				c := builtClassCluster([]string{"v"}, patchOnS(keep))
 				if path != "" {
 					l := handWritten("l")
 					l.Spec.Path, l.Spec.Wait = path, true
