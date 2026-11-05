@@ -8,10 +8,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// This file is the guard for a method of an object a caller holds. Kure calls
-// such a method in two places, and both go through the guard here: the read of
-// a built tree (kindOf, marshalHeld), and the labels and annotations that
-// Bundle.Generate writes (CallHeld). A caller's object may panic in its
+// This file is the guard for a method of an object a caller holds. Two paths
+// go through it: the read of a built tree (kindOf, marshalHeld), and the labels
+// and annotations that Bundle.Generate writes (CallHeld). Other public helpers
+// call such a method too, and say in their doc comment that they do not
+// recover a panic of it. A caller's object may panic in its
 // methods, or hold a value that formats without end, so a call into it is
 // guarded here, and a refusal names the Go type of the object and nothing it
 // holds: a caller's value is never formatted and never has a method called on

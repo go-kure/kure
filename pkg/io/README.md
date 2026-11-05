@@ -374,9 +374,9 @@ The example prints one ConfigMap three ways: as YAML, as a table through a `Reso
 `ValidateOutputFormat` turns that string into an `OutputFormat`, and fails on one it does not
 know. `PrintObjectsAsTable` prints a table directly, without a `ResourcePrinter`.
 
-The printers call methods of the objects they are given (`GetObjectKind`, `GetName`,
-`GetNamespace`) and do not recover a panic of those methods: an object whose method panics
-panics the call.
+The printers call methods of the objects they are given (the name format calls `GetObjectKind`,
+`GetName` and `GetNamespace`; the table printers call `GetNamespace` and `GetName`) and do not
+recover a panic of those methods: an object whose method panics panics the call.
 
 <!-- doc-example: pkg/io ExampleNewResourcePrinter -->
 ```go

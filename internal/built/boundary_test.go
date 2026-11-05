@@ -10,8 +10,8 @@ import (
 	"testing"
 )
 
-// A caller's object is read in one place. These checks pin the rule that keeps
-// a hostile object from crashing kure (go-kure/kure#1201): the package reads a
+// A caller's object is read in one place in this package. These checks pin the
+// rule that keeps a hostile object from crashing kure (go-kure/kure#1201): the package reads a
 // List's items by reflection (items.go) and calls a method of a caller's
 // object only through the guard (held.go), and the files that read never
 // format a value with %v, which has no end for a value that holds itself.
