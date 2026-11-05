@@ -495,12 +495,13 @@ group's PR, which then fails to build. A bump of the `require` line alone change
 kure builds or tests, because the `replace` wins here. It raises the minimum
 kube-openapi version that kure requires, which matters to modules that do not inherit the
 `replace`, and no check here builds against it. `go mod tidy` raises the `require`
-line when a dependency needs a newer one. The same rule also stops the security-update PR
-for this module: Renovate adds the rule for a GitHub advisory after the repository's own
-rules and forces only the `vulnerabilityAlerts` settings, which do not include `enabled`.
-This reading comes from Renovate's source and has not been tested on a repository. For a
-kube-openapi advisory, watch the advisory feed or `govulncheck` instead of waiting for a PR.
-Remove both, the `replace` line and the rule, with
+line when a dependency needs a newer one. The rule does not stop a security-update PR
+for this module. The shared preset sets `vulnerabilityAlerts.enabled: true`, and Renovate adds
+the rule for an advisory after the repository's own rules with those settings forced, which
+overrides `enabled: false`. The org Renovate standards in `go-kure/.github` record this as verified
+on several Renovate releases. So an advisory for kube-openapi can still open a PR. The `replace`
+pins kube-openapi at a commit chosen by a person, so treat that PR as a prompt to assess the pin
+by hand, not as a change to merge. Remove both, the `replace` line and the rule, with
 the Kubernetes v0.38 GA bump, whose apimachinery moves to v7.
 That bump fails to compile while the pin is still in place, so it cannot be missed.
 
