@@ -88,6 +88,94 @@ func TestStandIn_NonMemberLosesWaitThroughALabelSelectedPatch(t *testing.T) {
 	}
 }
 
+// A hand-written Kustomization builds the directory holding s with the name
+// prefix x-, and the first patch labels the copy x-s with its first dependsOn
+// entry and gives it the spec.path of the generated umbrella platform, so x-s
+// applies Flux Kustomizations. The second patch selects the label d=y-infra,
+// which only the rewritten dependsOn gives, and removes spec.healthChecks or
+// spec.wait: x-s loses what it held. A copy of platform that a build makes has
+// the whole spec of platform before the rewrite, and only it loses them without a
+// refusal. x-s is a leaf of its own, with a spec of its own, whatever else it
+// shares with platform: with a health check added, with the dependsOn of s (it
+// keeps platform's path and nothing else), or with the dependsOn of platform and
+// another interval, it is refused. With the dependsOn of platform removed from
+// it as well, nothing of its spec differs from platform's: it is a duplicate of
+// the umbrella and loses what the umbrella loses. The specs are compared as the
+// typed Kustomization encodes them.
+func TestStandIn_LeafWithItsOwnReadinessIsNotTakenForACopyOfAnUmbrella(t *testing.T) {
+	const check = "- op: add\n  path: /spec/healthChecks\n" +
+		"  value: [{apiVersion: apps/v1, kind: Deployment, name: manual-check, namespace: default}]\n"
+	// platform depends on nothing before the rewrite, so removing s's own
+	// dependsOn gives x-s the dependsOn of platform.
+	const noDeps = "- op: remove\n  path: /spec/dependsOn\n"
+	const interval = "- op: add\n  path: /spec/interval\n  value: 17m0s\n"
+	for name, tc := range map[string]struct {
+		addCheck, noDeps, interval bool
+		drop                       string
+		refused                    string
+	}{
+		"check added, check removed":                                {true, false, false, "healthChecks", "spec.healthChecks"},
+		"check added, wait removed":                                 {true, false, false, "wait", "spec.wait"},
+		"check added, kept (ctl)":                                   {true, false, false, "", ""},
+		"no check, wait removed":                                    {false, false, false, "wait", "spec.wait"},
+		"no check, nothing removed (ctl)":                           {false, false, false, "", ""},
+		"same dependsOn, interval changed, wait removed":            {false, true, true, "wait", "spec.wait"},
+		"same dependsOn, interval changed, kept (ctl)":              {false, true, true, "", ""},
+		"same dependsOn and interval, wait removed (duplicate ctl)": {false, true, false, "wait", ""},
+	} {
+		for _, placement := range integratedPlacements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				rules := withPlacement(nodeOnly, placement)
+				build := func(host, umbrellaPath string) *stack.Cluster {
+					c := builtClassCluster([]string{"v"})
+					if host == "" {
+						return c
+					}
+					k := handWritten("hand-written")
+					k.Spec.Path, k.Spec.NamePrefix = host, "x-"
+					first := labelDependsOnZero(umbrellaPath)
+					if tc.addCheck {
+						first += check
+					}
+					if tc.noDeps {
+						first += noDeps
+					}
+					if tc.interval {
+						first += interval
+					}
+					k.Spec.Patches = []kustomize.Patch{{Patch: first, Target: &kustomize.Selector{Kind: "Kustomization", Name: "s"}}}
+					if tc.drop != "" {
+						k.Spec.Patches = append(k.Spec.Patches, kustomize.Patch{
+							Patch:  "- op: remove\n  path: /spec/" + tc.drop + "\n",
+							Target: &kustomize.Selector{Kind: "Kustomization", LabelSelector: "d=y-infra"},
+						})
+					}
+					c.Node.Children = append(c.Node.Children, &stack.Node{Name: "patcher", Bundle: srBundle("patcher", objApp("patcher-app", k))})
+					return c
+				}
+				probed, err := fluxstack.NewLayoutIntegrator(noWaitGenerator()).CreateLayoutWithResources(build("", ""), rules)
+				if err != nil {
+					t.Fatalf("CreateLayoutWithResources: %v", err)
+				}
+				platform := findKustomization(probed, "platform")
+				if platform == nil {
+					t.Fatal("no generated Kustomization platform")
+				}
+				host := hostPathOf(t, func() *stack.Cluster { return build("", "") }, rules, "s")
+				c := build(host, platform.Spec.Path)
+				_, err = fluxstack.NewLayoutIntegrator(noWaitGenerator()).CreateLayoutWithResources(c, rules)
+				if tc.refused != "" {
+					wantRefusedWith(t, err, `Flux Kustomization "flux-system/x-s" has a different `+tc.refused+` after the rewrite than before it`)
+					return
+				}
+				if err != nil {
+					t.Fatalf("got %v, want the tree admitted", err)
+				}
+			})
+		}
+	}
+}
+
 // The build before the rewrite fails (remove /spec/dependsOn/2 is out of range
 // for [platform v] and valid for [y-infra y-services v]), so the pass judges
 // the written entries from the tree alone. The copy x-s loses its wait on v. The

@@ -79,6 +79,9 @@ type viewSnapshot struct {
 	classes map[string]map[string]classSet
 	// fields holds, per identity, specFields of its spec without dependsOn.
 	fields map[string]map[string]string
+	// spec holds, per identity, specJSON of its spec: the whole spec, dependsOn
+	// included. copiesAnUmbrella compares it.
+	spec map[string]string
 }
 
 // depSnapshot is the snapshot of every view of one tree
@@ -167,6 +170,7 @@ func snapshotView(v *builtView) (*viewSnapshot, error) {
 		built:   map[string]bool{},
 		classes: map[string]map[string]classSet{},
 		fields:  map[string]map[string]string{},
+		spec:    map[string]string{},
 	}
 	for _, k := range v.t.kusts {
 		s.ids[crKey(k.Namespace, k.Name)] = true
@@ -198,6 +202,9 @@ func snapshotView(v *builtView) (*viewSnapshot, error) {
 		}
 		delete(fields, "dependsOn")
 		s.fields[id] = fields
+		if s.spec[id], err = specJSON(k); err != nil {
+			return nil, err
+		}
 	}
 	return s, nil
 }
@@ -392,21 +399,6 @@ func (v *builtView) writtenByPlainWritersOnly(x string) bool {
 	})
 }
 
-// sameBesidesReadiness reports whether a and b, graphFields as specFields reads
-// them, agree on every field other than dependsOn, wait and healthChecks.
-func sameBesidesReadiness(a, b map[string]string) bool {
-	for _, field := range graphFields {
-		switch field {
-		case "dependsOn", "wait", "healthChecks":
-			continue
-		}
-		if a[field] != b[field] {
-			return false
-		}
-	}
-	return true
-}
-
 // checkSameIdentities refuses a view q that builds other identities than p,
 // the same view before the rewrite. A patch may copy a dependsOn entry into
 // the metadata (a JSON6902 copy of /spec/dependsOn/0/name into /metadata/name),
@@ -481,12 +473,17 @@ func (t *kustomizationTree) checkReadinessFields(v *builtView, p, q *viewSnapsho
 		// A build may make a copy of an umbrella, with the wait the pass
 		// cleared on the umbrella it copies; that wait may go, and no other
 		// field may differ. A copy is a non-member that applies Flux
-		// Kustomizations and, before the rewrite, had the fields of an
-		// umbrella of the tree other than dependsOn, wait and healthChecks
-		// (go-kure/kure#1247): a patch may rename it, and may not give it
-		// another path. A Kustomization the tree holds as a leaf that
-		// applies Flux Kustomizations keeps its own.
-		copied := !v.isMember(x) && len(v.written(x)) > 0 && copiesAnUmbrella(before, x, f.terminals)
+		// Kustomizations and, before the rewrite, had the whole spec of an
+		// umbrella of the tree (go-kure/kure#1247): a patch may rename it,
+		// and may not give it another path, nor a wait, a health check or
+		// a dependency of its own, nor change any other field of its spec.
+		// A Kustomization the tree holds as a leaf that applies Flux
+		// Kustomizations keeps its own.
+		var specs map[string]string
+		if p != nil {
+			specs = p.spec
+		}
+		copied := !v.isMember(x) && len(v.written(x)) > 0 && copiesAnUmbrella(specs, x, f.terminals)
 		if err := checkFields(x, before[x], q.fields[x], treeUmbrella, copied); err != nil {
 			return err
 		}
@@ -522,18 +519,25 @@ func allHold(by map[string]classSet, keys []string, need int) bool {
 	return len(keys) > 0
 }
 
-// copiesAnUmbrella reports whether x, in fields (each identity's fields before
-// the rewrite, without dependsOn), has the fields of an umbrella of the tree
-// other than dependsOn, wait and healthChecks. Without a recorded umbrella or
-// x, it is not a copy: a Kustomization that cannot be compared is judged as
-// one the tree keeps.
-func copiesAnUmbrella(fields map[string]map[string]string, x string, umbrellas map[string][]string) bool {
-	mine, ok := fields[x]
+// copiesAnUmbrella reports whether x, in specs (the whole spec of each identity
+// before the rewrite, specJSON), has the spec of an umbrella of the tree. A copy
+// of an umbrella made by a build has the umbrella's spec as it was before the
+// rewrite, wait, health checks and dependencies included, so the ones it loses
+// are the ones it inherited; a Kustomization with a field of its own does not.
+// The specs are compared as the typed Kustomization encodes them, with the keys
+// in the order encoding/json gives them: a duration written 60s or 1m, and an
+// empty or an absent list, compare equal, and only a value the typed form keeps
+// can tell two specs apart. A Kustomization with the whole spec of an umbrella
+// is a duplicate of it, and loses what the umbrella loses. Without a recorded
+// umbrella or x, it is not a copy: a Kustomization that cannot be compared is
+// judged as one the tree keeps.
+func copiesAnUmbrella(specs map[string]string, x string, umbrellas map[string][]string) bool {
+	mine, ok := specs[x]
 	if !ok {
 		return false
 	}
 	for u := range umbrellas {
-		if theirs, ok := fields[u]; ok && u != x && sameBesidesReadiness(mine, theirs) {
+		if theirs, ok := specs[u]; ok && u != x && mine == theirs {
 			return true
 		}
 	}
