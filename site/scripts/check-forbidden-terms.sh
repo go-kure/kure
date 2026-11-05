@@ -99,15 +99,20 @@ allowed() {
 # `xFirstSecond`, with both segments terms, the second would go unseen and a pragma
 # for the first would excuse the line.
 line_words() {
-  local text="$1" w words=""
+  local text="$1" w words="" cap up
   for w in ${TERMS_RE//|/ }; do
+    # The capitalised and upper-case forms come from tr, not from Bash's case-conversion
+    # expansions: those need Bash 4, and the stock Bash 3.2 of macOS aborts on them
+    # (go-kure/.github#305).
+    cap="$(printf '%s' "${w:0:1}" | tr '[:lower:]' '[:upper:]')${w:1}"
+    up="$(printf '%s' "$w" | tr '[:lower:]' '[:upper:]')"
     # Three shapes: the whole word in any case; a camelCase segment after a lowercase
     # letter, a digit or `_`; the leading segment of an identifier (lower or capitalised
     # before a capital, a digit or `_`; upper-case before a digit or `_`).
     if grep -qiE "\b${w}\b" <<<"$text" \
-      || grep -qE "[[:lower:][:digit:]_]${w^}([^[:lower:]]|\$)" <<<"$text" \
-      || grep -qE "(^|[^[:alnum:]_])(${w}|${w^})[[:upper:][:digit:]_]" <<<"$text" \
-      || grep -qE "(^|[^[:alnum:]_])${w^^}[[:digit:]_]" <<<"$text"; then
+      || grep -qE "[[:lower:][:digit:]_]${cap}([^[:lower:]]|\$)" <<<"$text" \
+      || grep -qE "(^|[^[:alnum:]_])(${w}|${cap})[[:upper:][:digit:]_]" <<<"$text" \
+      || grep -qE "(^|[^[:alnum:]_])${up}[[:digit:]_]" <<<"$text"; then
       words+="$w "
     fi
   done
