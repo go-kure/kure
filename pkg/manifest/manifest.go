@@ -12,7 +12,8 @@ import (
 // IsCRD reports whether o is a CustomResourceDefinition, by type or GVK. Unlike
 // CRDDefinedGroupKind it does not require spec.group/spec.names to be populated —
 // an object is a CRD by virtue of its kind, even if its defined GroupKind can't
-// be read.
+// be read. It calls GetObjectKind on o and does not recover a panic of that
+// method: an object whose method panics panics the call.
 func IsCRD(o client.Object) bool {
 	if _, ok := o.(*apiextv1.CustomResourceDefinition); ok {
 		return true
@@ -42,7 +43,8 @@ func CRDDefinedGroupKind(o client.Object) (schema.GroupKind, bool) {
 	return schema.GroupKind{}, false
 }
 
-// ObjectGroupKind is the GroupKind of an emitted object.
+// ObjectGroupKind is the GroupKind of an emitted object. It calls GetObjectKind
+// on o and does not recover a panic of that method.
 func ObjectGroupKind(o client.Object) schema.GroupKind {
 	gvk := o.GetObjectKind().GroupVersionKind()
 	return schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}
@@ -114,7 +116,8 @@ const (
 )
 
 // Scope determines whether o is namespaced, cluster-scoped, or unknown, in this
-// order:
+// order. It calls GetObjectKind on o and does not recover a panic of that
+// method:
 //
 //  1. A CustomResourceDefinition is cluster-scoped.
 //  2. A built-in kind takes its scope from the generated table, derived from the

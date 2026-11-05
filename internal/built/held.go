@@ -8,11 +8,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// This file is the one place a method of an object a caller holds is called.
-// A caller's object may panic in its methods, or hold a value that formats
-// without end, so a call into it is guarded here, and a refusal names the Go
-// type of the object and nothing it holds: a caller's value is never formatted
-// and never has a method called on it to describe it.
+// This file is the guard for a method of an object a caller holds. Kure calls
+// such a method in two places, and both go through the guard here: the read of
+// a built tree (kindOf, marshalHeld), and the labels and annotations that
+// Bundle.Generate writes (CallHeld). A caller's object may panic in its
+// methods, or hold a value that formats without end, so a call into it is
+// guarded here, and a refusal names the Go type of the object and nothing it
+// holds: a caller's value is never formatted and never has a method called on
+// it to describe it.
 
 // refusedError is the refusal of an object whose method panicked, as opposed
 // to an error that a method returned.
@@ -41,6 +44,14 @@ func marshalHeld(obj runtime.Object) (data []byte, err error) {
 		return nil, err
 	}
 	return data, marshalErr
+}
+
+// CallHeld calls f, which calls the methods of obj, an object a caller holds,
+// and returns a panic of one as the refusal callHeld returns. It is the entry
+// for a reader outside this package: f holds the calls into obj and as little
+// else as it can, because a panic anywhere in f is reported as the object's.
+func CallHeld(obj runtime.Object, f func()) error {
+	return callHeld(obj, f)
 }
 
 // callHeld calls f, which calls a method of obj, an object a caller holds, and

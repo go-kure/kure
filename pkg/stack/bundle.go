@@ -487,6 +487,13 @@ func (a *Bundle) InitializeUmbrella() {
 // nor another object. A nil entry, or one holding no object (a nil
 // client.Object, or a nil pointer of an object type such as
 // (*corev1.ConfigMap)(nil)), is returned as it is and gets nothing.
+//
+// The labels and annotations are read and written through methods of the
+// objects an application returned, which are a caller's. A method that panics
+// is a refusal: Generate returns no objects and an error that names the Go
+// type of the object and of the panic value, not the panic's text. Objects
+// before the refused one have been given their labels and annotations by then,
+// as they would have been before the panic, and are not put back.
 func (a *Bundle) Generate() ([]*client.Object, error) {
 	var resources []*client.Object
 	for _, app := range a.Applications {
@@ -505,12 +512,26 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 			continue
 		}
 		if len(a.Labels) > 0 {
-			(*r).SetLabels(withBundleEntries((*r).GetLabels(), a.Labels))
+			// Each call into the object is guarded on its own, so the guard
+			// reports a panic of the object's and withBundleEntries, which is
+			// kure's, stays outside it.
+			var own map[string]string
+			if err := built.CallHeld(*r, func() { own = (*r).GetLabels() }); err != nil {
+				return nil, fmt.Errorf("bundle %q: %w", a.Name, err)
+			}
+			labels := withBundleEntries(own, a.Labels)
+			if err := built.CallHeld(*r, func() { (*r).SetLabels(labels) }); err != nil {
+				return nil, fmt.Errorf("bundle %q: %w", a.Name, err)
+			}
 		}
 		if len(a.Annotations) > 0 {
 			// The object's annotations stay as written: on an unstructured
-			// object a value need not be a string.
-			built.AddAnnotations(*r, a.Annotations)
+			// object a value need not be a string. The helper that adds them
+			// is a few map operations around the object's GetAnnotations and
+			// SetAnnotations, so the whole call is guarded.
+			if err := built.CallHeld(*r, func() { built.AddAnnotations(*r, a.Annotations) }); err != nil {
+				return nil, fmt.Errorf("bundle %q: %w", a.Name, err)
+			}
 		}
 	}
 

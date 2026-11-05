@@ -211,6 +211,9 @@ Groups a slice of rendered Helm objects by `helm.sh/hook` phase and
 `HookGroup` into a Flux Kustomization, a bundle or a layout. A consumer that wants one
 Kustomization per group, applied in that order, builds them from the groups itself.
 
+It calls `GetAnnotations` on each object it is given and does not recover a panic of that
+method: an object whose method panics panics the call.
+
 `io.ParseYAML` turns the multi-doc YAML `RenderChart` returns into the `[]client.Object` this
 takes. Here the `test` hook is excluded, as the table below says:
 

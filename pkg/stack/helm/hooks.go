@@ -35,6 +35,9 @@ var excludedHookPhases = map[string]bool{
 // (pre-delete, post-delete, pre-rollback, post-rollback, test) are excluded.
 // Comma-separated hook annotations (e.g. "pre-install,post-install") are treated
 // as a single opaque phase string and placed in the unknown group.
+//
+// It calls GetAnnotations on each object it is given and does not recover a
+// panic of that method: an object whose method panics panics the call.
 func SplitByHookWeight(objects []client.Object) []HookGroup {
 	if len(objects) == 0 {
 		return nil
