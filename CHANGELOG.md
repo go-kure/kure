@@ -16,6 +16,153 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-beta.25] - 2026-11-05
+
+### Added
+
+- Read a build that merges into a Secret
+- Export the baseline and restricted capability lists
+
+### Build
+
+- Run the offline docs-build checks in verify
+- Update module go.yaml.in/yaml/v2 to v2.4.5
+- Update module go.universe.tf/metallb to v0.16.2
+- Update module github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring to v0.95.0
+- Widen the prometheus-operator range to 0.95
+
+### CI
+
+- Drop the review triggers from the Claude workflow
+- Raise the test timeouts to 20m per binary and 40m per job
+
+### Documentation
+
+- Note the case-sensitive Kustomization read in the guide
+- Describe zero-value copies and the repeated-path bound in the guide
+- State the shared kyaml schema as a contract
+- Mark the kyaml schema functions as upstream API
+- State the procMount and pod-override limits of the PSA validators
+- Describe the PSA validators in the library usage guide
+- Sync the workflow guide with the build-guard refusals
+- Point the workflow guide at the README for what is not refused
+- Say the umbrella rewrite reads patched dependsOn entries from the build views
+- Say only the integration builds twice in the builtView comment
+- Name no test-only identifier in the maxJSONNodes comment
+- State what the normalization budget and the typed walk count
+- Say a plain entry proves nothing in a patched tree only without a build that shows it
+
+### Fixed
+
+- Read a spec.path naming a single-file layout as no directory
+- Index only layouts that have a directory
+- Read a Flux Kustomization as the API server does
+- Count a dependsOn entry with a readyExpr as no proof of Ready
+- Build a substituting writer that generates a ConfigMap
+- Compare a zero value as an omitted field in a writer copy
+- End the writer walk on a self-copying Kustomization
+- A plain dependsOn entry proves Ready only in a tree with no patch
+- Do not read a build over SOPS-encrypted files
+- Read an identity an inline anchor and alias moves as unknown
+- Do not read a build over changed kustomize schema definitions
+- Cover kyaml's indexed schemas and order the schema check
+- Hash the schema definitions faster and name the builds a refusal covers
+- Keep the schema fingerprint sound for cycles through map keys and same-named types
+- Satisfy exhaustive, gosec and staticcheck in the fingerprint walk
+- Refuse a build when kyaml's scope for a kind is not the built-in one
+- Name unnamed struct, func, chan and interface types by what they hold
+- Implement the Pod Security Standards securityContext rules in the PSA validators
+- Walk a shared slice once in the schema fingerprint
+- Ask the scope of every kind the build loaded
+- Read a shared List and its items once
+- Read a merge source once
+- Refuse a deep merge chain in an item of an object List
+- Work out the sources of a merge value once for the call
+- Refuse an object nested below the List depth cap
+- Refuse an over-long apiVersion or kind on an object
+- Refuse a List whose items may lie behind a deep merge chain
+- Follow merge chains fully for the kinds the build guard records
+- Read a merge cycle the same from every member
+- Read dependsOn classes as the build shows them under UmbrellasDoNotWait
+- Compare built identities, not held namesakes, in the UmbrellasDoNotWait identity check
+- Judge every held copy of a patching Kustomization in the UmbrellasDoNotWait view check
+- Judge a kept local-config patcher in the UmbrellasDoNotWait view check
+- Fail the flux-operator pin script when a golden test did not run
+- Require the golden tests to pass in the pin script, not only to run
+- Hold the kube-openapi require line while go.mod replaces it
+- Read a caller's non-JSON unstructured values as JSON
+- Cover typed List items, cycles and later refusals
+- Normalize nested typed Lists, refuse deep values, keep later caller changes on undo
+- Refuse pointer cycles and named deep containers, read only the items kure reads
+- Convert caller values directly instead of through the JSON encoder
+- Match the JSON round trip for RawMessage, big floats, Number, uintptr and UTF-8
+- Convert caller values from a closed allowlist, never marshal them
+- Refuse what the caller-object check cannot read, match encoding/json for []byte and float32
+- Check the objects of a List with a nil item, count an interface value once
+- Walk a typed object field by field before it is written and refuse what it cannot read
+- Bound the walk before the cycle check, do not format map keys, walk what a marshaler writes
+- Refuse self-marshaling types outside trusted packages instead of walking private fields
+- Walk interface map keys, trust only named standard library packages
+- A typed nil resource holds no caller object
+- Refuse a resource whose own method panics, naming it
+- Isolate calls to a caller's object and read List items without formatting
+- Guard serialization of a List's unwritten items
+- Refuse a typed nil unstructured resource; trust a marshaler promoted from a trusted type
+- Bound the promotion check and fail closed
+- Normalize a wrapper embedding Unstructured; document the guide; build the matrix from walked layouts
+- Refuse a typed nil wrapper before reading what it embeds
+- Refuse a wrapper around an unstructured object that needs conversion
+- Follow Go method promotion when detecting a wrapper over an unstructured object
+- Check an embedded unstructured List, and follow an unexported embedded field
+- Do not follow a type that embeds itself when looking for a wrapped object
+- Do not refuse a Cilium Envoy config or a RawExtension that holds its list
+- Refuse a RawExtension that holds its own List whatever Raw holds
+- Trust a pointer to a trusted type as the type itself
+- Follow embedded structs to an unstructured object without a depth or size limit
+- Bound the conversion work across the whole call, not per object
+- Refuse a nesting only where origin/main's own write of it fails
+- Judge each embedded marshaler type once, without a depth limit
+- Charge the bytes of a converted byte slice to the call's budget
+- Count levels, not pointers, in the held depth, and skip json:"-" fields
+- Refuse an oversized map before its keys are collected
+- Refuse before allocating, charge held bytes, count levels exactly, build paths lazily
+- Keep a byte slice at the nesting limit, compare whole refusal paths
+- Normalize a plain List's own map and count scalar objects
+- Normalize an Unstructured held in a field of a typed object
+- Decide a held object's handling by the typed object's kind first
+- Return the slot address of an addressable struct item of a typed List
+- Normalize the own map of an unstructured List held in a field of a typed object
+
+### Maintenance
+
+- Update go-kure/.github digest to d3e6b6a
+- Update go-kure/.github digest to bae9298
+- Update go-kure/.github digest to 51ad824
+- Update go-kure/.github digest to e504309
+- Update go-kure/.github digest to 31a60bf
+- Update go-kure/.github digest to 7fc5fb6
+- Update go-kure/.github digest to 8e11a63
+- Update go-kure/.github digest to d3b8c13
+- Update go-kure/.github digest to 23566a1
+- Update go-kure/.github digest to 40104c9
+- Update go-kure/.github digest to 5f19b02
+- Satisfy the exhaustive and unused linters in the caller-object converter
+- Remove the dead weaker-entry carve-out in the UmbrellasDoNotWait rewrite checks
+
+### Testing
+
+- Pin that a dry-run substitution takes a variable bound through postBuild.substitute
+- Assert the induced build failure in the added-definition precedence test
+- Test each field a sequence in a merge cycle lacks
+- Run the hostile matrix's bound case on one placement and its three checked entry points
+- Cover the held-object reader and the guard around a caller's methods
+- Lower the value bound in the tests that walk to it
+- Nest the typed List in the nested-list marshaler test
+
+### Revert
+
+- Restore the held walk of 660052c8 and state its bounds as the contract
+
 ## [0.2.0-beta.24] - 2026-10-30
 
 ### Documentation
