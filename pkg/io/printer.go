@@ -53,7 +53,10 @@ func NewResourcePrinter(options PrintOptions) *ResourcePrinter {
 	}
 }
 
-// Print outputs the given resources to the writer using the configured format
+// Print outputs the given resources to the writer using the configured format.
+// The name and table formats call GetObjectKind, GetName and GetNamespace on
+// each object and do not recover a panic of those methods: an object whose
+// method panics panics the call.
 func (rp *ResourcePrinter) Print(resources []*client.Object, w io.Writer) error {
 	if len(resources) == 0 {
 		return nil

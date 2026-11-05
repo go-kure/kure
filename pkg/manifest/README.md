@@ -113,3 +113,6 @@ case manifest.ScopeUnknown:
 | `Scope(o, crdScopes)` | Classify an object as namespaced, cluster-scoped, or unknown. |
 | `IsNamespacedKind(apiVersion, kind)` | Whether a kind kure registers is namespaced, built-in or custom resource alike. Answered from the generated table; version-insensitive. An unregistered kind answers `false`, which means "not known to be namespaced", never "cluster-scoped" — use `Scope` to tell those apart. |
 | `IsNamespacedBuiltinKind(apiVersion, kind)` | The same question restricted to built-ins: a kind whose scope the Kubernetes API itself defines, which the generated table records as `ScopeSourceBuiltin`. A CRD kind answers `false` whatever its scope. |
+
+`IsCRD`, `ObjectGroupKind` and `Scope` call `GetObjectKind` on the object they are given and do
+not recover a panic of that method: an object whose method panics panics the call.

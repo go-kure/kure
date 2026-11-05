@@ -21,7 +21,9 @@ type TableColumn struct {
 	WideOnly bool // Only shown in wide output
 }
 
-// DefaultColumns returns the default column set for Kubernetes resources
+// DefaultColumns returns the default column set for Kubernetes resources. The
+// accessors of the NAMESPACE and NAME columns call GetNamespace and GetName on
+// the object they are given and do not recover a panic of those methods.
 func DefaultColumns() []TableColumn {
 	return []TableColumn{
 		{
@@ -247,7 +249,9 @@ func NewSimpleTablePrinterWithColumns(columns []TableColumn, wide, noHeaders boo
 	}
 }
 
-// Print outputs resources in table format using the simple table printer
+// Print outputs resources in table format using the simple table printer. It
+// sorts them by GetNamespace and GetName and does not recover a panic of those
+// methods: an object whose method panics panics the call.
 func (stp *SimpleTablePrinter) Print(resources []*client.Object, w io.Writer) error {
 	if len(resources) == 0 {
 		return nil
