@@ -1003,7 +1003,9 @@ tagged `json:"-"` is walked like any other. A value past a bound is refused even
 origin/main would accept it: the bounds are part of the contract, and
 the package README lists them.
 A type that embeds two such objects at the same depth, or that has a
-`DeepCopyObject` of its own (or one in a type it embeds), is refused too.
+`DeepCopyObject` of its own (or one in a type it embeds, an embedded interface
+or a named type that is not a struct included, at the object's depth or
+shallower), is refused too.
 A typed object whose method panics, and a typed nil
 resource, are refused naming the Go type. The package README lists the accepted
 shapes. A Flux Kustomization you hand-write

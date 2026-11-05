@@ -1,6 +1,8 @@
 package fluxcd
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -261,5 +263,238 @@ func TestEmbeddedUnstructured_OneTypeReachedByTwoPathsAtTheSameDepthIsAmbiguous(
 	_, _, err := embeddedUnstructured(&viaTwo{parentA{shared{wrapperObj(int64(1))}}, parentB{shared{wrapperObj(int64(1))}}})
 	if err == nil || !strings.Contains(err.Error(), "parentA.shared.Unstructured") || !strings.Contains(err.Error(), "parentB.shared.Unstructured") {
 		t.Fatalf("got %v, want a refusal naming both paths", err)
+	}
+}
+
+// deepCopier is an interface with a DeepCopyObject. A struct that embeds it
+// takes its DeepCopyObject from it when the embed is shallower than the
+// unstructured object it also embeds.
+type deepCopier interface{ DeepCopyObject() runtime.Object }
+
+// viaInterface embeds the *Unstructured two levels down and a deepCopier one
+// level down: Go promotes DeepCopyObject from the interface, not from the object.
+type viaInterface struct {
+	nestedEmbed
+	deepCopier
+}
+
+// withClientObject embeds the whole client.Object interface beside the nested
+// object, which has a DeepCopyObject by embedding runtime.Object.
+type withClientObject struct {
+	nestedEmbed
+	client.Object
+}
+
+// withStringer embeds an interface with no DeepCopyObject.
+type withStringer struct {
+	nestedEmbed
+	fmt.Stringer
+}
+
+// copyByValue and copyByPointer are named non-struct types with a
+// DeepCopyObject, declared with a value and a pointer receiver.
+type (
+	copyByValue   map[string]string
+	copyByPointer []string
+)
+
+func (copyByValue) DeepCopyObject() runtime.Object    { return nil }
+func (*copyByPointer) DeepCopyObject() runtime.Object { return nil }
+
+type (
+	viaNamedValue struct {
+		nestedEmbed
+		copyByValue
+	}
+	viaNamedPointer struct {
+		nestedEmbed
+		copyByPointer
+	}
+)
+
+// holdsCopier is a struct whose DeepCopyObject is promoted from the interface
+// it embeds, so the compiler wrote it and the source declares none.
+type holdsCopier struct{ deepCopier }
+
+// deeperProvider embeds the *Unstructured directly and the deepCopier one level
+// further down, through holdsCopier: Go promotes DeepCopyObject from the object.
+type deeperProvider struct {
+	*unstructured.Unstructured
+	holdsCopier
+}
+
+// ownCopyStruct is a struct that declares its own DeepCopyObject.
+type ownCopyStruct struct{ n int }
+
+func (ownCopyStruct) DeepCopyObject() runtime.Object { return nil }
+
+// offPathOwn embeds the object two levels down and, beside the path to it, a
+// struct that declares its own DeepCopyObject one level down.
+type offPathOwn struct {
+	nestedEmbed
+	ownCopyStruct
+}
+
+// offPathPromoted embeds the object three levels down and, beside the path to
+// it, a struct one level down whose DeepCopyObject is promoted from an
+// interface: Go promotes DeepCopyObject from that interface, two levels down.
+type (
+	nestedTwice     struct{ nestedEmbed }
+	offPathPromoted struct {
+		nestedTwice
+		holdsCopier
+	}
+)
+
+// offPathUnrelated embeds the object two levels down and, beside the path to
+// it, a struct that declares a method that is none of the object's.
+type (
+	unrelatedMethod  struct{ n int }
+	offPathUnrelated struct {
+		nestedEmbed
+		unrelatedMethod
+	}
+)
+
+func (unrelatedMethod) Describe() string { return "unrelated" }
+
+// ownCopyBelow holds ownCopyStruct, so its DeepCopyObject is a promotion; the
+// object it sits beside is shallower than the struct that declares it.
+type (
+	ownCopyBelow struct{ ownCopyStruct }
+	deeperStruct struct {
+		*unstructured.Unstructured
+		ownCopyBelow
+	}
+)
+
+// A wrapper whose DeepCopyObject Go promotes from an embedded interface, or from
+// a named type that is no struct, at or above the object's depth, calls caller
+// code on the layout's copy and is refused whatever its map holds. One whose
+// object is shallower than every such embed keeps the object's own.
+func TestEmbeddedUnstructured_DeepCopyObjectFromAnEmbeddedProvider(t *testing.T) {
+	run := func(r client.Object) error {
+		return normalizeForTest(&layout.ManifestLayout{Name: "l", Resources: []client.Object{r}})
+	}
+	// The map holds a clean value, so only the type decides.
+	one := int64(1)
+	for _, tc := range []struct {
+		name     string
+		r        client.Object
+		typ      string
+		provider string
+	}{
+		{"an embedded interface that is nil", &viaInterface{nestedEmbed{wrapperObj(one)}, nil}, "fluxcd.viaInterface", "deepCopier"},
+		{"an embedded interface that holds a copier", &viaInterface{nestedEmbed{wrapperObj(one)}, wrapperObj(one)}, "fluxcd.viaInterface", "deepCopier"},
+		{"an embedded client.Object", &withClientObject{nestedEmbed{wrapperObj(one)}, nil}, "fluxcd.withClientObject", "Object"},
+		{"a named non-struct type, value receiver", &viaNamedValue{nestedEmbed{wrapperObj(one)}, nil}, "fluxcd.viaNamedValue", "copyByValue"},
+		{"a named non-struct type, pointer receiver", &viaNamedPointer{nestedEmbed{wrapperObj(one)}, nil}, "fluxcd.viaNamedPointer", "copyByPointer"},
+		{"an off-path struct that declares one", &offPathOwn{nestedEmbed{wrapperObj(one)}, ownCopyStruct{}}, "fluxcd.offPathOwn", "ownCopyStruct"},
+		{"an off-path struct that promotes one from an interface", &offPathPromoted{nestedTwice{nestedEmbed{wrapperObj(one)}}, holdsCopier{}}, "fluxcd.offPathPromoted", "holdsCopier.deepCopier"},
+	} {
+		t.Run("refused: "+tc.name, func(t *testing.T) {
+			err := run(tc.r)
+			want := tc.provider + ", which it embeds"
+			if err == nil || !strings.Contains(err.Error(), tc.typ) || !strings.Contains(err.Error(), want) {
+				t.Fatalf("got %v, want a refusal naming %s and %q", err, tc.typ, want)
+			}
+		})
+	}
+	// The object is shallower than every other DeepCopyObject, or the embed has none.
+	for _, tc := range []struct {
+		name string
+		r    client.Object
+	}{
+		{"an embedded interface with no DeepCopyObject", &withStringer{nestedEmbed{wrapperObj(one)}, nil}},
+		{"a provider deeper than the object", &deeperProvider{wrapperObj(one), holdsCopier{}}},
+		{"a struct that declares an unrelated method", &offPathUnrelated{nestedEmbed{wrapperObj(one)}, unrelatedMethod{}}},
+		{"a struct that promotes a DeepCopyObject deeper than the object", &deeperStruct{wrapperObj(one), ownCopyBelow{}}},
+	} {
+		t.Run("kept: "+tc.name, func(t *testing.T) {
+			if err := run(tc.r); err != nil {
+				t.Fatalf("refused: %v", err)
+			}
+		})
+	}
+}
+
+// sameDepthCopier embeds the object and an interface at one depth: Go promotes
+// DeepCopyObject from neither, so the type is no runtime.Object, and the search
+// still returns the interface as a provider at the object's depth.
+type sameDepthCopier struct {
+	*unstructured.Unstructured
+	deepCopier
+}
+
+type label string
+
+// otherHolder and twoHolders reach the one interface type deepCopier through two
+// structs at one depth: the search keeps one path to it.
+type (
+	otherHolder struct{ deepCopier }
+	twoHolders  struct {
+		nestedTwice
+		holdsCopier
+		otherHolder
+	}
+)
+
+type withLabel struct {
+	nestedEmbed
+	label
+}
+
+func TestShallowestEmbeds_ProvidersAtOrAboveTheObject(t *testing.T) {
+	paths := func(steps []embedStep) []string {
+		var out []string
+		for _, s := range steps {
+			out = append(out, s.path)
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name string
+		typ  reflect.Type
+		want []string
+	}{
+		{"an interface above the object", reflect.TypeFor[viaInterface](), []string{"deepCopier"}},
+		{"an interface at the object's depth", reflect.TypeFor[sameDepthCopier](), []string{"deepCopier"}},
+		{"an interface below the object", reflect.TypeFor[deeperProvider](), nil},
+		{"a named non-struct type above the object", reflect.TypeFor[viaNamedPointer](), []string{"copyByPointer"}},
+		{"an interface held by a struct above the object", reflect.TypeFor[offPathPromoted](), []string{"holdsCopier.deepCopier"}},
+		{"a named type with no DeepCopyObject is still listed", reflect.TypeFor[withLabel](), []string{"label"}},
+		{"one interface type reached by two paths is listed once", reflect.TypeFor[twoHolders](), []string{"holdsCopier.deepCopier"}},
+		{"no provider", reflect.TypeFor[nestedEmbed](), nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			found, _, providers := shallowestEmbeds(tc.typ)
+			if len(found) != 1 {
+				t.Fatalf("found %d unstructured objects, want 1", len(found))
+			}
+			if got := paths(providers); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("providers %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestProviderHasDeepCopyObject(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		typ  reflect.Type
+		want bool
+	}{
+		{"an interface with it", reflect.TypeFor[deepCopier](), true},
+		{"client.Object", reflect.TypeFor[client.Object](), true},
+		{"an interface without it", reflect.TypeFor[fmt.Stringer](), false},
+		{"a value-receiver method on a named type", reflect.TypeFor[copyByValue](), true},
+		{"a pointer-receiver method on a named type", reflect.TypeFor[copyByPointer](), true},
+		{"a named type with no methods", reflect.TypeFor[label](), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := providerHasDeepCopyObject(tc.typ); got != tc.want {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

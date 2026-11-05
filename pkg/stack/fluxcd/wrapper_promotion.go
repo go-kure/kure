@@ -33,8 +33,11 @@ type embedStep struct {
 // code the layout would call: one it declares itself, or one that a struct
 // embedded on the way to the object, or beside it at or above its depth,
 // declares (isPromotion tells the compiler's wrapper from a method of the
-// source). It is refused as well when it embeds a nil pointer, when the object
-// cannot be reached. Where this cannot be told, the wrapper is refused.
+// source), or one that an embedded interface, or a named type that is no
+// struct, at or above that depth provides (providerHasDeepCopyObject: its
+// presence is enough). It is refused as well when it embeds a nil pointer, when
+// the object cannot be reached. Where this cannot be told, the wrapper is
+// refused.
 func embeddedUnstructured(r apiruntime.Object) (objs []*unstructured.Unstructured, st reflect.Type, err error) {
 	if r == nil {
 		return nil, nil, nil
@@ -52,7 +55,7 @@ func embeddedUnstructured(r apiruntime.Object) (objs []*unstructured.Unstructure
 	if st.Kind() != reflect.Struct || st == unstructuredType || st == unstructuredListType {
 		return nil, nil, nil
 	}
-	found, above := shallowestEmbeds(st)
+	found, above, providers := shallowestEmbeds(st)
 	if len(found) == 0 {
 		return nil, nil, nil
 	}
@@ -69,6 +72,11 @@ func embeddedUnstructured(r apiruntime.Object) (objs []*unstructured.Unstructure
 	for _, a := range above {
 		if declaresDeepCopyObject(a.typ) {
 			return nil, st, errors.Errorf("a %s embeds an unstructured object, and %s, which it embeds, has a DeepCopyObject of its own", st, a.path)
+		}
+	}
+	for _, p := range providers {
+		if providerHasDeepCopyObject(p.typ) {
+			return nil, st, errors.Errorf("a %s embeds an unstructured object, and %s, which it embeds, is an interface or a type that is no struct and has a DeepCopyObject, so the wrapper's DeepCopyObject is not the object's", st, p.path)
 		}
 	}
 	v := rv
@@ -98,18 +106,26 @@ func embeddedUnstructured(r apiruntime.Object) (objs []*unstructured.Unstructure
 // unstructured.Unstructured (by value or by pointer) at the shallowest depth
 // that has any, and the embedded struct types at the depths above it and at its
 // own. More than one is returned when several share that depth. None is
-// returned when st embeds none.
+// returned when st embeds none. The third result holds the embedded interfaces
+// and named types that are no struct, at those same depths and above: they
+// promote methods like a struct does, and are not followed any deeper.
 //
 // The search has no limit of its own: the number of steps is linear in the
 // types st reaches. A type is followed at the depth it is first reached, and at
 // most twice there, as a third path to it adds nothing to the two that already
 // make it ambiguous. So a level holds at most two steps per type, and there are
-// at most as many levels as types. Each step holds the path to it, so the
-// memory is quadratic in the depth of embedding. That depth is the one of a Go
+// at most as many levels as types. A level scans the fields of each of its
+// steps, so the number of visits is that many steps times the fields of a type.
+// A provider is kept once per type, with its shallowest path, so there are no
+// more of them than types. Each step and each provider holds the path to it,
+// and building one copies the path of its parent: a chain of N embedded structs
+// costs N squared in time and memory, and any other shape costs the number of
+// steps and providers times the length of the longest path. That depth is the one of a Go
 // type the caller wrote, and no value of the caller's data makes it larger.
-func shallowestEmbeds(st reflect.Type) (found, above []embedStep) {
+func shallowestEmbeds(st reflect.Type) (found, above, providers []embedStep) {
 	level := []embedStep{{typ: st}}
 	seen := map[reflect.Type]int{st: 0}
+	seenProvider := map[reflect.Type]bool{}
 	for depth := 0; len(level) > 0; depth++ {
 		var next []embedStep
 		paths := map[reflect.Type]int{}
@@ -144,18 +160,41 @@ func shallowestEmbeds(st reflect.Type) (found, above []embedStep) {
 					}
 					at.typ = ft
 					next = append(next, at)
+				case ft.Kind() == reflect.Interface || ft.Name() != "":
+					// An embedded interface, or a named type that is no struct, gives
+					// its methods to the wrapper but holds no field to look through.
+					// Only the type decides, so one path to each is kept: the shallowest.
+					if !seenProvider[ft] {
+						seenProvider[ft] = true
+						at.typ = ft
+						providers = append(providers, at)
+					}
 				}
 			}
 		}
 		if len(found) > 0 {
 			// A struct that is embedded at this depth declares methods Go ranks
 			// with the object's, so it counts with the ones above.
-			return found, append(above, next...)
+			return found, append(above, next...), providers
 		}
 		above = append(above, next...)
 		level = next
 	}
-	return nil, nil
+	return nil, nil, nil
+}
+
+// providerHasDeepCopyObject reports whether t, an embedded interface or a named
+// type that is no struct, has a DeepCopyObject in its method set, which Go then
+// promotes to a struct that embeds it. Unlike a struct, such a type has no
+// compiler-written promotion to tell from a method of the source, and an
+// interface method has no code to look at, so presence is all there is to read.
+func providerHasDeepCopyObject(t reflect.Type) bool {
+	for _, u := range []reflect.Type{t, reflect.PointerTo(t)} {
+		if _, ok := u.MethodByName("DeepCopyObject"); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // declaresDeepCopyObject reports whether the struct type st declares a
