@@ -1923,8 +1923,8 @@ function, a complex number, a map with other keys, a `uint64` above the largest 
 with a `MarshalJSON` or `MarshalText` method (`json.RawMessage` and `net.IP` among them). So is a value
 that holds itself through maps and slices, one nested deeper than 10,000 levels (the depth `encoding/json` takes), a call whose objects
 need more than 4 million values converted or checked in all, and a byte slice of more than 4 million bytes. This is a contract of every entry point, stricter than the code before it (go-kure/kure#1201): everything a caller passes is normalized at entry, including a value that no path of that entry point reads, so an unstructured object holding a byte slice of more than 4 million bytes is refused by an entry point that never reads the slice. The objects of one call that need conversion or a check share the one budget of 4 million values (the bytes of a byte slice count as values each time the slice is converted or checked, and an object of a typed `List` is checked before the `List` is written); an unstructured object that holds JSON-typed values only is kept as it is and is not charged to it. An unstructured object held in a field of a typed object, which needs conversion, is checked and then converted, so each of its values counts twice, as the values of a `List`'s items do. A value past a bound of this section is refused even where origin/main would accept it: the bounds are part of the contract of the package, not a measure of what main takes. A refusal names the layout, the object
-and the field, and replaces no object. kure never calls a method of a caller's value, a marshaler
-included, also not to read a typed `List` that holds such an object. A typed object is walked, field by
+and the field, and replaces no object. The walk never calls a method of a caller's value, a marshaler
+included, also not to read a typed `List` that holds such an object; the metadata methods are called by the entry probe described below, a pass of its own. A typed object is walked, field by
 field, before it is written, and refused when it holds itself, when it is nested deeper than 40,000
 steps (a pointer, a field, an element, a map value, a map key of interface type and an embedded struct are each one step, and an interface is none, so a value past this bound is refused even where `encoding/json` and origin/main would take it), when the walk of that one typed object meets more than 4 million values (an interface is one of them) or when an unstructured object in it holds a
 value that would call a method when written. A typed object that holds a type with a `MarshalJSON`,
@@ -1934,10 +1934,36 @@ one of the standard library packages that define such a type (`time`, `net`, `ne
 `math/big`, `regexp`, `log/slog` and `encoding/json`), or is the Cilium `XDSResource` of a Cilium Envoy
 config, or the Cilium policy `EndpointSelector` (its `IsZero` tests one field for nil, and kure's own CiliumNetworkPolicy builders emit it). Each is an audited type, trusted by its exact name. The `XDSResource` marshaler writes a protobuf `Any` with `protojson`, which resolves the type URL in the global protobuf registry, so a message type a caller registered there still runs. A field tagged `omitzero` whose type has an `IsZero` method is judged the same way, as `encoding/json` calls that method when it writes the field: the typed object is refused, naming the type, unless the type is from one of those packages or is one of the exact types listed above. For an interface field the type judged is the one the interface holds, and a nil pointer, or an interface that holds one, is not judged, since `encoding/json` calls no `IsZero` on it. A type that only promotes `IsZero` from an embedded type is judged by its own package. An embedded struct (or pointer to one) with no name in its tag is flattened by `encoding/json`, which calls no `IsZero` for it, so it is not judged. A struct embedded under a name and an embedded interface are fields, and are judged. A field tagged `json:"-"`, which `encoding/json` never writes, is walked, charged and judged like any other field, so an untrusted `IsZero` inside it is refused: `encoding/json` does not write it, but a marshaler or kure's own code can (a `RawExtension` marshals its `Object`, which is tagged `-`), and each exemption tried here left a hole. The check does not copy the rest of how `encoding/json` picks fields, and refuses where that choice is subtle: a field with the same JSON name as a shallower field, which `encoding/json` drops, is still judged, and so is an embedded struct under a tag name that is not valid for JSON. A refusal is the safe side, and a copy of those rules could miss a method that is called. A `RawExtension` whose `Object` holds its own List is refused whatever `Raw` holds, since a copy of the object follows `Object`. A type of `package main` is not trusted. A named struct that only promotes such a method from an embedded type of a trusted package (a type that embeds `*unstructured.Unstructured`) is accepted; one that declares the method itself is not. A wrapper that embeds an `unstructured.Unstructured` (by pointer or by value, directly or through another embedded struct, as a resource or as an item of a typed List) is not normalized: it is refused, naming its Go type, when the map it embeds holds a value that is not JSON typed, and kept as it is when it holds none, since a copy put in its place would no longer carry what is done to the wrapper. Hold the object as a plain `*unstructured.Unstructured` to have it converted. The object that counts is the one Go promotes the methods of, the shallowest; a wrapper that embeds two at the same depth is refused, naming both paths. A wrapper with a `DeepCopyObject` of its own, one embedded on the way to the object that has one, or one that embeds a nil pointer, is refused. So is a wrapper that embeds an interface, or a named type that is not a struct, with a `DeepCopyObject` above the object, where Go promotes that method and not the object's, or at its depth, where Go promotes neither: it is refused whatever the map holds, naming the type and the path to the embedded interface or type. An embedded interface or non-struct type without that method, or one deeper than the object, changes nothing. This holds for a wrapper around an `unstructured.UnstructuredList` as well. A typed resource whose own method panics when kure reads
 its kind (a struct that embeds a nil pointer) is refused, naming the layout, the resource's place in it
-and its Go type; so is a typed nil resource, an unstructured one included. Two paths guard a call to a method of a caller's object:
-the read of a built tree and the labels and annotations that `Bundle.Generate` gives the objects of
-its applications. A panic there is a refusal that names only the Go types of the object and of
-the panic value, never the panic's text. kure reads
+and its Go type; so is a typed nil resource, an unstructured one included. The paths below guard a
+call to a method of a caller's object, and a panic in any is a refusal that names only the Go types
+of the object and of the panic value, never the panic's text:
+
+- the read of a built tree, and the labels and annotations that `Bundle.Generate` gives the objects of
+  its applications;
+- the entry probe (go-kure/kure#1245): `IntegrateWithLayout`, `CreateLayoutWithResources`,
+  `UmbrellaTerminals` and the layout writers (`WriteToDisk`, `WriteToTar`, `WritePackagesToDisk`,
+  `WriteManifest`) call `GetObjectKind`, `GetName`, `GetNamespace`, `GetLabels` and `GetAnnotations`
+  once on each object they are given, and on each object a typed `List` holds, before they read any.
+  An item that is no `client.Object` is probed through the metadata it exposes with
+  `ObjectMetaAccessor`, as the writers read it. The integrator and `UmbrellaTerminals` also probe the
+  objects the origin records of the layouts retain (`OriginApplicationObjects`), which a delivery
+  intent is applied to: the layouts hold the same values, but a caller can drop one from a layout and
+  leave it in the record. The probe is a separate pass that follows the normalization above and
+  changes nothing. An object
+  whose metadata methods panic is refused at entry, whether or not a later phase would have called
+  the method that panics. `GenerateFromLayout`, `GenerateFromCluster` and `WalkCluster` read no
+  metadata method beyond the guarded read of the kind, and have no probe;
+- the annotations an application's delivery intent sets on its objects, and takes back when a later
+  check refuses the call. A setter cannot be probed, so the call that sets and the call that takes
+  back are each guarded. A refusal while setting leaves the object annotated by no call. A panic
+  while taking back is reported in the same error as the refusal that started it, names the Go type
+  and says the object could not be restored.
+
+The paths leave out a method that answers or panics differently on a later call than on the probe's,
+and a method that never returns. A setter that panics part-way may leave the object changed, and then
+the undo cannot promise to restore it.
+
+kure reads
 the items of a `List` by reflection and never formats a caller's object, so an item that is no
 object cannot make it format without end. The cases the issue names (a
 plain `int` in an object, nested in a `sourceRef`, in a `List`'s items, in a `Source` `spec`) all stay accepted. A

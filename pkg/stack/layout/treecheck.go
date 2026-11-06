@@ -17,6 +17,39 @@ import (
 	"github.com/go-kure/kure/pkg/stack"
 )
 
+// probeCallerObjects calls the metadata methods of every object a caller put
+// in a layout of the tree under root once (built.ProbeHeld), so that an object
+// whose method panics is refused before the writers' checks, which call them
+// at many places, read any. A refusal names the layout and the Go type of the
+// object. It changes nothing.
+//
+// The fluxcd package keeps a copy of the same walk for its integrator and
+// UmbrellaTerminals (probeCallerObjects in pkg/stack/fluxcd/caller_objects.go):
+// this package cannot import that one, and one shared helper would be new
+// public API. Change both together.
+func probeCallerObjects(root *ManifestLayout) error {
+	seen := map[*ManifestLayout]bool{}
+	var walk func(l *ManifestLayout) error
+	walk = func(l *ManifestLayout) error {
+		if l == nil || seen[l] {
+			return nil
+		}
+		seen[l] = true
+		for _, r := range l.Resources {
+			if err := built.ProbeHeld(r); err != nil {
+				return errors.Wrapf(err, "layout %q", l.FullRepoPath())
+			}
+		}
+		for _, child := range l.Children {
+			if err := walk(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return walk(root)
+}
+
 // checkLayoutTree refuses, before anything is written, a tree in which:
 //   - two layouts resolve to the same directory, or, for AppFileSingle
 //     layouts, the same file (go-kure/kure#771): each writes its own files
@@ -59,6 +92,10 @@ import (
 // plan is the writer's own, so the check and the write agree on every path
 // and file name.
 func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
+	// Before every check, each of which reads a caller's objects.
+	if err := probeCallerObjects(root); err != nil {
+		return err
+	}
 	outDir := plan.outDir
 	dirs := map[string]*ManifestLayout{}
 	files := map[string]*ManifestLayout{}

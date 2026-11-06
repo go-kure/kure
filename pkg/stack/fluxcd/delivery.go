@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -44,7 +45,10 @@ func deliveryAnnotations(d stack.DeliveryIntent) map[string]string {
 // another value is refused, naming the object.
 //
 // The annotations are set on the objects the layout holds, in place. undo
-// takes back exactly what this call added; on error it has already run.
+// takes back exactly what this call added and returns the refusal of an object
+// whose method panics while it does, naming its Go type: the annotations then
+// stay on that object, and the other objects are still taken back. On error it
+// has already run, and the error then holds the undo's refusals too.
 //
 // sources maps the identity (sourceKey) of every Flux Source among those
 // objects to the annotations its application's intent asks for. A Source the
@@ -52,14 +56,18 @@ func deliveryAnnotations(d stack.DeliveryIntent) map[string]string {
 // them too (integratedPlacement.add). A Source kustomize drops
 // (built.LocalConfig) is no object of the build, so it maps nothing; it is
 // annotated all the same, since kustomize patches it before it drops it.
-func applyDeliveryIntents(ml *layout.ManifestLayout) (sources map[string]map[string]string, undo func(), err error) {
+func applyDeliveryIntents(ml *layout.ManifestLayout) (sources map[string]map[string]string, undo func() error, err error) {
 	sources = map[string]map[string]string{}
-	var undos []func()
-	undo = func() {
+	var undos []func() error
+	undo = func() error {
+		var errs []error
 		for _, u := range slices.Backward(undos) {
-			u()
+			if err := u(); err != nil {
+				errs = append(errs, err)
+			}
 		}
 		undos = nil
+		return stderrors.Join(errs...)
 	}
 	var walk func(l *layout.ManifestLayout) error
 	walk = func(l *layout.ManifestLayout) error {
@@ -107,7 +115,9 @@ func applyDeliveryIntents(ml *layout.ManifestLayout) (sources map[string]map[str
 				}
 			}
 			us, err := annotateGenerators(rec.Application, rec.Layout, want)
-			undos = append(undos, us...)
+			for _, u := range us {
+				undos = append(undos, func() error { u(); return nil })
+			}
 			if err != nil {
 				return err
 			}
@@ -120,7 +130,9 @@ func applyDeliveryIntents(ml *layout.ManifestLayout) (sources map[string]map[str
 		return nil
 	}
 	if err := walk(ml); err != nil {
-		undo()
+		if undoErr := undo(); undoErr != nil {
+			err = stderrors.Join(err, undoErr)
+		}
 		return nil, nil, err
 	}
 	return sources, undo, nil
@@ -170,7 +182,7 @@ func refuseDeliveryIntent(ml *layout.ManifestLayout) error {
 // back, or nil when obj already carries all of want. It changes nothing when
 // one of them is present with another value. Every other annotation stays as
 // written, also one whose value is no string (built.Annotations).
-func annotateObject(app *stack.Application, obj client.Object, want map[string]string) (func(), error) {
+func annotateObject(app *stack.Application, obj client.Object, want map[string]string) (func() error, error) {
 	have := built.Annotations(obj)
 	for _, k := range slices.Sorted(maps.Keys(want)) {
 		v, ok := have[k]
@@ -181,7 +193,8 @@ func annotateObject(app *stack.Application, obj client.Object, want map[string]s
 		return nil, errors.Errorf("application %q: %s already carries annotation %s: %s, but the application's delivery intent needs %q",
 			app.Name, describeObject(obj), k, written, want[k])
 	}
-	return built.AddAnnotations(obj, want), nil
+	// A caller's object: its methods are guarded, and so is the undo.
+	return built.AddAnnotationsHeld(obj, want)
 }
 
 // annotateGenerators adds want to every configMapGenerator of l and of the
