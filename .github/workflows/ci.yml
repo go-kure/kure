@@ -630,6 +630,13 @@ jobs:
     - name: Install dependencies
       run: make deps
 
+    # The pkg/stack/fluxcd test binary runs close to its -timeout and its time varies with the runner
+    # (go-kure/kure#1288): name the CPUs the job has next to the split the test binary prints.
+    - name: Log runner CPUs
+      run: |
+        echo "nproc=$(nproc)"
+        echo "cgroup cpu.max=$(cat /sys/fs/cgroup/cpu.max 2>/dev/null || echo unavailable)"
+
     - name: Run tests
       run: |
         set -euo pipefail
