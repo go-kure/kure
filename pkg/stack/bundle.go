@@ -517,11 +517,11 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 			// kure's, stays outside it.
 			var own map[string]string
 			if err := built.CallHeld(*r, func() { own = (*r).GetLabels() }); err != nil {
-				return nil, fmt.Errorf("bundle %q: %w", a.Name, err)
+				return nil, errors.Wrapf(err, "bundle %q", a.Name)
 			}
 			labels := withBundleEntries(own, a.Labels)
 			if err := built.CallHeld(*r, func() { (*r).SetLabels(labels) }); err != nil {
-				return nil, fmt.Errorf("bundle %q: %w", a.Name, err)
+				return nil, errors.Wrapf(err, "bundle %q", a.Name)
 			}
 		}
 		if len(a.Annotations) > 0 {
@@ -533,7 +533,7 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 			// the whole call is guarded, and a panic in the helper's own map
 			// operations on such an object is reported as the object's too.
 			if err := built.CallHeld(*r, func() { built.AddAnnotations(*r, a.Annotations) }); err != nil {
-				return nil, fmt.Errorf("bundle %q: %w", a.Name, err)
+				return nil, errors.Wrapf(err, "bundle %q", a.Name)
 			}
 		}
 	}
