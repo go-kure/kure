@@ -128,7 +128,8 @@ nothing.
 `Generate` calls the object's label and annotation methods. If one of them panics, `Generate`
 returns no objects and an error that names only the Go type of the object and the Go type of the
 panic value, never the panic text. Objects it handled before that one stay changed; it does not
-put them back.
+put them back. An unstructured object whose metadata is a nil map holds no annotations and takes
+none, so adding the bundle's annotations leaves it as it was.
 
 A nil `DependsOn` entry is refused by `Bundle.Validate`, with the bundle's path (an umbrella
 descendant's from the bundle that was validated: `platform/infra/db`) and the entry's index; the

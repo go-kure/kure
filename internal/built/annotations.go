@@ -48,8 +48,8 @@ func writtenMetadataMap(obj client.Object, field string, typed func() map[string
 // carry, and keeps every annotation it carries as written (Annotations). It
 // returns how to put obj back exactly as it was, or nil when it changed
 // nothing: when obj already carries every key of want, or when obj is
-// unstructured and its metadata is present but no map, which holds no
-// annotations and takes none.
+// unstructured and its metadata is present but no map or a nil map, which
+// holds no annotations and takes none.
 func AddAnnotations(obj client.Object, want map[string]string) func() {
 	have := Annotations(obj)
 	changed := false
@@ -73,7 +73,7 @@ func AddAnnotations(obj client.Object, want map[string]string) func() {
 	hadObject := u.Object != nil
 	raw, hadMeta := u.Object["metadata"]
 	meta, isMap := raw.(map[string]any)
-	if hadMeta && !isMap {
+	if hadMeta && (!isMap || meta == nil) {
 		return nil
 	}
 	if !hadObject {

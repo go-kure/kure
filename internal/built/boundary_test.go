@@ -10,11 +10,14 @@ import (
 	"testing"
 )
 
-// A caller's object is read in one place in this package. These checks pin the
-// rule that keeps a hostile object from crashing kure (go-kure/kure#1201): the package reads a
-// List's items by reflection (items.go) and calls a method of a caller's
-// object only through the guard (held.go), and the files that read never
-// format a value with %v, which has no end for a value that holds itself.
+// These checks pin the rule that keeps a hostile object from crashing kure
+// (go-kure/kure#1201): the package reads a List's items by reflection
+// (items.go), looks up the kind of a caller's object and marshals it only
+// through the guard (held.go), and the files that read never format a value
+// with %v, which has no end for a value that holds itself. They do not cover
+// the labels and annotations helpers, which call GetLabels, GetAnnotations and
+// SetAnnotations on a caller's object themselves. Bundle.Generate wraps its
+// calls to them in the guard.
 
 func parseNonTestFiles(t *testing.T, dir string) map[string]*ast.File {
 	t.Helper()

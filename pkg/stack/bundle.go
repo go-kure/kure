@@ -530,8 +530,8 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 			// is a few map operations around the object's GetAnnotations and
 			// SetAnnotations, and on malformed unstructured metadata it falls
 			// back to GetAnnotations, which can format a caller's value. So
-			// the whole call is guarded, and a panic in the helper's own map
-			// operations on such an object is reported as the object's too.
+			// the whole call is guarded. The guard cannot tell the object's
+			// panic from the helper's own, and reports both as the object's.
 			if err := built.CallHeld(*r, func() { built.AddAnnotations(*r, a.Annotations) }); err != nil {
 				return nil, errors.Wrapf(err, "bundle %q", a.Name)
 			}

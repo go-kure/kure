@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -122,6 +123,42 @@ func TestBundleGenerate_UnstructuredMalformedMetadataIsARefusal(t *testing.T) {
 	}
 	if resources != nil {
 		t.Errorf("Generate returned %d objects with its refusal, want none", len(resources))
+	}
+}
+
+// TestBundleGenerate_NilMetadataMapTakesNoAnnotations: an unstructured object
+// whose metadata is a nil map holds no annotations and takes none. No method of
+// the object panics, so Generate is no refusal, and the object stays as it is
+// (go-kure/kure#1283).
+func TestBundleGenerate_NilMetadataMapTakesNoAnnotations(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "ConfigMap",
+		"metadata":   map[string]any(nil),
+	}}
+	obj := client.Object(u)
+	b := &Bundle{
+		Name:         "web",
+		Applications: []*Application{NewApplication("web", "default", &fakeConfig{objs: []*client.Object{&obj}})},
+		Annotations:  map[string]string{"owner": "shop"},
+	}
+	resources, err := b.Generate()
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if len(resources) != 1 {
+		t.Fatalf("Generate returned %d objects, want 1", len(resources))
+	}
+	if *resources[0] != client.Object(u) {
+		t.Errorf("Generate returned a different object than the one it was given")
+	}
+	want := map[string]any{
+		"apiVersion": "v1",
+		"kind":       "ConfigMap",
+		"metadata":   map[string]any(nil),
+	}
+	if !reflect.DeepEqual(u.Object, want) {
+		t.Errorf("object = %#v, want it unchanged: %#v", u.Object, want)
 	}
 }
 
