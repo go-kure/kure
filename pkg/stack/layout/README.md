@@ -622,9 +622,10 @@ no origin of its own. Hand-built layouts have none.
 or its per-app directories (plus a stand-in for each ConfigMap a `configMapGenerator` makes in an
 augmenter application's layout or a layout below it: its kind and name, and the annotations the
 entry sets at the time of the call): the Flux generator uses it to refuse a patch that would
-reach another bundle sharing the directory. A call brings the stand-ins of `b`'s applications up
-to date and no other bundle's: a call for another bundle of a merged layout leaves them as they
-were. The slice is the layout's own record, not a copy, so a write to one of its elements changes
+reach another bundle sharing the directory. A call brings up to date the stand-ins of the
+applications `b` emitted when the layout was walked, even if `b.Applications` has changed since,
+and no other bundle's, even for an application two bundles list: a call for another bundle of a
+merged layout leaves them as they were. The slice is the layout's own record, not a copy, so a write to one of its elements changes
 the record.
 `OriginApplicationObjects()` returns, per application rendered in a layout, the application, its
 objects and its own layout: the objects are what the application emitted plus, for an application

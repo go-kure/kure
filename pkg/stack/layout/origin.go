@@ -53,6 +53,11 @@ type ApplicationObjects struct {
 	// ConfigMaps the ConfigMapGenerators of Layout and of the layouts below
 	// it build.
 	generated []generatedStandIn
+	// bundle is the bundle whose walk emitted this record. The stand-in sync
+	// of OriginBundleObjects follows it, not the bundle's Applications at the
+	// time of the call, and two bundles that list one application each have
+	// a record of their own (go-kure/kure#1297).
+	bundle *stack.Bundle
 }
 
 // generatedStandIn is the stand-in (generatedConfigMap) for the ConfigMap a
@@ -84,20 +89,18 @@ func generatedStandIns(l *ManifestLayout) []generatedStandIn {
 // builds, where a patch target's annotation selector reads them, and an entry
 // can gain some after the walk (a workflow applying a delivery intent).
 //
-// It visits the applications of bundle b only: OriginBundleObjects returns the
-// stand-ins of b's applications and no other bundle's, so a call for one bundle
-// of a merged layout does not compare every other bundle's generators
-// (go-kure/kure#1297).
+// It visits the records bundle b emitted when it was walked, and no other
+// bundle's: OriginBundleObjects returns the stand-ins of those records only,
+// so a call for one bundle of a merged layout does not compare every other
+// bundle's generators (go-kure/kure#1297). The records are selected by the
+// bundle recorded on them, not by b.Applications now, which can have changed
+// since the walk or list an application another bundle lists too.
 func (o *origin) syncGenerated(b *stack.Bundle) {
 	if b == nil {
 		return
 	}
-	apps := make(map[*stack.Application]bool, len(b.Applications))
-	for _, app := range b.Applications {
-		apps[app] = true
-	}
 	for _, rec := range o.apps {
-		if !apps[rec.Application] {
+		if rec.bundle != b {
 			continue
 		}
 		for _, standIn := range rec.generated {
@@ -135,6 +138,14 @@ func (o *origin) addObjects(b *stack.Bundle, objs []client.Object) {
 	o.objects[b] = append(o.objects[b], objs...)
 }
 
+// claimApps records b as the bundle that emitted the application records from
+// index first on: the ones renderApps appended for b.
+func (o *origin) claimApps(first int, b *stack.Bundle) {
+	for i := first; i < len(o.apps); i++ {
+		o.apps[i].bundle = b
+	}
+}
+
 // OriginNodes returns the stack nodes whose directory this layout is. Nil for
 // a hand-built layout and for bundle, application and augmenter layouts.
 func (ml *ManifestLayout) OriginNodes() []*stack.Node { return ml.origin.nodes }
@@ -154,8 +165,10 @@ func (ml *ManifestLayout) OriginUnit() *ManifestLayout { return ml.origin.unit }
 // this layout's directory or its per-app directories. Nil when b is not one
 // of OriginBundles. A ConfigMap a configMapGenerator builds is among them as a
 // stand-in: its kind and name, and the annotations its entry sets at the time
-// of the call. Only the stand-ins of b's applications are brought up to date:
-// a call for another bundle of this layout does not refresh them. The slice
+// of the call. Only the stand-ins of the applications b emitted when the
+// layout was walked are brought up to date, even if b.Applications has changed
+// since: a call for another bundle of this layout does not refresh them, an
+// application two bundles list included. The slice
 // is the layout's own record, not a copy, so a write to an element changes it.
 func (ml *ManifestLayout) OriginBundleObjects(b *stack.Bundle) []client.Object {
 	ml.origin.syncGenerated(b)

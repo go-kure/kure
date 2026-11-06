@@ -592,11 +592,13 @@ func renderBundle(b *stack.Bundle, into *ManifestLayout, g grouping) error {
 		target.origin = origin{bundles: []*stack.Bundle{b}}
 		into.Children = append(into.Children, target)
 	}
+	first := len(target.origin.apps)
 	objs, err := renderApps(b.Applications, target, g)
 	if err != nil {
 		return err
 	}
 	target.origin.addObjects(b, objs)
+	target.origin.claimApps(first, b)
 	if len(b.Children) > 0 {
 		b.InitializeUmbrella()
 		if err := renderUmbrellaChildren(b.Children, target, g); err != nil {
@@ -623,11 +625,13 @@ func renderUmbrellaChildren(children []*stack.Bundle, parent *ManifestLayout, g 
 		ml.Mode = KustomizationExplicit
 		ml.UmbrellaChild = true
 		ml.origin = origin{bundles: []*stack.Bundle{cb}}
+		first := len(ml.origin.apps)
 		objs, err := renderApps(cb.Applications, ml, g)
 		if err != nil {
 			return err
 		}
 		ml.origin.addObjects(cb, objs)
+		ml.origin.claimApps(first, cb)
 		if len(cb.Children) > 0 {
 			cb.InitializeUmbrella()
 			if err := renderUmbrellaChildren(cb.Children, ml, g); err != nil {
