@@ -50,12 +50,17 @@ var maxJSONNodes = 1 << 22
 // The reads that follow call these methods at many places that are not each
 // guarded, so a method that panics must be found here, before the first of
 // them. It runs after normalizeCallerObjects has succeeded, as a pass of its
-// own: that walk calls no method of a caller's object. It changes nothing.
-// Nil roots are skipped.
+// own: that walk calls no method of a caller's object. It changes no caller's
+// object. The one write it makes is the one every read of OriginBundleObjects
+// makes: the annotations a configMapGenerator entry sets are copied to its
+// stand-in, which is kure's own object. Nil roots are skipped.
 //
 // The layout package keeps a copy of the same walk for its writers
 // (probeCallerObjects in pkg/stack/layout/treecheck.go): it cannot import this
-// package, and one shared helper would be new public API. Change both together.
+// package, and one shared helper would be new public API. Change both together,
+// except for the loops over the origin records (OriginApplicationObjects and
+// OriginBundleObjects): they are this copy's alone, because no writer of the
+// layout package reads either record.
 func probeCallerObjects(roots ...*layout.ManifestLayout) error {
 	seen := map[*layout.ManifestLayout]bool{}
 	var walk func(l *layout.ManifestLayout) error
@@ -74,6 +79,16 @@ func probeCallerObjects(roots ...*layout.ManifestLayout) error {
 		// from a layout and leave it in the record.
 		for _, rec := range l.OriginApplicationObjects() {
 			for _, o := range rec.Objects {
+				if err := built.ProbeHeld(o); err != nil {
+					return errors.Wrapf(err, "layout %q", l.FullRepoPath())
+				}
+			}
+		}
+		// The objects each bundle of a unit emitted are read by the check that a
+		// bundle's patch selects none of the other bundles' objects, and the
+		// record of them is a third place a caller can leave an object in.
+		for _, b := range l.OriginBundles() {
+			for _, o := range l.OriginBundleObjects(b) {
 				if err := built.ProbeHeld(o); err != nil {
 					return errors.Wrapf(err, "layout %q", l.FullRepoPath())
 				}

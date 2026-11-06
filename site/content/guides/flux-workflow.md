@@ -1006,9 +1006,21 @@ A type that embeds two such objects at the same depth, or that has a
 `DeepCopyObject` of its own (or one in a type it embeds, an embedded interface
 or a named type that is not a struct included, at the object's depth or
 shallower), is refused too.
-A typed object whose method panics, and a typed nil
-resource, are refused naming the Go type. The package README lists the accepted
-shapes. A Flux Kustomization you hand-write
+A typed nil resource is refused naming the Go type. So is a typed object whose
+`GetObjectKind`, `GetName`, `GetNamespace`, `GetLabels` or `GetAnnotations`
+panics, or one that a typed `List` holds: every entry that reads your objects
+(`IntegrateWithLayout`, `CreateLayoutWithResources`, `UmbrellaTerminals`,
+`GenerateFromLayout`, `GenerateFromCluster` and the layout writers) calls these
+five once on each object before it reads any, and refuses a panic in an error
+that names the Go type and never the panic's text. The call refuses before it
+changes anything of yours, whether or not a later step would have called the
+method that panics. It also reaches an object that only a bundle's emitted
+record still holds, which a caller took out of the layout: the integrator and
+`UmbrellaTerminals` refuse that object too. A method that answers or panics
+differently on a later call, or never returns, is not covered. A setter that
+panics part-way, when an application's delivery intent sets its annotations, may
+leave the object changed, and then the undo cannot promise to restore it. The
+package README lists the accepted shapes. A Flux Kustomization you hand-write
 as an unstructured object is read the way the API server reads it: a key
 matches a field only in its exact spelling, and a key the type does not have is
 dropped. A `Wait:` or `KubeConfig:` key therefore sets nothing, as it sets
