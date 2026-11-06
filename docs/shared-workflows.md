@@ -176,7 +176,11 @@ The queue tests the real merged result, so the pull request does not need to be 
 | Entries built and merged at once | 1 |
 | Wait before merging | 0 minutes |
 | Grouping | All checks must pass; a failing entry is removed |
-| Check response timeout | 60 minutes |
+| Check response timeout | 120 minutes |
+
+The timeout is 120 minutes because kure and launcher share one self-hosted runner pool. A
+`merge_group` run waits behind pull request jobs from both repositories, and at 60 minutes the
+queue removed pull requests whose checks were still running.
 
 ### Required checks
 
