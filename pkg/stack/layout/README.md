@@ -91,6 +91,15 @@ named like one of its parent's generated files (`default-configmap-a`, or `confi
 `kustomization`. A child with no resources writes no `<Name>.yaml`, so its name is never refused as
 replacing another file; its directory, which the writers still create, and its extra files are
 checked.
+That check first calls `GetObjectKind`, `GetName`, `GetNamespace`, `GetLabels` and `GetAnnotations`
+once on each resource a caller put in the tree, and on each object a typed `List` among them holds
+(go-kure/kure#1245); an item that is no `client.Object` is probed through the metadata it exposes with
+`ObjectMetaAccessor`, which is how the check reads it. A caller's object whose method panics is refused before the writer writes
+anything, in an error that names its Go type and the layout it is in and never the panic's text,
+whether or not the writer would have called that method. `WritePackagesToDisk` runs the check once for
+each package, through `WriteToDisk`, so an earlier package may already be written when a later one is
+refused. A method that answers or
+panics differently on a later call, or never returns, is not covered.
 Nor may such a file need a directory where another layout writes a file, or be a file where
 another layout needs a directory (go-kure/kure#878): an extra file `default-configmap-a.yaml/v.yaml`
 next to the parent's `default-configmap-a.yaml`, an extra file `sub` where a child layout's

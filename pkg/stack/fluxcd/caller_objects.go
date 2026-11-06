@@ -41,6 +41,59 @@ const (
 // export_test.go; no in-process test that does so may be t.Parallel.
 var maxJSONNodes = 1 << 22
 
+// probeCallerObjects is the entry probe of the entry points that read the
+// objects of the layouts of roots, and of the layouts below them
+// (go-kure/kure#1245): it calls GetObjectKind, GetName, GetNamespace,
+// GetLabels and GetAnnotations once on each object a caller put in a layout
+// and on each object a typed List holds (built.ProbeHeld), and returns the
+// refusal of the first whose method panics, naming its layout and its Go type.
+// The reads that follow call these methods at many places that are not each
+// guarded, so a method that panics must be found here, before the first of
+// them. It runs after normalizeCallerObjects has succeeded, as a pass of its
+// own: that walk calls no method of a caller's object. It changes nothing.
+// Nil roots are skipped.
+//
+// The layout package keeps a copy of the same walk for its writers
+// (probeCallerObjects in pkg/stack/layout/treecheck.go): it cannot import this
+// package, and one shared helper would be new public API. Change both together.
+func probeCallerObjects(roots ...*layout.ManifestLayout) error {
+	seen := map[*layout.ManifestLayout]bool{}
+	var walk func(l *layout.ManifestLayout) error
+	walk = func(l *layout.ManifestLayout) error {
+		if l == nil || seen[l] {
+			return nil
+		}
+		seen[l] = true
+		for _, r := range l.Resources {
+			if err := built.ProbeHeld(r); err != nil {
+				return errors.Wrapf(err, "layout %q", l.FullRepoPath())
+			}
+		}
+		// The origin records hold the objects a delivery intent is applied
+		// to. They are the values the layouts hold, but a caller can drop one
+		// from a layout and leave it in the record.
+		for _, rec := range l.OriginApplicationObjects() {
+			for _, o := range rec.Objects {
+				if err := built.ProbeHeld(o); err != nil {
+					return errors.Wrapf(err, "layout %q", l.FullRepoPath())
+				}
+			}
+		}
+		for _, child := range l.Children {
+			if err := walk(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, root := range roots {
+		if err := walk(root); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // normalizeCallerObjects makes every unstructured object a caller put in the
 // layouts of roots, and of the layouts below them, one kure can read
 // (go-kure/kure#1201). apimachinery requires such an object to hold JSON
@@ -56,9 +109,11 @@ var maxJSONNodes = 1 << 22
 // holds itself, one nested deeper than maxJSONDepth and a call whose objects
 // need more than maxJSONNodes values converted or checked in all: that count is
 // one for the whole call, as a map shared by many objects is expanded once for
-// each. No method of a value the caller built is ever called,
+// each. The walk itself calls no method of a value the caller built,
 // also not to read a typed List that holds it: a marshaler could not be
-// stopped on a value that holds itself.
+// stopped on a value that holds itself. The methods of a caller's objects are
+// called by a separate pass that runs after the walk succeeds
+// (probeCallerObjects).
 //
 // The objects are those in each layout's Resources, and the unstructured
 // objects a typed List in them holds, directly or through the typed Lists it

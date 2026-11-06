@@ -707,6 +707,10 @@ func umbrellaTerminals(existenceOnly bool, roots []*layout.ManifestLayout) (map[
 	if err != nil {
 		return nil, errors.Wrapf(ErrUmbrellaTerminals, "%s", err.Error())
 	}
+	if err := probeCallerObjects(roots...); err != nil {
+		undo()
+		return nil, errors.Wrapf(ErrUmbrellaTerminals, "%s", err.Error())
+	}
 	out, err := umbrellaTerminalsOf(existenceOnly, roots)
 	if err != nil {
 		undo()

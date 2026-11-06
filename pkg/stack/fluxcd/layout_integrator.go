@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"maps"
 	"path"
@@ -91,6 +92,9 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 			undoNormalize()
 		}
 	}()
+	if err := probeCallerObjects(ml); err != nil {
+		return err
+	}
 
 	rules = normalizeRulesPlacement(rules)
 
@@ -149,7 +153,11 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 		err = recordFluxKustomizations(ml, generated)
 	}
 	if err != nil {
-		undoDelivery()
+		// A refusal that started the undo stays the answer when the undo is
+		// refused too: the error holds both.
+		if undoErr := undoDelivery(); undoErr != nil {
+			err = stderrors.Join(err, undoErr)
+		}
 		restore()
 	}
 	return err
