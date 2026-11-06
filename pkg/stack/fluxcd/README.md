@@ -1956,7 +1956,10 @@ of the object and of the panic value, never the panic's text:
   caller can drop one from a layout and leave it in a record. The probe is a separate pass that
   follows the normalization above. It changes no caller's object; the one write it makes is the one
   every read of `OriginBundleObjects` makes, copying the annotations of a `configMapGenerator` entry
-  to its stand-in, which is kure's own object. An object whose metadata methods panic is refused at
+  to its stand-in, which is kure's own object. A nil left in the record of a bundle's emitted objects,
+  a typed nil pointer or a nil interface, is refused at entry with an error naming the layout and the
+  bundle, in the words used for a typed nil in a layout's `Resources`: the patch check calls a method
+  on every element of that record. An object whose metadata methods panic is refused at
   entry, whether or not a later phase would have called the method that panics, and a refused
   `GenerateFromLayout` or `GenerateFromCluster` puts back what the normalization replaced.
   `WalkCluster` reads no metadata method beyond the guarded read of the kind, and has no probe;
