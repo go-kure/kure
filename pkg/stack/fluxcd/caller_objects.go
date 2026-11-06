@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/internal/built"
+	"github.com/go-kure/kure/internal/nilobj"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
@@ -89,6 +90,13 @@ func probeCallerObjects(roots ...*layout.ManifestLayout) error {
 		// record of them is a third place a caller can leave an object in.
 		for _, b := range l.OriginBundles() {
 			for _, o := range l.OriginBundleObjects(b) {
+				// ProbeHeld leaves a nil to its reader, and the reader of this
+				// record, the patch-scope check, calls a method on every
+				// element: a nil is refused here, in the words callerObjects
+				// uses for a nil resource (go-kure/kure#1297).
+				if nilobj.Is(o) {
+					return errors.Errorf("layout %q: bundle %q: a nil %T in its origin record", l.FullRepoPath(), b.Name, o)
+				}
 				if err := built.ProbeHeld(o); err != nil {
 					return errors.Wrapf(err, "layout %q", l.FullRepoPath())
 				}
