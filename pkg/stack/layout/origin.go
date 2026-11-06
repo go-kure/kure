@@ -83,8 +83,23 @@ func generatedStandIns(l *ManifestLayout) []generatedStandIn {
 // configMapGenerator entry sets now. kustomize puts them on the ConfigMap it
 // builds, where a patch target's annotation selector reads them, and an entry
 // can gain some after the walk (a workflow applying a delivery intent).
-func (o *origin) syncGenerated() {
+//
+// It visits the applications of bundle b only: OriginBundleObjects returns the
+// stand-ins of b's applications and no other bundle's, so a call for one bundle
+// of a merged layout does not compare every other bundle's generators
+// (go-kure/kure#1297).
+func (o *origin) syncGenerated(b *stack.Bundle) {
+	if b == nil {
+		return
+	}
+	apps := make(map[*stack.Application]bool, len(b.Applications))
+	for _, app := range b.Applications {
+		apps[app] = true
+	}
 	for _, rec := range o.apps {
+		if !apps[rec.Application] {
+			continue
+		}
 		for _, standIn := range rec.generated {
 			for _, gen := range standIn.layout.ConfigMapGenerators {
 				if gen.Name != standIn.object.GetName() {
@@ -139,9 +154,11 @@ func (ml *ManifestLayout) OriginUnit() *ManifestLayout { return ml.origin.unit }
 // this layout's directory or its per-app directories. Nil when b is not one
 // of OriginBundles. A ConfigMap a configMapGenerator builds is among them as a
 // stand-in: its kind and name, and the annotations its entry sets at the time
-// of the call.
+// of the call. Only the stand-ins of b's applications are brought up to date:
+// a call for another bundle of this layout does not refresh them. The slice
+// is the layout's own record, not a copy, so a write to an element changes it.
 func (ml *ManifestLayout) OriginBundleObjects(b *stack.Bundle) []client.Object {
-	ml.origin.syncGenerated()
+	ml.origin.syncGenerated(b)
 	return ml.origin.objects[b]
 }
 
