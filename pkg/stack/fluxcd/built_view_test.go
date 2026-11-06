@@ -662,6 +662,7 @@ func TestBuiltView_ImagesAreCompared(t *testing.T) {
 // admitted (go-kure/kure#1169). The control sets the field to a value that
 // differs, and the tree is refused naming it.
 func TestBuiltView_AZeroValueIsNotADifference(t *testing.T) {
+	t.Parallel()
 	for name, c := range map[string]struct {
 		field, zero, value string
 	}{

@@ -72,6 +72,7 @@ func findObject[T client.Object](t *testing.T, objs []client.Object) T {
 // and nowhere else changes; the source with every option unset is the stored
 // one (TestBootstrap_OutputUnchanged).
 func TestBootstrapSourceAccess_Gotk(t *testing.T) {
+	t.Parallel()
 	for name, access := range sourceAccessCases {
 		t.Run(name, func(t *testing.T) {
 			bg := fluxstack.NewBootstrapGenerator()

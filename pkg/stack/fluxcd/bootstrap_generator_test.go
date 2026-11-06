@@ -653,6 +653,7 @@ func TestFluxOperatorBootstrapCarriesSyncName(t *testing.T) {
 // the oracle is the generator's own output with SyncName unset. Every call
 // builds from the vendored GotkVersion bundle, so none touches the network.
 func TestGenerateBootstrapGotkSyncName(t *testing.T) {
+	t.Parallel()
 	generate := func(t *testing.T, kind, url, syncName string) []client.Object {
 		t.Helper()
 		bg := fluxstack.NewBootstrapGenerator()

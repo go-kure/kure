@@ -378,6 +378,7 @@ func TestUmbrellaTerminals_PatchedTreeKeepsReadyExprEntryAsLeaf(t *testing.T) {
 // entries on the terminal leaves. Admitted (go-kure/kure#1226; the blanket of
 // go-kure/kure#1225 refused it).
 func TestReadyExprTrue_PatchedKeptDependsOnUmbrella(t *testing.T) {
+	t.Parallel()
 	build := func() *stack.Cluster {
 		return noWaitCluster(srBundle("platform", objApp("platform-app", handWritten("h"))), false)
 	}

@@ -406,6 +406,7 @@ func findLayout(ml *layout.ManifestLayout, name string) *layout.ManifestLayout {
 // with the edge, a would wait for b-longer's apply, and b-longer for a's
 // readiness.
 func TestMissedCycles_UncertainWriterAddsNoEdge(t *testing.T) {
+	t.Parallel()
 	cm := func(ns, name string) client.Object { return unstructuredObj("v1", "ConfigMap", ns, name) }
 	check := func(ns, name string) stack.HealthCheck {
 		return stack.HealthCheck{APIVersion: "v1", Kind: "ConfigMap", Namespace: ns, Name: name}
