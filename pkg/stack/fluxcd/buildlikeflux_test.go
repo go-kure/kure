@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -54,7 +55,10 @@ func TestMain(m *testing.M) {
 	}
 	timedOut := func() {
 		debug.SetTraceback("all")
-		panic(fmt.Sprintf("test timed out after %v in buildsAsFlux, TestMain's replay of every build through SecureBuild", timeout))
+		// A timeout loses the phases line below, so the split and the replay's
+		// progress go in the message (go-kure/kure#1288).
+		panic(fmt.Sprintf("test timed out after %v in buildsAsFlux, TestMain's replay of every build through SecureBuild: tests=%.1fs replay=%d of %d builds numcpu=%d gomaxprocs=%d",
+			timeout, tests.Seconds(), replayDone.Load(), replayTotal.Load(), runtime.NumCPU(), runtime.GOMAXPROCS(0)))
 	}
 	var alarm *time.Timer
 	if timeout > 0 {
@@ -98,6 +102,10 @@ type fluxInput struct {
 // fluxInputs holds the first build buildLikeFlux made of each distinct tree,
 // by fluxInputKey, for buildsAsFlux.
 var fluxInputs sync.Map
+
+// replayTotal and replayDone count the builds of buildsAsFlux, so a timeout
+// can say how far the replay got.
+var replayTotal, replayDone atomic.Int64
 
 // buildLikeFlux builds path in tree as Flux's SecureBuild does, with its
 // secure file system, its kustomize options and its recovery from a kustomize
@@ -209,10 +217,15 @@ func buildResult(rm resmap.ResMap, err error, root string) string {
 // SecureBuild races with nothing.
 func buildsAsFlux() bool {
 	ok, n := true, 0
+	fluxInputs.Range(func(_, _ any) bool {
+		replayTotal.Add(1)
+		return true
+	})
 	fluxInputs.Range(func(_, v any) bool {
 		in := v.(fluxInput)
 		n++
 		got, err := secureBuildOf(in)
+		replayDone.Add(1)
 		switch {
 		case err != nil:
 			fmt.Fprintf(os.Stderr, "buildsAsFlux: %s: %v\n", in.dir, err)
