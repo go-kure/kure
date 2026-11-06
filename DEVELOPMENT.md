@@ -257,8 +257,12 @@ surface:
   nothing to close. To reopen a closed/ignored update, tick its checkbox on
   the dashboard.
 - **Rebasing a PR**: tick the "rebase/retry" checkbox in the PR body, or the
-  per-PR entry on the dashboard. Renovate also rebases automatically when the
-  PR falls behind the base branch.
+  per-PR entry on the dashboard. Renovate rebases on its own only when the PR
+  conflicts with the base branch (`rebaseWhen: conflicted` in `renovate.json`).
+  A PR that is only behind `main` stays as it is: the merge queue rebases it and
+  tests the merged result. The shared preset rebases on every move of `main`;
+  this repository overrides that because kure and launcher share one CI runner
+  pool, and each such rebase started a full CI run.
 - **Closing a PR**: closing it normally tells Renovate not to recreate that
   version; the dashboard lists it under *Closed/Ignored*.
 
