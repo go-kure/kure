@@ -154,7 +154,11 @@ func TestAddAnnotations_UnstructuredEdges(t *testing.T) {
 			t.Errorf("undo left %#v, want an empty Unstructured", obj)
 		}
 	})
-	for name, meta := range map[string]any{"null metadata": nil, "string metadata": "x"} {
+	for name, meta := range map[string]any{
+		"null metadata":    nil,
+		"string metadata":  "x",
+		"nil map metadata": map[string]any(nil),
+	} {
 		t.Run(name, func(t *testing.T) {
 			obj := &unstructured.Unstructured{Object: map[string]any{"kind": "ConfigMap", "metadata": meta}}
 			before := runtime.DeepCopyJSON(obj.Object)
