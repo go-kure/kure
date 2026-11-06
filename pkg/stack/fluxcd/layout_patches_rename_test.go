@@ -171,6 +171,7 @@ func localKust(name, value string) string {
 // it (reorder) and of one patch per object first for a patch of several
 // documents (split); where kustomize fails on the entry itself it does not.
 func TestLayoutPatches_AfterAnEntryThatIsNotPlain(t *testing.T) {
+	t.Parallel()
 	layouts := func(i ...int) map[string][]int {
 		out := map[string][]int{}
 		for _, name := range shopLayoutNames {

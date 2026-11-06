@@ -102,6 +102,7 @@ func asGeneric(t *testing.T, v any) any {
 // OCIRepository's spec.verify, an empty provider the CRD's default, and no
 // other object changes from the same config without it.
 func TestBootstrapSourceVerify_Gotk(t *testing.T) {
+	t.Parallel()
 	for name, tc := range sourceVerifyCases {
 		t.Run(name, func(t *testing.T) {
 			bg := fluxstack.NewBootstrapGenerator()
@@ -407,6 +408,7 @@ func TestBootstrapSourceVerify_StoredOutput(t *testing.T) {
 // on the root source in both modes: gotk's OCIRepository as read, and the
 // flux-operator sync source after the read FluxInstance's patches.
 func TestBootstrapSourceVerify_Encoded(t *testing.T) {
+	t.Parallel()
 	encoders := map[string]kureio.EncodeOptions{"default": {}, "kubernetes field order": {KubernetesFieldOrder: true}}
 	for name, tc := range sourceVerifyCases {
 		for _, mode := range []string{fluxstack.ModeGotk, fluxstack.DefaultFluxMode} {

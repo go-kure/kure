@@ -64,6 +64,7 @@ func bootstrapOutputConfigs() map[string]*stack.BootstrapConfig {
 // TestBootstrap_OutputUnchanged renders each config through GenerateBootstrap
 // and compares the result with the stored file.
 func TestBootstrap_OutputUnchanged(t *testing.T) {
+	t.Parallel()
 	for name, config := range bootstrapOutputConfigs() {
 		t.Run(name, func(t *testing.T) {
 			objs, err := fluxstack.NewBootstrapGenerator().GenerateBootstrap(

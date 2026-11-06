@@ -387,6 +387,7 @@ func integrateNonMemberWriter(t *testing.T, placement layout.FluxPlacement, depe
 // and the tree is admitted. Without a transform h stays certain and the cycle
 // is refused.
 func TestBuiltObjects_AnotherSourcesTransformLeavesTheWriterUncertain(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		edit    func(k *kustv1.Kustomization)
 		refused bool
@@ -427,6 +428,7 @@ func TestBuiltObjects_AnotherSourcesTransformLeavesTheWriterUncertain(t *testing
 // another cluster, h stays certain and the cycle is refused; so it is where no
 // p applies other at all.
 func TestBuiltObjects_AnotherSourceIsReadAsItsAppliedCopy(t *testing.T) {
+	t.Parallel()
 	const unskip = "- op: remove\n  path: /metadata/annotations/kustomize.toolkit.fluxcd.io~1ssa\n"
 	for name, c := range map[string]struct {
 		patch   string

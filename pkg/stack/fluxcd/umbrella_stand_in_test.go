@@ -36,6 +36,7 @@ func labelDependsOnZero(path string) string {
 // so the loss is refused. Without the replaced spec.path, and without the
 // second patch, the tree is as it was before.
 func TestStandIn_NonMemberLosesWaitThroughALabelSelectedPatch(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		replacePath, dropWait bool
 		refused               bool
@@ -104,6 +105,7 @@ func TestStandIn_NonMemberLosesWaitThroughALabelSelectedPatch(t *testing.T) {
 // the umbrella and loses what the umbrella loses. The specs are compared as the
 // typed Kustomization encodes them.
 func TestStandIn_LeafWithItsOwnReadinessIsNotTakenForACopyOfAnUmbrella(t *testing.T) {
+	t.Parallel()
 	const check = "- op: add\n  path: /spec/healthChecks\n" +
 		"  value: [{apiVersion: apps/v1, kind: Deployment, name: manual-check, namespace: default}]\n"
 	// platform depends on nothing before the rewrite, so removing s's own
@@ -496,6 +498,7 @@ func TestStandIn_HeldLeafOfAPostBuildOnlyWriterIsRefusedOnTheFallback(t *testing
 // documents. With one that gives it the applied 17m it is a duplicate of the
 // umbrella as applied, and is admitted.
 func TestStandIn_UntouchedCopyOfAPatchedUmbrellaIsAdmitted(t *testing.T) {
+	t.Parallel()
 	const interval = "- op: replace\n  path: /spec/interval\n  value: %s\n"
 	for name, tc := range map[string]struct {
 		platformPatch string

@@ -256,6 +256,7 @@ func TestBuiltClasses_RenamedMemberCopyLosingALeaf(t *testing.T) {
 // applied member never stands for the copy: the patch is refused all the same,
 // and the namesake alone, and the patcher without the patch, are admitted.
 func TestBuiltClasses_RenamedMemberCopyBesideANamesake(t *testing.T) {
+	t.Parallel()
 	dropped := "true"
 	skipped := handWritten("x-s")
 	skipped.Annotations = map[string]string{"kustomize.toolkit.fluxcd.io/ssa": "Ignore"}
@@ -426,6 +427,7 @@ func strayLayout(ml *layout.ManifestLayout, objs ...client.Object) *layout.Manif
 // for [y-infra y-services v]). The same tree without the patch, and the
 // namesake alone, are admitted.
 func TestBuiltClasses_RenamedMemberCopyBesideAnUnbuiltNamesake(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		patch   string
 		refused bool
@@ -621,6 +623,7 @@ func rescueBuiltTree(t *testing.T, placement layout.FluxPlacement, patch string)
 // dependsOn, and the tests pin that a tree with such a view is read, admitted
 // when the patch leaves dependsOn alone and refused when it does not.
 func TestBuiltClasses_RescueView(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		patch   string
 		refused bool

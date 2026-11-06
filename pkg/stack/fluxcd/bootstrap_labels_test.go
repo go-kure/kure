@@ -72,6 +72,7 @@ func labelsConfig(mode, kind string, labels map[string]string) *stack.BootstrapC
 // source, of either kind, and on the bootstrap Kustomization, and nothing else
 // changes from the same config without them.
 func TestBootstrapLabels_Gotk(t *testing.T) {
+	t.Parallel()
 	for kind := range labelsSources {
 		for _, syncName := range []string{"", "fleet"} {
 			t.Run(fmt.Sprintf("%s/sync %q", kind, syncName), func(t *testing.T) {

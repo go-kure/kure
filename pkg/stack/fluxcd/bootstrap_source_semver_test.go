@@ -38,6 +38,7 @@ func semverConfig(mode, rng string) *stack.BootstrapConfig {
 // TestBootstrapSourceSemVer_Gotk: the range is the gotk OCIRepository's whole
 // ref, and no other object changes from the same config without it.
 func TestBootstrapSourceSemVer_Gotk(t *testing.T) {
+	t.Parallel()
 	for name, rng := range semverRanges {
 		t.Run(name, func(t *testing.T) {
 			bg := fluxstack.NewBootstrapGenerator()

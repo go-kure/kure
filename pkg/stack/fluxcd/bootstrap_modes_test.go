@@ -406,6 +406,7 @@ func bootstrapModeConfigs() map[string]*stack.BootstrapConfig {
 // decide what the cluster pulls and applies must agree; the comparison, differences
 // included, is stored under testdata/bootstrap-modes.
 func TestBootstrapModes_RootIdentities(t *testing.T) {
+	t.Parallel()
 	for name, config := range bootstrapModeConfigs() {
 		t.Run(name, func(t *testing.T) {
 			render := func(mode string) []client.Object {

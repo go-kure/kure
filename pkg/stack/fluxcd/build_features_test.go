@@ -90,6 +90,7 @@ func builtKustomizations(t *testing.T, ml *layout.ManifestLayout, dir string) []
 // mark is read as that build applies it; and a health check waits for a
 // skipped object too.
 func TestBuildFeatures_ExcludedObjectLeavesTheWait(t *testing.T) {
+	t.Parallel()
 	label := func(key, value string) *kustv1.CommonMetadata {
 		return &kustv1.CommonMetadata{Labels: map[string]string{key: value}}
 	}

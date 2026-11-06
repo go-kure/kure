@@ -96,6 +96,7 @@ func schemaTree(dir string, patch bool) (*layout.ManifestLayout, error) {
 // this test does not hit, and it passes without kure's parse too. That proof
 // is internal/kustomizeschema's test, whose lookup takes no lock after it.
 func TestKustomizeSchema_ColdIntegrationsDoNotRace(t *testing.T) {
+	t.Parallel()
 	if os.Getenv(freshProcessEnv) == "" {
 		inFreshProcess(t, "TestKustomizeSchema_ColdIntegrationsDoNotRace", webDirectory(t, layout.FluxIntegratedPerBundle))
 		return

@@ -822,6 +822,7 @@ var dependsOnShapes = map[string]func() *stack.Cluster{
 // dependsOn names an umbrella, the dependsOn edges are acyclic, and the
 // Kustomizations are the ones written without the setting.
 func TestUmbrellasDoNotWait_Property(t *testing.T) {
+	t.Parallel()
 	shapes := map[string]func() *stack.Cluster{}
 	for name, shape := range propertyShapes {
 		shapes[name] = shape

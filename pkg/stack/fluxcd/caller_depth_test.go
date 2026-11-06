@@ -56,6 +56,7 @@ func TestNestingLimit_IsExactlyWhatEncodingJSONTakes(t *testing.T) {
 // change refuses an object only where main does, so a nesting main handles is
 // kept, and converted where it needs it.
 func TestNormalizeCallerObjects_NestingMainHandlesIsNotRefused(t *testing.T) {
+	t.Parallel()
 	nest := func(levels int, leaf any) map[string]any {
 		m := map[string]any{"leaf": leaf}
 		for range levels {

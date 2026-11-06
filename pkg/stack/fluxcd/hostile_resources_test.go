@@ -401,6 +401,7 @@ func TestHostileResources_Child(t *testing.T) {
 }
 
 func TestHostileResources_NoEntryPointPanics(t *testing.T) {
+	t.Parallel()
 	cases := hostileCases()
 	names := make([]string, 0, len(cases))
 	for name := range cases {

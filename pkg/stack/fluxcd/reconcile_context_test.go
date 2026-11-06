@@ -324,6 +324,7 @@ func webBuildDirectory(t *testing.T, placement layout.FluxPlacement) string {
 // writes its entries on the leaves. That is the renamed-copy class: refused
 // as a wait the rewrite dropped (go-kure/kure#1226).
 func TestReconcileContext_TransformedBuildIsRead(t *testing.T) {
+	t.Parallel()
 	const throughWeb = "ready flux-system/hand-written -> ready flux-system/web -> apply flux-system/web"
 	const deleteWeb = "$patch: delete\napiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: web\n  namespace: flux-system\n"
 	// A component adding an object beside web, and one whose patch deletes
@@ -404,6 +405,7 @@ func TestReconcileContext_TransformedBuildIsRead(t *testing.T) {
 // prefix, the kept copy is another object, x-inner, and closes the cycle
 // under that name.
 func TestReconcileContext_PatchedBuildKeepsLocalConfig(t *testing.T) {
+	t.Parallel()
 	patch := "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: inner\n  namespace: flux-system\n  annotations:\n    " + localConfigAnnotation + `: "false"` + "\n"
 	keepInner := "apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\npatches:\n- patch: |\n    " +
 		strings.ReplaceAll(strings.TrimSuffix(patch, "\n"), "\n", "\n    ") + "\n"
@@ -577,6 +579,7 @@ func TestReconcileContext_KeptCopyBesideLiveNamesakeWaits(t *testing.T) {
 // build holds nothing (go-kure/kure#1197). A single file beside the patched
 // build's directory, of the same path, changes nothing: the tree is refused.
 func TestReconcileContext_KeptCopyUnreadableIsRefused(t *testing.T) {
+	t.Parallel()
 	patch := "apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\nmetadata:\n  name: inner\n  namespace: flux-system\n  annotations:\n    " + localConfigAnnotation + `: "false"` + "\n"
 	build := func(seed string, patched bool) *stack.Cluster {
 		k := handWritten("hand-written")
