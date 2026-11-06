@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -41,6 +42,7 @@ import (
 func TestMain(m *testing.M) {
 	start := time.Now()
 	code := m.Run()
+	tests := time.Since(start)
 	// m.Run stops the -timeout alarm before it returns, so the replay keeps
 	// to what is left of the timeout under an alarm of its own, which fails
 	// as the testing package's does.
@@ -63,6 +65,13 @@ func TestMain(m *testing.M) {
 		alarm = time.AfterFunc(left, timedOut)
 	}
 	ok := buildsAsFlux()
+	// The tests and the replay share one -timeout, so the log names the split
+	// and the CPUs the binary had (go-kure/kure#1288). A child process of the
+	// tests below runs this too, and has nothing to report.
+	if os.Getenv(hostileChildEnv) == "" && os.Getenv(freshProcessEnv) == "" {
+		fmt.Printf("fluxcd phases: tests=%.1fs replay=%.1fs numcpu=%d gomaxprocs=%d\n",
+			tests.Seconds(), (time.Since(start) - tests).Seconds(), runtime.NumCPU(), runtime.GOMAXPROCS(0))
+	}
 	// An alarm can be due and not yet run, or be running, when the replay
 	// ends, so whether it timed out is read from the clock, not the alarm.
 	if alarm != nil {
