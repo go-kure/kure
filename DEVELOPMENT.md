@@ -333,7 +333,7 @@ Set from the environment (`?=`, so `VAR=value make <target>` and an exported `VA
 
 - `GOROOT` - Go root directory (default: `go env GOROOT`)
 - `VERSION` - Version string for builds (default: `git describe`, else `dev`)
-- `TEST_TIMEOUT` - Test timeout, applied per test binary (default: `20m`, the same value as the `test` job in CI)
+- `TEST_TIMEOUT` - Test timeout, applied per test binary (default: `30m`, the same value as the `test` job in CI)
 
 Assigned with `:=`, so the **environment does not reach them** — override with a make command-line
 assignment instead, as in `make test TEST_PACKAGES=./pkg/errors/`:

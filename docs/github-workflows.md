@@ -105,7 +105,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `validate` | `lint` | 25 min | changes | Go fmt, tidy, vet, lint, tool-version parity (golangci-lint pin across Makefile/ci.yml/docs), govulncheck doc parity; `sync-versions.sh check`; `scripts/gen-builders.sh check` (fails when the generated constructor wrappers under `pkg/kubernetes` are stale against the registered scheme); syntax-check on the version-sync scripts, `sh -n` or `bash -n` per each script's own shebang; `scripts/test/run-tests.sh` (hermetic mutation-matrix guard tests for `sync-versions.sh`'s own six guards, no network); caches goimports + yq binaries |
 | `action-pins` | `action-pins` | 2 min | — | Fails if any third-party `uses:` ref is not pinned to a 40-char commit SHA (`go-kure/.github` canonical checker) |
 | `forbidden-terms` | `forbidden-terms` | 2 min | — | Runs the canonical full-tree downstream-reference guard on every workflow event and verifies the vendored release guard and release guide against `go-kure/.github` at a ref derived from the guard action's own pin (go-kure/kure#813) |
-| `test` | `test` | 40 min | changes | Unit tests with race detection and coverage; `go test -timeout 20m` bounds each test binary, and the 40 min job limit covers that plus the `-race` compile, the two cache restores and the cache save |
+| `test` | `test` | 50 min | changes | Unit tests with race detection and coverage; `go test -timeout 30m` bounds each test binary, and the 50 min job limit covers that plus the `-race` compile, the two cache restores and the cache save |
 | `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.9.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational; the accepted-risk entry (`GO-2026-5377`) carries its justification inline in `ci.yml` |
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment |
 | `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
@@ -590,7 +590,7 @@ There is **one** Go test job, and it runs `go test` inline rather than through a
 
 | Job | Command | Uses Makefile? |
 |-----|---------|----------------|
-| `test` | `go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic -timeout 20m ./...`, tee'd to a `test-log` artifact (the `Run tests` step of `ci.yml`) | `make deps` only |
+| `test` | `go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic -timeout 30m ./...`, tee'd to a `test-log` artifact (the `Run tests` step of `ci.yml`) | `make deps` only |
 | `coverage-check` | no tests; downloads the `coverage` artifact and thresholds it with `go tool cover -func` | - |
 
 That single command produces the race check and the coverage profile together, so there is no
@@ -607,8 +607,8 @@ nothing about whether any of them passes.
 
 | Target | Command | Invoked by CI? | In precommit? |
 |--------|---------|----------------|---------------|
-| `test` | `go test -timeout 20m ./...` | - (CI runs its own inline `go test`) | ✅ |
-| `test-race` | `go test -race -timeout 20m ./...` | - (the inline command already carries `-race`) | - |
+| `test` | `go test -timeout 30m ./...` | - (CI runs its own inline `go test`) | ✅ |
+| `test-race` | `go test -race -timeout 30m ./...` | - (the inline command already carries `-race`) | - |
 | `test-coverage` | `go test -coverprofile=... ./...` | - (the inline command already writes the profile) | - |
 | `test-integration` | `go test -tags=integration -timeout 5m ./...` | - | - |
 | `vuln` | `govulncheck ./...` | - (CI runs the canonical `govulncheck-gate` action instead) | - |

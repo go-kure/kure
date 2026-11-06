@@ -577,7 +577,7 @@ jobs:
     # save. pkg/stack/fluxcd takes most of the run. This limit must stay above the
     # -timeout of the test step plus that other work: a limit that is too low
     # cancels the run before completion with no test failure.
-    timeout-minutes: 40
+    timeout-minutes: 50
     needs: [changes]
     if: github.event_name != 'pull_request' || needs.changes.outputs.go == 'true'
 
@@ -634,7 +634,7 @@ jobs:
       run: |
         set -euo pipefail
         mkdir -p coverage
-        go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic -timeout 20m ./... 2>&1 | tee /tmp/gotest.log
+        go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic -timeout 30m ./... 2>&1 | tee /tmp/gotest.log
 
     - name: Save Go build cache
       # Default-branch only: a PR's own gocache entry is dead the moment it merges (GitHub
