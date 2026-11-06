@@ -1941,18 +1941,25 @@ of the object and of the panic value, never the panic's text:
 - the read of a built tree, and the labels and annotations that `Bundle.Generate` gives the objects of
   its applications;
 - the entry probe (go-kure/kure#1245): `IntegrateWithLayout`, `CreateLayoutWithResources`,
-  `UmbrellaTerminals` and the layout writers (`WriteToDisk`, `WriteToTar`, `WritePackagesToDisk`,
-  `WriteManifest`) call `GetObjectKind`, `GetName`, `GetNamespace`, `GetLabels` and `GetAnnotations`
-  once on each object they are given, and on each object a typed `List` holds, before they read any.
+  `UmbrellaTerminals`, `GenerateFromLayout`, `GenerateFromCluster` and the layout writers
+  (`WriteToDisk`, `WriteToTar`, `WritePackagesToDisk`, `WriteManifest`) call `GetObjectKind`,
+  `GetName`, `GetNamespace`, `GetLabels` and `GetAnnotations` once on each object they are given, and
+  on each object a typed `List` holds, before they read any. `GenerateFromLayout` and
+  `GenerateFromCluster` call these methods only when bundles merged into one directory share a
+  Kustomization and a bundle's patch has a target, which is matched against the other bundles'
+  objects; they probe at entry all the same, so the contract does not depend on that shape.
   An item that is no `client.Object` is probed through the metadata it exposes with
-  `ObjectMetaAccessor`, as the writers read it. The integrator and `UmbrellaTerminals` also probe the
-  objects the origin records of the layouts retain (`OriginApplicationObjects`), which a delivery
-  intent is applied to: the layouts hold the same values, but a caller can drop one from a layout and
-  leave it in the record. The probe is a separate pass that follows the normalization above and
-  changes nothing. An object
-  whose metadata methods panic is refused at entry, whether or not a later phase would have called
-  the method that panics. `GenerateFromLayout`, `GenerateFromCluster` and `WalkCluster` read no
-  metadata method beyond the guarded read of the kind, and have no probe;
+  `ObjectMetaAccessor`, as the writers read it. The generator, the integrator and `UmbrellaTerminals`
+  also probe the objects the origin records of the layouts retain (`OriginApplicationObjects`), which a
+  delivery intent is applied to, and the objects each bundle of a layout emitted
+  (`OriginBundleObjects`), which that patch check reads: the layouts hold the same values, but a
+  caller can drop one from a layout and leave it in a record. The probe is a separate pass that
+  follows the normalization above. It changes no caller's object; the one write it makes is the one
+  every read of `OriginBundleObjects` makes, copying the annotations of a `configMapGenerator` entry
+  to its stand-in, which is kure's own object. An object whose metadata methods panic is refused at
+  entry, whether or not a later phase would have called the method that panics, and a refused
+  `GenerateFromLayout` or `GenerateFromCluster` puts back what the normalization replaced.
+  `WalkCluster` reads no metadata method beyond the guarded read of the kind, and has no probe;
 - the annotations an application's delivery intent sets on its objects, and takes back when a later
   check refuses the call. A setter cannot be probed, so the call that sets and the call that takes
   back are each guarded. A refusal while setting leaves the object annotated by no call. A panic

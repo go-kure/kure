@@ -238,6 +238,13 @@ func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.L
 // marshaler) refuses the call, with the object and the field named, and
 // replaces no object, and a refusal after it puts every Object map back
 // (go-kure/kure#1201).
+//
+// A caller's object whose GetObjectKind, GetName, GetNamespace, GetLabels or
+// GetAnnotations panics, in a layout, in an origin record of one or in a typed
+// List, refuses the call, in an error that names its Go type and never the
+// panic's text, whether or not the call would have read it: bundles merged
+// into one directory read each other's objects to check a targeted patch
+// (go-kure/kure#1245).
 func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, error) {
 	out, _, err := g.generateFromLayout(root, c)
 	return out, err
@@ -257,6 +264,12 @@ func (g *ResourceGenerator) generateFromLayout(root *layout.ManifestLayout, c *s
 				undo()
 			}
 		}()
+		// The check that a bundle's patch selects none of the other bundles of its
+		// unit calls the metadata methods of their objects (checkPatchScope), so
+		// the probe goes before it (go-kure/kure#1245).
+		if err = probeCallerObjects(root); err != nil {
+			return nil, nil, err
+		}
 	}
 	return g.generateFromNormalizedLayout(root, c)
 }

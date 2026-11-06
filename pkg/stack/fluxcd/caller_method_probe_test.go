@@ -440,3 +440,172 @@ func TestCallerMethodPanic_ObjectsOfAnOriginRecordAreProbed(t *testing.T) {
 		})
 	}
 }
+
+// Two bundles merged into one directory share one Kustomization, and a
+// bundle's targeted patch is checked against the objects of every other bundle
+// of the unit (checkPatchScope), which calls the metadata methods of a caller's
+// object. GenerateFromLayout and GenerateFromCluster probe the objects of every
+// bundle of every unit before that check.
+
+// mergedPatchCluster is a root node whose bundle carries a patch that targets
+// ConfigMaps by label and annotation, and a child node whose bundle's
+// application emits r. A node-flat walk merges both bundles into one directory.
+func mergedPatchCluster(r client.Object) *stack.Cluster {
+	obj := r
+	hostile := stack.NewApplication("hostile", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+	owner := srBundle("owner", cmApp("owner-app"))
+	owner.Patches = []stack.Patch{{
+		Patch:  "- op: add\n  path: /metadata/labels/z\n  value: y\n",
+		Target: &stack.PatchSelector{Kind: "ConfigMap", LabelSelector: "a=b", AnnotationSelector: "c=d"},
+	}}
+	child := &stack.Node{Name: "child", Bundle: srBundle("other", hostile)}
+	return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "root", Bundle: owner, Children: []*stack.Node{child}}}
+}
+
+var generatesFromMergedPatchCluster = map[string]func(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error){
+	"GenerateFromLayout": func(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error) {
+		ml, err := layout.WalkCluster(c, rules)
+		if err != nil {
+			return nil, err
+		}
+		return fluxstack.NewResourceGenerator().GenerateFromLayout(ml, c)
+	},
+	"GenerateFromCluster": func(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error) {
+		return fluxstack.NewResourceGenerator().GenerateFromCluster(c, rules)
+	},
+}
+
+// TestCallerMethodPanic_PatchScopeOfMergedBundlesRefuses: the patch-scope check
+// of a unit of merged bundles reads another bundle's caller object with every
+// metadata method; a method that panics is a refusal naming the Go type, in each
+// shape the object can come in, and not the panic.
+func TestCallerMethodPanic_PatchScopeOfMergedBundlesRefuses(t *testing.T) {
+	rules := propertyGroupings["nodeFlat"]
+	for entry, run := range generatesFromMergedPatchCluster {
+		for shape, build := range callerShapes {
+			for _, method := range callerMethods {
+				t.Run(entry+"/"+shape+"/"+method, func(t *testing.T) {
+					obj := build(callerKinds[0], method)
+					before := snapshotOf(t, obj)
+					err := callEntry(func() error {
+						_, err := run(mergedPatchCluster(obj), rules)
+						return err
+					})
+					if after := snapshotOf(t, obj); after != before {
+						t.Errorf("the refusal left the caller's object changed:\nbefore %s\nafter  %s", before, after)
+					}
+					if err == nil {
+						t.Fatalf("%s returned no error for an object whose %s panics", entry, method)
+					}
+					msg := err.Error()
+					if strings.HasPrefix(msg, "PANIC: ") {
+						t.Fatalf("%s panicked instead of refusing: %s", entry, msg)
+					}
+					if strings.Contains(msg, callerMethodPanicText) {
+						t.Errorf("the refusal carries the text of the panic: %s", msg)
+					}
+					if !strings.Contains(msg, "fluxcd_test.panic") {
+						t.Errorf("the refusal does not name the Go type of the object: %s", msg)
+					}
+				})
+			}
+		}
+	}
+}
+
+// A refusal of GenerateFromLayout puts back what the normalization before it
+// replaced (go-kure/kure#1201), also when the probe refuses. The control shows
+// the call does replace the map of an object that holds a plain int.
+func TestCallerMethodPanic_GenerateFromLayoutRefusalPutsBackWhatNormalizationReplaced(t *testing.T) {
+	rules := propertyGroupings["nodeFlat"]
+	generate := func(second client.Object) (*unstructured.Unstructured, error) {
+		u := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "v1", "kind": "ConfigMap",
+			"metadata": map[string]any{"name": "plain", "namespace": "default"},
+			"data":     map[string]any{"n": int(1)},
+		}}
+		c := mergedPatchCluster(second)
+		ml, err := layout.WalkCluster(c, rules)
+		if err != nil {
+			return u, err
+		}
+		ml.Resources = append(ml.Resources, u)
+		err = callEntry(func() error {
+			_, err := fluxstack.NewResourceGenerator().GenerateFromLayout(ml, c)
+			return err
+		})
+		return u, err
+	}
+	numberType := func(u *unstructured.Unstructured) string {
+		return fmt.Sprintf("%T", u.Object["data"].(map[string]any)["n"])
+	}
+
+	// The control's object matches no label of the patch, so the call succeeds.
+	benign := panicConfigMap(callerKinds[0])
+	benign.Labels = nil
+	u, err := generate(&panicObject{ConfigMap: benign})
+	if err != nil {
+		t.Fatalf("control: %v", err)
+	}
+	if got := numberType(u); got != "int64" {
+		t.Fatalf("control: the normalization left a %s, want int64: the case below would prove nothing", got)
+	}
+
+	u, err = generate(&panicObject{ConfigMap: panicConfigMap(callerKinds[0]), panicOn: "GetLabels"})
+	if err == nil || !strings.Contains(err.Error(), "fluxcd_test.panicObject") || strings.HasPrefix(err.Error(), "PANIC:") {
+		t.Fatalf("want the refusal naming fluxcd_test.panicObject, got %v", err)
+	}
+	if got := numberType(u); got != "int" {
+		t.Errorf("the refused call left the unstructured object's number as %s, want the caller's int", got)
+	}
+}
+
+// An object a bundle's application emitted, which a caller took out of the
+// layouts' resources and out of the applications' records, is still in the
+// bundle's emitted record (OriginBundleObjects), which the integration reads.
+// The probe reads it too.
+func TestCallerMethodPanic_ObjectsOnlyInABundlesEmittedRecordAreProbed(t *testing.T) {
+	entries := map[string]func(c *stack.Cluster, ml *layout.ManifestLayout) error{
+		"IntegrateWithLayout": func(c *stack.Cluster, ml *layout.ManifestLayout) error {
+			return fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, nodeOnly)
+		},
+		"UmbrellaTerminals": func(_ *stack.Cluster, ml *layout.ManifestLayout) error {
+			_, err := fluxstack.UmbrellaTerminals(ml)
+			return err
+		},
+	}
+	for entry, run := range entries {
+		for _, method := range callerMethods {
+			t.Run(entry+"/"+method, func(t *testing.T) {
+				obj := &panicObject{ConfigMap: panicConfigMap(callerKinds[0]), panicOn: method}
+				c, ml, err := walkPanicCluster(obj, stack.DeliveryIntent{})
+				if err != nil {
+					t.Fatalf("walk: %v", err)
+				}
+				var drop func(l *layout.ManifestLayout)
+				drop = func(l *layout.ManifestLayout) {
+					if l == nil {
+						return
+					}
+					l.Resources = nil
+					recs := l.OriginApplicationObjects()
+					for i := range recs {
+						recs[i].Objects = nil
+					}
+					for _, child := range l.Children {
+						drop(child)
+					}
+					drop(l.OriginUnit())
+				}
+				drop(ml)
+				err = callEntry(func() error { return run(c, ml) })
+				if err == nil || strings.HasPrefix(err.Error(), "PANIC:") {
+					t.Fatalf("want a refusal, got %v", err)
+				}
+				if !strings.Contains(err.Error(), "fluxcd_test.panicObject") || strings.Contains(err.Error(), callerMethodPanicText) {
+					t.Errorf("the refusal %q must name fluxcd_test.panicObject and not the panic text", err)
+				}
+			})
+		}
+	}
+}

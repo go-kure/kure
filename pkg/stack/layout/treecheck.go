@@ -26,7 +26,9 @@ import (
 // The fluxcd package keeps a copy of the same walk for its integrator and
 // UmbrellaTerminals (probeCallerObjects in pkg/stack/fluxcd/caller_objects.go):
 // this package cannot import that one, and one shared helper would be new
-// public API. Change both together.
+// public API. Change both together, except for the loops over the origin
+// records (OriginApplicationObjects and OriginBundleObjects): they are the
+// fluxcd copy's alone, because no writer in this package reads either record.
 func probeCallerObjects(root *ManifestLayout) error {
 	seen := map[*ManifestLayout]bool{}
 	var walk func(l *ManifestLayout) error
