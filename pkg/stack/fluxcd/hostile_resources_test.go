@@ -409,6 +409,9 @@ func TestHostileResources_NoEntryPointPanics(t *testing.T) {
 	slices.Sort(names)
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
+			// Each case runs in a process of its own and reads nothing the
+			// others write, so they run side by side.
+			t.Parallel()
 			cmd := exec.Command(os.Args[0], "-test.run=^TestHostileResources_Child$")
 			cmd.Env = append(os.Environ(), hostileChildEnv+"="+name)
 			out, err := cmd.CombinedOutput()
