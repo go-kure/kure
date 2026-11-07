@@ -37,8 +37,9 @@ To release the version in `VERSION` on `main`:
    on `release`, tick **Dry run**, and run it. The run's summary shows the tag it would make and the
    `VERSION` that would follow.
 2. If that is what you want, run it again with **Dry run** unticked.
-3. Wait for the run to go green: about a minute for the checks, up to 30 minutes for CI on the
-   commit, then the time Release / Publish takes (up to 75 minutes).
+3. Wait for the run to go green. The checks take about a minute. The run then waits for the whole CI
+   workflow to finish on the commit, and after that for Release / Publish. The release workflow sets
+   a limit on each wait, and "What happens after you click" gives those limits.
 
 That is the whole procedure for an ordinary prerelease. The rest of this guide is for moving
 between stages, patch releases on a release branch, and failures.
@@ -165,9 +166,11 @@ Release: release-as-stable (later)
 1. **Check branch and action** — about a minute. Refuses an unknown action, a tag instead of a
    branch, a branch other than `main` or `release/vX.Y` (unless it is a dry run), and any action
    other than `release` on a release branch.
-2. **Wait for CI on this commit** — real runs of the `release…` options only. Waits up to 30
-   minutes for CI to pass on the commit being released; a failed or unfinished CI run stops the
-   release with nothing tagged, and so does a commit with no CI run at all after two minutes.
+2. **Wait for CI on this commit** — real runs of the `release…` options only. The workflow waits up
+   to 30 minutes for CI to pass on the commit being released. A failed or unfinished CI run stops
+   the release with nothing tagged, and so does a commit with no CI run at all after two minutes.
+   The wait starts here, not at the push. The workflow accepts a CI run that already passed at once.
+   If CI does not finish before this wait ends, the release stops with nothing tagged.
 3. **Release** — runs the release script against this repository:
    - refuses if the branch moved on since the run started (start the release again);
    - refuses if the tag, or the `VERSION` that would follow it, already exists as a tag;
@@ -175,8 +178,10 @@ Release: release-as-stable (later)
    - creates the annotated tag, then commits the next `VERSION`;
    - checks the tree for downstream references, then pushes the branch and the tag (or `main` and
      the new release branch) in one atomic push.
-4. **Wait for Release / Publish** — only when a tag was pushed. Up to 2 minutes for Publish to
-   start and 75 minutes for it to finish; Release fails if Publish does.
+4. **Wait for Release / Publish** — only when a tag was pushed. The workflow waits up to 2 minutes
+   for Publish to start and up to 75 minutes for it to finish. Release fails if Publish does. The
+   75 minutes is the sum of the job limits on Publish's critical path, so a change to one of those
+   limits needs this wait changed with it.
 
 Only one Release run per repository runs at a time. A second run waits for the first; if a third
 is started meanwhile, GitHub cancels the waiting one.
