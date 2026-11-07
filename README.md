@@ -57,8 +57,8 @@ New here? Follow the [quickstart](docs/quickstart.md), then run the complete
 - [Builder contract](pkg/kubernetes/README.md) — normative: construction, sugar admission, purity,
   and where scope and maturity come from
 - [Supported kinds and field maturity](docs/api-tables.md) — generated from the pinned modules
-- [Release-1 migration notes](docs/builder-contract-release-1.md) — every helper the builder
-  contract removed, with the expression that replaces it
+- [Release-1 migration notes](docs/builder-contract-release-1.md) — development record of every
+  helper the builder contract removed, with the expression that replaces it; not on the website
 - [Layout and Flux naming](docs/layout-and-flux-naming.md) — how the layout engine names directories,
   files and Flux objects
 - [Compatibility matrix](docs/compatibility.md) — supported infrastructure versions, generated from

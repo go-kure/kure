@@ -27,7 +27,7 @@ fmt.Println(obj.Kind, obj.Namespace+"/"+obj.Name)
 
 There is no second construction path.
 The config-struct layer this package used to carry (`prometheus.ServiceMonitor(&prometheus.ServiceMonitorConfig{...})`, `PodMonitor`, `PrometheusRule`) was retired by release 2 of the builder contract: it reached 6 of a `ServiceMonitor`'s 19 spec fields and 6 of a `PodMonitor`'s 17, and its `Labels` field was `metadata.labels` under another name. <!-- doc-api-refs:ignore names the retired config-struct layer -->
-The [release 2 migration notes](/concepts/builder-contract-release-2/) map every removed field to the upstream field that replaces it. One hand-written constructor for a spec fragment remains, `CreateRuleGroup`: `monitoringv1.RuleGroup` is not a `client.Object`, so it gets no generated wrapper, and the helper stays because a rule group is the unit a caller assembles repeatedly. Every other sub-type takes a struct literal.
+A caller sets the upstream field directly; the config field that used to feed it is gone. One hand-written constructor for a spec fragment remains, `CreateRuleGroup`: `monitoringv1.RuleGroup` is not a `client.Object`, so it gets no generated wrapper, and the helper stays because a rule group is the unit a caller assembles repeatedly. Every other sub-type takes a struct literal.
 
 The kinds this package registers, their scope, and what stated that scope are rows in the generated [Supported kinds and field maturity](/api-reference/api-tables/) tables. The sections below are worked examples, not the coverage list.
 
@@ -122,4 +122,3 @@ fmt.Println(sm.Spec.TargetLabels, pm.Spec.PodTargetLabels, rule.Spec.Groups[0].N
 ## Related Packages
 
 - [kubernetes-builders](/api-reference/kubernetes-builders/) - Core Kubernetes resource constructors
-- [Builder contract: release 2 migration notes](/concepts/builder-contract-release-2/) - the retired config-struct layer, field by field

@@ -622,7 +622,7 @@ Some upstream CRDs encode an *exactly-one-of* constraint as a struct with multip
 
 Kure passes that struct through as it is. The upstream one-of is the API: set the arm you want as a pointer (`issuer.Spec.Vault = &certv1.VaultIssuer{...}`, `rs.Spec.Restic = &volsyncv1alpha1.ReplicationSourceResticSpec{...}`), and leave the others nil. A pointer setter exists where the contract admits one (`SetIssuerACME`, `SetClusterIssuerCA`); every arm is reachable either way.
 
-Until release 2 of the builder contract, `pkg/kubernetes/volsync` and `pkg/kubernetes/certmanager` wrapped these one-ofs in a **sealed-interface sum type** — an interface closed by an unexported marker method, a per-variant `Config` type per arm, and a type switch in a `Kind(&Config)` constructor — so that setting two arms was a compile error. The wall cut both ways: a caller could not add a Vault issuer or an Azure DNS solver even by hand, because no type outside the package could satisfy the marker, and the sums only ever covered the arms kure had chosen to mirror (2 of 5 issuer arms, 3 of 9 DNS-01 providers). The sums went with the layer; the [release 2 migration notes](/concepts/builder-contract-release-2/) map each former variant to its upstream arm.
+Until release 2 of the builder contract, `pkg/kubernetes/volsync` and `pkg/kubernetes/certmanager` wrapped these one-ofs in a **sealed-interface sum type** — an interface closed by an unexported marker method, a per-variant `Config` type per arm, and a type switch in a `Kind(&Config)` constructor — so that setting two arms was a compile error. The wall cut both ways: a caller could not add a Vault issuer or an Azure DNS solver even by hand, because no type outside the package could satisfy the marker, and the sums only ever covered the arms kure had chosen to mirror (2 of 5 issuer arms, 3 of 9 DNS-01 providers). The sums went with the layer; a caller now sets the upstream arm directly, and each arm is a field of the upstream type.
 
 ---
 
@@ -1609,7 +1609,6 @@ Additional design documentation available in the repository:
 - `pkg/kubernetes/README.md`: The builder contract (ADR-038) — normative
 - `docs/history/20260905-DESIGN-builder-contract.md`: Why the contract replaced three builder layers
 - `docs/history/20261001-DESIGN-schema-validation.md`: Why kure's output is validated against the pinned CRD schemas in process, and what that leaves to a real apiserver
-- `docs/builder-contract-release-1.md`: Release-1 migration ledger — every removed helper and its replacement
 - `docs/api-tables.md`: Generated kinds, scope and field-maturity tables
 - `pkg/stack/layout/README.md`: Layout system overview
 - `docs/layout-and-flux-naming.md`: How the layout engine names directories, files and Flux objects
@@ -1646,9 +1645,8 @@ For migrating from previous versions:
 
 The builder contract removed the constructor defaults and the bare field forwarders. This is a
 breaking change for callers that relied on either, and it is the one migration this release asks
-for. Every removed function is listed with the expression that replaces it, grouped by package, in
-[the release-1 migration notes](/concepts/builder-contract-release-1/). Three of those replacements
-change what the caller emits; every other one is mechanical and emits the same YAML the helper did.
+for. Each removed function has a replacement expression, usually `obj.Spec.Field = value`. Three of
+those replacements change what the caller emits; every other one is mechanical and emits the same YAML the helper did.
 The three, all called out in the notes as well:
 
 - A constructor no longer injects `app: <name>` labels or a per-kind spec default.

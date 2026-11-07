@@ -113,17 +113,18 @@ fmt.Println(dep.Labels["tier"], *dep.Spec.Replicas)
 
 The [Kubernetes Builders](/api-reference/kubernetes-builders) page is the
 normative contract: what constructors emit, which helpers exist and why, and
-the [migration notes](/concepts/builder-contract-release-1/) for the
-constructor defaults that earlier releases injected and no longer do. If you
-upgraded and a field you relied on is now empty, that page lists it.
+the constructor defaults that earlier releases injected and no longer do. If
+you upgraded and a field you relied on is now empty, that page says which
+values a constructor sets: identity only, and nothing else.
 
 The per-kind config-struct builders (`certmanager.Certificate(&CertificateConfig{...})`, <!-- doc-api-refs:ignore retired config-struct builder, named as gone -->
 `cnpg.Cluster(&ClusterConfig{...})` and the like in `certmanager`, `cnpg`, <!-- doc-api-refs:ignore retired config-struct builder, named as gone -->
 `externalsecrets`, `prometheus`, `cilium` and `volsync`) are gone too: build
 those kinds with `Create<Kind>` and the upstream struct, exactly as above. The
-[release 2 migration notes](/concepts/builder-contract-release-2/) map every
-removed function, type and field to the upstream field that replaces it, and
-list the values the CNPG builders used to inject that you now write yourself.
+[Kubernetes Builders](/api-reference/kubernetes-builders/) page states the
+rule, and each per-kind builder page shows the upstream field that carries
+what a config field used to. The values the CNPG builders used to inject are
+values you now write yourself.
 
 ### FluxCD Resources
 
