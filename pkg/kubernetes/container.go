@@ -76,6 +76,8 @@ func SetContainerSecurityContext(container *corev1.Container, securityContext co
 	container.SecurityContext = &securityContext
 }
 
+// SetContainerLifecycle sets the lifecycle hooks on the container. It stores the
+// pointer it is given, not a copy, and a nil container panics.
 func SetContainerLifecycle(container *corev1.Container, lifecycle *corev1.Lifecycle) {
 	container.Lifecycle = lifecycle
 }

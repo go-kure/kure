@@ -122,10 +122,9 @@ fmt.Println(hc.Spec.Chart, hc.Spec.Version, hc.Spec.SourceRef.Kind)
 
 Additional setters: `AddHelmChartValuesFile`, `SetHelmChartVerify`.
 
-> **Note (Flux 2.9):** `source-controller/api` v1.9 split the verification types.
-> `SetHelmChartVerify` now takes `*sourcev1.HelmChartVerification` (previously
-> `*sourcev1.OCIRepositoryVerification`); `SetOCIRepositoryVerify` still takes
-> `*sourcev1.OCIRepositoryVerification`. The API version is unchanged (both v1).
+> **Note:** `source-controller/api` has separate verification types for the two kinds.
+> `SetHelmChartVerify` takes `*sourcev1.HelmChartVerification` and
+> `SetOCIRepositoryVerify` takes `*sourcev1.OCIRepositoryVerification`. Both kinds are v1.
 
 ### Bucket
 
@@ -357,7 +356,7 @@ fluxcd.SetProviderSecretRef(provider, &meta.LocalObjectReference{Name: "slack-we
 
 alert := fluxcd.CreateAlert("slack-alert", "flux-system")
 alert.Spec.ProviderRef = meta.LocalObjectReference{Name: "slack"}
-alert.Spec.EventSeverity = "error" // no Alert setters remain: all were bare assignments
+alert.Spec.EventSeverity = "error" // plain field: assigned; the Alert setters are the Add* helpers below
 
 receiver := fluxcd.CreateReceiver("github-receiver", "flux-system")
 receiver.Spec.Type = "github"
@@ -366,6 +365,9 @@ fluxcd.SetReceiverSecretRef(receiver, meta.LocalObjectReference{Name: "webhook-t
 fmt.Println(provider.Spec.SecretRef.Name, alert.Spec.EventSeverity, receiver.Spec.SecretRef.Name)
 ```
 <!-- doc-example:end -->
+
+`Alert` keeps four append helpers: `AddAlertEventSource`, `AddAlertInclusion`,
+`AddAlertExclusion` and `AddAlertEventMetadata`.
 
 ## Image Automation
 

@@ -35,7 +35,9 @@ func IsGVKAllowed(gvk schema.GroupVersionKind, allowed []schema.GroupVersionKind
 	return slices.Contains(allowed, gvk)
 }
 
-// Helper function to convert to client.Object
+// ToClientObject returns a pointer to a copy of the client.Object interface
+// value, which is the element type of the []*client.Object that Application.Generate
+// returns. It does not copy the object the value holds.
 func ToClientObject(obj client.Object) *client.Object {
 	clientObj := obj
 	return &clientObj

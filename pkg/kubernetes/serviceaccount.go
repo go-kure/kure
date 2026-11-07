@@ -4,6 +4,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+// AddServiceAccountSecret appends a secret reference to the service account.
 func AddServiceAccountSecret(sa *corev1.ServiceAccount, secret corev1.ObjectReference) {
 	if sa == nil {
 		panic("AddServiceAccountSecret: sa must not be nil")
@@ -11,6 +12,8 @@ func AddServiceAccountSecret(sa *corev1.ServiceAccount, secret corev1.ObjectRefe
 	sa.Secrets = append(sa.Secrets, secret)
 }
 
+// AddServiceAccountImagePullSecret appends an image pull secret reference to the
+// service account.
 func AddServiceAccountImagePullSecret(sa *corev1.ServiceAccount, secret corev1.LocalObjectReference) {
 	if sa == nil {
 		panic("AddServiceAccountImagePullSecret: sa must not be nil")
@@ -18,6 +21,8 @@ func AddServiceAccountImagePullSecret(sa *corev1.ServiceAccount, secret corev1.L
 	sa.ImagePullSecrets = append(sa.ImagePullSecrets, secret)
 }
 
+// SetServiceAccountAutomountToken sets whether pods that use the service account
+// get its API token mounted.
 func SetServiceAccountAutomountToken(sa *corev1.ServiceAccount, automount bool) {
 	if sa == nil {
 		panic("SetServiceAccountAutomountToken: sa must not be nil")
