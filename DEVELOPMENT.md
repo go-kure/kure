@@ -8,11 +8,11 @@ This guide covers development workflows and tooling for the Kure project.
 # Get help with all available commands
 make help
 
-# Run all standard development tasks
-make all
-
-# Quick development cycle
+# Quick development cycle (lint, vet, short tests, tool pins, generated builders)
 make check
+
+# Everything CI runs, locally
+make ci
 ```
 
 ## Contributing Workflow
@@ -117,8 +117,8 @@ make test-coverage
 # Run all tests
 make test
 
-# Run tests with verbose output
-make test-verbose
+# Run the tests of one package, verbosely
+go test -v ./pkg/errors/
 
 # Run tests with race detection
 make test-race
@@ -187,8 +187,11 @@ make vet
 # Tidy modules
 make tidy
 
-# Run Qodana static analysis (requires Docker)
-make qodana
+# Run the faster linters only (no type analysis)
+make lint-fast
+
+# Check for known vulnerabilities (govulncheck)
+make vuln
 ```
 
 ## Pre-commit Workflow
@@ -203,26 +206,33 @@ This will:
 - Format code with `go fmt`
 - Tidy modules
 - Run linters
-- Run `go vet`  
 - Run all tests
+- Check the pinned tool versions and the govulncheck version mentioned in the docs
+- Run the `sync-versions.sh` guard tests
+- Check that the generated builders are up to date
+- Run the offline checks of CI's docs build (`make check-docs`)
 
 ## CI/CD Pipeline
 
 The project uses several GitHub Actions workflows:
 
 ### Main CI Pipeline (`.github/workflows/ci.yml`)
-- **Triggers**: Push to main/develop, PRs
-- **Jobs**:
-  - Test (unit, race, coverage)
-  - Lint and format check
-  - Integration tests (main branch only)
-  - Security scanning
-  - Dependency vulnerability checks
+- **Triggers**: push to `main`, `develop` and `release/*`; every pull request (any base branch);
+  the merge queue; a daily schedule; manual dispatch
+- **Jobs** (job names as the required checks show them): `lint`, `test`, `build`, `Security`,
+  `Coverage Check`, `docs-build`, `doc-gate`, `forbidden-terms`, `action-pins`, `pin-impact` and
+  `Analyze Changes`
 
-### Qodana Code Quality (`.github/workflows/code_quality.yml`)
-- **Triggers**: Push, PRs
-- **Purpose**: Static analysis with JetBrains Qodana
-- **Uses**: `make deps` for setup
+### Documentation (`.github/workflows/deploy-docs.yml`, `.github/workflows/manage-docs.yml`)
+- **Deploy Docs**: publishes the site on a push to `main` that touches `site/`, `docs/`, package or
+  example READMEs, `README.md`, `CHANGELOG.md` or `DEVELOPMENT.md`, and on manual dispatch
+- **Manage Docs**: manual dispatch only; acts on a version slot (`dev` or `vX.Y`) of the published
+  site
+
+### PR Review (`.github/workflows/pr-review.yml`) and Claude Code (`.github/workflows/claude.yml`)
+- **PR Review**: the AI code review that is a required check (`pr-review / AI Code Review`), run on
+  pull requests and on the merge queue
+- **Claude Code**: answers issue comments and newly opened or assigned issues
 
 ### Release (`.github/workflows/release.yml`) and Release / Publish (`.github/workflows/release-publish.yml`)
 
@@ -233,16 +243,6 @@ the tag, and **Release / Publish** then runs by itself on the tag. Nothing is ta
 repository) explains every option, release branches, and what to do when a release fails. kure's
 Publish creates the GitHub release object only: kure is a library, so a complete release carries no
 assets and the tag is the artifact.
-
-### PR Checks (`.github/workflows/pr-checks.yml`)
-- **Triggers**: PR events
-- **Jobs**:
-  - Quick validation with `make check`
-  - Security and dependency checks
-  - Test coverage validation
-  - Changed files analysis
-  - Performance benchmarks (when labeled)
-  - Documentation validation
 
 ## Renovate Management
 
@@ -287,50 +287,56 @@ For the full dependency update process (review, bundling, version tracking), see
 
 ## Makefile Targets Reference
 
+`make help` prints the same list with one-line descriptions.
+
 ### Development
 - `help` - Display help message
-- `all` - Run all standard development tasks
 - `info` - Display project information
+- `dev` - Set up the development environment (mise, dependencies, git hooks)
 - `clean` - Clean build artifacts and caches
+- `changelog-preview` - Print the unreleased changelog entries
 
 ### Dependencies
 - `deps` - Download and tidy Go modules
 - `deps-upgrade` - Upgrade all dependencies
-- `tools` - Install development tools
 - `outdated` - Check for outdated dependencies
+- `tools` - Install development tools
 
 ### Testing
 - `test` - Run all tests
-- `test-verbose` - Run tests with verbose output
-- `test-race` - Run tests with race detection
 - `test-short` - Run short tests only
+- `test-race` - Run tests with race detection
 - `test-coverage` - Run tests with coverage report
 - `test-benchmark` - Run benchmark tests
 - `test-integration` - Run integration tests
+- `test-fuzz` - Run fuzz tests
 
 ### Code Quality
-- `lint` - Run all linters
-- `lint-go` - Run golangci-lint
+- `lint` - Run golangci-lint
+- `lint-fast` - Run the fast linters only (no type analysis)
 - `fmt` - Format Go code
 - `vet` - Run go vet
 - `tidy` - Tidy modules
-- `qodana` - Run Qodana static analysis
+- `vuln` - Run the govulncheck vulnerability check
+
+### Consistency checks and generators
+- `sync-go-version` / `check-go-version` - Sync or verify the Go version across files from `mise.toml`
+- `sync-tool-versions` / `check-tool-versions` - Sync or verify the golangci-lint pin
+- `sync-govulncheck-docs` / `check-govulncheck-docs` - Sync or verify the govulncheck version mentioned in the docs
+- `gen-builders` / `check-builders` - Regenerate or verify the generated constructor wrappers under `pkg/kubernetes`
+- `check-docs` - Run the offline checks of CI's docs build (API references, site self-links, doc examples)
+- `versions-test` - Run the `sync-versions.sh` guard tests (hermetic, no network)
 
 ### CI/CD
-- `ci` - Run CI pipeline tasks
-- `ci-coverage` - Run CI with coverage
-- `ci-integration` - Run CI with integration tests
-- `check` - Quick code quality check
-- `precommit` - Run all pre-commit checks
+- `check` - Quick code quality check (lint, vet, short tests, tool pins, generated builders)
+- `precommit` - Fast pre-commit checks (see Pre-commit Workflow)
+- `ci` - The comprehensive CI pipeline, locally
 
 ### Release
 No target releases or previews a release: run the **Release** workflow, with **Dry run** ticked for
 a preview ([Releasing](/contributing/releasing/)). `changelog-preview` prints the unreleased
 changelog entries.
-### Utilities
-- `generate` - Run go generate
-- `mod-graph` - Display module dependency graph
-- `list-packages` - List all packages
+
 ## Environment Variables
 
 Set from the environment (`?=`, so `VAR=value make <target>` and an exported `VAR` both work):
@@ -349,7 +355,7 @@ assignment instead, as in `make test TEST_PACKAGES=./pkg/errors/`:
 
 `COVERAGE_THRESHOLD` (`Makefile:30`) is **defined and never referenced** — setting it changes
 nothing. It also disagrees with the gate that does run: it reads `80`, while the `coverage-check` CI
-job hardcodes `90` for both total and per-package coverage (`.github/workflows/ci.yml:768-769`).
+job (`.github/workflows/ci.yml`) hardcodes `90` for both total and per-package coverage.
 Treat 90 as the number that matters.
 
 ## Development Tips
@@ -393,7 +399,6 @@ Formatters: `gofmt`, `goimports` (with `github.com/go-kure/kure` as local prefix
 
 ### Performance
 - Benchmark tests can be run with `make test-benchmark`
-- PR checks include performance benchmarks when labeled with `performance`
 - Build targets include optimized release builds with `-s -w` flags
 
 ## Troubleshooting
@@ -401,7 +406,7 @@ Formatters: `gofmt`, `goimports` (with `github.com/go-kure/kure` as local prefix
 ### Build Issues
 ```bash
 # Clean everything and rebuild
-make clean all
+make clean
 
 # Check Go installation and environment
 make info
@@ -410,7 +415,7 @@ make info
 ### Test Failures
 ```bash
 # Run tests with verbose output for more details
-make test-verbose
+go test -v ./pkg/specific/package
 
 # Run specific test
 go test -v ./pkg/specific/package -run TestSpecific
@@ -437,10 +442,13 @@ When modifying a package's public API, update documentation in the same PR:
 To verify the docs site builds correctly:
 
 ```bash
-# Check all mounted files exist
-bash site/scripts/check-mounts.sh
+# Offline checks of CI's docs build: API references, site self-links, doc examples
+make check-docs
 
-# Build site
+# Check the code-to-docs mapping in site/docs-map.yaml
+mise run site:check
+
+# Build the site
 mise run site:build
 ```
 
