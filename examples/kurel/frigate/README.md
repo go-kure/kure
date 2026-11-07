@@ -31,12 +31,12 @@ Frigate is a complete and local NVR designed for Home Assistant with AI object d
 | `app.image.repository` | Frigate image repository | `ghcr.io/blakeblackshear/frigate` |
 | `app.image.tag` | Frigate image tag | `0.12.0` |
 | `service.type` | Service type | `LoadBalancer` |
-| `service.loadBalancerIP` | Static IP for LoadBalancer | `172.32.104.0` |
+| `service.loadBalancerIP` | Static IP for LoadBalancer | `192.0.2.10` |
 | `ingress.enabled` | Enable ingress | `true` |
-| `ingress.hostname` | Hostname for ingress | `frigate.home.vanginderachter.be` |
+| `ingress.hostname` | Hostname for ingress | `frigate.example.com` |
 | `storage.size` | PVC storage size | `100Gi` |
 | `storage.storageClass` | Storage class name | `local-path` |
-| `mqtt.host` | MQTT broker host | `mqtt-broker-home.mqttbroker` |
+| `mqtt.host` | MQTT broker host | `mqtt-broker.mqtt` |
 | `detector.type` | Detector type | `edgetpu` |
 | `detector.device` | Detector device | `usb` |
 

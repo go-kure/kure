@@ -111,7 +111,7 @@ See [Domain Model](/concepts/domain-model) for the full reference.
 
 Kure is the manifest-generation library. Related tooling:
 
-- **[go-kure/launcher](https://github.com/go-kure/launcher)**: Package manager and customization workflows (patching, overlays). Optional — only needed if you use those workflows. References to "kurel" in older docs refer to this project's predecessor.
+- **[go-kure/launcher](https://github.com/go-kure/launcher)**: Package manager and customization workflows (patching, overlays). Optional — only needed if you use those workflows. "kurel" is the launcher's command-line tool; kure itself ships no CLI. Older kure docs that describe a kurel package system describe a prototype that preceded the launcher.
 
 ## Current Status
 

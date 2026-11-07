@@ -11,7 +11,7 @@ app:
 # Service configuration
 service:
   type: LoadBalancer
-  loadBalancerIP: 172.32.104.0
+  loadBalancerIP: 192.0.2.10
   ports:
     http: 5000
     rtmp: 1935
@@ -21,7 +21,7 @@ service:
 # Ingress configuration
 ingress:
   enabled: true
-  hostname: frigate.home.vanginderachter.be
+  hostname: frigate.example.com
   tlsEnabled: true
   clusterIssuer: acme-gandi
   forceSSLRedirect: true
@@ -40,7 +40,7 @@ environment:
 
 # MQTT configuration
 mqtt:
-  host: mqtt-broker-home.mqttbroker
+  host: mqtt-broker.mqtt
   port: 1883
   topicPrefix: frigate
   clientId: frigate

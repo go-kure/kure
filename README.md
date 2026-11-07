@@ -41,9 +41,15 @@ upstream type. The rules, and what they mean for a caller, are the
 
 ## Installation
 
+Kure is a Go library and needs the Go version that [`go.mod`](go.mod) declares. In a Go
+module:
+
 ```bash
-go get github.com/go-kure/kure
+go get github.com/go-kure/kure@latest
 ```
+
+New here? Follow the [quickstart](docs/quickstart.md), then run the complete
+[cluster-to-disk example](examples/getting-started/README.md).
 
 ## Documentation
 
