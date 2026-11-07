@@ -12,7 +12,7 @@ Practical examples of using Kure to generate Kubernetes configurations.
 These examples include full documentation:
 
 - [Getting Started](/examples/getting-started/) - The complete cluster-to-disk pipeline in Go: build a cluster, generate the layout, write it to disk
-- [Patches](/examples/patches/) - Declarative patching with TOML and YAML formats
+- [Patches](/examples/patches/) - Sample patch files for the patch library in go-kure/launcher
 
 ## Sample Data on GitHub
 

@@ -9,7 +9,7 @@ This directory contains examples for Kure, organized by purpose.
 These directories have documentation mounted to the docs site:
 
 - [`getting-started/`](getting-started/) — Complete cluster-to-disk pipeline using the Go API
-- [`patches/`](patches/) — Declarative patching with TOML and YAML formats
+- [`patches/`](patches/) — sample patch files for the patch library in go-kure/launcher
 
 ### Not on the docs site
 
