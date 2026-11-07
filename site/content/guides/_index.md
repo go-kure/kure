@@ -3,8 +3,6 @@ title = "Guides"
 weight = 30
 +++
 
-# Guides
-
 Step-by-step guides for common Kure workflows.
 
 - [Using Kure as a Library](/guides/library-usage/) - Import paths, creating resources, generating YAML

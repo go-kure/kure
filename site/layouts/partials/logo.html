@@ -1,5 +1,5 @@
 <a href="{{ .Site.BaseURL }}" style="text-decoration: none;">
-    <h1 style="margin: 0; padding: 1rem; color: var(--MENU-SECTIONS-ACTIVE-BG-color);">
+    <div style="margin: 0; padding: 1rem; color: var(--MENU-SECTIONS-ACTIVE-BG-color);">
         {{- .Site.Title -}}
         {{- with site.Params.version -}}
             {{- if eq . "dev" }}
@@ -8,5 +8,5 @@
                 <span style="font-size: 0.5em; vertical-align: middle; opacity: 0.7;">{{ . }}</span>
             {{- end -}}
         {{- end -}}
-    </h1>
+    </div>
 </a>

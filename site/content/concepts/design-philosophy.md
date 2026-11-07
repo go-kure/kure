@@ -3,8 +3,6 @@ title = "Design Philosophy"
 weight = 30
 +++
 
-# Design Philosophy
-
 Kure is built on a few core principles that guide its design and API choices.
 
 ## The Upstream Type Over Templating

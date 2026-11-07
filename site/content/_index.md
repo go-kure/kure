@@ -7,11 +7,7 @@ type = "home"
 
 Kure helps platform teams describe a cluster in Go and write it out as plain Kubernetes YAML for GitOps workflows — without Helm templates, runtime controllers, or fragile string-based YAML manipulation.
 
-{{< button link="/getting-started/quickstart/" >}}Get Started{{< /button >}} {{< button link="https://github.com/go-kure/kure" >}}View on GitHub{{< /button >}}
-
-{{< notice style="info" >}}
-Development docs: Kure has not reached a stable release yet. These docs track the current development version, so APIs and examples may change.
-{{< /notice >}}
+{{< button href="/getting-started/quickstart/" >}}Get Started{{< /button >}} {{< button href="https://github.com/go-kure/kure" >}}View on GitHub{{< /button >}}
 
 ## Why Kure?
 
@@ -31,7 +27,7 @@ against the Example's own `// Output:` comment. The YAML tab reproduces that out
 not generated.
 
 {{< tabs >}}
-{{< tab title="Go" >}}
+{{% tab title="Go" %}}
 <!-- doc-example:excerpt the import block alone, which the example below uses -->
 ```go
 import (
@@ -52,8 +48,8 @@ if err := io.Marshal(os.Stdout, cm); err != nil {
 }
 ```
 <!-- doc-example:end -->
-{{< /tab >}}
-{{< tab title="YAML Output" >}}
+{{% /tab %}}
+{{% tab title="YAML Output" %}}
 ```yaml
 apiVersion: v1
 data:
@@ -64,7 +60,7 @@ metadata:
   name: app-config
   namespace: default
 ```
-{{< /tab >}}
+{{% /tab %}}
 {{< /tabs >}}
 
 ## How It Fits GitOps

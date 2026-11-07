@@ -3,8 +3,6 @@ title = "Concepts"
 weight = 20
 +++
 
-# Concepts
-
 Understand the ideas behind Kure's design.
 
 - [Architecture](/concepts/architecture/) - System architecture and component overview

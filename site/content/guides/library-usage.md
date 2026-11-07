@@ -3,8 +3,6 @@ title = "Using Kure as a Library"
 weight = 10
 +++
 
-# Using Kure as a Library
-
 Kure is primarily a Go library. This guide covers the basics of importing it, creating resources, and generating YAML output.
 
 Each Go block below that is not an import block is the body of an `Example` function in

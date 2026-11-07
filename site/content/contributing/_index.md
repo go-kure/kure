@@ -3,8 +3,6 @@ title = "Contributing"
 weight = 70
 +++
 
-# Contributing
-
 Resources for contributing to Kure.
 
 - [Development Guide](/contributing/guide/) - Setup, testing, code quality, and CI/CD workflows
