@@ -158,7 +158,12 @@ bundle's labels and annotations, so an edit there leaves the cluster's bundles, 
 generation from them produces, as they were. The applications' objects are the ones their configs
 returned, passed through without copying; an entry that is nil or holds no object (a nil
 `client.Object`, or a nil pointer such as `(*corev1.ConfigMap)(nil)`) holds nothing to write and
-is skipped. See the
+is skipped. That holds for what an application returns. A nil you leave in the record of a bundle's
+emitted objects (the slice `OriginBundleObjects` returns) is not skipped: `GenerateFromLayout`
+refuses it with an error that names the layout, the bundle and the type. That slice is the
+layout's own record, so a write to it changes the layout. `OriginBundleObjects(b)` brings up to
+date only the stand-ins for the ConfigMaps that bundle `b` emitted when the layout was walked, and
+no other bundle's. See the
 [Flux Engine reference](/api-reference/flux-engine/) § Resource Generation.
 
 ## Step 4: Write to Disk
