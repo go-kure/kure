@@ -16,6 +16,68 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-rc.0] - 2026-11-07
+
+### Build
+
+- Update module github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring to v0.95.1
+- Update dependency yq to v4.54.2
+
+### CI
+
+- Log the tests-versus-replay split and the CPUs of the test job
+- Raise the test timeouts to 30m per binary and 50m per job
+- Rebase Renovate PRs only on conflict
+
+### Documentation
+
+- Qualify the copy-patch and fallback-writer rules in the guide and README
+- Note that a security update bypasses the kube-openapi rule
+- State the nil-metadata exception in the domain-model guide
+- Describe the nil bundle-record refusal and per-bundle stand-in refresh
+- State the measured cost of the definitions check
+- Count the definitions checks per path and use one figure
+
+### Fixed
+
+- Require a stand-in for a built Kustomization to prove it produced the copy
+- Refuse a held stand-in whose copy a transforming Kustomization writes
+- Require a copy of an umbrella to have its whole spec before the rewrite
+- Judge a copy of an umbrella against the umbrella as the tree holds it too
+- Pin the postBuild clause of the fallback and document the copy rules in the guide
+- Refuse an untrusted IsZero called for omitzero
+- Refuse a caller's object whose label or annotation method panics
+- State the guarded paths exactly and assert the refusal's context
+- Detect a wrapper whose DeepCopyObject comes from an embedded interface
+- Refuse a caller's object whose metadata method panics, at entry
+- Probe a caller's objects at GenerateFromLayout, and those a bundle emitted
+- Treat a nil metadata map as holding no annotations
+- Refuse a nil in a bundle's emitted record at entry
+- Sync the stand-ins of the records a bundle emitted, not those it lists now
+
+### Maintenance
+
+- Update go-kure/.github digest to 41b25bc
+- Update go-kure/.github digest to c47afbd
+- Use errors.Wrapf in Bundle.Generate refusals
+- Update go-kure/.github digest to 2ddb238
+- Update go-kure/.github digest to ba28a69
+
+### Performance
+
+- Sync only the requested bundle's generated stand-ins
+
+### Testing
+
+- Run the hostile-resource cases side by side
+- Run the 28 audited slow tests in parallel
+- Name the tests-phase time and replay progress in the timeout panic
+- Mark the embed-search fixture types as read by reflection
+- A typed nil in a bundle's emitted record must be refused
+- A call for one bundle syncs only that bundle's stand-ins
+- A bundle's call syncs the stand-ins it emitted, not those it lists now
+- A patch to another bundle's generated ConfigMap is refused whatever the bundle lists now
+
 ## [0.2.0-beta.25] - 2026-11-05
 
 ### Added
