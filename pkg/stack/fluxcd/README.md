@@ -395,7 +395,8 @@ not, with a pinned one for the built-in schema, before the first build of a tree
 its last, and does not read any build of a tree when either differs, naming the definitions. Any
 difference counts, a CRD schema another use of kustomize registered included, and so does a value
 moved to a field kyaml does not read, such as an extension moved to `ExtraProps`, which marshals
-to the same JSON. A change made and reverted between the two checks is not seen. The check covers
+to the same JSON. A change made and reverted between the two checks is not seen. One check costs
+about 17 ms, and about 110 ms under `-race`, so a tree pays that twice. The check covers
 the definitions kyaml exposes, and the schema kyaml's per-resource-type index serves for every kind
 they declare: the index holds a copy of each definition, apart from the one in the definitions, so
 a write through the schema kyaml returns for a kind changes what a build reads and leaves the

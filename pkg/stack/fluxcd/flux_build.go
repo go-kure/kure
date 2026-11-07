@@ -216,8 +216,10 @@ func builtInVersion() error {
 
 // builtInDefinitions checks the definitions of kustomize's schema once per
 // tree, on the first build, and returns that result for every build after it.
-// Hashing them costs a few tens of milliseconds, so it is not repeated per
-// build.
+// One check costs about 17 ms, and about 110 ms under -race, whose cost is the
+// number of reflect operations in the hash (BenchmarkDefinitions in
+// internal/kustomizeschema, measured on a 20-thread host), so it is not
+// repeated per build.
 func (b *treeBuilds) builtInDefinitions() error {
 	if !b.definitionsChecked {
 		b.definitionsChecked = true
