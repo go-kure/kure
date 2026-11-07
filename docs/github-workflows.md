@@ -2,8 +2,6 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-10-02
-
 ---
 
 ## Workflow Summary

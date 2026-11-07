@@ -10,8 +10,8 @@ Kure is a Go library for programmatically building Kubernetes resources used by 
 
 - **Language**: Go (see `go.mod` / [`docs/compatibility.md`](docs/compatibility.md) for the exact version)
 - **Core Dependencies**: Kubernetes APIs, Flux, cert-manager, MetalLB and more — see the generated [`docs/compatibility.md`](docs/compatibility.md) for exact build versions (do not hardcode versions here; they drift)
-- **Testing**: 105 test files with 100% pass rate
-- **Build System**: Comprehensive Makefile with 40+ targets, mise for cross-repo consistency
+- **Testing**: unit, example and golden-fixture tests in every package (`make test`)
+- **Build System**: Comprehensive Makefile (`make help` lists the targets), mise for cross-repo consistency
 
 ### Architecture
 
@@ -26,18 +26,24 @@ Kure is a Go library for programmatically building Kubernetes resources used by 
 kure/
 ├── pkg/
 │   ├── errors/       # Error handling (use in app code instead of fmt.Errorf)
+│   ├── gvk/          # GVK registry and typed wrappers
 │   ├── io/           # YAML serialization
-│   ├── kubernetes/   # Public K8s utilities
+│   ├── kubernetes/   # Kubernetes builders (one sub-package per CRD family)
 │   ├── logger/       # Logging (use this for all logging)
-│   └── stack/        # Core domain model
-│       ├── argocd/   # ArgoCD workflow
-│       ├── fluxcd/   # FluxCD workflow
-│       └── layout/   # Manifest organization
+│   ├── manifest/     # Parse and resolve manifests
+│   ├── stack/        # Core domain model
+│   │   ├── argocd/   # ArgoCD workflow
+│   │   ├── fluxcd/   # FluxCD workflow
+│   │   ├── helm/     # Helm chart rendering
+│   │   ├── layout/   # Manifest organization
+│   │   └── stacktest/ # Conformance helpers for ApplicationConfig tests
+│   └── versions/     # Machine-readable ranges of deployed tool versions
+├── internal/         # Packages shared by the module's tests and generators
 ├── examples/         # Sample configurations
 ├── docs/             # Documentation
 ├── .claude/          # Claude Code configuration
 ├── mise.toml         # Tool versions and tasks
-├── Makefile          # Build system (40+ targets)
+├── Makefile          # Build system
 ├── AGENTS.md         # This file
 └── DEVELOPMENT.md    # Development workflow guide
 ```
@@ -61,8 +67,8 @@ mise run test
 # Run all tests
 make test
 
-# Run with verbose output
-make test-verbose
+# Run one package with verbose output
+go test -v ./pkg/errors/
 
 # Run tests with coverage
 make test-coverage
@@ -100,8 +106,8 @@ make vet
 # Run all quality checks
 make precommit
 
-# Run Qodana analysis (requires Docker)
-make qodana
+# Run the faster linters only
+make lint-fast
 ```
 
 ### Pre-commit Workflow
@@ -366,7 +372,7 @@ Fluent builders follow an immutable pattern - each `With*` method returns a new 
 1. **Import Errors**: Check `go.mod` for correct versions
 2. **Test Failures**: Ensure all required fields are set in constructors
 3. **Layout Issues**: Verify LayoutRules configuration
-4. **Patch Problems**: Check JSONPath syntax and target existence
+4. **Doc Check Failures**: Run `make check-docs` (API references, site self-links, doc examples) and `mise run site:check` (code-to-docs mapping)
 5. **golangci-lint version mismatch**: If lint fails with "Go language version used to build golangci-lint is lower than the targeted Go version", bump the version in `mise.toml` and run `scripts/sync-tool-versions.sh` to propagate it to `Makefile`, `.github/workflows/ci.yml` and `docs/github-workflows.md` — `scripts/check-tool-versions.sh` (run during `precommit`) requires all four to match. When bumping Go, always check that golangci-lint is built with a compatible Go version.
 6. **Stale GOPATH binaries shadowing mise**: The `lint` target prepends `GOPATH/bin` to PATH so the golangci-lint version it just verified or reinstalled against `GOLANGCI_LINT_VERSION` is always the one that runs, even when a differently-versioned binary (e.g. mise-managed) is earlier on `PATH`. If you see unexpected tool versions elsewhere, check `which <tool>` vs `mise which <tool>`.
 

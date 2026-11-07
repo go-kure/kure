@@ -364,7 +364,7 @@ Minor bumps (e.g., v1.19 → v1.20) may add new APIs or deprecate existing ones.
 2. Check if Kure uses any deprecated APIs
 3. Update `go.mod`; if the new version lands **outside** `supported_range`, widen the
    range and update `notes` in `versions.yaml` (only after confirming API compatibility)
-4. Run `make verify` to catch compile-time breakage
+4. Run `mise run verify` to catch compile-time breakage
 
 ### Major Updates (High Risk)
 
@@ -584,7 +584,7 @@ bundle them into a single PR:
 4. Update `versions.yaml` `supported_range` / `notes` for any bump that lands outside its range
 5. Regenerate docs: `./scripts/sync-versions.sh generate`; regenerate the constructor wrappers and the API tables if an API module moved: `./scripts/gen-builders.sh generate`
 6. Validate: `./scripts/sync-versions.sh check` and `./scripts/gen-builders.sh check`
-7. Run full verification: `make verify && make test-race`
+7. Run full verification: `mise run verify && make test-race`
 8. Commit, push, and create PR
 9. Reference all Renovate PR numbers in the PR body to auto-close them
 
@@ -637,7 +637,7 @@ Before merging any dependency update:
       reports drift; reword any raw commit SHA in `notes:` to reference `go.mod` instead)
 - [ ] `./scripts/gen-builders.sh check` — the constructor wrappers and the API tables
       match the pinned modules (run `generate` first if it reports drift)
-- [ ] `make verify` — tidy + lint + test
+- [ ] `mise run verify` — tidy + lint + test + the offline docs checks
 - [ ] `make test-race` — race condition detection
 - [ ] k8s.io replace directives unchanged (unless intentionally bumping)
 
