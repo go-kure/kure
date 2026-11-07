@@ -145,6 +145,7 @@ extra_mounts:
   # docs/builder-contract-release-1.md and -2.md are development records for the
   # release-1 and release-2 removals. They are not published: the contract is the
   # Kubernetes Builders page, and a ledger of removed names is history.
+  - {source: docs/package-status.md, target: concepts/package-status.md, title: Package Status, weight: 70}
   - {source: docs/layout-and-flux-naming.md, target: concepts/layout-and-flux-naming.md, title: Layout and Flux Naming, weight: 50}
   - {source: examples/getting-started/README.md, target: examples/getting-started.md, title: Getting Started, weight: 5}
   - {source: examples/patches/README.md, target: examples/patches.md, title: Patches, weight: 10}
