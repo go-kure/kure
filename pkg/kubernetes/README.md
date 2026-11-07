@@ -143,20 +143,18 @@ Sub-types that are not `client.Object` (`Container`, `PodSpec`,
 constructor. A struct literal is the idiom: build the value directly, as
 `&corev1.Container{Name: "app", Image: "nginx"}`.
 
-In this package two hand-written sub-type constructors survive, both because
-they do more than wrap a literal and both under review for the next work item:
-`CreateResourceRequirements()` returns empty `Requests` and `Limits` maps, and
-`CreateIngressPath(path, pathType, service, port)` assembles a nested
-`HTTPIngressPath`. Everything else in that shape has been removed from this
-package.
+In this package two hand-written sub-type constructors exist, both because
+they do more than wrap a literal: `CreateResourceRequirements()` returns empty
+`Requests` and `Limits` maps, and `CreateIngressPath(path, pathType, service, port)`
+assembles a nested `HTTPIngressPath`. Both are exported and supported, and neither is
+marked deprecated. Nothing else in that shape exists in this package.
 
-The kind sub-packages are a different matter and are not in scope here.
-`pkg/kubernetes/fluxcd` still exports twenty-four hand-written sub-type
-constructors (`CreateSourceReference`, `CreatePostBuild`, `CreateDecryption`,
+The kind sub-packages are a different matter and are not covered by this rule.
+`pkg/kubernetes/fluxcd` exports several hand-written sub-type constructors
+(`CreateSourceReference`, `CreatePostBuild`, `CreateDecryption`,
 `CreateCommonMetadata`, `CreateDriftDetection`, `CreatePostRendererKustomize`,
-`CreateGitSpec` and the rest), and `pkg/kubernetes/prometheus` exports
-`CreateRuleGroup`. They remain available and unchanged; whether they belong under
-the contract is the sealing work item's question, not this one's.
+`CreateGitSpec` and others), and `pkg/kubernetes/prometheus` exports
+`CreateRuleGroup`. They are exported and supported.
 
 ### Regenerating the wrappers
 
@@ -258,9 +256,9 @@ conditionally created one (`obj := &Obj{}; if ok { obj = o }; obj.Spec.Ref = ref
 refused at its first statement, which is not the one local the grammar below has a
 form for (S3). A helper containing a function literal (S9), or declaring type
 parameters, is inadmissible.
-`pkg/kubernetes/testdata/admission_exclusions.txt` listed the
-helpers tolerated while the prune work item of the epic ran; that file is now empty and stays
-empty. Entries only ever leave, and a stale entry fails the test.
+`pkg/kubernetes/testdata/admission_exclusions.txt` lists the helpers the test
+tolerates outside those classes. It is empty and stays empty: entries only ever leave, and a
+stale entry fails the test.
 
 ### The grammar of a helper body
 
@@ -513,8 +511,8 @@ module root — and none of them is part of the public API:
 
 Every resolved scope records which of three sources answered — `marker`, `builtin`
 or `crd`, surfaced on `KindInfo.ScopeSource` — so a wrong scope can be traced to the
-thing that claimed it. Against the current pins that is 67 from the kind's own
-marker, 55 from the built-in table and 20 from a shipped CRD. The source is part of
+thing that claimed it. The [generated table](/api-reference/api-tables/) lists the source of every
+kind in its `Scope from` column; the counts against the current pins are read there, not here. The source is part of
 the public answer and not only a debugging aid: `builtin` is what makes a kind a
 built-in, so a caller asking specifically about built-ins reads it rather than
 keeping a list.
@@ -527,7 +525,7 @@ where it asks about built-ins specifically. The cluster-scoped half of
 the old table survives as a frozen fixture in the `internal/kinds` tests, dated to
 the pins it was taken at. That is deliberate: the derivation fails silently by
 construction — an absent, unread or detached marker resolves to `Namespaced`, which
-is also the right answer for 100 of the 142 kinds — so without a literal to compare
+is also the right answer for most registered kinds — so without a literal to compare
 against, a regression in the comment reattachment below would turn cluster-scoped
 kinds namespaced with nothing going red. A pin bump that legitimately re-scopes a kind
 is an edit to that fixture, made with the upstream change named in the commit message.
@@ -699,13 +697,13 @@ tree, every path it names resolves too, and what each Flux Kustomization applies
 with the reason. Schema-backed kinds are the ones whose module ships its definitions
 (cert-manager, cilium, cloudnative-pg, plugin-barman-cloud, flux-operator,
 gateway-api, metallb, volsync) or whose definitions the vendored Flux install bundle
-carries (`internal/gotk`): 76 against the current pins. Uncovered kinds have no
+carries (`internal/gotk`). Uncovered kinds have no
 definition to hold them to — the built-in kinds of `k8s.io/api`,
 `k8s.io/apiextensions-apiserver` and `k8s.io/kube-aggregator`, whose validation the
 apiserver implements in Go,
 and the external-secrets and prometheus-operator kinds, whose API modules ship no
 manifests — and get the server's ObjectMeta validation under the kind's own name rule,
-and nothing more: 66 against the current pins. A kind in neither table, a stale table entry, a definition whose
+and nothing more. The test holds the list, so its count is read from the test and not from this page. A kind in neither table, a stale table entry, a definition whose
 scope disagrees with the kinds table, or an uncovered module that starts shipping
 definitions all turn the test red. Why the validation is in process and what it leaves
 to a real apiserver is recorded in `docs/history/20261001-DESIGN-schema-validation.md`.
@@ -740,10 +738,54 @@ and `OCIRepository` in the group `source.toolkit.fluxcd.io`, at the versions `v1
 Kure builds and registers `v1`. The function returns `errors.ErrGVKNotAllowed` for any other
 group, version or kind. It reads its argument, so pass a non-nil pointer.
 
+## Helpers by kind
+
+The package root exports 97 admitted `Set*` and `Add*` helpers (counted from the source with
+`rg '^func (Set|Add)[A-Z]'` over the non-test files; a helper added later is not counted here).
+This table lists them by the object they work on. The examples below show some of them; a field
+no helper names is a plain field write on the upstream struct.
+
+| Object | Helpers |
+|---|---|
+| Any `metav1.Object` | `SetLabels`, `AddLabel`, `SetAnnotations`, `AddAnnotation` |
+| Namespace | `AddNamespaceFinalizer` |
+| `Container` | `AddContainerPort`, `AddContainerEnv`, `AddContainerEnvFrom`, `AddContainerVolumeMount`, `AddContainerVolumeDevice`, `SetContainerLivenessProbe`, `SetContainerReadinessProbe`, `SetContainerStartupProbe`, `SetContainerSecurityContext`, `SetContainerLifecycle` |
+| `PodSpec` | `AddPodSpecContainer`, `AddPodSpecInitContainer`, `AddPodSpecEphemeralContainer`, `AddPodSpecVolume`, `AddPodSpecImagePullSecret`, `AddPodSpecToleration`, `AddPodSpecTopologySpreadConstraints`, `SetPodSpecSecurityContext`, `SetPodSpecAffinity`, `SetPodSpecDNSConfig`, `SetPodSpecTerminationGracePeriod` |
+| `ResourceRequirements` | `SetResourceRequest`, `SetResourceLimit`, `AddResourceClaim` |
+| Deployment | `SetDeploymentReplicas`, `SetDeploymentRevisionHistoryLimit`, `SetDeploymentProgressDeadlineSeconds` |
+| StatefulSet | `AddStatefulSetVolumeClaimTemplate`, `SetStatefulSetReplicas`, `SetStatefulSetRevisionHistoryLimit` |
+| DaemonSet | `SetDaemonSetRevisionHistoryLimit` |
+| Job | `SetJobCompletions`, `SetJobParallelism`, `SetJobBackoffLimit`, `SetJobTTLSecondsAfterFinished`, `SetJobActiveDeadlineSeconds` |
+| CronJob | `SetCronJobSuspend`, `SetCronJobSuccessfulJobsHistoryLimit`, `SetCronJobFailedJobsHistoryLimit`, `SetCronJobStartingDeadlineSeconds`, `SetCronJobTimeZone` |
+| HorizontalPodAutoscaler | `SetHPAScaleTargetRef`, `SetHPAMinMaxReplicas`, `AddHPACPUMetric`, `AddHPAMemoryMetric`, `AddHPACustomMetric`, `SetHPABehavior` |
+| PodDisruptionBudget | `SetPDBMinAvailable`, `SetPDBMaxUnavailable`, `SetPDBSelector` |
+| Service | `AddServicePort`, `AddServiceExternalIP`, `SetServiceLoadBalancerClass`, `AddServiceLoadBalancerSourceRange`, `SetServiceIPFamilyPolicy`, `SetServiceInternalTrafficPolicy`, `SetServiceAllocateLoadBalancerNodePorts`, `SetServiceSessionAffinityConfig` |
+| Ingress | `AddIngressRule`, `AddIngressRulePath`, `AddIngressTLS`, `SetIngressDefaultBackend`, `SetIngressClassName` (and `CreateIngressPath`) |
+| NetworkPolicy | `AddNetworkPolicyPolicyType`, `AddNetworkPolicyIngressRule`, `AddNetworkPolicyEgressRule`, `AddNetworkPolicyIngressPeer`, `AddNetworkPolicyIngressPort`, `AddNetworkPolicyEgressPeer`, `AddNetworkPolicyEgressPort` |
+| ConfigMap | `AddConfigMapData`, `AddConfigMapBinaryData`, `SetConfigMapImmutable` |
+| PersistentVolumeClaim | `AddPVCAccessMode`, `SetPVCStorageClassName`, `SetPVCVolumeMode`, `SetPVCSelector`, `SetPVCDataSource`, `SetPVCDataSourceRef` |
+| ServiceAccount | `AddServiceAccountSecret`, `AddServiceAccountImagePullSecret`, `SetServiceAccountAutomountToken` |
+| RBAC | `AddRoleRule`, `AddRoleBindingSubject`, `AddClusterRoleRule`, `AddClusterRoleBindingSubject` |
+| HTTPRoute (Gateway API) | `AddHTTPRouteHostname`, `AddHTTPRouteParentRef`, `AddHTTPRouteRule`, `AddHTTPRouteRuleMatch`, `AddHTTPRouteRuleFilter`, `AddHTTPRouteRuleBackendRef` |
+
+The Pod Security Admission helpers have their own section below, and the kind sub-packages
+(`fluxcd`, `prometheus` and the others) export their own helpers.
+
+## Gateway API
+
+The scheme registers Gateway API (`gateway.networking.k8s.io`), and the package root has a
+generated constructor for each of its ten kinds: `CreateGatewayClass` (cluster-scoped, name
+only), `CreateGateway`, `CreateListenerSet`, `CreateHTTPRoute`, `CreateGRPCRoute`,
+`CreateTLSRoute`, `CreateTCPRoute`, `CreateUDPRoute`, `CreateReferenceGrant` and
+`CreateBackendTLSPolicy`. Like every wrapper they set identity only. Only `HTTPRoute` has
+admitted sugar, the six HTTPRoute helpers in the table above; for the other kinds write
+the fields on the upstream type. The [generated table](/api-reference/api-tables/) lists each
+kind with the module and version it comes from.
+
 ## Examples
 
-The helpers below are the surviving sugar for the core kinds. Anything not shown is
-a field write on the upstream struct.
+The examples below show the sugar for the core kinds. The table above lists all of it; anything
+it does not name is a field write on the upstream struct.
 
 ### Deployment
 
@@ -961,12 +1003,11 @@ restricted level. `ValidateContainerPSA` has no pod, so it inherits nothing from
 `securityContext` and applies neither exemption: at the restricted level the container
 must set `runAsNonRoot` and a seccomp profile itself.
 
-**Behaviour change.** The validators accept and refuse more than before. A restricted
-pod that sets `runAsNonRoot` and `seccompProfile` on its containers only is now accepted.
-A container with a `securityContext` that sets `runAsUser: 0`, a baseline-listed
+A restricted pod that sets `runAsNonRoot` and `seccompProfile` on its containers only is
+accepted. A container with a `securityContext` that sets `runAsUser: 0`, a baseline-listed
 capability such as `CHOWN` at the restricted level, `Unconfined` seccomp or AppArmor,
 an unsafe pod sysctl, `procMount: Unmasked`, `hostProcess: true`, or a disallowed SELinux
-option is now refused where it passed before.
+option is refused.
 
 ### ResourceRequirements
 
@@ -987,8 +1028,16 @@ literal, `resource.ParseQuantity` when the text comes from configuration.
 
 ## Related Packages
 
-- [fluxcd](/api-reference/fluxcd-builders/) - FluxCD resource constructors
-- [prometheus](/api-reference/prometheus-builders/) - Prometheus Operator CRD builders
+- [fluxcd](/api-reference/fluxcd-builders/) - Flux resource constructors
+- [certmanager](/api-reference/certmanager-builders/) - cert-manager constructors
+- [cilium](/api-reference/cilium-builders/) - Cilium constructors
+- [cnpg](/api-reference/cnpg-builders/) - CloudNativePG and Barman Cloud constructors
+- [externalsecrets](/api-reference/externalsecrets-builders/) - External Secrets Operator constructors
+- [metallb](/api-reference/metallb-builders/) - MetalLB constructors
+- [prometheus](/api-reference/prometheus-builders/) - Prometheus Operator constructors
+- [volsync](/api-reference/volsync-builders/) - VolSync constructors
+- [Compatibility matrix](/api-reference/compatibility/) - the dependency versions these builders are pinned to
+- [Kinds and field maturity](/api-reference/api-tables/) - the generated table of every registered kind
 - [errors](/api-reference/errors/) - Structured error types used for nil-check sentinels
 - [Builder Contract Migration](/concepts/builder-contract-release-1/) - removed constructor defaults and changed signatures
 - [Builder Contract Migration (release 2)](/concepts/builder-contract-release-2/) - the retired `Kind(&Config)` layer, field by field

@@ -53,8 +53,11 @@ var (
 // addSchemeFunc is a function that adds types to a scheme
 type addSchemeFunc func(*runtime.Scheme) error
 
-// RegisterSchemes adds all Kubernetes and Flux custom resource schemes to Scheme.
-// The registration is performed only once. The first non-nil error returned by
+// RegisterSchemes adds the Kubernetes built-in types and every custom resource
+// family kure builds for to Scheme: Flux (source, source-watcher, kustomize,
+// helm, notification, image and the Flux operator), cert-manager, External
+// Secrets, Gateway API, MetalLB, the Prometheus Operator, VolSync,
+// CloudNativePG, plugin-barman-cloud and Cilium. The registration is performed only once. The first non-nil error returned by
 // any AddToScheme call is cached and returned on subsequent invocations.
 func RegisterSchemes() error {
 	registerOnce.Do(func() {
