@@ -59,6 +59,10 @@ New here? Follow the [quickstart](docs/quickstart.md), then run the complete
 - [Supported kinds and field maturity](docs/api-tables.md) — generated from the pinned modules
 - [Release-1 migration notes](docs/builder-contract-release-1.md) — every helper the builder
   contract removed, with the expression that replaces it
+- [Layout and Flux naming](docs/layout-and-flux-naming.md) — how the layout engine names directories,
+  files and Flux objects
+- [Compatibility matrix](docs/compatibility.md) — supported infrastructure versions, generated from
+  `versions.yaml`
 - [API Reference](https://pkg.go.dev/github.com/go-kure/kure) — full Go package documentation
 - [`examples/`](examples/) — cluster configurations and patching samples
 

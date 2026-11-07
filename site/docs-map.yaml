@@ -51,7 +51,7 @@ packages:
   - path: pkg/kubernetes
     readme: pkg/kubernetes/README.md
     guides: [guides/library-usage]
-    mount: {target: api-reference/kubernetes-builders.md, title: Kubernetes Builders, weight: 95, group: Resource Operations, desc: "Core K8s resource constructors (GVK, HPA, PDB)"}
+    mount: {target: api-reference/kubernetes-builders.md, title: Kubernetes Builders, weight: 95, group: Resource Operations, desc: "Generic constructor, per-kind wrappers and sugar helpers for core Kubernetes and Gateway API kinds; the builder contract"}
   - path: pkg/kubernetes/certmanager
     readme: pkg/kubernetes/certmanager/README.md
     guides: [guides/library-usage]
@@ -89,7 +89,7 @@ packages:
   - path: pkg/errors
     readme: pkg/errors/README.md
     guides: []
-    mount: {target: api-reference/errors.md, title: Errors, weight: 80, group: Utilities, desc: "Structured error types"}
+    mount: {target: api-reference/errors.md, title: Errors, weight: 108, group: Utilities, desc: "Structured error types"}
   - path: pkg/logger
     readme: pkg/logger/README.md
     guides: []
@@ -103,15 +103,15 @@ packages:
   - path: pkg/gvk
     readme: pkg/gvk/README.md
     mounted: false
-    reason: "Low-level GVK helpers; surfaced through the Kubernetes Builders page rather than a standalone reference."
+    reason: "Standalone group/version/kind registry and YAML type-detection helpers. No other package in the repository imports it, and the Kubernetes Builders page documents a different function (kubernetes.GetGroupVersionKind), so the README is not mounted."
   - path: pkg/stack/argocd
     readme: pkg/stack/argocd/README.md
     mounted: false
-    reason: "ArgoCD support is not yet production-ready; the Flux workflow is the supported GitOps integration."
+    reason: "The Argo CD engine generates Applications but does not implement bootstrap (GenerateBootstrap returns an error when enabled); the Flux workflow is the supported GitOps integration. The README is not mounted."
   - path: pkg/stack/helm
     readme: pkg/stack/helm/README.md
     mounted: false
-    reason: "Internal-facing Helm workflow helpers; not yet part of the published API-reference surface."
+    reason: "Chart rendering (RenderChart) and hook-phase grouping (SplitByHookWeight) for callers that build their own GitOps objects; kure does not use them in a workflow, and the README is not mounted."
   - path: pkg/kubernetes/internal/kinds
     readme: pkg/kubernetes/README.md
     mounted: false
@@ -140,11 +140,11 @@ packages:
 # Non-package docs mounted into the site. Not gated by code changes.
 extra_mounts:
   - {source: docs/quickstart.md, target: getting-started/quickstart.md, title: Quickstart, weight: 10}
-  - {source: docs/ARCHITECTURE.md, target: concepts/architecture.md, title: Architecture, weight: 10}
-  - {source: docs/oci-layout.md, target: concepts/oci-layout.md, title: OCI Artifact Layout, weight: 20}
+  - {source: docs/ARCHITECTURE.md, target: concepts/architecture.md, title: Architecture, weight: 40}
+  - {source: docs/oci-layout.md, target: concepts/oci-layout.md, title: OCI Artifact Layout, weight: 60}
   - {source: docs/builder-contract-release-1.md, target: concepts/builder-contract-release-1.md, title: Builder Contract Migration, weight: 30}
   - {source: docs/builder-contract-release-2.md, target: concepts/builder-contract-release-2.md, title: Builder Contract Migration (release 2), weight: 31}
-  - {source: docs/layout-and-flux-naming.md, target: concepts/layout-and-flux-naming.md, title: Layout and Flux Naming, weight: 40}
+  - {source: docs/layout-and-flux-naming.md, target: concepts/layout-and-flux-naming.md, title: Layout and Flux Naming, weight: 50}
   - {source: examples/getting-started/README.md, target: examples/getting-started.md, title: Getting Started, weight: 5}
   - {source: examples/patches/README.md, target: examples/patches.md, title: Patches, weight: 10}
   - {source: docs/compatibility.md, target: api-reference/compatibility.md, title: Compatibility Matrix, weight: 120}

@@ -27,7 +27,7 @@ For full Go API documentation, see [pkg.go.dev/github.com/go-kure/kure](https://
 |---------|-------------|-----------|
 | [IO](/api-reference/io/) | YAML/JSON serialization and resource printing | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/io) |
 | [Manifest Classification](/api-reference/manifest/) | CRD recognition and object scope classification | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/manifest) |
-| [Kubernetes Builders](/api-reference/kubernetes-builders/) | Core K8s resource constructors (GVK, HPA, PDB) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes) |
+| [Kubernetes Builders](/api-reference/kubernetes-builders/) | Generic constructor, per-kind wrappers and sugar helpers for core Kubernetes and Gateway API kinds; the builder contract | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes) |
 | [Cert-Manager Builders](/api-reference/certmanager-builders/) | cert-manager CRD constructors (Certificate, Issuer, ClusterIssuer) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/certmanager) |
 | [Cilium Builders](/api-reference/cilium-builders/) | Cilium CRD constructors (network policies and related resources) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/cilium) |
 | [CloudNativePG Builders](/api-reference/cnpg-builders/) | CloudNativePG and Barman Cloud CRD constructors | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/cnpg) |
