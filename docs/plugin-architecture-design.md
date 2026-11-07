@@ -5,7 +5,7 @@ describes an API that was designed and never built; those identifiers are not pa
 surface and will not resolve against `pkg/`. `scripts/check-doc-api-refs.sh` exempts this page by
 name for that reason, so nothing on it is checked — including the *Current Generator Architecture*
 section, which describes live code and has partly gone stale. `ApplicationConfig` is real, with the
-method shown (`pkg/stack/application.go:16-19`). The registration example below it is not:
+method shown (`pkg/stack/application.go:62-64`). The registration example below it is not:
 `stack.RegisterApplicationConfig` does not exist, and `AppWorkload` and `FluxHelm` are GVK kind
 strings rather than exported Go types. Registration goes through the generic
 `gvk.Registry[T].Register` (`pkg/gvk/registry.go:26`). Read the current-state section against

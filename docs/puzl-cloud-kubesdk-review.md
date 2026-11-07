@@ -1,5 +1,7 @@
 # puzl-cloud/kubesdk Comprehensive Review
 
+> **Not about Kure.** This is a review of a third-party Python Kubernetes client, kept as research. It describes no Kure behaviour and is not current guidance.
+
 **Repository:** https://github.com/puzl-cloud/kubesdk
 **Review Date:** December 3, 2025
 **Version Reviewed:** v0.0.5 (kubesdk), v0.0.3 (kube-models), v0.0.2 (kubesdk-cli)

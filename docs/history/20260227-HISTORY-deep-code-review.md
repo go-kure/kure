@@ -4,6 +4,8 @@
 
 # Kure — Deep Dive Code Review
 
+> **Historical record, not current guidance.** This was written for its date and is kept for the reasoning behind it. For how Kure works now, read the code and the documentation site.
+
 **Reviewer**: Claude · **Date**: 2026-02-26 · **Commit**: HEAD of `main`
 **Scope**: Full codebase — `github.com/go-kure/kure`
 

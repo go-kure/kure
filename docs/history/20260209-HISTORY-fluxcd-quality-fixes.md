@@ -1,5 +1,7 @@
 # Kure FluxCD Quality Fixes + Features Plan
 
+> **Historical record, not current guidance.** This was written for its date and is kept for the reasoning behind it. For how Kure works now, read the code and the documentation site.
+
 > **Status:** Completed 2026-02-09
 > **Archived from:** `PLAN.md`
 > **Related:** the downstream consumer `docs/development/20260209-HISTORY-fluxcd-integration.md`

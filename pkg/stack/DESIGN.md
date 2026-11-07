@@ -1,7 +1,7 @@
 # Stack Module Design Document
 
-> **Last Updated**: 2025-08-08  
-> **Status**: Implemented — Phase 2 was removed (see Phase 2 section below)
+> **Status**: Describes the shipped design. Proposals that were dropped (versioned stack structs, a
+> `generators.gokure.dev` API group) are not described here; they remain in the git history.
 
 ## Overview
 
@@ -48,11 +48,12 @@ Cluster                    # Top-level configuration
 - **Contains**: Multiple Applications
 - **Features**:
   - Flux reconciliation settings (interval, timeout, retryInterval, source)
-  - Interval validation (1s to 24h, Go duration format)
+  - Interval, timeout and retry interval must parse as Go durations (see "Bundle Validation")
   - Dependency management (`DependsOn`) — ordering between sibling bundles
   - Umbrella composition (`Children`) — a parent Kustomization aggregates
-    child readiness via `spec.wait: true` + auto `spec.healthChecks`. See
-    the "Umbrella Bundles" subsection below.
+    child readiness through `spec.healthChecks` (one entry per child) while
+    `Bundle.Wait` is unset or false. See the "Umbrella Bundles" subsection
+    below.
   - Label propagation
 
 ##### Umbrella Bundles (Containment vs Ordering)
@@ -63,11 +64,13 @@ Cluster                    # Top-level configuration
   Y is Ready". It does not change which resources either bundle applies.
 - `Children` expresses **containment**: the parent bundle is a wrapper around
   its children. The parent's Flux Kustomization renders the child
-  Kustomization CRs in its own path, sets `spec.wait: true`, and uses
-  `spec.healthChecks` to aggregate each child's Ready condition into its own.
-  The parent becomes Ready iff all children are Ready — giving downstream
-  consumers a single stable anchor regardless of how many internal tiers the
-  umbrella contains.
+  Kustomization CRs in its own path and, with `Bundle.Wait` unset or false,
+  uses `spec.healthChecks` to aggregate each child's Ready condition into its
+  own. The generator does not force `spec.wait`; with `Wait` true it writes no
+  child entries (see `pkg/stack/README.md` and the Flux engine's "Umbrella
+  Bundles"). The parent becomes Ready iff all children are Ready, giving
+  downstream consumers a single stable anchor regardless of how many internal
+  tiers the umbrella contains.
 
 Children bundles must be **standalone**: a bundle referenced by `Children`
 cannot simultaneously be the `Bundle` of any `stack.Node`. `ValidateCluster`
@@ -77,7 +80,6 @@ rejection, and multi-package rejection (initial patch restriction).
 #### 4. Application (`pkg/stack/application.go`)
 - **Purpose**: Single deployable application
 - **Contains**: ApplicationConfig interface
-- **Current GVK Support**: ✅ Already implemented
 
 ### ApplicationConfig System
 
@@ -90,87 +92,8 @@ type ApplicationConfig interface {
 }
 ```
 
-**Current Generators** (with GVK support):
-- `generators.gokure.dev/v1alpha1/AppWorkload` - Standard Kubernetes workloads
-- `generators.gokure.dev/v1alpha1/FluxHelm` - Flux HelmRelease resources
-
-## Planned GVK Integration
-
-> **REMOVED**: The following section describes a feature (versioned stack structs as GVK types) that was designed and partially implemented but then removed. It is preserved for historical context. Do not implement from this spec.
-
-### Motivation
-
-Currently, only the ApplicationConfig layer has GVK versioning. The upper layers (Cluster, Node, Bundle) are unversioned structs, which limits:
-
-1. **API Evolution**: No clear versioning for schema changes
-2. **Multiple Formats**: Different stack representation approaches
-3. **Tooling Integration**: Different tools may prefer different formats
-4. **Schema Validation**: No OpenAPI schema generation capability
-
-### Proposed GVK Design
-
-#### API Group Structure
-
-**Domain**: `stack.gokure.dev`
-
-```yaml
-# Cluster Configuration
-apiVersion: stack.gokure.dev/v1alpha1
-kind: Cluster
-metadata:
-  name: production-cluster
-spec:
-  gitops:
-    type: flux
-    bootstrap:
-      enabled: true
-      fluxVersion: v2.2.0
-  node:
-    name: root
-    # ... node specification
-
----
-# Node Configuration (can be separate artifact)
-apiVersion: stack.gokure.dev/v1alpha1
-kind: Node
-metadata:
-  name: infrastructure
-  namespace: flux-system
-spec:
-  packageRef:
-    name: infra-packages
-    version: v1.0.0
-  bundles:
-    - name: cert-manager
-    - name: ingress-nginx
-  children:
-    - name: monitoring
-      packageRef:
-        name: monitoring-packages
-        version: v2.1.0
-
----
-# Bundle Configuration  
-apiVersion: stack.gokure.dev/v1alpha1
-kind: Bundle
-metadata:
-  name: cert-manager
-  namespace: cert-manager
-spec:
-  interval: 10m
-  sourceRef:
-    kind: GitRepository
-    name: fleet-infra
-  dependsOn:
-    - name: crds
-  applications:
-    - apiVersion: generators.gokure.dev/v1alpha1
-      kind: AppWorkload
-      metadata:
-        name: cert-manager
-      spec:
-        # ... application config
-```
+Kure ships no `ApplicationConfig` implementations of its own: each caller implements `ApplicationConfig` for its
+application types. `pkg/stack/stacktest` checks an implementation against the generation contract.
 
 ### Bundle Validation
 
@@ -185,104 +108,30 @@ All time-based fields in Bundle configurations are automatically validated:
 - **`retryInterval`**: Frequency for retrying failed reconciliations
 
 **Validation Rules:**
-- **Format**: Must follow Go `time.Duration` syntax
-- **Range**: 1 second minimum, 24 hours maximum
-- **Examples**: `"1s"`, `"5m"`, `"1h"`, `"1h30m45s"`, `"2.5m"`
+- **Format**: Must follow Go `time.Duration` syntax (`"10m"`, `"1h30m45s"`, `"2.5m"`). Empty means unset.
+- **No range check**: `Bundle.Validate` only requires the value to parse (`pkg/stack/bundle.go`,
+  `validateDurations`). The Flux generator additionally refuses a duration the Flux API does not
+  take: a negative one, or a positive one under a millisecond (`pkg/stack/fluxcd/durations.go`).
+  See `pkg/stack/README.md` and the Flux engine's "Durations".
 
-**Validation Examples:**
+**Examples:**
 
-```yaml
-# ✅ Valid Bundle with proper intervals
-apiVersion: stack.gokure.dev/v1alpha1
-kind: Bundle
-metadata:
-  name: web-app
-spec:
-  interval: "10m"        # Reconcile every 10 minutes
-  timeout: "15m"         # Wait up to 15 minutes 
-  retryInterval: "2m"    # Retry every 2 minutes
-  
-# ❌ Invalid Bundle - validation errors
-apiVersion: stack.gokure.dev/v1alpha1  
-kind: Bundle
-metadata:
-  name: invalid-bundle
-spec:
-  interval: "5 minutes"    # Error: spaces not allowed
-  timeout: "500ms"         # Error: too short (minimum 1s)
-  retryInterval: "48h"     # Error: too long (maximum 24h)
-```
-
-**Error Messages:**
-
-Validation failures provide clear, actionable error messages:
-
-```
-validation error in Bundle "web-app" at spec.interval: 
-invalid interval format: "5 minutes", expected format like '5m', '1h', '30s'
-
-validation error in Bundle "web-app" at spec.timeout:
-interval "500ms" is too short, minimum is 1s
-```
-
-#### Version Evolution Strategy
-
-- **v1alpha1**: Initial implementation, API may change
-- **v1beta1**: API stabilizing, backward compatibility within beta  
-- **v1**: Stable API, backward compatibility guaranteed
-
-### Implementation Architecture
-
-#### Shared GVK Infrastructure
-
-Create `pkg/gvk` package with reusable components:
-
-<!-- doc-example:excerpt the planned shape of pkg/gvk as proposed, declarations only, not its current API -->
+<!-- doc-example:excerpt a Bundle literal that Validate refuses, not a call -->
 ```go
-// Generic GVK representation
-type GVK struct {
-    Group   string
-    Version string
-    Kind    string
-}
-
-// Generic registry for any GVK-enabled type
-type Registry[T any] struct {
-    factories map[GVK]func() T
-    mu        sync.RWMutex
-}
-
-// Generic wrapper for type-aware unmarshaling
-type TypedWrapper[T any] struct {
-    APIVersion string            `yaml:"apiVersion"`
-    Kind       string            `yaml:"kind"`
-    Metadata   map[string]any    `yaml:"metadata"`
-    Spec       T                 `yaml:"spec"`
-}
-
-// Common interfaces
-type VersionedType interface {
-    GetAPIVersion() string
-    GetKind() string
+bundle := &stack.Bundle{
+    Name:          "web-app",
+    Interval:      "10m",       // valid
+    Timeout:       "15m",       // valid
+    RetryInterval: "5 minutes", // refused by Validate: spaces are not allowed
 }
 ```
 
-#### Migration Plan
+**Error message:** the error names the bundle, the field and the value, then the parse error; the
+message text is:
 
-**Phase 1: Create Shared Infrastructure**
-1. Extract generic GVK components to `pkg/gvk`
-2. Update generators to use shared infrastructure
-3. Add comprehensive tests
-
-**Phase 2: Add GVK to Stack Structs**
-1. Create versioned wrappers for Cluster/Node/Bundle
-2. Implement custom YAML marshaling/unmarshaling
-3. Maintain backward compatibility during transition
-
-**Phase 3: Migration & Validation**
-1. Add schema validation for each version
-2. Create migration utilities for existing configs
-3. Update documentation and examples
+```
+retryInterval "5 minutes" is not a valid duration
+```
 
 ## Current Workflow Integration
 
@@ -296,8 +145,7 @@ The Flux workflow engine generates:
 ### ArgoCD Workflow (`pkg/stack/argocd/`)
 
 The ArgoCD workflow engine generates:
-- **Application resources**: From Bundle configurations
-- **AppProject resources**: For grouping and RBAC
+- **Application resources**: From Bundle configurations (`GenerateBootstrap` returns an error when bootstrap is enabled: ArgoCD bootstrap is not implemented)
 
 ### Layout System (`pkg/stack/layout/`)
 
@@ -306,50 +154,11 @@ The layout system handles manifest organization:
 - **Resource grouping**: By namespace, type, or bundle
 - **Dependency ordering**: Ensuring proper apply sequence
 
-## Benefits of GVK Integration
+## Construction
 
-### 1. **Versioned APIs**
-- Clear schema evolution path
-- Backward compatibility guarantees
-- Migration tooling support
+A stack is built by constructing the Go structs directly; there is no serialized, versioned stack
+format:
 
-### 2. **Multi-Format Support**
-```yaml
-# Hierarchical format (current)
-apiVersion: stack.gokure.dev/v1alpha1
-kind: Cluster
-spec:
-  node:
-    bundles: [...]
-
-# Flat format (future)
-apiVersion: stack.gokure.dev/v1beta1
-kind: ClusterFlat
-spec:
-  bundles: [...]  # Direct bundle list
-```
-
-### 3. **Schema Validation**
-- OpenAPI schemas for each version
-- IDE support with autocompletion
-- Runtime validation
-
-### 4. **Tooling Integration**
-- Different tools can support different versions
-- Clear API contracts
-- Automated conversion between versions
-
-### 5. **Future Extensibility**
-- Plugin system for custom stack types
-- Alternative hierarchy models
-- Integration with external tools
-
-## Compatibility Considerations
-
-### Backward Compatibility
-
-The GVK-wrapped stack format of Phase 2 was removed (see Implementation Status below), so there is
-one format, direct struct construction:
 <!-- doc-example: pkg/stack ExampleCluster -->
 ```go
 cluster := &stack.Cluster{
@@ -361,99 +170,19 @@ fmt.Println(cluster.Name, cluster.Node.Name)
 <!-- doc-example:end -->
 
 That block is `ExampleCluster` in `pkg/stack`, which `go test` runs; the other Go blocks in this
-document are declarations or proposals, marked as excerpts.
-
-### Migration Path
-
-1. **Phase 1**: Internal infrastructure (no breaking changes)
-2. **Phase 2**: Add GVK support alongside existing APIs
-3. **Phase 3**: Deprecate old APIs (with migration period)
-4. **Phase 4**: Remove old APIs in next major version
-
-## Testing Strategy
-
-### Unit Tests
-- GVK parsing and generation
-- Registry functionality  
-- Wrapper marshaling/unmarshaling
-- Version compatibility
-
-### Integration Tests
-- Full stack configuration parsing
-- Workflow engine compatibility
-- Layout generation with GVK structs
-
-### Migration Tests
-- Conversion between formats
-- Backward compatibility
-- Schema validation
-
-## Future Enhancements
-
-### 1. **Advanced Versioning**
-- Conversion webhooks for Kubernetes-style migration
-- Automatic version detection and upgrade
-- Version-specific optimizations
-
-### 2. **Schema Management**
-- OpenAPI schema generation
-- JSON Schema validation
-- Documentation generation from schemas
-
-### 3. **Tooling**
-- CLI commands for version management
-- Migration utilities
-- Validation tools
-
-### 4. **Alternative Stack Models**
-```yaml
-# GitOps-native stack (future)
-apiVersion: stack.gokure.dev/v2alpha1
-kind: GitOpsStack
-spec:
-  repositories:
-    - url: github.com/org/infra
-      path: clusters/prod
-  kustomizations: [...]
-  helmReleases: [...]
-```
+document are declarations or illustrations, marked as excerpts.
 
 ## Implementation Status
 
-### Phase 1: Shared GVK Infrastructure ✅ COMPLETE
+See [`STATUS.md`](STATUS.md) for what is implemented. `pkg/gvk` holds shared Group, Version, Kind
+infrastructure that no other package in this module imports yet; a versioned stack struct format was
+tried and removed because nothing consumed it.
 
-Successfully created `pkg/gvk` package with:
-- Generic registry using Go generics
-- Type-safe factory patterns
-- YAML unmarshaling with automatic type detection
-- Version conversion framework
-- Comprehensive test coverage
-
-**Files Created:**
-- `pkg/gvk/types.go` - Core GVK types and interfaces
-- `pkg/gvk/registry.go` - Generic registry implementation
-- `pkg/gvk/wrapper.go` - TypedWrapper for YAML unmarshaling
-- `pkg/gvk/parsing.go` - YAML parsing utilities
-- `pkg/gvk/conversion.go` - Version conversion infrastructure
-
-### Phase 2: Stack Struct GVK ~~COMPLETE~~ REMOVED
-
-`pkg/stack/v1alpha1` (ClusterV1Alpha1, NodeV1Alpha1, BundleV1Alpha1) was implemented but had no live consumer outside its own tests. The package was removed in favour of direct Go type construction. If a versioned serialized stack interchange format is needed in future, it should be introduced as a dedicated package with an explicit consumer requirement.
-
-### Phase 3: ApplicationConfig Refactoring ✅ COMPLETE
-
-- Refactored generators to use `pkg/gvk` infrastructure
-- Updated ApplicationWrapper to eliminate circular dependencies
-- Maintained full backward compatibility
-- All tests passing
 
 ## Related Documentation
 
-- [`generators/DESIGN.md`](generators/DESIGN.md) - ApplicationConfig generator system
 - [`layout/README.md`](layout/README.md) - Manifest layout and organization
 - [`fluxcd/README.md`](fluxcd/README.md) - Flux workflow integration
 - [`argocd/README.md`](argocd/README.md) - ArgoCD workflow integration
 
 ---
-
-*This design document is a living document that will be updated as the implementation progresses.*

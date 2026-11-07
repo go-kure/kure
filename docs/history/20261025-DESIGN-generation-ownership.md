@@ -10,7 +10,7 @@
 > `pkg/stack/layout/generation_contract_test.go` (walks) and
 > `pkg/stack/generation_contract_test.go` (workflow entry points).
 
-**Status: proposed.** The maintainer decides on the pull request that adds this note.
+**Status: shipped.** The contracts below are in the godoc and tests named in the note above; this document records how they were decided.
 
 ---
 

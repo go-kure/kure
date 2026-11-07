@@ -50,7 +50,7 @@
 //   - [github.com/go-kure/kure/pkg/stack/fluxcd.WorkflowEngine]: Generates
 //     Flux Kustomizations, GitRepositories, and related resources
 //   - [github.com/go-kure/kure/pkg/stack/argocd.WorkflowEngine]: Generates
-//     ArgoCD Applications and AppProjects
+//     ArgoCD Applications
 //
 // Use the workflow to generate all manifests for a cluster:
 //

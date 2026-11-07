@@ -1,5 +1,7 @@
 # Comprehensive Repository Review: go-kure/kure
 
+> **Historical record, not current guidance.** This was written for its date and is kept for the reasoning behind it. For how Kure works now, read the code and the documentation site.
+
 **Review Date:** 2025-12-02
 **Reviewers:** Multi-perspective AI analysis
 **Status:** Beta - Production-ready for Flux, Partial ArgoCD/Kurel
