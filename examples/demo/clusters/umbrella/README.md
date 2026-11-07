@@ -39,7 +39,8 @@ See `site/content/concepts/domain-model.md` for the full model.
 
 ## Expected output
 
-Running `./bin/demo` produces:
+A layout of this shape is what this definition describes (kure has no
+`demo` program, so the tree is illustrative and not produced by a command in this repository):
 
 ```
 out/umbrella-demo-repo/clusters/umbrella-demo/

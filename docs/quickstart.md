@@ -1,12 +1,14 @@
 # Quickstart Guide
 
-This guide walks you through installing Kure, generating your first cluster configuration, and deploying with Flux.
+This guide walks you through installing Kure, generating one Flux Kustomization from Go, and handing it to Flux. It stays at the level of a single Kubernetes object. To build a whole cluster (Cluster, Node, Bundle, Application) and write the repository layout to disk, continue with the [cluster-to-disk example](/examples/getting-started/).
 
 ## Installation
 
-Add Kure as a Go module dependency:
+You need the Go version that Kure's `go.mod` declares. Create a module and add Kure:
 
 ```bash
+mkdir hello-kure && cd hello-kure
+go mod init example.com/hello-kure
 go get github.com/go-kure/kure@latest
 ```
 
@@ -53,9 +55,10 @@ That body is `Example_quickstart` in `pkg/kubernetes/fluxcd`, which `go test` ru
 against the Example's own `// Output:` comment. The output below reproduces that comment by hand;
 it is not generated.
 
-Run the program to see the generated YAML:
+Fetch the modules the program imports, then run it to see the generated YAML:
 
 ```bash
+go mod tidy
 go run main.go
 ```
 
@@ -79,11 +82,13 @@ status: {}
 
 ## Deploy with Flux
 
-Once you have generated manifests, deploy them using Flux:
+The program prints the Kustomization to stdout. To deploy it you need a Flux installation that already watches your Git repository through a `GitRepository` named `flux-system`, and a `./clusters/production` directory in that repository that holds the manifests the Kustomization should apply.
 
-1. **Commit the manifests to your Git repository**
+1. **Save the output into the repository Flux watches, then commit it**
 
 ```bash
+go run main.go > /path/to/your-repo/clusters/flux-system/hello-world.yaml
+cd /path/to/your-repo
 git add clusters/
 git commit -m "Add hello-world kustomization"
 git push
@@ -91,7 +96,7 @@ git push
 
 2. **Flux reconciles automatically**
 
-If Flux is already watching your repository, it will automatically apply the new Kustomization. Check the status:
+If a Flux Kustomization already applies the directory you saved the file in, Flux picks up the new Kustomization on its next sync. Check the status:
 
 ```bash
 flux get kustomizations
@@ -100,13 +105,15 @@ flux get kustomizations
 3. **Or trigger manually**
 
 ```bash
-flux reconcile kustomization flux-system --with-source
+flux reconcile kustomization hello-world --with-source
 ```
 
 ## Next Steps
 
+- **A whole cluster**: The [cluster-to-disk example](/examples/getting-started/) builds a Cluster with Nodes, Bundles and Applications and writes the repository layout
+- **Flux workflow**: The [Flux workflow guide](/guides/flux-workflow/) covers the generated Flux resources in depth
 - **Architecture**: Read the [Design Philosophy](/concepts/design-philosophy/) page for a deep dive into Kure's design
 - **Building objects**: The [Builder Contract](/concepts/builder-contract/) page explains what a constructor does and does not set, when a `Set*`/`Add*` helper exists, and how to read the maturity table
-- **Examples**: Explore the `examples/` directory for more complex configurations
+- **Examples**: The [examples page](/examples/) lists the runnable examples and sample data
 - **API Reference**: See the full API at [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure)
 - **Patching**: The patch engine moved to [go-kure/launcher](https://github.com/go-kure/launcher) in the launcher extraction (ADR-018); see that repository for current documentation

@@ -11,13 +11,9 @@ Practical examples of using Kure to generate Kubernetes configurations.
 
 These examples include full documentation:
 
+- [Getting Started](/examples/getting-started/) - The complete cluster-to-disk pipeline in Go: build a cluster, generate the layout, write it to disk
 - [Patches](/examples/patches/) - Declarative patching with TOML and YAML formats
 
-## Additional Examples
+## Sample Data on GitHub
 
-These examples are available in the [examples/ directory](https://github.com/go-kure/kure/tree/main/examples) on GitHub:
-
-- **App Workloads** (`examples/demo/app-workloads/`) - Application workload generation
-- **Bootstrap** (`examples/demo/bootstrap/`) - Flux bootstrap configuration
-- **Clusters** (`examples/demo/clusters/`) - Multi-cluster definitions
-- **Multi-OCI** (`examples/demo/multi-oci/`) - Multi-source OCI deployments
+The [examples/ directory](https://github.com/go-kure/kure/tree/main/examples) also holds sample YAML under `examples/demo/`: app workloads, bootstrap, clusters and multi-OCI definitions. Kure has no command that reads these files; use them for the shape of an input, not as a tested interface.

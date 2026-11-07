@@ -12,7 +12,6 @@ after resource generation, making them useful for environment-specific customiza
 > **Note**: `pkg/patch` lives in `go-kure/launcher`, not in kure itself. kure does not depend on
 > launcher, so the Go blocks on this page are marked as excerpts and are not compiled by kure's
 > doc-example check.
-> <!-- TODO: update link when launcher docs site is published -->
 
 ## When to Patch vs Configure
 
@@ -26,15 +25,20 @@ after resource generation, making them useful for environment-specific customiza
 The TOML format uses section headers to target resources:
 
 ```toml
-# [kind.name.path.to.field]
-[deployment.myapp.spec]
-replicas = 3
+# [kind.name.section.selector]
+[deployment.myapp]
+spec.replicas: 3
 
-[deployment.myapp.spec.template.spec.containers.0]
-image = "nginx:1.25"
-resources.requests.cpu = "200m"
-resources.requests.memory = "256Mi"
+[deployment.myapp.containers.name=myapp]
+image: nginx:1.25
+resources.requests.cpu: 200m
+resources.requests.memory: 256Mi
 ```
+
+Each line under a header is `field.path: value`, with a colon, not `=`. A line without a colon is
+refused. Sections such as `containers` expand to the Kubernetes path for the kind, so
+`containers` on a Deployment means `spec.template.spec.containers`. The header grammar is in
+the [patches example](/examples/patches/).
 
 ### YAML Format
 
@@ -77,8 +81,8 @@ err = patchSet.WriteToFile("patched-output.yaml")
 Patches can reference variables:
 
 ```toml
-[deployment.myapp.spec.template.spec.containers.0]
-image = "${registry}/${image}:${tag}"
+[deployment.myapp.containers.name=myapp]
+image: ${registry}/${image}:${tag}
 ```
 
 <!-- doc-example:excerpt calls go-kure/launcher's pkg/patch, which kure does not depend on, so it cannot compile here -->
@@ -98,23 +102,15 @@ specs, err := patch.LoadPatchFileWithVariables(file, varCtx)
 ### Target by index
 
 ```toml
-[deployment.myapp.spec.template.spec.containers.0]
-image = "updated:latest"
-```
-
-### Append to list
-
-```toml
-[deployment.myapp.spec.template.spec.containers.-]
-name = "sidecar"
-image = "envoy:latest"
+[deployment.myapp.containers.0]
+image: updated:latest
 ```
 
 ### Target by field selector
 
 ```toml
-[deployment.myapp.spec.template.spec.containers.{name=myapp}]
-image = "updated:latest"
+[deployment.myapp.containers.name=myapp]
+image: updated:latest
 ```
 
 ## Strategic Merge Patch

@@ -8,13 +8,12 @@ This directory contains examples for Kure, organized by purpose.
 
 These directories have documentation mounted to the docs site:
 
-- [`patches/`](patches/) — Declarative patching with TOML and YAML formats
-- [`kurel/frigate/`](kurel/frigate/) — Building a complete kurel package
-
-### Go API Tutorial
-
 - [`getting-started/`](getting-started/) — Complete cluster-to-disk pipeline using the Go API
+- [`patches/`](patches/) — Declarative patching with TOML and YAML formats
 
-### Demo Inputs
+### Not on the docs site
 
-- [`demo/`](demo/) — YAML input configurations used as reference inputs for manifest generation
+- [`kurel/frigate/`](kurel/frigate/) — A sample package for the `kurel` CLI, which now lives in
+  [go-kure/launcher](https://github.com/go-kure/launcher). Its README is a deprecation notice.
+- [`demo/`](demo/) — Sample YAML files shaped like cluster, bootstrap and workload definitions.
+  Kure has no command that reads them; they are kept as sample data.
