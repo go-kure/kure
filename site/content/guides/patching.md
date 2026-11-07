@@ -5,198 +5,33 @@ weight = 40
 
 # Patching Resources
 
-The patch system in [go-kure/launcher](https://github.com/go-kure/launcher) lets you
-declaratively modify Kubernetes resources using JSONPath expressions. Patches are applied
-after resource generation, making them useful for environment-specific customization.
+kure does not patch resources. The patch library, `pkg/patch`, lives in
+[go-kure/launcher](https://github.com/go-kure/launcher), which owns its formats, its API and its
+documentation. Read it there:
 
-> **Note**: `pkg/patch` lives in `go-kure/launcher`, not in kure itself. kure does not depend on
-> launcher, so the Go blocks on this page are marked as excerpts and are not compiled by kure's
-> doc-example check.
+- [`pkg/patch` README](https://github.com/go-kure/launcher/tree/main/pkg/patch) - what the library
+  does, the patch file formats and how to call it
+- [Go package reference](https://pkg.go.dev/github.com/go-kure/launcher/pkg/patch) - the exported API
 
-## When to Patch vs Configure
+## What this is not
 
-- **Configure at generation time** when you control the resource builder (set replicas, image, etc. in code)
-- **Patch after generation** when you need to modify resources from external sources, or when the same base resources need different modifications per environment
+`kurel build` does not run `pkg/patch`, and there is no patch subcommand. The library is for callers
+that modify Kubernetes resources themselves, outside the build path.
 
-## Patch File Formats
+It is also not any of these, which are separate mechanisms with their own documentation:
 
-### TOML Format (`.kpatch`)
+- the `patches` field of a Flux `Kustomization`, which the Flux kustomize controller applies in the
+  cluster
+- Helm post-rendering
 
-The TOML format uses section headers to target resources:
+## Choosing between patching and generating
 
-```toml
-# [kind.name.section.selector]
-[deployment.myapp]
-spec.replicas: 3
+- **Set it at generation time** when you control the builder: set the replica count or the image on
+  the object kure returns.
+- **Patch afterwards** only when the resources come from somewhere you do not control. kure does not
+  help with that step.
 
-[deployment.myapp.containers.name=myapp]
-image: nginx:1.25
-resources.requests.cpu: 200m
-resources.requests.memory: 256Mi
-```
+## Sample files
 
-Each line under a header is `field.path: value`, with a colon, not `=`. A line without a colon is
-refused. Sections such as `containers` expand to the Kubernetes path for the kind, so
-`containers` on a Deployment means `spec.template.spec.containers`. The header grammar is in
-the [patches example](/examples/patches/).
-
-### YAML Format
-
-```yaml
-target:
-  kind: Deployment
-  name: myapp
-patches:
-  - path: spec.replicas
-    value: 3
-  - path: spec.template.spec.containers[0].image
-    value: "nginx:1.25"
-```
-
-## Applying Patches
-
-<!-- doc-example:excerpt calls go-kure/launcher's pkg/patch, which kure does not depend on, so it cannot compile here -->
-```go
-import "github.com/go-kure/launcher/pkg/patch"
-
-// Load patches from file
-file, _ := os.Open("patches/production.kpatch")
-specs, err := patch.LoadPatchFile(file)
-
-// Create patchable set
-patchSet, err := patch.NewPatchableAppSet(resources, specs)
-
-// Resolve and apply
-resolved, err := patchSet.Resolve()
-for _, r := range resolved {
-    err := r.Apply()
-}
-
-// Write output
-err = patchSet.WriteToFile("patched-output.yaml")
-```
-
-## Variable Substitution
-
-Patches can reference variables:
-
-```toml
-[deployment.myapp.containers.name=myapp]
-image: ${registry}/${image}:${tag}
-```
-
-<!-- doc-example:excerpt calls go-kure/launcher's pkg/patch, which kure does not depend on, so it cannot compile here -->
-```go
-varCtx := &patch.VariableContext{
-    Values: map[string]interface{}{
-        "registry": "docker.io",
-        "image":    "myapp",
-        "tag":      "v2.0.0",
-    },
-}
-specs, err := patch.LoadPatchFileWithVariables(file, varCtx)
-```
-
-## List Operations
-
-### Target by index
-
-```toml
-[deployment.myapp.containers.0]
-image: updated:latest
-```
-
-### Target by field selector
-
-```toml
-[deployment.myapp.containers.name=myapp]
-image: updated:latest
-```
-
-## Strategic Merge Patch
-
-For broad document-level changes, use strategic merge patch (SMP). Instead of targeting individual fields, SMP deep-merges a partial YAML document into the target resource.
-
-### How It Works
-
-Known Kubernetes kinds (Deployment, Service, etc.) are merged using struct tags — lists like `containers` are merged by `name`, not replaced. Unknown kinds (CRDs) fall back to JSON merge patch (RFC 7386), where lists are replaced entirely.
-
-### YAML Syntax
-
-```yaml
-# Add a sidecar and update the main container's resources
-- target: deployment.my-app
-  type: strategic
-  patch:
-    spec:
-      template:
-        spec:
-          containers:
-          - name: main
-            resources:
-              limits:
-                cpu: "500m"
-                memory: "256Mi"
-          - name: sidecar
-            image: envoy:v1.28
-```
-
-### Mixing with Field-Level Patches
-
-SMP and field-level patches can coexist in the same file. SMP patches are applied first (setting the document shape), then field-level patches make precise tweaks:
-
-```yaml
-# Strategic merge: add a sidecar container
-- target: deployment.my-app
-  type: strategic
-  patch:
-    spec:
-      template:
-        spec:
-          containers:
-          - name: sidecar
-            image: envoy:v1.28
-
-# Field-level: set replica count precisely
-- target: deployment.my-app
-  patch:
-    spec.replicas: 3
-```
-
-### Enabling Kind-Aware Merging
-
-<!-- doc-example:excerpt calls go-kure/launcher's pkg/patch, which kure does not depend on, so it cannot compile here -->
-```go
-import "github.com/go-kure/launcher/pkg/patch"
-
-// Create a kind lookup for schema-aware merging
-lookup, err := patch.DefaultKindLookup()
-patchSet.KindLookup = lookup
-```
-
-### Conflict Detection
-
-When multiple SMP patches target the same resource, check for conflicts:
-
-<!-- doc-example:excerpt calls go-kure/launcher's pkg/patch, which kure does not depend on, so it cannot compile here -->
-```go
-resolved, reports, err := patchSet.ResolveWithConflictCheck()
-for _, r := range reports {
-    if r.HasConflicts() {
-        for _, c := range r.Conflicts {
-            log.Printf("conflict on %s: %s", r.ResourceName, c.Description)
-        }
-    }
-}
-```
-
-## Further Reading
-
-- [Patch reference](https://pkg.go.dev/github.com/go-kure/launcher/pkg/patch) for API details
-- [Patch examples](/examples/patches) for working samples
-
-## See Also
-
-- [go-kure/launcher](https://github.com/go-kure/launcher) — the project that owns `pkg/patch`
-  and the full patch runtime
-<!-- TODO: link to launcher docs site once published -->
+The [patch examples](/examples/patches/) in this repository are sample input files for launcher's
+library. kure does not read them, and launcher's documentation is the reference for their format.
