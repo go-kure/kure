@@ -69,9 +69,8 @@ it: `kubernetes.Create[metallbv1beta1.BGPPeer](name, namespace)`. The
 It will not set a label, a selector, a replica count, a schedule, an access mode or an empty slice.
 Earlier releases did some of this: `CreateDeployment` wrote `app: <name>` into both the labels and
 the selector, `CreatePersistentVolumeClaim` requested 1Gi, `CreateServiceAccount` wrote
-`automountServiceAccountToken: false`. All of it is gone, and the
-[release-1 migration notes](/concepts/builder-contract-release-1/) list every value with the line
-that restores it.
+`automountServiceAccountToken: false`. All of it is gone: a constructor sets identity and nothing else, and
+whatever you need beyond that is one assignment on the returned object.
 
 The reason is that a default you did not ask for is indistinguishable, in the YAML, from one you
 did. A 1Gi PVC that you never sized reads exactly like a 1Gi PVC you sized deliberately, and the
@@ -205,7 +204,5 @@ documented.
 
 - [Kubernetes Builders](/api-reference/kubernetes-builders/) — the normative contract, with the
   admission classes and the derivation in full
-- [Release-1 migration notes](/concepts/builder-contract-release-1/) — every removed helper and the
-  expression that replaces it
 - [Supported kinds and field maturity](/api-reference/api-tables/) — the generated tables
 - [Using Kure as a Library](/guides/library-usage/) — import paths and end-to-end examples

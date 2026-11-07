@@ -31,7 +31,7 @@ fmt.Println(obj.Kind, obj.Namespace+"/"+obj.Name, cl.Kind, cl.Name)
 
 There is no second construction path.
 The config-struct layer this package used to carry (`cnpg.Cluster(&cnpg.ClusterConfig{Options: &cnpg.ClusterOptions{...}})`, `Database`, `ObjectStore`, `ScheduledBackup`, `Pooler` and their twenty-one `*Config` / `*Options` types) was retired by release 2 of the builder contract: it reached 15 of a `Cluster`'s 55 spec fields, 6 of a `Database`'s 23 and 4 of a `Pooler`'s 9, and it invented values the caller never asked for — `enablePDB` from the instance count, a pinned `primaryUpdateStrategy`, the `ACCESS_KEY_ID` / `SECRET_ACCESS_KEY` key names, the barman-cloud plugin entry, a pooler `type` coerced to `rw`, an extension's `ensure`. Those are the caller's own lines now. <!-- doc-api-refs:ignore names the retired config-struct layer -->
-The [release 2 migration notes](/concepts/builder-contract-release-2/) map every removed field to the upstream field that replaces it. No hand-written `Create*` helper for a spec fragment remains either — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
+A caller sets the upstream field directly; the config field that used to feed it is gone. No hand-written `Create*` helper for a spec fragment remains either — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
 
 The kinds this package registers, their scope, and what stated that scope are rows in the generated [Supported kinds and field maturity](/api-reference/api-tables/) tables. The sections below are worked examples, not the coverage list.
 
@@ -215,4 +215,3 @@ fmt.Println(db.Spec.ReclaimPolicy, store.Spec.InstanceSidecarConfiguration.Env[0
 ## Related Packages
 
 - [stack](/api-reference/stack/) - Domain model that produces Kubernetes resources
-- [Builder contract: release 2 migration notes](/concepts/builder-contract-release-2/) - the retired config-struct layer, field by field

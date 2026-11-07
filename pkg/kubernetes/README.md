@@ -48,8 +48,7 @@ the caller's own `obj.Spec = spec`.
 There is no second construction path either. The `Kind(&Config)` layer — a function per
 kind taking a kure-invented `Config` struct and translating it into the upstream spec —
 was retired by release 2 of the contract, together with the sealed-interface sum types
-behind it; the [release 2 migration notes](/concepts/builder-contract-release-2/) map
-every removed field to the upstream field that replaces it. §3 states the rule that keeps
+behind it; a caller sets the upstream field the config field used to feed. §3 states the rule that keeps
 it out.
 
 ## 2. Constructors
@@ -1039,5 +1038,3 @@ literal, `resource.ParseQuantity` when the text comes from configuration.
 - [Compatibility matrix](/api-reference/compatibility/) - the dependency versions these builders are pinned to
 - [Kinds and field maturity](/api-reference/api-tables/) - the generated table of every registered kind
 - [errors](/api-reference/errors/) - Structured error types used for nil-check sentinels
-- [Builder Contract Migration](/concepts/builder-contract-release-1/) - removed constructor defaults and changed signatures
-- [Builder Contract Migration (release 2)](/concepts/builder-contract-release-2/) - the retired `Kind(&Config)` layer, field by field

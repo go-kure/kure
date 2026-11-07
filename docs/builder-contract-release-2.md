@@ -1,9 +1,13 @@
 # Builder contract: release 2 migration notes
 
+> **Development record, not published on the documentation site.** This file lists what the
+> release removed, for the people who made the change. The current contract is
+> [`pkg/kubernetes/README.md`](../pkg/kubernetes/README.md).
+
 This page is the ledger for the second release of the builder contract (ADR-038,
 the "thin core + admissible sugar" decision). Release 1 made the upstream Go struct
 the construction API and removed the bare forwarders and injected defaults; its
-ledger is the [release 1 migration notes](/concepts/builder-contract-release-1/).
+ledger is [`builder-contract-release-1.md`](builder-contract-release-1.md).
 Release 2 removes the one construction path that survived it: the `Kind(&Config)`
 layer — a function per kind taking a kure-invented `Config` struct and translating
 it into the upstream spec — in the six packages that still carried one, together

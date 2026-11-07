@@ -142,8 +142,9 @@ extra_mounts:
   - {source: docs/quickstart.md, target: getting-started/quickstart.md, title: Quickstart, weight: 10}
   - {source: docs/ARCHITECTURE.md, target: concepts/architecture.md, title: Architecture, weight: 40}
   - {source: docs/oci-layout.md, target: concepts/oci-layout.md, title: OCI Artifact Layout, weight: 60}
-  - {source: docs/builder-contract-release-1.md, target: concepts/builder-contract-release-1.md, title: Builder Contract Migration, weight: 30}
-  - {source: docs/builder-contract-release-2.md, target: concepts/builder-contract-release-2.md, title: Builder Contract Migration (release 2), weight: 31}
+  # docs/builder-contract-release-1.md and -2.md are development records for the
+  # release-1 and release-2 removals. They are not published: the contract is the
+  # Kubernetes Builders page, and a ledger of removed names is history.
   - {source: docs/layout-and-flux-naming.md, target: concepts/layout-and-flux-naming.md, title: Layout and Flux Naming, weight: 50}
   - {source: examples/getting-started/README.md, target: examples/getting-started.md, title: Getting Started, weight: 5}
   - {source: examples/patches/README.md, target: examples/patches.md, title: Patches, weight: 10}

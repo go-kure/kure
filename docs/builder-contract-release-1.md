@@ -1,5 +1,9 @@
 # Builder contract: release 1 migration notes
 
+> **Development record, not published on the documentation site.** This file lists what the
+> release removed, for the people who made the change. The current contract is
+> [`pkg/kubernetes/README.md`](../pkg/kubernetes/README.md).
+
 This page tracks what the builder contract (ADR-038, the "thin core + admissible
 sugar" decision) changes for callers across its first release. The normative
 contract text is the [Kubernetes Builders](/api-reference/kubernetes-builders/)
@@ -1254,7 +1258,7 @@ assignment, that assignment is the one that survives. The six rows that name onl
 `rs.Spec.Trigger = &volsyncv1alpha1.ReplicationSourceTriggerSpec{...}` /
 `rd.Spec.Trigger = &volsyncv1alpha1.ReplicationDestinationTriggerSpec{...}` and by
 setting one mover arm (`rs.Spec.Restic`, `rs.Spec.Rsync`, …) directly; the
-[release 2 migration notes](/concepts/builder-contract-release-2/) map each trigger
+[release 2 migration notes](builder-contract-release-2.md) map each trigger
 field and mover variant to its upstream field.
 
 | Removed | Replacement |
