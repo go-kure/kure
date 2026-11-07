@@ -1,5 +1,3 @@
-// Package api defines configuration structures used to generate
-// Kubernetes manifests and Flux resources.
 package layout
 
 import (
@@ -23,8 +21,9 @@ const (
 
 // GroupingMode controls how nodes, bundles and applications are laid out on disk.
 //
-// The default for all grouping modes is GroupByName which creates a directory per
-// entity. GroupFlat places all entities in the same directory.
+// GroupByName creates a directory per entity; GroupFlat places all entities in the
+// same directory. DefaultLayoutRules uses GroupByName for nodes and GroupFlat for bundles
+// and applications.
 type GroupingMode string
 
 const (
@@ -131,8 +130,9 @@ type LayoutRules struct {
 	// FilePer sets the default file export mode for resources. Defaults to
 	// FilePerResource.
 	FilePer FileExportMode
-	// ClusterName specifies a cluster name to prepend to all paths.
-	// When set, creates clusters/{ClusterName}/... structure.
+	// ClusterName specifies a cluster name to prepend to all paths. When set, the
+	// paths start with {ClusterName}/...; the "clusters" prefix some layouts show
+	// is Config.ManifestsDir, not part of ClusterName.
 	ClusterName string
 	// FluxPlacement determines how Flux Kustomizations are placed.
 	// Defaults to FluxSeparate.

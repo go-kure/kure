@@ -15,6 +15,11 @@
 //   - [FileError]: File operation failures (read, write, parse)
 //   - [ValidationError]: General validation failures with field details
 //   - [ConfigError]: Configuration-related errors
+//   - [PatchError]: Patch operation failures
+//   - [ParseError]: Parse failures with a source and, where known, a line and column
+//   - [PSAViolationError]: Pod Security Standards violations, with the field path and level
+//   - [ParseErrors]: the errors found while decoding YAML, collected into one error that
+//     unwraps to each of them
 //
 // # Predefined Errors
 //

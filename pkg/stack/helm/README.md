@@ -270,6 +270,9 @@ Comma-separated annotations (e.g. `"pre-install,post-install"`) are treated as
 a single opaque phase string and placed in the unknown group to avoid SSA
 ownership conflicts between multiple Kustomizations.
 
+A `helm.sh/hook-weight` that is missing, or is not an integer, counts as weight 0 and raises no
+error. Within a phase, groups run from the lowest weight to the highest.
+
 <!-- doc-example:excerpt the declarations from hooks.go, not calls -->
 ```go
 // HookGroup is a set of Helm manifests sharing the same hook phase and weight.
@@ -336,5 +339,3 @@ func SplitByHookWeight(objects []client.Object) []HookGroup
 - With `WithDigestVersion`, a semver tag must equal the selected child's chart version, build
   metadata aside, so a child of another version is selected through a tag that is not semver.
   This follows from the tag check above; it is not a separate rule.
-- Comma-separated hook annotations (e.g. `"pre-install,post-install"`) are
-  treated as a single opaque phase and placed in the unknown group.

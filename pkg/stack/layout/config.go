@@ -11,7 +11,7 @@ type ManifestFileNameFunc func(namespace, kind, name string, mode FileExportMode
 // KustomizationFileNameFunc returns the file name for a Flux Kustomization manifest.
 type KustomizationFileNameFunc func(name string) string
 
-// Config LayoutConfig defines rules for generating a cluster layout.
+// Config defines where the layout writers place Kubernetes and Flux manifests.
 type Config struct {
 	// ManifestsDir is the directory under which Kubernetes manifests are written.
 	ManifestsDir string

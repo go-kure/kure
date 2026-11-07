@@ -16,6 +16,17 @@ The engine is composed of three specialized components:
 | **LayoutIntegrator** | Integrates resources into directory structures |
 | **BootstrapGenerator** | Creates Flux bootstrap manifests |
 
+This page is long. Start with Quick Start and Engine Construction, then read the section for the
+task in front of you:
+
+| If you need | Read |
+|---|---|
+| The Flux objects a cluster produces and how they are named | Resource Generation, Kustomization names, Kustomization paths |
+| Where the files land and how Kustomizations point at them | Layout Integration, Umbrella Bundles, Non-Bundle Child Layout CRs |
+| To install Flux itself | Bootstrap Generation |
+| The settings and defaults the engine takes | Defaults are declared, named and exported, Configuration, Service account |
+| What the engine refuses | Validation |
+
 ## Quick Start
 
 <!-- doc-example:excerpt the import line alone, which every example on this page uses -->
@@ -1317,8 +1328,8 @@ the `BootstrapConfig` is, a nil or disabled one included. `WorkflowEngine.Genera
 takes them as `stack.LayoutRulesProvider` and refuses anything that is not a `layout.LayoutRules`
 value, nil included, as `GenerateFromCluster` does; it does not fall back to the defaults.
 
-The organisation layout document shows the bootstrap Kustomization's path as the `flux-system`
-directory. kure's bootstrap applies the top directory of the written tree, whose
+The [OCI artifact layout design](https://github.com/go-kure/.github/blob/main/docs/design/oci-layout.md)
+shows the bootstrap Kustomization's path as the `flux-system` directory. kure's bootstrap applies the top directory of the written tree, whose
 `kustomization.yaml` lists `flux-system` under the Separate placement, so the objects that
 directory holds are applied either way.
 

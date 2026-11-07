@@ -4,6 +4,8 @@
 
 The `gvk` package provides shared infrastructure for Group, Version, Kind (GVK) based type systems within Kure. It implements version-aware type registration, unmarshaling, and conversion similar to Kubernetes' own GVK system but tailored for Kure's needs.
 
+No other package in this repository imports `gvk`; only its own tests do. It is a standalone toolkit for programs that define their own versioned YAML types.
+
 ## Core Components
 
 | Component | Description |
@@ -93,6 +95,23 @@ if err != nil {
 fmt.Printf("%+v\n", converted)
 ```
 <!-- doc-example:end -->
+
+### Parsing helpers
+
+`ParseSingle`, `ParseMultiple` (documents separated by `---`) and `ParseStream` (an `io.Reader`)
+decode YAML into `TypedWrapper` values for a registry. They take a `*ParseOptions`
+(`StrictGVK`, `AllowUnknownTypes`; `DefaultParseOptions` sets the first and clears the second),
+but every one of them ignores it today: the parameter is reserved. `ValidateGVK` checks that a
+`GVK` has a kind and a version; the group may be empty for core types, and `ParseAPIVersion`
+splits an `apiVersion` string and a kind into a `GVK`.
+
+### Other exported types
+
+- `Factory[T]` - the constructor type that `Registry[T].Register` takes
+- `BaseMetadata` - a `Name` and `Namespace` pair with getters and setters, for embedding in spec types
+- `VersionComparator` - compares version strings (`Compare` returns -1, 0 or 1)
+- `TypedWrappers[T]` - a slice of wrappers; its `UnmarshalYAML` always returns an error, so decode
+  a multi-document stream with `ParseMultiple` or `ParseStream` instead
 
 ## Key Interfaces
 

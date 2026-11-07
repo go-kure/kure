@@ -62,6 +62,10 @@ fmt.Println(engine.GetName(), engine.RepoURL, engine.DefaultNamespace)
 ```
 <!-- doc-example:end -->
 
+`Engine()` starts with the placeholder `RepoURL` `https://github.com/example/manifests.git`. Every
+generated Application takes its `spec.source.repoURL` from that field, so call `SetRepoURL`
+before you generate, or the Applications point at the placeholder.
+
 ## Resource Generation
 
 <!-- doc-example: pkg/stack/argocd ExampleWorkflowEngine_GenerateFromCluster -->
