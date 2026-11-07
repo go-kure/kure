@@ -396,7 +396,8 @@ its last, and does not read any build of a tree when either differs, naming the 
 difference counts, a CRD schema another use of kustomize registered included, and so does a value
 moved to a field kyaml does not read, such as an extension moved to `ExtraProps`, which marshals
 to the same JSON. A change made and reverted between the two checks is not seen. One check costs
-about 17 ms, and about 110 ms under `-race`, so a tree pays that twice. The check covers
+about 17 ms, and about 110 ms under `-race`. A tree that a view reads pays it twice, and a tree built only to
+name a patch in a refusal pays it once. The check covers
 the definitions kyaml exposes, and the schema kyaml's per-resource-type index serves for every kind
 they declare: the index holds a copy of each definition, apart from the one in the definitions, so
 a write through the schema kyaml returns for a kind changes what a build reads and leaves the
@@ -438,7 +439,7 @@ base into the tree, or reference it through a Flux Source.
 concurrent integrations included, do not race each other on it. It refuses a build under a custom
 schema or another built-in version, naming it, and every build of a tree whose schema holds
 definitions other than the built-in ones, such as those kyaml's `AddSchema` and `AddDefinitions` <!-- doc-api-refs:ignore kyaml openapi functions, not kure API -->
-add, checked before the tree's first build and after its last (about 20 ms each). A process that
+add, checked before the tree's first build and after its last (about 17 ms each). A process that
 registers CRD schemas with kustomize beside an integration therefore gets no reconcile-order
 verdict from it: kure cannot tell such a definition from one that changes how a field merges. It
 cannot order another use of kustomize in the same process: one that sets or resets the schema
