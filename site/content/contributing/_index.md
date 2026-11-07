@@ -8,8 +8,10 @@ weight = 70
 Resources for contributing to Kure.
 
 - [Development Guide](/contributing/guide/) - Setup, testing, code quality, and CI/CD workflows
+- [Releasing](/contributing/releasing/) - How a release is cut
 - [GitHub Workflows](/contributing/github-workflows/) - CI/CD pipeline documentation
 - [Shared Workflows](/contributing/shared-workflows/) - PR review, merge queue, shared CI checks and docs deploy
+- [Dependency Updates](/contributing/dependency-updates/) - How pinned dependencies are bumped
 
 ## Quick Start
 

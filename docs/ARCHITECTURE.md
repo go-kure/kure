@@ -1612,6 +1612,8 @@ Additional design documentation available in the repository:
 - `docs/builder-contract-release-1.md`: Release-1 migration ledger — every removed helper and its replacement
 - `docs/api-tables.md`: Generated kinds, scope and field-maturity tables
 - `pkg/stack/layout/README.md`: Layout system overview
+- `docs/layout-and-flux-naming.md`: How the layout engine names directories, files and Flux objects
+- `docs/compatibility.md`: Generated matrix of supported infrastructure versions
 - `pkg/stack/workflow.go`: Workflow interface definitions
 
 ### Appendix D: Migration Guide

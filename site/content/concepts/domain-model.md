@@ -1,6 +1,6 @@
 +++
 title = "Domain Model"
-weight = 20
+weight = 10
 +++
 
 # Domain Model

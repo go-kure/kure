@@ -1,6 +1,6 @@
 +++
 title = "Builder Contract"
-weight = 25
+weight = 20
 +++
 
 # Builder Contract

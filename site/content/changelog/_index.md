@@ -1,6 +1,6 @@
 +++
 title = "Changelog"
-weight = 70
+weight = 80
 +++
 
 # Changelog

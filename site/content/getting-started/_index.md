@@ -7,28 +7,7 @@ weight = 10
 
 Kure is a Go library for programmatically building Kubernetes resources.
 
-## Using as a Library
+- [Quickstart](/getting-started/quickstart/) - Install the module and generate your first manifests
+- [Cluster to disk](/examples/getting-started/) - The complete pipeline in Go: build a cluster, generate the layout, write it to disk
 
-Add Kure to your Go project:
-
-```bash
-go get github.com/go-kure/kure
-```
-
-Then import the packages you need:
-
-<!-- doc-example:excerpt an import block alone, with no code to compile against it -->
-```go
-import (
-    "github.com/go-kure/kure/pkg/stack"
-    "github.com/go-kure/kure/pkg/kubernetes/fluxcd"
-    "github.com/go-kure/kure/pkg/io"
-)
-```
-
-## Next Steps
-
-- Follow the [Quickstart](/getting-started/quickstart/) guide
-- Read about the [Domain Model](/concepts/domain-model) and [Design Philosophy](/concepts/design-philosophy)
-- Explore the [Guides](/guides) for common workflows
-- Try the [Examples](/examples)
+Then read the [Domain Model](/concepts/domain-model/) and [Design Philosophy](/concepts/design-philosophy/), explore the [Guides](/guides/), or try the [Examples](/examples/).
