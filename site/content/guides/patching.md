@@ -3,8 +3,6 @@ title = "Patching Resources"
 weight = 40
 +++
 
-# Patching Resources
-
 kure does not patch resources. The patch library, `pkg/patch`, lives in
 [go-kure/launcher](https://github.com/go-kure/launcher), which owns its formats, its API and its
 documentation. Read it there:

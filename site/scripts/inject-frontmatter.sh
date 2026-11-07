@@ -41,7 +41,13 @@ inject_fm() {
     echo "weight: $weight"
     echo "---"
     echo ""
-    cat "$src"
+    # The page title comes from the front matter above, which the theme renders as the
+    # page's <h1>. Drop the source's own leading "# Title" line (it may follow one-line HTML
+    # comments such as a "generated" marker) so a page has one.
+    awk '!seen && /^# / { seen = 1; skip = 1; next }
+         skip && /^$/ { skip = 0; next }
+         NF && !/^<!--.*-->[ \t]*$/ { seen = 1 }
+         { skip = 0; print }' "$src"
   } > "$dest"
 }
 

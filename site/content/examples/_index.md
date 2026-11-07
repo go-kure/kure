@@ -3,8 +3,6 @@ title = "Examples"
 weight = 40
 +++
 
-# Examples
-
 Practical examples of using Kure to generate Kubernetes configurations.
 
 ## Mounted Examples

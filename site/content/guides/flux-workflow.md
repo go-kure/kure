@@ -3,8 +3,6 @@ title = "Generating Flux Manifests"
 weight = 20
 +++
 
-# Generating Flux Manifests
-
 This guide walks through the complete workflow for generating a GitOps repository structure with Flux resources using Kure.
 
 ## Overview

@@ -3,8 +3,6 @@ title = "Domain Model"
 weight = 10
 +++
 
-# Domain Model
-
 Kure models Kubernetes infrastructure as a four-level hierarchy. Each level maps to a concept in GitOps deployment workflows.
 
 ## The Hierarchy

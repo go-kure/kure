@@ -3,8 +3,6 @@ title = "Builder Contract"
 weight = 20
 +++
 
-# Builder Contract
-
 kure's Kubernetes foundation is deliberately thin: it hands you the upstream Go struct with its
 identity filled in, and stops. This page is the consumer's view of what that means in practice —
 how to build an object, when a kure helper exists and when there is none, how to read the generated

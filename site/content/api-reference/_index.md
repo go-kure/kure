@@ -3,8 +3,6 @@ title = "API Reference"
 weight = 60
 +++
 
-# API Reference
-
 Kure's public API is organized into focused packages. Each package README below is auto-synced from the source code.
 
 For full Go API documentation, see [pkg.go.dev/github.com/go-kure/kure](https://pkg.go.dev/github.com/go-kure/kure).
