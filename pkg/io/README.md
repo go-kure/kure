@@ -412,6 +412,27 @@ if err := io.PrintObjects(objects, format, io.PrintOptions{}, os.Stdout); err !=
 ```
 <!-- doc-example:end -->
 
+### Table printers and the rest of the printing API
+
+Two printers produce tables. `ResourcePrinter` (the `table` and `wide` formats) hands each object
+to the `k8s.io/cli-runtime` table printer. `SimpleTablePrinter` has no `cli-runtime`
+dependency: it prints the columns `DefaultColumns()` returns (a `TableColumn` has a header, a
+width and a priority; wide-only columns appear only in wide mode), sorted by namespace and name.
+`NewSimpleTablePrinter(wide, noHeaders)` builds one with the default columns,
+`NewSimpleTablePrinterWithColumns` with your own, and `PrintObjectsAsTable` is the one-call form.
+`KindSpecificColumns` returns the columns for Pod, Deployment, Service, ConfigMap and Secret, and
+the defaults for any other kind.
+
+The rest of the printing API:
+
+- `NewTablePrinter(options)` is `NewResourcePrinter` with the format forced to `table` unless it
+  is already `table` or `wide`.
+- `PrintSingle(obj, w)` and `PrintToString(objects)` are methods of `ResourcePrinter`.
+- `PrintObjectsAsYAML` and `PrintObjectsAsJSON` write the encoders' output to a writer.
+- `ValidateOutputFormat` ignores case and also accepts `yml` for YAML.
+- `FormatAge`, `GetResourceAge` and `GetResourceStatus` are the helpers behind the AGE and STATUS
+  columns.
+
 ## Related Packages
 
 - [errors](/api-reference/errors/) - Error types for parse failures

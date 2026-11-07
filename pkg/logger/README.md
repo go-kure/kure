@@ -2,7 +2,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/logger.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/logger)
 
-The `logger` package provides structured logging for Kure. All logging in the project should use this package instead of `fmt.Print` or the standard `log` package.
+The `logger` package provides a small printf-style logger with four levels. The library packages do not import it: the only non-test importer in this repository is `examples/getting-started/main.go`. It is there for programs that build on Kure and want a logger to hand around.
 
 ## Overview
 
@@ -33,12 +33,23 @@ log.Info("discarded")
 
 ## Log Levels
 
-| Level | Usage |
-|-------|-------|
-| `Info` | Normal operational messages |
-| `Error` | Error conditions |
-| `Debug` | Detailed debugging information |
-| `Warn` | Warning conditions |
+From least to most severe. A logger drops every message below its minimum level; the default
+minimum is `LevelInfo`.
+
+| Level constant | Method | Usage |
+|----------------|--------|-------|
+| `LevelDebug` | `Debug` | Detailed debugging information |
+| `LevelInfo` | `Info` | Normal operational messages |
+| `LevelWarn` | `Warn` | Warning conditions |
+| `LevelError` | `Error` | Error conditions |
+
+## Prefixes, levels and helpers
+
+- `WithPrefix(prefix)` returns a new logger whose prefix is the old prefix followed by `prefix`,
+  and a trailing space is added if there is none.
+- `SetLevel(level)` changes the minimum level of that logger.
+- `logger.FormatBytes(n)` formats a byte count (`1536` becomes `1.5 KB`), and
+  `logger.FormatDuration(nanos)` formats a duration given in nanoseconds (`1500000` becomes `1.50ms`).
 
 ## Conventions
 
@@ -49,4 +60,4 @@ log.Info("discarded")
 
 ## Related Packages
 
-All Kure packages use this logger. See the [errors](/api-reference/errors/) package for error handling patterns.
+See the [errors](/api-reference/errors/) package for error handling patterns.

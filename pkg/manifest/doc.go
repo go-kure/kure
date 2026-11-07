@@ -33,8 +33,8 @@
 //	    // unknown custom resource with no defining CRD in scope
 //	}
 //
-// The package depends only on the Kubernetes API machinery
+// The package depends on the Kubernetes API machinery
 // (k8s.io/apiextensions-apiserver, k8s.io/apimachinery,
-// sigs.k8s.io/controller-runtime) and has no dependency on any other Kure
-// package.
+// sigs.k8s.io/controller-runtime) and on one other Kure package,
+// pkg/kubernetes.
 package manifest

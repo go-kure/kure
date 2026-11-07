@@ -382,6 +382,12 @@ Both skip an entry of an application's `Generate` result that is nil or holds no
 ## Directory Structure Patterns
 
 ### Standard Layout (WalkCluster)
+
+The tree below is what `GroupByName` on all three axes (`NodeGrouping`, `BundleGrouping`,
+`ApplicationGrouping`) writes. `DefaultLayoutRules` groups bundles and applications flat, so a
+default layout has no `bundle1/` and `app1/` levels. `clusters/` is `Config.ManifestsDir` (the
+default of `DefaultLayoutConfig`), and `cluster-name` is `LayoutRules.ClusterName`.
+
 ```
 clusters/
   cluster-name/
@@ -825,6 +831,16 @@ Three named presets provide pre-configured LayoutRules for common deployment pat
 | `SiblingControlPlane` | B | FluxSeparate | GroupByName | FileNamingDefault |
 | `ParentDeployedControl` | C | FluxIntegratedPerLayout | GroupByName | FileNamingDefault |
 
+The patterns, from `preset.go`:
+
+- **A, `CentralizedControlPlane`**: all Flux Kustomization CRs sit in dedicated aggregator
+  directories, completely separate from the payload. Suited to fleet management with many
+  applications; flat directory grouping and `{kind}-{name}.yaml` file names.
+- **B, `SiblingControlPlane`**: the Kustomization CRs sit in a `flux-system/` sibling directory
+  within each artifact. Suited to single-artifact or per-application artifacts.
+- **C, `ParentDeployedControl`**: the Kustomization CRs live in the payload of their parent
+  Kustomization. Suited to simple, single-application deployments.
+
 This block and the one under [Example Usage](#example-usage) are the bodies of `Example` functions
 in `example_test.go`, which `go test` runs; the two interface blocks above are declarations, shown
 as excerpts. The examples import this package as `layout`, `os`, `path/filepath`, and `fmt` for the
@@ -885,12 +901,35 @@ printFiles(out)
 ```
 <!-- doc-example:end -->
 
+## Config
+
+`WriteManifest` takes a `Config` besides the layout. `DefaultLayoutConfig()` returns the defaults.
+
+| Field | Meaning |
+|-------|---------|
+| `ManifestsDir` | Directory under which Kubernetes manifests are written (default `clusters`) |
+| `FluxDir` | Directory under which Flux manifests are written (default `clusters`) |
+| `FilePer` | How resources are grouped into files |
+| `ApplicationFileMode` | Whether an application's resources are one file or one file per resource |
+| `KustomizationMode` | How `kustomization.yaml` files reference their children (default `KustomizationExplicit`) |
+| `FluxKustomizationMode` | Per-`FluxPlacement` override of `KustomizationMode` |
+| `FileNaming` | The file naming mode; `ManifestFileName` takes precedence when set |
+| `ManifestFileName`, `KustomizationFileName` | Functions that name resource and Kustomization files |
+
 ## Key Files
 
 - **types.go**: Core types and configuration options
 - **walker.go**: Tree traversal algorithms (WalkCluster, WalkClusterByPackage)
 - **manifest.go**: ManifestLayout structure and package-based writing
-- **write.go**: Standard manifest writing with kustomization generation  
+- **write.go**: Standard manifest writing with kustomization generation
 - **config.go**: Configuration and file naming conventions
+- **preset.go**: The named layout presets (patterns A, B and C)
+- **profile.go**: Layout profiles and the defaults for each
+- **augmenter.go**: The optional `LayoutAugmenter` interface an `ApplicationConfig` implements to attach extra files
+- **tar.go**: `WriteToTar`, the archive writer
+- **recursive.go**, **writerplan.go**: How the writers plan directories, files and `kustomization.yaml` entries
+- **treecheck.go**: Checks a layout tree before anything is written
+- **origin.go**, **flatten.go**: Which stack objects a walked layout renders, and the single-tier flatten helper
+- **yamlstring.go**: Quoting of the entries the writers put in `kustomization.yaml`
 
 The layout module essentially bridges the gap between Kure's programmatic resource construction and the file-based expectations of GitOps workflows, with extensive configurability for different organizational preferences and tool requirements.

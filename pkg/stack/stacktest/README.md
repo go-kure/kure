@@ -19,6 +19,9 @@ func TestMyConfig_Conformance(t *testing.T) {
 }
 ```
 
+The repository runs this test on its own example config: `TestMyConfig_Conformance` in
+[`pkg/stack/example_test.go`](https://github.com/go-kure/kure/blob/main/pkg/stack/example_test.go).
+
 `AssertGeneration` calls `Application.Generate` twice, so `Validate` runs before each call as in a
 walk, and fails the test for an error or for every value it reports, naming both paths.
 `CheckGeneration` returns the same findings as a `Report` instead:

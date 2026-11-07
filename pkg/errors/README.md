@@ -2,7 +2,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/errors.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/errors)
 
-The `errors` package provides structured error types with contextual information for Kubernetes resource operations. All Kure packages use this instead of `fmt.Errorf`.
+The `errors` package provides structured error types with contextual information for Kubernetes resource operations. Most Kure packages return these errors in place of `fmt.Errorf`; a few, such as `pkg/stack`'s builders, still call `fmt.Errorf`.
 
 ## Overview
 
@@ -12,12 +12,19 @@ Errors in Kure carry context: the type of error, what resource was affected, sug
 
 | Type | Use Case | Key Fields |
 |------|----------|------------|
-| `ValidationError` | Field validation failures | Field, Value, ValidValues, Suggestion |
-| `ResourceError` | Resource-specific issues | Kind, Name, Namespace, Available |
+| `ValidationError` | Field validation failures | Field, Value, Component, ValidValues |
+| `ResourceError` | Resource-specific issues | ResourceType, Name, Namespace, Available |
 | `PatchError` | Patch operation failures | Operation, Path, ResourceName |
 | `ParseError` | File/YAML parsing errors | Source, Line, Column |
 | `FileError` | File system operations | Operation, Path |
-| `ConfigError` | Configuration problems | Source, Field, Value, ValidValues |
+| `ConfigError` | Configuration problems | Source, Field, ValidValues |
+| `PSAViolationError` | Pod Security Standards violations | Field, Level |
+
+Every type embeds `BaseError`, which carries the message, the cause and the suggestion, and
+reports one of the `ErrorType` constants (`ErrorTypeValidation`, `ErrorTypeResource`,
+`ErrorTypePatch`, `ErrorTypeParse`, `ErrorTypeFile`, `ErrorTypeConfiguration`, `ErrorTypePSA`,
+`ErrorTypeInternal`). `ParseErrors` is not one of these types: it aggregates the errors found
+while decoding YAML (`pkg/io`) and unwraps to each of them.
 
 ## Usage
 
@@ -198,4 +205,4 @@ as produced.
 
 ## Related Packages
 
-All Kure packages import this package for error handling. Never use `fmt.Errorf` directly.
+Kure packages import this package to build the errors they return, in place of `fmt.Errorf`. Use it the same way when your code returns an error to a Kure caller.
