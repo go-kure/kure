@@ -52,6 +52,7 @@ ENABLED_PAGES=(
 	docs/github-workflows.md
 	docs/layout-and-flux-naming.md
 	docs/oci-layout.md
+	docs/package-status.md
 	docs/puzl-cloud-kubesdk-review.md
 	docs/quickstart.md
 	docs/releasing.md

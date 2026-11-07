@@ -107,13 +107,15 @@ See [Domain Model](/concepts/domain-model) for the full reference.
 
 Kure is the manifest-generation library. Related tooling:
 
-- **[go-kure/launcher](https://github.com/go-kure/launcher)**: Package manager and customization workflows (patching, overlays). Optional — only needed if you use those workflows. "kurel" is the launcher's command-line tool; kure itself ships no CLI. Older kure docs that describe a kurel package system describe a prototype that preceded the launcher.
+- **[go-kure/launcher](https://github.com/go-kure/launcher)**: An OAM-native package manager built on kure. Optional: you need it only if you want packages rather than a Go program. "kurel" is the launcher's command-line tool; kure itself ships no CLI. See [how the two models relate](/concepts/#how-the-kure-and-launcher-models-relate). Older kure docs that describe a kurel package system describe a prototype that preceded the launcher.
 
 ## Current Status
 
-- **FluxCD** workflow is the primary supported path — fully implemented
-- **ArgoCD** support is present but bootstrap is not yet production-ready
-- No stable release yet; APIs may change between versions
+- **FluxCD** workflow is the primary supported path, with bootstrap generation
+- **Argo CD** generates Applications; bootstrap is not implemented
+- No stable release yet: the published prereleases and the development docs can both change
+
+The [package status](/concepts/package-status/) page lists every package as supported, limited, consumer-provided, not implemented or proposed.
 
 ## Start Here
 
