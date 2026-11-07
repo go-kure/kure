@@ -1,5 +1,7 @@
 # Kure — Action Plan
 
+> **Historical record, not current guidance.** This was written for its date and is kept for the reasoning behind it. For how Kure works now, read the code and the documentation site.
+
 > **Generated**: 2026-02-27
 > **Source**: `20260227-HISTORY-deep-code-review.md` and the downstream fleet status report
 

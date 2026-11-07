@@ -1,9 +1,10 @@
-# Layout and Flux naming: current behaviour and target
+# Layout and Flux naming: behaviour and the changes made to it
 
 This page records how kure names, places and wires the directories and Flux objects it generates
-from the stack model, and what each planned change makes of it. Part 1 is the behaviour of
-`v0.2.0-beta.15`, confirmed by rendering small clusters to disk and to tar. Part 2 is the target,
-one section per planned change, each tracked by an issue.
+from the stack model, and what each change made of it. Part 1 is the behaviour of
+`v0.2.0-beta.15`, confirmed by rendering small clusters to disk and to tar. Part 2 is the record of
+the changes made since, one section per change, each tracked by an issue; every section is marked
+**Shipped**.
 
 kure, its consumers and their output are pre-release: names, paths and output may change, and
 live-cluster upgrade effects are not a constraint.
@@ -25,8 +26,8 @@ live-cluster upgrade effects are not a constraint.
 A consumer never renames, moves or deletes what kure produced. If it has to, kure lacks a parameter
 or has a bug, and the fix belongs in kure.
 
-Two rules follow from that. They are the target, not today's behaviour: sections 1.7 and 1.8 show
-where they do not hold yet, and Part 2 is what makes them hold.
+Two rules follow from that. Sections 1.7 and 1.8 record where they did not hold in
+`v0.2.0-beta.15`, and Part 2 is what made them hold.
 
 - Every generated name has a default and an override.
 - Two objects of the same kind in the same namespace never share a name; objects of different
@@ -296,11 +297,10 @@ what the text said and what it says now.
    as that layout's Kustomization name; any other entry is still written as given. Since
    go-kure/kure#1032 the field is refused, not dropped, where no Kustomization carries it.)
 
-## Part 2: target behaviour
+## Part 2: the changes (all shipped)
 
-Each section names the change, the target, a design outline and the acceptance criteria. The
-linked issue tracks the implementation. A section whose change has shipped is marked **Shipped**
-and describes what the code does now.
+Each section names the change, its design outline and its acceptance criteria. The linked issue
+tracked the implementation. A section marked **Shipped** describes what the code does now.
 
 ### Kustomization name separate from the bundle name ([go-kure/kure#971](https://github.com/go-kure/kure/issues/971))
 

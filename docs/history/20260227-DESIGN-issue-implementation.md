@@ -1,5 +1,7 @@
 # Kure — Implementation Design
 
+> **Historical record, not current guidance.** This was written for its date and is kept for the reasoning behind it. For how Kure works now, read the code and the documentation site.
+
 > **Generated**: 2026-02-27
 > **Source**: Issue specifications + live codebase exploration
 > **Issues designed**: 15

@@ -890,10 +890,6 @@ When upgrading a dependency:
 4. Run `./scripts/sync-versions.sh generate` to update docs
 5. Run `./scripts/sync-versions.sh check` to validate consistency
 
-## Related Issues
-
-- [#133](https://github.com/go-kure/kure/issues/133) - Go 1.25 upgrade tracking
-- [#128](https://github.com/go-kure/kure/issues/128) - FluxCD ecosystem upgrade (blocked by Go 1.25)
 
 EOF
 

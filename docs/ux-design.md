@@ -83,6 +83,10 @@ This document outlines a comprehensive user experience strategy for Kure, a Go l
 ### **Existing Interaction Model**
 Currently, users interact with Kure through direct Go code:
 
+> The snippet below is the proposal's picture of today, not Kure's API: `NewNode` and the
+> `AddNode`, `AddBundle` and `AddApplication` methods do not exist, and `NewCluster`, `NewBundle`
+> and `NewApplication` take different arguments. See `examples/getting-started` for what runs.
+
 ```go
 // Manual, step-by-step creation
 cluster := stack.NewCluster("production", rootNode)

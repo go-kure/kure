@@ -7,9 +7,9 @@
 - Hierarchical domain model: Cluster → Node → Bundle → Application
 - FluxCD workflow engine: full resource generation, layout integration, bootstrap (gotk and flux-operator modes)
 - ArgoCD workflow engine: Application generation and layout integration; **bootstrap not implemented**
-- GVK registry and ApplicationConfig system
+- ApplicationConfig system (callers supply the implementations)
 - Layout generation with WriteToDisk, WriteToTar, WriteManifest
-- Patch system, umbrella bundles, flatten-single-tier
+- Umbrella bundles, flatten-single-tier
 
 ## Known Limitations
 

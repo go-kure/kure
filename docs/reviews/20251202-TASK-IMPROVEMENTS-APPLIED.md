@@ -1,5 +1,7 @@
 # Task Improvements Applied
 
+> **Historical record, not current guidance.** This was written for its date and is kept for the reasoning behind it. For how Kure works now, read the code and the documentation site.
+
 **Date:** 2025-12-02
 **Based on:** Review feedback
 

@@ -78,7 +78,6 @@ graph TB
     WF --> LO
     LO --> FLUX
     LO --> ARGO
-    PS --> K8S
 ```
 
 ### Core Components
@@ -518,7 +517,7 @@ pkg/kubernetes/
 ├── podspec.go                 # Admissible sugar for corev1.PodSpec
 ├── admission_test.go          # go/ast check that every exported helper is admissible
 ├── certmanager/ cilium/ cnpg/ …   # one subpackage per CRD family, same shape
-└── internal/                  # kinds, markers, upstream, crds, maturity, gen, admission
+└── internal/                  # kinds, markers, upstream, maturity, gen, admission
 ```
 
 The `internal/` tree is where derivation lives: it reads the pinned upstream module sources and
@@ -778,18 +777,28 @@ func Engine() *WorkflowEngine // Default engine
 
 ```
 pkg/                          # Public APIs and interfaces
-├── stack/                   # Domain model (public)
-│   ├── fluxcd/             # FluxCD workflow implementation  
+├── errors/                 # Typed errors with context and suggestions
+├── gvk/                    # Shared Group, Version, Kind infrastructure
+├── io/                     # YAML reading and writing
+├── kubernetes/             # Typed builders, the registered scheme, generated kind tables
+│   └── certmanager/ cilium/ cnpg/ fluxcd/ …   # one subpackage per CRD family
+├── logger/                 # Structured logging interface
+├── manifest/               # Shared classification of Kubernetes manifests
+├── stack/                  # Domain model: Cluster, Node, Bundle, Application
+│   ├── workflow.go         # Workflow interfaces
+│   ├── fluxcd/             # FluxCD workflow implementation
 │   ├── argocd/             # ArgoCD workflow implementation
-│   └── layout/             # Layout generation utilities
-├── stack/workflow.go       # Workflow interfaces (public)
-├── errors/                 # Error handling utilities (public)
-└── patch/                  # Patch system (public) — moved to go-kure/launcher (ADR-018)
+│   ├── helm/               # Client-side Helm chart rendering from OCI registries
+│   ├── layout/             # Layout generation and writing
+│   └── stacktest/          # Checks an ApplicationConfig against the generation contract
+└── versions/               # Machine-readable ranges of deployed tool versions
+internal/                     # Packages shared by the tests and generators; not importable by consumers
 ```
 
-There is no top-level `internal/` tree: the kind-specific builders live under `pkg/kubernetes/`,
-and the last private builder package, `internal/kubernetes`, was removed once nothing imported it
-(issue go-kure/kure#756).
+The patch engine is not part of this module: it moved to go-kure/launcher (ADR-018). The packages
+under `internal/` (`built`, `crds`, `crdvalidate`, `gotk`, `kuretest`, `kustomizeschema`,
+`nilobj`) are described under [Testing Architecture](#testing-architecture); the builder-specific
+internals live under `pkg/kubernetes/internal/`.
 
 ### File Naming Patterns
 
@@ -1131,16 +1140,8 @@ func TestWorkflowGeneration(t *testing.T) {
 
 Kure is optimized for batch resource generation rather than individual operations:
 
-**Benchmarks** (typical 100-node cluster):
-- Domain model creation: ~1ms
-- Resource generation: ~10ms 
-- Layout generation: ~5ms
-- YAML serialization: ~15ms
-
-**Memory Usage:**
-- Domain model: ~100KB per 100 resources
-- Generated resources: ~1MB per 1000 resources
-- Layout structures: ~50KB per cluster
+Kure does not publish benchmark figures. Generation runs in a build step, so its cost is rarely
+the limit; measure with `go test -bench` on your own cluster definition if it matters.
 
 ### Optimization Strategies
 
@@ -1583,8 +1584,6 @@ func assertError(t *testing.T, err error, expectedType errors.ErrorType) {
 **Layout**: Directory structure and manifest organization for GitOps repositories.
 
 **Node**: Hierarchical container for organizing related Bundles (e.g., infrastructure vs applications).
-
-**Patch**: Declarative modification of Kubernetes resources using JSONPath-based operations.
 
 **Kubernetes foundation**: `pkg/kubernetes` and its per-CRD subpackages — the registered scheme, `Create[T]` and its generated per-kind wrappers, the admissible sugar helpers, and the generated kinds/scope/maturity tables.
 

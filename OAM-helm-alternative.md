@@ -1,5 +1,7 @@
 # OAM-Based Helm Alternative: Design Overview (Revised)
 
+> **Unpublished design draft, not shipped.** Nothing in this document describes behaviour that exists in this repository. It is not part of the documentation site.
+
 > **Status:** Initial Design Draft (Revised)
 > **Date:** January 2025
 
