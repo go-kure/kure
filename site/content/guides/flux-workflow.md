@@ -1066,7 +1066,7 @@ So is a tree, whole, when kustomize's schema in this process is not its
 built-in one: another use of kustomize set a custom schema, or added or
 changed definitions of it, such as a CRD schema, which can change how a field
 merges and so a verdict either way. kure checks the schema before the first
-build of a tree and again after its last (about 20 ms each), and refuses every
+build of a tree and again after its last (about 17 ms each), and refuses every
 build of the tree if either differs, naming the definitions. A process that
 registers CRD schemas with kustomize beside an integration therefore gets no
 reconcile-order verdict from it; run such a use apart from the integration.
