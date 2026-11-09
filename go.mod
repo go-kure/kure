@@ -60,10 +60,10 @@ require (
 	github.com/backube/volsync v0.16.0
 	github.com/cert-manager/cert-manager v1.21.3
 	github.com/cilium/cilium v1.20.4
-	github.com/cloudnative-pg/barman-cloud v0.6.0
+	github.com/cloudnative-pg/barman-cloud v0.7.0
 	github.com/cloudnative-pg/cloudnative-pg v1.30.1
 	github.com/cloudnative-pg/machinery v0.6.1
-	github.com/cloudnative-pg/plugin-barman-cloud v0.15.1
+	github.com/cloudnative-pg/plugin-barman-cloud v0.16.0
 	github.com/controlplaneio-fluxcd/flux-operator v0.62.1
 	github.com/envoyproxy/go-control-plane/envoy v1.40.0
 	github.com/external-secrets/external-secrets/apis v0.0.0-20261110094301-b872cf4b508f
@@ -106,7 +106,7 @@ require (
 )
 
 require (
-	cel.dev/expr v0.25.2 // indirect
+	cel.dev/expr v0.25.3 // indirect
 	dario.cat/mergo v1.0.2 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
@@ -252,7 +252,7 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
-	google.golang.org/grpc v1.84.0 // indirect
+	google.golang.org/grpc v1.85.0 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/client-go v0.37.2 // indirect
