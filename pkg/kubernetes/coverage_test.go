@@ -335,6 +335,32 @@ func TestValidatePackageRef_EdgeCases(t *testing.T) {
 		}
 	})
 
+	t.Run("exact GitRepository match at v1", func(t *testing.T) {
+		gvk := &schema.GroupVersionKind{
+			Group:   "source.toolkit.fluxcd.io",
+			Version: "v1",
+			Kind:    "GitRepository",
+		}
+
+		err := ValidatePackageRef(gvk)
+		if err != nil {
+			t.Errorf("GitRepository at v1 should be valid: %v", err)
+		}
+	})
+
+	t.Run("exact OCIRepository match at v1", func(t *testing.T) {
+		gvk := &schema.GroupVersionKind{
+			Group:   "source.toolkit.fluxcd.io",
+			Version: "v1",
+			Kind:    "OCIRepository",
+		}
+
+		err := ValidatePackageRef(gvk)
+		if err != nil {
+			t.Errorf("OCIRepository at v1 should be valid: %v", err)
+		}
+	})
+
 	t.Run("wrong group", func(t *testing.T) {
 		gvk := &schema.GroupVersionKind{
 			Group:   "helm.toolkit.fluxcd.io",
@@ -351,7 +377,7 @@ func TestValidatePackageRef_EdgeCases(t *testing.T) {
 	t.Run("wrong version", func(t *testing.T) {
 		gvk := &schema.GroupVersionKind{
 			Group:   "source.toolkit.fluxcd.io",
-			Version: "v1",
+			Version: "v2",
 			Kind:    "GitRepository",
 		}
 
