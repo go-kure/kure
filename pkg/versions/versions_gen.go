@@ -99,9 +99,9 @@ var infrastructure = []Dependency{
 	{
 		Name:           "cnpg-barman-cloud-plugin",
 		GoModule:       "github.com/cloudnative-pg/plugin-barman-cloud",
-		SupportedRange: "0.9 - 0.15",
+		SupportedRange: "0.9 - 0.16",
 		Min:            "0.9",
-		Max:            "0.15",
+		Max:            "0.16",
 		VersionBasis:   "semver",
 		FloorModule:    "",
 	},
