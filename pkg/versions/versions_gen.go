@@ -81,9 +81,9 @@ var infrastructure = []Dependency{
 	{
 		Name:           "external-secrets",
 		GoModule:       "github.com/external-secrets/external-secrets/apis",
-		SupportedRange: "2.9 - 2.14",
+		SupportedRange: "2.9 - 2.15",
 		Min:            "2.9",
-		Max:            "2.14",
+		Max:            "2.15",
 		VersionBasis:   "semver",
 		FloorModule:    "",
 	},

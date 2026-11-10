@@ -108,6 +108,8 @@ kure's own code uses none of them (gateway-api v1.7.0 reshapes the experimental-
 retypes `WebTLSConfig.ClientAuthType` from `*string` to `*ClientAuthType`). The widening's note in
 `docs/compatibility.md` names such fields.
 
+A widening can also change nothing a caller sees. external-secrets v2.15.0 changes only the comments of its `apis` module, so the widening's note says that and nothing else moves.
+
 An MVS-floor entry (`FloorModule != ""`) moves on a different trigger: its pin tracks
 whichever version `floor_module` itself currently requires, tag or pseudo-version, whether
 or not that's kure's own dependency bump (see `docs/dependency-updates.md`'s "MVS-floor
