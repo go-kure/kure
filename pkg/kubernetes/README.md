@@ -735,6 +735,11 @@ fmt.Println(gvk, ok)
 ```
 <!-- doc-example:end -->
 
+`ValidatePackageRef` checks that a GVK can name a package source. It accepts `GitRepository`
+and `OCIRepository` in the group `source.toolkit.fluxcd.io`, at the versions `v1` and `v1beta1`.
+Kure builds and registers `v1`. The function returns `errors.ErrGVKNotAllowed` for any other
+group, version or kind. It reads its argument, so pass a non-nil pointer.
+
 ## Examples
 
 The helpers below are the surviving sugar for the core kinds. Anything not shown is

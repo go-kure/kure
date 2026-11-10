@@ -41,8 +41,14 @@ func ToClientObject(obj client.Object) *client.Object {
 	return &clientObj
 }
 
+// ValidatePackageRef reports whether p can name a package source: a GitRepository
+// or an OCIRepository in the source.toolkit.fluxcd.io group, at v1 (the version
+// kure builds and registers) or at the older v1beta1. The match is exact on group,
+// version and kind. Any other GVK returns errors.ErrGVKNotAllowed. p must not be nil.
 func ValidatePackageRef(p *schema.GroupVersionKind) error {
 	allowed := []schema.GroupVersionKind{
+		{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "GitRepository"},
+		{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "OCIRepository"},
 		{Group: "source.toolkit.fluxcd.io", Version: "v1beta1", Kind: "GitRepository"},
 		{Group: "source.toolkit.fluxcd.io", Version: "v1beta1", Kind: "OCIRepository"},
 	}

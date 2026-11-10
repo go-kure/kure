@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-kure/kure/pkg/errors"
 
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -339,6 +340,50 @@ func TestValidatePackageRef_OCIRepository(t *testing.T) {
 	}
 }
 
+// TestValidatePackageRef_V1Sources pins that the v1 source API, the version kure
+// builds, is a valid package reference (go-kure/kure#1302).
+func TestValidatePackageRef_V1Sources(t *testing.T) {
+	for _, kind := range []string{"GitRepository", "OCIRepository"} {
+		t.Run(kind, func(t *testing.T) {
+			gvk := &schema.GroupVersionKind{
+				Group:   "source.toolkit.fluxcd.io",
+				Version: "v1",
+				Kind:    kind,
+			}
+
+			if err := ValidatePackageRef(gvk); err != nil {
+				t.Errorf("expected %s at v1 to be valid, got error: %v", kind, err)
+			}
+		})
+	}
+}
+
+// TestValidatePackageRef_FollowsTheSchemeVersion reads the GVK of each source kind
+// from kure's own scheme, so the allowed set cannot drift from the version kure
+// registers (go-kure/kure#1302).
+func TestValidatePackageRef_FollowsTheSchemeVersion(t *testing.T) {
+	tests := []struct {
+		name string
+		obj  runtime.Object
+	}{
+		{name: "GitRepository", obj: &sourcev1.GitRepository{}},
+		{name: "OCIRepository", obj: &sourcev1.OCIRepository{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gvk, err := GetGroupVersionKind(tt.obj)
+			if err != nil {
+				t.Fatalf("expected the scheme to know %s, got error: %v", tt.name, err)
+			}
+
+			if err := ValidatePackageRef(&gvk); err != nil {
+				t.Errorf("expected the scheme's %v to be valid, got error: %v", gvk, err)
+			}
+		})
+	}
+}
+
 func TestValidatePackageRef_InvalidGVK(t *testing.T) {
 	tests := []struct {
 		name string
@@ -356,7 +401,7 @@ func TestValidatePackageRef_InvalidGVK(t *testing.T) {
 			name: "wrong version",
 			gvk: &schema.GroupVersionKind{
 				Group:   "source.toolkit.fluxcd.io",
-				Version: "v1",
+				Version: "v2",
 				Kind:    "GitRepository",
 			},
 		},
@@ -365,6 +410,14 @@ func TestValidatePackageRef_InvalidGVK(t *testing.T) {
 			gvk: &schema.GroupVersionKind{
 				Group:   "source.toolkit.fluxcd.io",
 				Version: "v1beta1",
+				Kind:    "HelmRepository",
+			},
+		},
+		{
+			name: "wrong kind at v1",
+			gvk: &schema.GroupVersionKind{
+				Group:   "source.toolkit.fluxcd.io",
+				Version: "v1",
 				Kind:    "HelmRepository",
 			},
 		},
@@ -407,13 +460,15 @@ func TestValidatePackageRef_NilGVK(t *testing.T) {
 func TestValidatePackageRef_AllowedList(t *testing.T) {
 	// Test that the allowed list contains exactly what we expect
 	allowedGVKs := []schema.GroupVersionKind{
+		{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "GitRepository"},
+		{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "OCIRepository"},
 		{Group: "source.toolkit.fluxcd.io", Version: "v1beta1", Kind: "GitRepository"},
 		{Group: "source.toolkit.fluxcd.io", Version: "v1beta1", Kind: "OCIRepository"},
 	}
 
 	// Test each allowed GVK
 	for _, gvk := range allowedGVKs {
-		t.Run(gvk.Kind, func(t *testing.T) {
+		t.Run(gvk.Version+"/"+gvk.Kind, func(t *testing.T) {
 			err := ValidatePackageRef(&gvk)
 			if err != nil {
 				t.Errorf("expected %s to be allowed, got error: %v", gvk.Kind, err)
