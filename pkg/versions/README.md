@@ -100,6 +100,8 @@ in its own `go.mod` (external-secrets v2.14.0 and `k8s.io/kube-openapi`; see
 `docs/dependency-updates.md`). The widening's note in `docs/compatibility.md` records such a
 requirement.
 
+A widening can also tighten what the cluster accepts without changing a Go type. plugin-barman-cloud v0.16.0 adds two validation rules to its `ObjectStore` CRD, so the API server rejects a combination that the Go types still allow. The widening's note in `docs/compatibility.md` names such a rule.
+
 A widening can also change the Go types a caller writes to. kure's builders hand back upstream
 structs, and a module that requires kure builds against at least the dependency version kure
 pins, so a release that removes or retypes a field breaks a caller's assignment to it even when
