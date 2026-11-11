@@ -52,7 +52,7 @@ func TestUnitLayoutCRName(t *testing.T) {
 			want: "web-" + strings.Repeat("a", 59),
 		},
 		{
-			// The README's example, its hash pinned so that it cannot move
+			// The example in docs/child-layout-crs.md, its hash pinned so that it cannot move
 			// between versions.
 			desc: "over the limit",
 			unit: "platform-services-payments", name: "checkout-service-payments-reconciler-worker",

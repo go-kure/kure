@@ -79,8 +79,8 @@ type Bundle struct {
 	// only when all Children are. With Wait true it writes none, and the
 	// umbrella's wait covers the children only where its build applies their
 	// Flux Kustomization CRs: under the integrated placements, which render
-	// them into this bundle's directory, not under FluxSeparate (pkg/stack/fluxcd
-	// README, "Umbrella Bundles"). Children bundles must be
+	// them into this bundle's directory, not under FluxSeparate
+	// (pkg/stack/fluxcd/docs/umbrella-bundles.md). Children bundles must be
 	// standalone — they cannot simultaneously be the Bundle of a stack.Node.
 	Children []*Bundle
 	// Interval controls how often Flux reconciles the bundle. It must parse as

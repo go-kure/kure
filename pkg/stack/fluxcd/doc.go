@@ -8,9 +8,9 @@
 //
 //	import _ "github.com/go-kure/kure/pkg/stack/fluxcd"
 //
-// Engine returns a WorkflowEngine with the defaults the README lists. The
-// engine has three parts: the resource generator, the layout integrator and
-// the bootstrap generator. The package README documents each of them, the
-// names and paths the generated Kustomizations get, and the checks that
-// refuse a cluster the engine cannot render.
+// Engine returns a WorkflowEngine with the defaults docs/defaults.md lists.
+// The engine has three parts: the resource generator, the layout integrator and
+// the bootstrap generator. The package README names the page that documents
+// each of them, the names and paths the generated Kustomizations get, and the
+// checks that refuse a cluster the engine cannot render.
 package fluxcd

@@ -1175,7 +1175,7 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      generated Source in a wrapper that lists the root node's directory is still refused: the
      wrapper's build would hold it and the root's copy, kustomize refuses one object twice,
      and the integration removes neither.
-   - Not solved, and stated as limits in the fluxcd README: a tree written below a sub-path of
+   - Not solved, and stated as limits in `pkg/stack/fluxcd/docs/bootstrap-generation.md`: a tree written below a sub-path of
      the repository (the base directory a writer is given is the caller's), and
      `WalkClusterByPackage` trees.
    - Breaking:
