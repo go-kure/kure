@@ -4,7 +4,7 @@ This guide walks you through installing Kure, generating one Flux Kustomization 
 
 ## Installation
 
-You need the Go version that Kure's `go.mod` declares. Create a module and add Kure:
+You need Go 1.27.4 or later, the version that Kure's `go.mod` declares for v0.2.0-rc.1. With an older Go, the `go` command downloads that toolchain when you add Kure. Create a module and add Kure:
 
 ```bash
 mkdir hello-kure && cd hello-kure
