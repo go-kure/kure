@@ -990,7 +990,7 @@ The items carry the ticket's numbers. Each says whether it has shipped or is a t
      now holds no child node's Kustomization, so that cycle is gone. (It still hosts those of
      the bundle's umbrella children and, under `FluxIntegratedPerLayout`, of the layouts inside
      it.) The check still refuses it below the root, and for a kept Kustomization; its error
-     names no root bundle, so its wording stays, and the fluxcd README says what it still
+     names no root bundle, so its wording stays, and `pkg/stack/fluxcd/docs/names-and-paths.md` says what it still
      guards.
    - Not changed by this item: a bundle-less layout below the root node whose bundles all have a
      URL on their `SourceRef` and that no bundle encloses was still refused, with an error that
