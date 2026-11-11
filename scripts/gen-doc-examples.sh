@@ -51,7 +51,6 @@ ENABLED_PAGES=(
 	docs/dependency-updates.md
 	docs/github-workflows.md
 	docs/layout-and-flux-naming.md
-	docs/oci-layout.md
 	docs/package-status.md
 	docs/puzl-cloud-kubesdk-review.md
 	docs/quickstart.md
@@ -93,6 +92,7 @@ ENABLED_PAGES=(
 	site/content/concepts/builder-contract.md
 	site/content/concepts/design-philosophy.md
 	site/content/concepts/domain-model.md
+	site/content/concepts/oci-layout.md
 	site/content/contributing/_index.md
 	site/content/examples/_index.md
 	site/content/getting-started/_index.md

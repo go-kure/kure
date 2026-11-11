@@ -141,7 +141,6 @@ packages:
 extra_mounts:
   - {source: docs/quickstart.md, target: getting-started/quickstart.md, title: Quickstart, weight: 10}
   - {source: docs/ARCHITECTURE.md, target: concepts/architecture.md, title: Architecture, weight: 40}
-  - {source: docs/oci-layout.md, target: concepts/oci-layout.md, title: OCI Artifact Layout, weight: 60}
   # docs/builder-contract-release-1.md and -2.md are development records for the
   # release-1 and release-2 removals. They are not published: the contract is the
   # Kubernetes Builders page, and a ledger of removed names is history.

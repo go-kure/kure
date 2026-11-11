@@ -432,13 +432,13 @@ func TestWriteToTar_FilePerKind_FluxIntegrated(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// OCI layout pattern tests (docs/oci-layout.md)
+// OCI layout pattern tests (go-kure/.github docs/design/oci-layout.md)
 // ---------------------------------------------------------------------------
 
 // TestWriteToTar_NamespaceDot_TarRoot verifies that Namespace:"." on a layout
 // node produces paths relative to the archive root (no extra prefix directory).
 // This is the convention used by OCI artifact producers;
-// see docs/oci-layout.md §Kure responsibilities.
+// see the "kure responsibilities" section of go-kure/.github docs/design/oci-layout.md.
 func TestWriteToTar_NamespaceDot_TarRoot(t *testing.T) {
 	child := &ManifestLayout{
 		Name:       "flux-system",
@@ -487,7 +487,7 @@ func TestWriteToTar_NamespaceDot_TarRoot(t *testing.T) {
 // TestWriteToTar_OCILayer2GroupNaming verifies that a Layer 2 directory uses the
 // flux-system-<group> naming convention (e.g. flux-system-frontend/) and that
 // Kustomization CRs inside it use kind-name filenames (kustomization-<app>.yaml).
-// See docs/oci-layout.md Layer 2 row.
+// See the Layer 2 row of "Layer reference" in go-kure/.github docs/design/oci-layout.md.
 func TestWriteToTar_OCILayer2GroupNaming(t *testing.T) {
 	kustCR := &unstructured.Unstructured{}
 	kustCR.SetAPIVersion("kustomize.toolkit.fluxcd.io/v1")
@@ -543,7 +543,7 @@ func TestWriteToTar_OCILayer2GroupNaming(t *testing.T) {
 // TestWriteToTar_OCILayer3PayloadPath verifies that a Layer 3 application
 // payload directory follows the <group>/<appname>/ path convention (e.g.
 // frontend/storefront/), constructed from Namespace:<group> and Name:<appname>.
-// See docs/oci-layout.md Layer 3 row.
+// See the Layer 3 row of "Layer reference" in go-kure/.github docs/design/oci-layout.md.
 func TestWriteToTar_OCILayer3PayloadPath(t *testing.T) {
 	ml := &ManifestLayout{
 		Name:       "storefront",
@@ -598,7 +598,7 @@ func TestWriteToTar_OCILayer3PayloadPath(t *testing.T) {
 //	Layer 3: platform/cert-manager/     – application manifests
 //
 // All nodes use Namespace:"." and FileNamingKindName, matching the contract
-// documented in docs/oci-layout.md §Kure responsibilities.
+// documented in the "kure responsibilities" section of go-kure/.github docs/design/oci-layout.md.
 func TestWriteToTar_OCIMonolithic_SiblingLayers(t *testing.T) {
 	// Layer 1: flux-system/ with an OCIRepository CR
 	ociCR := &unstructured.Unstructured{}

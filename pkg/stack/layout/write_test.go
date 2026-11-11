@@ -1123,7 +1123,7 @@ func TestWriteToDisk_FileNamingKindName(t *testing.T) {
 
 // TestWriteToDisk_NamespaceDot_RootPaths verifies that Namespace:"." on layout
 // nodes produces paths relative to basePath (no "cluster/" prefix), mirroring
-// the tar behaviour. This is the OCI root convention from docs/oci-layout.md.
+// the tar behaviour. This is the OCI root convention from go-kure/.github docs/design/oci-layout.md.
 func TestWriteToDisk_NamespaceDot_RootPaths(t *testing.T) {
 	fluxSystem := &ManifestLayout{
 		Name:       "flux-system",
