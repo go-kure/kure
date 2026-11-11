@@ -104,10 +104,11 @@ flux get kustomizations
 
 3. **Or trigger manually**
 
-The `hello-world` Kustomization does not exist until Flux applies the file you pushed. First reconcile the Flux Kustomization that applies the directory you saved the file in. In a default Flux bootstrap, that Kustomization is named `flux-system`.
+The `hello-world` Kustomization does not exist until Flux applies the file you pushed. First fetch the new commit, then reconcile the Flux Kustomization that applies the directory you saved the file in. In a default Flux bootstrap, both objects are named `flux-system`.
 
 ```bash
-flux reconcile kustomization flux-system --with-source
+flux reconcile source git flux-system
+flux reconcile kustomization flux-system
 ```
 
 When `flux get kustomizations` lists `hello-world`, reconcile it directly:
