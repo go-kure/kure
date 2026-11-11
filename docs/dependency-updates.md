@@ -508,8 +508,8 @@ and on every merge-queue, push and scheduled run.
 that dependency back, as the external-secrets cap does.
 
 The hold has one limit. A consumer whose own module graph pulls a v7-era kube-openapi still needs
-its own `replace` until the Kubernetes v0.38 GA bump. go-kure/launcher is one: it keeps the
-external-secrets v2.15.0 types for its own CRDs and its own `replace`.
+its own `replace` until the Kubernetes v0.38 GA bump. For example, a consumer that needs a newer
+external-secrets release for its own types must keep its own `replace`.
 
 Remove the kube-openapi rule, the external-secrets cap and the `check-consumer` task with the
 Kubernetes v0.38 GA bump, whose apimachinery moves to v7. Then raise the kube-openapi `require`
