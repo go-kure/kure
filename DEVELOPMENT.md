@@ -330,7 +330,7 @@ For the full dependency update process (review, bundling, version tracking), see
 ### CI/CD
 - `check` - Quick code quality check (lint, vet, short tests, tool pins, generated builders)
 - `precommit` - Fast pre-commit checks (see Pre-commit Workflow)
-- `ci` - The comprehensive CI pipeline, locally
+- `ci` - The local CI checks (CI also enforces the coverage thresholds and the rendered-site link check)
 
 ### Release
 No target releases or previews a release: run the **Release** workflow, with **Dry run** ticked for
