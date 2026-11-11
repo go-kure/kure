@@ -11,7 +11,7 @@ Understand the ideas behind Kure's design.
 - [Design Philosophy](/concepts/design-philosophy/) - The upstream type over templating, GitOps-native output
 - [Package Status](/concepts/package-status/) - What is supported, limited, consumer-provided, not implemented or only proposed
 - [Layout and Flux Naming](/concepts/layout-and-flux-naming/) - How directories, files and Flux objects are named
-- [OCI Artifact Layout](/concepts/oci-layout/) - How manifests are packaged as OCI artifacts
+- [OCI Artifact Layout](/concepts/oci-layout/) - The directory shape of an OCI artifact and what Kure does to produce it
 
 ## How the kure and launcher models relate
 
