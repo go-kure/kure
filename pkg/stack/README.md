@@ -267,8 +267,8 @@ engine's workflow when it generates, so a name that could never be applied is
 refused before anything is written. A name the caller sets is never shortened
 or rewritten: the caller chooses a valid name. The one name shortened is one
 kure composes itself, the Flux workflow's default `<unit name>-<layout name>`
-for a layout's own Kustomization (`pkg/stack/fluxcd` README, "Per-layout name
-rule").
+for a layout's own Kustomization ([Flux Non-Bundle Child Layout CRs](/api-reference/flux-child-layout-crs/#per-layout-name-rule),
+"Per-layout name rule").
 
 | Name | Rule | Checked by |
 |---|---|---|
