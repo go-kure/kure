@@ -43,7 +43,10 @@ if [ ! -f "$KURE_DIR/go.mod" ]; then
 fi
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/check-consumer.XXXXXX")" || exit 2
-trap 'rm -rf "$WORK"' EXIT INT TERM
+trap 'rm -rf "$WORK"' EXIT
+# A trap does not stop the script by itself, so INT and TERM must exit.
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 GO_DIRECTIVE="$(awk '$1 == "go" {print $2; exit}' "$KURE_DIR/go.mod")"
 if [ -z "$GO_DIRECTIVE" ]; then
