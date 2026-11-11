@@ -45,7 +45,7 @@ fi
 pin_snapshot
 run_pin
 assert_rc 0
-assert_out_contains 'constant and README already v0.2.0 -- no change'
+assert_out_contains 'constant and bootstrap page already v0.2.0 -- no change'
 assert_pin_tree_unchanged "second run changed the tree (not idempotent)"
 # In sync, so the second run must not have gone to the network: the log still
 # holds only the first run's single request.

@@ -12,7 +12,7 @@ printf 'package fluxcd\n\nconst FluxOperatorVersion = "v0.2.0"\n' \
     > "$FIXTURE/pkg/stack/fluxcd/flux_operator_install.go"
 run_pin
 assert_rc 0
-assert_out_not_contains 'constant and README already'
+assert_out_not_contains 'constant and bootstrap page already'
 if ! grep -qF 'currently **v0.2.0**' "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md"; then
     echo "FAIL: stale README not corrected:" >&2
     cat "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md" >&2

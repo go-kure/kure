@@ -37,7 +37,7 @@
 # rewriting nothing is how a lockstep pin drifts.
 #
 # Idempotent: a re-run at the same go.mod version rewrites nothing. When the
-# constant and README already name the go.mod version the script exits before
+# constant and bootstrap page already name the go.mod version the script exits before
 # the download, so the many Renovate bumps unrelated to flux-operator (this runs
 # after every gomod/mise bump) never touch the network.
 #
@@ -144,17 +144,17 @@ require_one "$CONST_FILE" '^const FluxOperatorVersion = "[^"]*"'
 require_one "$README_FILE" "\`FluxOperatorVersion\`, currently \\*\\*v[^*]*\\*\\*"
 
 # Renovate runs this after every gomod/mise bump, nearly all of which have
-# nothing to do with flux-operator. When the constant and the README already
+# nothing to do with flux-operator. When the constant and the bootstrap page already
 # name the go.mod version the lockstep is intact, so skip the download: an
 # unrelated bump must not depend on github.com being reachable. (Deliberately
 # not a content check of the bundle -- a hand-edited bundle at the right
 # version is not something a bot run should silently overwrite.)
 current_const="$(sed -nE 's/^const FluxOperatorVersion = "([^"]*)".*/\1/p' "$CONST_FILE")"
-# The backticks are literal markdown in the README, not a command substitution.
+# The backticks are literal markdown in the bootstrap page, not a command substitution.
 # shellcheck disable=SC2016
 current_readme="$(sed -nE 's/.*`FluxOperatorVersion`, currently \*\*(v[^*]*)\*\*.*/\1/p' "$README_FILE")"
 if [[ "$current_const" == "$version" && "$current_readme" == "$version" ]]; then
-    echo "sync-flux-operator-pin: constant and README already ${version} -- no change"
+    echo "sync-flux-operator-pin: constant and bootstrap page already ${version} -- no change"
     echo "sync-flux-operator-pin: done"
     exit 0
 fi
