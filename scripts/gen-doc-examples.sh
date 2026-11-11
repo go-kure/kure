@@ -97,6 +97,10 @@ ENABLED_PAGES=(
 	site/content/examples/_index.md
 	site/content/getting-started/_index.md
 	site/content/guides/_index.md
+	site/content/guides/flux-augmenters-and-delivery.md
+	site/content/guides/flux-bootstrap.md
+	site/content/guides/flux-layout-rules.md
+	site/content/guides/flux-umbrella-bundles.md
 	site/content/guides/flux-workflow.md
 	site/content/guides/library-usage.md
 	site/content/guides/patching.md

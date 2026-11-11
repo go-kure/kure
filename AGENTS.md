@@ -469,8 +469,8 @@ the map and run `bash site/scripts/gen-docs-tables.sh`.
 |-----------------|---------------------|------------------|
 | `pkg/stack/` | `api-reference/stack` | `guides/flux-workflow`, `concepts/domain-model` |
 | `pkg/stack/stacktest/` | `api-reference/stacktest` | `concepts/domain-model` |
-| `pkg/stack/fluxcd/` | `api-reference/flux-engine` | `guides/flux-workflow` |
-| `pkg/stack/layout/` | `api-reference/layout` | `guides/flux-workflow` |
+| `pkg/stack/fluxcd/` | `api-reference/flux-engine` | `guides/flux-workflow`, `guides/flux-layout-rules`, `guides/flux-umbrella-bundles`, `guides/flux-augmenters-and-delivery`, `guides/flux-bootstrap` |
+| `pkg/stack/layout/` | `api-reference/layout` | `guides/flux-workflow`, `guides/flux-layout-rules` |
 | `pkg/io/` | `api-reference/io` | `guides/library-usage` |
 | `pkg/manifest/` | `api-reference/manifest` | `guides/library-usage` |
 | `pkg/kubernetes/` | `api-reference/kubernetes-builders` | `guides/library-usage` |
