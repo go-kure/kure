@@ -264,7 +264,8 @@ package fluxcd
 
 const FluxOperatorVersion = "v0.1.0"
 GO
-    cat > "$FIXTURE/pkg/stack/fluxcd/README.md" <<'MD'
+    mkdir -p "$FIXTURE/pkg/stack/fluxcd/docs"
+    cat > "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md" <<'MD'
 The bundle is vendored (`FluxOperatorVersion`, currently **v0.1.0**). See the source.
 MD
     printf '%s' "$PIN_NEW_BUNDLE_BODY" > "$FIXTURE/new-bundle.yaml"

@@ -78,7 +78,7 @@ keys a Flux controller stamps on those objects are refused in both modes: flux-o
 `app.kubernetes.io/part-of`, `fluxcd.controlplane.io/name` and `fluxcd.controlplane.io/namespace`,
 and kustomize-controller's `kustomize.toolkit.fluxcd.io/name` and
 `kustomize.toolkit.fluxcd.io/namespace` (go-kure/kure#1180). See
-[Flux Engine](/api-reference/flux-engine/) for how each field is emitted.
+[Flux Bootstrap Generation](/api-reference/flux-bootstrap-generation/#labels) for how each field is emitted.
 
 ### Node
 
@@ -103,7 +103,7 @@ of its own under the layout rule `FluxPlacement: FluxIntegratedPerLayout`. `Kust
 it, instead of the name derived from the node's path, and `DependsOn` (nodes) and `NamedDependsOn`
 (Kustomization names) order it. On any other node, under another placement and under the ArgoCD
 workflow the three fields are refused rather than ignored. See
-[Flux Engine](/api-reference/flux-engine/#node-kustomizations).
+[Flux Non-Bundle Child Layout CRs](/api-reference/flux-child-layout-crs/#node-kustomizations).
 
 ### Bundle
 
@@ -378,7 +378,7 @@ exactly as before.
 The intent covers every object the application emits, the objects a layout augmenter adds to the
 application's own directory, and the ConfigMaps built from that directory's `configMapGenerator`
 entries. Each workflow engine maps it to its own mechanism: the Flux workflow writes per-object
-annotations (see [Flux Engine](/api-reference/flux-engine/)); the ArgoCD workflow has no mapping
+annotations (see [Flux Layout Integration](/api-reference/flux-layout-integration/#delivery-intent)); the ArgoCD workflow has no mapping
 yet and refuses an application that sets one. The Flux `GenerateFromCluster` refuses one too: it
 returns Kustomizations and Sources and none of the application's objects, so use
 `CreateLayoutWithResources`. `Bundle.Prune` and `Bundle.Force` stay the
@@ -445,7 +445,7 @@ Configs that do not implement `Validator` continue to work without changes.
 What `Generate` returns belongs to the caller from the moment it returns: the slice, every
 object it points to, and every map, slice and pointer those objects hold. kure writes to the objects.
 `Bundle.Generate` adds the bundle's labels and annotations that an object lacks, and the Flux
-integrator adds an application's delivery annotations (see [Flux Engine](/api-reference/flux-engine/)).
+integrator adds an application's delivery annotations (see [Flux Layout Integration](/api-reference/flux-layout-integration/#delivery-intent)).
 A caller that holds the layout may edit them as well. So:
 
 - **Return nothing you keep or have returned before.** Build each result fresh, or return a
@@ -550,7 +550,8 @@ with the Flux engine for that placement.
 `CreateLayoutWithResources` takes the same rules and also returns the layout it walked, with
 the resources placed in it.
 `GenerateBootstrap(config, rootNode, rules)` takes the same rules too, and points Flux at the top
-directory of the tree a walk with them writes (see [Flux Engine](/api-reference/flux-engine/)).
+directory of the tree a walk with them writes (see
+[Flux Bootstrap Generation](/api-reference/flux-bootstrap-generation/#the-directory-the-bootstrap-applies)).
 
 Supported workflow providers: `"flux"` / `"fluxcd"` and `"argo"` / `"argocd"`. Each is registered by
 importing its package, and `NewWorkflow` returns that package's `*fluxcd.WorkflowEngine` or

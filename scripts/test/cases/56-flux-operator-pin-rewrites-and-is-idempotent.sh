@@ -29,16 +29,16 @@ if ! grep -qxF 'const FluxOperatorVersion = "v0.2.0"' "$FIXTURE/pkg/stack/fluxcd
 fi
 # The backticks are literal markdown in the README, not a command substitution.
 # shellcheck disable=SC2016
-if ! grep -qF '`FluxOperatorVersion`, currently **v0.2.0**' "$FIXTURE/pkg/stack/fluxcd/README.md"; then
+if ! grep -qF '`FluxOperatorVersion`, currently **v0.2.0**' "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md"; then
     echo "FAIL: README mention not rewritten:" >&2
-    cat "$FIXTURE/pkg/stack/fluxcd/README.md" >&2
+    cat "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md" >&2
     exit 1
 fi
 # The rest of the README line must survive the rewrite.
-if ! grep -qF 'The bundle is vendored (' "$FIXTURE/pkg/stack/fluxcd/README.md" \
-   || ! grep -qF '). See the source.' "$FIXTURE/pkg/stack/fluxcd/README.md"; then
+if ! grep -qF 'The bundle is vendored (' "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md" \
+   || ! grep -qF '). See the source.' "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md"; then
     echo "FAIL: README rewrite clobbered surrounding text:" >&2
-    cat "$FIXTURE/pkg/stack/fluxcd/README.md" >&2
+    cat "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md" >&2
     exit 1
 fi
 

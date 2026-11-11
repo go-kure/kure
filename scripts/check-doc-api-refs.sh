@@ -1228,7 +1228,7 @@ check_removed_are_gone() {
 # It is deliberately not extended to unqualified names on a package's own README.
 # That rule is not decidable from the text and was measured against this tree: a
 # package README legitimately names a neighbour's builder both in prose
-# (pkg/stack/fluxcd/README.md's SetGitRepositoryReference, declared in
+# (pkg/stack/fluxcd/docs/defaults.md's SetGitRepositoryReference, declared in
 # pkg/kubernetes/fluxcd) and inside its own Go examples through an import alias
 # (the same file's pubfluxcd.CreateGitRepository), and an alias is spelled exactly
 # like the variable receiver in engine.CreateLayoutWithResources two code blocks

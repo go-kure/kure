@@ -28,7 +28,7 @@ import (
 //     https://github.com/fluxcd/flux2/releases/download/{version}/manifests.tar.gz
 //  3. Replace internal/gotk/manifests.tar.gz with it.
 //  4. Update this constant, and the version named in
-//     pkg/stack/fluxcd/README.md ("currently **vX.Y.Z**").
+//     pkg/stack/fluxcd/docs/bootstrap-generation.md ("currently **vX.Y.Z**").
 //  5. Run the tests under internal/ and pkg/stack/fluxcd.
 const Version = "v2.10.0"
 

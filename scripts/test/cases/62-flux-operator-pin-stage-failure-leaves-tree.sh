@@ -11,7 +11,7 @@ set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 
 new_pin_fixture v0.2.0
-mkdir "$FIXTURE/pkg/stack/fluxcd/README.md.new"
+mkdir "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md.new"
 pin_snapshot
 run_pin
 assert_rc 1

@@ -23,7 +23,7 @@
 #   4. Rewrite the FluxOperatorVersion constant in
 #      pkg/stack/fluxcd/flux_operator_install.go.
 #   5. Rewrite the "currently **vX.Y.Z**" mention in
-#      pkg/stack/fluxcd/README.md.
+#      pkg/stack/fluxcd/docs/bootstrap-generation.md.
 #   6. When the bundle changed, regenerate the stored bootstrap outputs under
 #      pkg/stack/fluxcd/testdata/bootstrap-output with the tests' -update flag.
 #      They summarise the bundle as one line, `=== install bundle: N objects,
@@ -60,7 +60,7 @@ DEP="flux-operator"
 BUNDLE_DIR="$REPO_ROOT/pkg/stack/fluxcd"
 BUNDLE_FILE="$BUNDLE_DIR/flux_operator_install.yaml"
 CONST_FILE="$BUNDLE_DIR/flux_operator_install.go"
-README_FILE="$BUNDLE_DIR/README.md"
+README_FILE="$BUNDLE_DIR/docs/bootstrap-generation.md"
 GOLDEN_DIR="$BUNDLE_DIR/testdata/bootstrap-output"
 # The tests that write the files in GOLDEN_DIR (compareWithStored with -update).
 # The names build the -run regexp, so step 6 can check that each one ran and
