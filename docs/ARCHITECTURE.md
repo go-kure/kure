@@ -679,8 +679,8 @@ walkers build the tree from a `stack.Cluster` according to `LayoutRules`.
 Each of the three grouping axes (`NodeGrouping`, `BundleGrouping`, `ApplicationGrouping`) decides,
 independently, whether its level gets a directory. `GroupByName` gives every child node, bundle or
 application a directory inside its parent's; `GroupFlat` renders the level into the layout above it
-(its resources, child layouts and origins). Umbrella child bundles and augmenter applications always
-get a directory. For a child node `platform` with bundle `web` holding apps `api` and `ui`:
+(its resources, child layouts and origins). Umbrella child bundles always get a
+directory, and so do augmenter applications that want one (the default). For a child node `platform` with bundle `web` holding apps `api` and `ui`:
 
 ```
 Node=ByName, Bundle=ByName, App=ByName   Node=ByName, Bundle=Flat, App=Flat (default)

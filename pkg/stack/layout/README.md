@@ -222,8 +222,10 @@ kustomize drops such an object from the build without requiring one, so it is wr
 The three axes are independent and apply the same way to the root node (also under a
 `ClusterName`), to umbrella children and in `WalkClusterByPackage`, with the one exception below.
 A level set to `GroupFlat` is rendered into the layout above it: its resources, its child layouts
-and its origins. Umbrella child bundles and augmenter applications always keep their own directory,
-because each carries its own Flux Kustomization or writer-owned files. `FilePer` is honoured on
+and its origins. Umbrella child bundles always keep their own directory. So does an application
+whose `LayoutAugmenter` wants its own layout, which is the default: its config can return false from
+`WantsOwnLayout` (`LayoutIntentAugmenter`) to render flat. Each of them carries its own Flux
+Kustomization or writer-owned files. `FilePer` is honoured on
 every layout. The writers refuse
 a merge that makes two layouts claim one directory, and a directory that would hold two objects
 with the same group, kind, namespace and name (kustomize cannot build it); objects that merely
@@ -385,9 +387,9 @@ Both skip an entry of an application's `Generate` result that is nil or holds no
 
 The tree below is what `GroupByName` on all three axes (`NodeGrouping`, `BundleGrouping`,
 `ApplicationGrouping`) writes. `DefaultLayoutRules` groups bundles and applications flat, so a
-default layout has no `bundle1/` and `app1/` levels. Two cases keep a directory: the root node's
-bundles share one directory inside the root's, and an application with a `LayoutAugmenter` keeps its
-own. `clusters/` is `Config.ManifestsDir` (the
+default layout has no `bundle1/` and `app1/` levels. Three cases keep a directory: the root node's
+bundles share one directory inside the root's, each umbrella child bundle keeps its own, and so does
+an application whose `LayoutAugmenter` wants its own layout. `clusters/` is `Config.ManifestsDir` (the
 default of `DefaultLayoutConfig`), and `cluster-name` is `LayoutRules.ClusterName`.
 
 ```
@@ -720,7 +722,7 @@ type LayoutAugmenter interface {
 }
 ```
 
-When `app.Config` implements it, the walker invokes `AugmentLayout` on the per-app `ManifestLayout` after resource generation, giving the config a chance to attach `ExtraFiles`, `ConfigMapGenerators`, and sub-`ManifestLayout` children. It runs on every per-app layout a walker creates, in both walkers and inside umbrella children — with `ApplicationGrouping: GroupFlat` an augmenter app still gets its own per-app sub-layout instead of merging into its bundle's directory.
+When `app.Config` implements it, the walker invokes `AugmentLayout` on the per-app `ManifestLayout` after resource generation, giving the config a chance to attach `ExtraFiles`, `ConfigMapGenerators`, and sub-`ManifestLayout` children. It runs on every per-app layout a walker creates, in both walkers and inside umbrella children — with `ApplicationGrouping: GroupFlat` an augmenter app that wants its own layout (the default, see `LayoutIntentAugmenter` below) still gets its own per-app sub-layout instead of merging into its bundle's directory.
 
 `LayoutIntentAugmenter` is an optional companion to `LayoutAugmenter`, for a config whose desire for its own layout varies per instance rather than being fixed for the whole type:
 
