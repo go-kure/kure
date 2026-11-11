@@ -262,6 +262,7 @@ infrastructure:
       (api/v1) has zero file changes between v0.14.0 and v0.15.0 (verified
       against the upstream diff) — build and tests pass unchanged.
       v0.16.0 changes one file of the imported api/v1 package, objectstore_types.go (verified against the upstream diff between v0.15.1 and v0.16.0): two CEL validation markers on ObjectStoreSpec.Configuration reject data or wal encryption together with s3Credentials.sseCustomerKey. No Go type or field changed, so build and tests pass unchanged. A caller that combines them is now rejected by the API server on the ObjectStore CRD, not by kure.
+      The same bump moves barman-cloud to v0.7.0 (the floor this plugin requires). Its pkg/api adds only optional API: S3Credentials.SSECustomerKey, BarmanObjectStoreConfiguration.S3AddressingStyle, the zstd compression value and SecretNames helpers (verified against the upstream diff between v0.6.0 and v0.7.0). Nothing is removed or retyped, so kure's use of BarmanObjectStoreConfiguration, S3Credentials and the WAL and data configuration types is unaffected.
   controller-runtime:
     go_module: "sigs.k8s.io/controller-runtime"
     supported_range: "0.22 - 0.25"
