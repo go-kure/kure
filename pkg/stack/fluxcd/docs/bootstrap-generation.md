@@ -137,7 +137,7 @@ One refusal is no longer met (go-kure/kure#979). Below a `ClusterName` wrapper u
 place of the generated one was refused when a patch or postBuild of it changed a Source hosted
 there, because the bootstrap applied that directory too. The bootstrap now applies the wrapper,
 which lists the Kustomization, so it is accepted (see
-[Layout Integration](/api-reference/flux-layout-integration/#layout-integration)).
+[Layout Integration](/api-reference/flux-layout-integration/)).
 
 ## Sync name
 

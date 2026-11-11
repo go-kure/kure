@@ -290,7 +290,7 @@ that applies it, whatever its expression says, when that writer is certain,
 and a cycle through them is refused. With several certain writers it waits for
 whichever creates the object first: the tree is refused when every one of them
 waits for the checker, but not for a deadlock that needs two such checks at
-once ([health checks on objects](/api-reference/flux-engine/#one-kustomization-per-directory)).
+once ([health checks on objects](/api-reference/flux-names-and-paths/#one-kustomization-per-directory)).
 A copy another apply excludes
 (`kustomize.toolkit.fluxcd.io/ssa: Ignore` or `reconcile: disabled`) counts for
 no writer, unless it, or that apply's `spec.commonMetadata`, is templated or
@@ -303,14 +303,14 @@ and a tree Flux would converge can then be refused. A Kustomization an
 application emits is followed as a placed one is, and a `dependsOn` with a
 `readyExpr` waits for `Ready`, which under kustomize-controller's default
 feature gates refuses a tree whose expression asks for less and whose
-`dependsOn` closes a cycle ([reconcile order](/api-reference/flux-engine/#one-kustomization-per-directory)).
+`dependsOn` closes a cycle ([reconcile order](/api-reference/flux-names-and-paths/#one-kustomization-per-directory)).
 Flux's default since v1.7 is the `AdditiveCELDependencyCheck` gate off, so an
 operator running the default controller sets
 `ResourceGenerator.AdditiveCELDependencyCheckOff` to true; false keeps that
 conservative read. With it, a `readyExpr` of exactly `"true"` waits only for
 the dependency to exist; set on a cluster whose gate is on, the checks can
 admit a tree that never becomes Ready
-([details](/api-reference/flux-engine/#with-additiveceldependencycheckoff)).
+([details](/api-reference/flux-names-and-paths/#with-additiveceldependencycheckoff)).
 Picking terminal leaves counts only a `dependsOn` entry with no `readyExpr` as
 a wait for `Ready`, with the setting or without: Flux skips its own readiness
 check for an entry with an expression. Where the tree holds a patch
@@ -330,7 +330,7 @@ them: only a Kustomization the integration recorded, still on the recorded
 path, Source and cluster, counts as an umbrella. For trees integrated with
 `AdditiveCELDependencyCheckOff`, that generator's `UmbrellaTerminals` method
 returns the same leaves. The full rules and refusals are in
-the [Flux Engine reference](/api-reference/flux-engine/#with-umbrellasdonotwait).
+the [Flux Engine reference](/api-reference/flux-umbrella-bundles/#with-umbrellasdonotwait).
 
 ## Umbrellas without child health checks
 
@@ -358,7 +358,7 @@ children directly. With `Wait` true the field changes nothing in any
 placement, since no entry was written before either; under an integrated
 placement the umbrella's wait still covers its children, under `FluxSeparate`
 it never did. Off, every tree renders as before. Details are in the
-[Flux Engine reference](/api-reference/flux-engine/#with-omitumbrellachildhealthchecks).
+[Flux Engine reference](/api-reference/flux-umbrella-bundles/#with-omitumbrellachildhealthchecks).
 
 ## Disk layout
 

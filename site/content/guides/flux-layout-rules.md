@@ -121,7 +121,7 @@ the layout that renders the bundle, taken from the walked layout tree. Before, t
 derived it from bundle names alone, so a node-level bundle's path was just its name and pointed at
 a directory the layout never wrote whenever a node and its bundle were named differently, or a
 `ClusterName` prefixed the tree. See
-[Kustomization paths](/api-reference/flux-engine/#kustomization-paths) for the rule.
+[Kustomization paths](/api-reference/flux-names-and-paths/#kustomization-paths) for the rule.
 
 What changed, and what to do:
 
@@ -252,7 +252,7 @@ Flux Kustomization named like the bundle: give the bundle another `Kustomization
 no longer collide. Without it the tree is refused, and the error names the application and bundle
 that hold the Kustomization in the tree, what the generated one is for, and the field to set. See
 the
-[Flux Engine reference](/api-reference/flux-engine/#kustomization-names).
+[Flux Engine reference](/api-reference/flux-names-and-paths/#kustomization-names).
 
 ## The root node's bundle has its own directory (breaking change in go-kure/kure#979)
 
@@ -343,7 +343,7 @@ takes the first merged bundle's `DirName`, and one on a later bundle has no effe
 be one path segment; it is no object name, so `00_Infra` is valid. Two bundles that would get one
 directory are refused, and the error names both. Name the directory on the bundle: a bundle's
 layout renamed after `WalkCluster` is refused by `IntegrateWithLayout`. See the
-[Flux Engine reference](/api-reference/flux-engine/#directory-names).
+[Flux Engine reference](/api-reference/flux-names-and-paths/#directory-names).
 
 ## Node Kustomizations
 
@@ -392,7 +392,7 @@ Kustomization of its own (its directory renders a bundle, a grouping rule merged
 node's directory, or it is the top of the tree) and under every other placement. Set the name and
 the named dependencies before the cluster is walked: the walker copies them onto the node's
 layout, and a value the node gets after the walk is refused too. See the
-[Flux Engine reference](/api-reference/flux-engine/#node-kustomizations).
+[Flux Engine reference](/api-reference/flux-child-layout-crs/#node-kustomizations).
 
 ## Application layout Kustomizations are named after their unit (breaking change)
 
@@ -468,7 +468,7 @@ were. Interval, prune and four more settings follow in the next section. What to
 - **A node's Kustomization inherits nothing.** Set the fields on the node's walked layout.
 
 What readiness through such a chain means, and where it stops, is in the
-[Flux Engine reference](/api-reference/flux-engine/#per-layout-settings).
+[Flux Engine reference](/api-reference/flux-child-layout-crs/#per-layout-settings).
 
 ## Per-layout Kustomizations take the bundle's interval, prune, force, suspend, postBuild and patches (breaking change)
 
@@ -511,7 +511,7 @@ whole, and the bundle's patches are placed by object. What to do:
   room for the opt-out under the Kubernetes API's total size is refused as well: shorten them.
 
 The full rules, the refusals and the limit are in the
-[Flux Engine reference](/api-reference/flux-engine/#per-layout-settings).
+[Flux Engine reference](/api-reference/flux-child-layout-crs/#per-layout-settings).
 
 ## A layout's Kustomization settings are refused where it gets no Kustomization (breaking change)
 
