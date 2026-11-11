@@ -66,7 +66,7 @@ go $GO_DIRECTIVE
 
 require $KURE_MODULE v0.0.0
 
-replace $KURE_MODULE => $KURE_DIR
+replace $KURE_MODULE => "$KURE_DIR"
 EOF
 
 cat > "$WORK/main.go" <<'EOF'
