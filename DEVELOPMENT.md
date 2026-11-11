@@ -11,7 +11,7 @@ make help
 # Quick development cycle (lint, vet, short tests, tool pins, generated builders)
 make check
 
-# Everything CI runs, locally
+# The local CI checks (CI also enforces the coverage thresholds and the rendered-site link check)
 make ci
 ```
 
@@ -309,7 +309,7 @@ For the full dependency update process (review, bundling, version tracking), see
 - `test-coverage` - Run tests with coverage report
 - `test-benchmark` - Run benchmark tests
 - `test-integration` - Run integration tests
-- `test-fuzz` - Run fuzz tests
+- `test-fuzz` - Fuzz target of the Makefile. It points at `./pkg/patch/...`, which no longer exists, so it fails
 
 ### Code Quality
 - `lint` - Run golangci-lint
@@ -405,7 +405,7 @@ Formatters: `gofmt`, `goimports` (with `github.com/go-kure/kure` as local prefix
 
 ### Build Issues
 ```bash
-# Clean everything and rebuild
+# Remove build artifacts and the Go caches (this does not rebuild)
 make clean
 
 # Check Go installation and environment
