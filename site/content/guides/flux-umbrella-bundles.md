@@ -5,7 +5,7 @@ weight = 22
 
 A bundle with children aggregates their readiness. This page covers how, and how to opt out.
 
-The Go blocks on this page are the bodies of `Example` functions in `pkg/stack/fluxcd`, which `go test` runs. They use the imports and the helpers named in the [tutorial](/guides/flux-workflow/).
+The Go blocks on this page are the bodies of `Example` functions in `pkg/stack/fluxcd`, which `go test` runs, except the blocks marked as excerpts. They use the imports and the helpers named in the [tutorial](/guides/flux-workflow/).
 
 A bundle with non-empty `Children` becomes an **umbrella**: Flux will only mark
 its Kustomization `Ready` once every child Kustomization is `Ready`. The Flux

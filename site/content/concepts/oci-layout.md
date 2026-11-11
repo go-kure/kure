@@ -16,10 +16,13 @@ these conventions:
 
 - The root layout node sets `Namespace: "."`, so the tar root has no extra prefix directory.
 - Every node sets `FileNaming: layout.FileNamingKindName`, so each file is named `<Kind>-<name>.yaml`.
-- A caller that attaches a per-application payload layout as a child first rewrites that layout's
-  `Namespace` to `<group>/<appname>`.
-- `WriteToTar` walks the tree depth first and writes a `kustomization.yaml` at each node that lists the
-  node's children as resources.
+- A caller that attaches a per-application payload layout as a child sets that layout's `Namespace` to
+  the parent path `<group>` and its `Name` to `<appname>`. The layout directory is `Namespace` joined
+  with `Name`, so a `Namespace` that already holds the application name nests one level too deep.
+- `WriteToTar` walks the tree depth first. A node in explicit mode (the default) gets a
+  `kustomization.yaml` that lists the children with a directory entry. A node in recursive mode gets
+  no such file, and neither does a single-file application child. A bundle that renders itself, an
+  umbrella child and an integrated per-layout directory have no entry in the parent's list.
 
 ## The three layers
 

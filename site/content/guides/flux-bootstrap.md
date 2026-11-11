@@ -5,7 +5,7 @@ weight = 24
 
 Generate the Flux system manifests that point a cluster at the tree the [tutorial](/guides/flux-workflow/) writes.
 
-The Go blocks on this page are the bodies of `Example` functions in `pkg/stack/fluxcd`, which `go test` runs. They use the imports and the helpers named in the [tutorial](/guides/flux-workflow/).
+The Go blocks on this page are the bodies of `Example` functions in `pkg/stack/fluxcd`, which `go test` runs, except the blocks marked as excerpts. They use the imports and the helpers named in the [tutorial](/guides/flux-workflow/).
 
 Generate Flux system bootstrap manifests. Two modes are available:
 
