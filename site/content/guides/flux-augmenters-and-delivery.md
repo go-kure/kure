@@ -142,5 +142,5 @@ it holds are annotated, those of a `List` inside it included, and never the List
 object that already carries one of the two
 annotations with another value is refused with an error naming it. The annotations are applied by
 `IntegrateWithLayout` and `CreateLayoutWithResources`; see the
-[Flux Engine reference](/api-reference/flux-engine/) for the full rule, including what prune
+[Flux Layout Integration reference](/api-reference/flux-layout-integration/) for the full rule, including what prune
 protection means for generated ConfigMaps.

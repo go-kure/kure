@@ -264,5 +264,5 @@ and Kustomization in `"flux-operator"` mode. Like `SyncName` it has no effect wi
 The keys a Flux controller stamps on these objects are refused in both modes, because the
 controller would overwrite them: `app.kubernetes.io/managed-by`, `instance`, `version` and
 `part-of`, `fluxcd.controlplane.io/name` and `namespace`, and `kustomize.toolkit.fluxcd.io/name`
-and `namespace`. The [Flux Engine reference](/api-reference/flux-engine) lists which controller
+and `namespace`. The [Flux Bootstrap Generation reference](/api-reference/flux-bootstrap-generation/#labels) lists which controller
 stamps each.
