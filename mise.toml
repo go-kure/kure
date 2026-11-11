@@ -49,6 +49,10 @@ depends = ["tidy", "lint", "test", "check-tool-versions", "check-govulncheck-doc
 description = "Verify golangci-lint pin parity (Makefile/ci.yml/docs) against mise.toml"
 run = "sh scripts/check-tool-versions.sh"
 
+[tasks.check-consumer]
+description = "Build a throwaway module that imports kure and check its graph: no structured-merge-diff/v7, kube-openapi as kure requires (go-kure/kure#1316)"
+run = "sh scripts/check-consumer.sh"
+
 [tasks.sync-tool-versions]
 description = "Sync golangci-lint pins (Makefile/ci.yml/docs) from mise.toml"
 run = "sh scripts/sync-tool-versions.sh"

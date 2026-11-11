@@ -482,27 +482,44 @@ All `k8s.io/` packages must stay at the same patch release. Kure uses `replace` 
 
 `k8s.io/kube-aggregator` is one of them. Kure requires it for the `APIService` type alone and imports only its API package (`pkg/apis/apiregistration/v1`), so the aggregator's server dependencies stay out of `go.mod`. It is pinned in the same `replace` block and moves with the other `k8s.io/` packages in the `kubernetes` update group.
 
-`k8s.io/kube-openapi` is the exception: it is untagged, so it has its own `replace` line, pinned
-to a pseudo-version rather than the lockstep patch release. Newer kube-openapi commits build on
-`sigs.k8s.io/structured-merge-diff/v7`, while apimachinery v0.37 still uses v6, so once a
-dependency requires one of them (external-secrets v2.14 does) the module no longer compiles.
-The `replace` holds kube-openapi at its last v6 commit. Go applies `replace` directives only in
-the main module, so a module that requires kure and resolves the same versions does not inherit
-it: it needs the same `replace` in its own `go.mod`. A `renovate.json` rule disables updates
-to that line and to the `require` line of the same module: Renovate reads every commit of an
-untagged module as a new digest and would otherwise move the `replace` into the `kubernetes`
-group's PR, which then fails to build. A bump of the `require` line alone changes nothing that
-kure builds or tests, because the `replace` wins here. It raises the minimum
-kube-openapi version that kure requires, which matters to modules that do not inherit the
-`replace`, and no check here builds against it. `go mod tidy` raises the `require`
-line when a dependency needs a newer one. Remove both, the `replace` line and the rule, with
-the Kubernetes v0.38 GA bump, whose apimachinery moves to v7.
-That bump fails to compile while the pin is still in place, so it cannot be missed.
+`k8s.io/kube-openapi` is the exception: it is untagged, so it is not part of the lockstep patch
+release. Newer kube-openapi commits build on `sigs.k8s.io/structured-merge-diff/v7`, while
+apimachinery v0.37 still uses v6. If the module graph selects one of those commits, a module that
+imports kure does not compile (go-kure/kure#1316).
+
+Kure holds kube-openapi at its last v6 commit, `be32def86098`, with the `require` line in
+`go.mod` and no `replace`. Go applies `replace` directives only in the main module, so a consumer
+of kure ignores them and reads only kure's `require` lines. A `replace` therefore protected kure's
+own build and nothing else. Two modules in the graph can raise kube-openapi above the hold: kure
+itself, through its own `require` line, and the external-secrets `apis` module, through the
+release kure pins. Kure pins that module to v2.13.0, the newest release that needs no v7-era
+kube-openapi. Release v2.14.0 and later need one.
+
+Renovate holds both. A `renovate.json` rule disables updates to the kube-openapi `require` line,
+because Renovate reads every commit of an untagged module as a new digest. The external-secrets
+rule caps the release at `<=2.13.0`. The `check-consumer` task (`mise run check-consumer`) builds a
+fresh module that imports kure, with none of kure's `replace` directives, and fails if the graph
+holds `sigs.k8s.io/structured-merge-diff/v7` or if the selected kube-openapi is not the one kure
+requires. In CI, the `check-consumer` job runs on a pull request that changes `go.mod` or `go.sum`,
+and on every merge-queue, push and scheduled run.
+
+`go mod tidy` raises the `require` line when a dependency needs a newer kube-openapi. If it does,
+`check-consumer` fails. Do not commit that raise. Find the dependency that asked for it and hold
+that dependency back, as the external-secrets cap does.
+
+The hold has one limit. A consumer whose own module graph pulls a v7-era kube-openapi still needs
+its own `replace` until the Kubernetes v0.38 GA bump. go-kure/launcher is one: it keeps the
+external-secrets v2.15.0 types for its own CRDs and its own `replace`.
+
+Remove the kube-openapi rule, the external-secrets cap and the `check-consumer` task with the
+Kubernetes v0.38 GA bump, whose apimachinery moves to v7. Then raise the kube-openapi `require`
+line and the external-secrets release in the same change.
 
 The rule does not stop a security update: the shared preset enables `vulnerabilityAlerts`, and
 Renovate forces `enabled` back on for an alert, so a `[SECURITY]` PR for kube-openapi still opens.
-Treat it as a prompt to assess the advisory and to decide whether the `replace` commit should
-move, not as a change to merge as it stands.
+Treat it as a prompt to assess the advisory and to decide whether the held commit should move,
+not as a change to merge as it stands. `check-consumer` fails on such a PR when the commit needs
+v7.
 
 **When can replace directives be removed?** Only when ALL direct and transitive dependencies converge on the same `k8s.io/` minor version. Check with:
 

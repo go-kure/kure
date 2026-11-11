@@ -26,12 +26,6 @@ replace (
 	k8s.io/client-go => k8s.io/client-go v0.37.2
 	k8s.io/component-base => k8s.io/component-base v0.37.2
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.37.2
-	// kube-openapi is untagged and not part of the lockstep above. From
-	// ca3452a79603 it builds on sigs.k8s.io/structured-merge-diff/v7, while
-	// apimachinery v0.37 still uses v6, so the newer one (pulled in by
-	// external-secrets) does not compile. Hold the last v6 commit; remove this
-	// line with the Kubernetes v0.38 GA bump, whose apimachinery moves to v7.
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098
 )
 
 // Replace directives: build with the kustomize kustomize-controller applies.
@@ -66,7 +60,7 @@ require (
 	github.com/cloudnative-pg/plugin-barman-cloud v0.16.0
 	github.com/controlplaneio-fluxcd/flux-operator v0.62.1
 	github.com/envoyproxy/go-control-plane/envoy v1.40.0
-	github.com/external-secrets/external-secrets/apis v0.0.0-20261110094301-b872cf4b508f
+	github.com/external-secrets/external-secrets/apis v0.0.0-20261016092056-a82d14894fbc
 	github.com/fluxcd/flux2/v2 v2.10.0
 	github.com/fluxcd/helm-controller/api v1.7.1
 	github.com/fluxcd/image-automation-controller/api v1.3.0
@@ -95,7 +89,7 @@ require (
 	k8s.io/apiserver v0.37.2
 	k8s.io/cli-runtime v0.37.2
 	k8s.io/kube-aggregator v0.37.2
-	k8s.io/kube-openapi v0.0.0-20261104182252-5bee61fc5225
+	k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
 	sigs.k8s.io/controller-runtime v0.25.2
 	sigs.k8s.io/gateway-api v1.7.0
