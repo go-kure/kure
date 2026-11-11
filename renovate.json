@@ -82,7 +82,7 @@
           "docs/github-workflows.md",
           "pkg/stack/fluxcd/flux_operator_install.yaml",
           "pkg/stack/fluxcd/flux_operator_install.go",
-          "pkg/stack/fluxcd/README.md",
+          "pkg/stack/fluxcd/docs/bootstrap-generation.md",
           "pkg/stack/fluxcd/testdata/bootstrap-output/flux-operator-*.txt"
         ],
         "executionMode": "branch"

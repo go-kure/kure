@@ -68,7 +68,7 @@ func ExampleEngine() {
 	cluster := exampleCluster()
 
 	// Create engine with defaults. Placement is set on the LayoutRules passed
-	// to the layout call, not on the engine — see Layout Integration below.
+	// to the layout call, not on the engine — see the Layout Integration page.
 	engine := fluxcd.Engine()
 
 	// Generate all Flux resources for a cluster: each spec.path is a directory

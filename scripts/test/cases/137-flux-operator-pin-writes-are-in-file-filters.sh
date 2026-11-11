@@ -92,7 +92,7 @@ done < <(find "$FIXTURE/pkg" -type f -print0 | sort -z)
 # empty or short list would make the coverage check below pass for nothing.
 for want in pkg/stack/fluxcd/flux_operator_install.yaml \
             pkg/stack/fluxcd/flux_operator_install.go \
-            pkg/stack/fluxcd/README.md \
+            pkg/stack/fluxcd/docs/bootstrap-generation.md \
             pkg/stack/fluxcd/testdata/bootstrap-output/flux-operator-oci.txt \
             pkg/stack/fluxcd/testdata/bootstrap-output/flux-operator-git.txt; do
     found=0

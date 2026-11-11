@@ -81,6 +81,12 @@ ENABLED_PAGES=(
 	pkg/stack/STATUS.md
 	pkg/stack/argocd/README.md
 	pkg/stack/fluxcd/README.md
+	pkg/stack/fluxcd/docs/bootstrap-generation.md
+	pkg/stack/fluxcd/docs/child-layout-crs.md
+	pkg/stack/fluxcd/docs/defaults.md
+	pkg/stack/fluxcd/docs/layout-integration.md
+	pkg/stack/fluxcd/docs/names-and-paths.md
+	pkg/stack/fluxcd/docs/umbrella-bundles.md
 	pkg/stack/helm/README.md
 	pkg/stack/layout/README.md
 	pkg/stack/stacktest/README.md

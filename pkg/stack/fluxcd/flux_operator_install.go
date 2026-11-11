@@ -25,7 +25,7 @@ import (
 //     https://github.com/controlplaneio-fluxcd/flux-operator/releases/download/{version}/install.yaml
 //  3. Replace pkg/stack/fluxcd/flux_operator_install.yaml with it.
 //  4. Update this constant, and the version named in
-//     pkg/stack/fluxcd/README.md ("currently **vX.Y.Z**"); no test checks it.
+//     pkg/stack/fluxcd/docs/bootstrap-generation.md ("currently **vX.Y.Z**"); no test checks it.
 //  5. Run the tests in this package and confirm the resource inventory in
 //     TestFluxOperatorInstallObjects still matches.
 const FluxOperatorVersion = "v0.62.1"

@@ -9,12 +9,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 
 # README anchor reworded.
 new_pin_fixture v0.2.0
-printf 'The bundle is vendored at some version.\n' > "$FIXTURE/pkg/stack/fluxcd/README.md"
+printf 'The bundle is vendored at some version.\n' > "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md"
 pin_snapshot
 run_pin
 assert_rc 1
 assert_err_contains 'expected exactly one line matching'
-assert_err_contains 'README.md'
+assert_err_contains 'bootstrap-generation.md'
 assert_pin_tree_unchanged "missing README anchor still modified the tree"
 
 # Constant declared twice: ambiguous, so refuse rather than rewrite both.

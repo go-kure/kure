@@ -406,7 +406,7 @@ carries patches unless a pending minor is deliberately approved on the dashboard
 (`flux_operator_install.yaml`) and names its release in `FluxOperatorVersion`, so the
 `FluxInstance` type kure compiles against and the operator it installs stay in lockstep.
 A `flux-operator` bump in `go.mod` therefore has three companion edits: the bundle, the
-constant, and the "currently **vX.Y.Z**" mention in `pkg/stack/fluxcd/README.md`.
+constant, and the "currently **vX.Y.Z**" mention in `pkg/stack/fluxcd/docs/bootstrap-generation.md`.
 
 `scripts/sync-flux-operator-pin.sh` makes all three. It reads the module version from
 `go.mod`, downloads that release's `install.yaml` asset, validates it looks like an install
@@ -468,7 +468,7 @@ Flux toolkit CustomResourceDefinitions it validates kure's Flux output against
 (`internal/kuretest`), so a bump also moves the schemas the fixtures are held to. A
 `flux2/v2` bump in `go.mod` therefore has three companion edits: the tarball (the release's
 `manifests.tar.gz` asset), the constant, and the "currently **vX.Y.Z**" mention in
-`pkg/stack/fluxcd/README.md`; the `gotk.Version` doc comment lists the steps. No script
+`pkg/stack/fluxcd/docs/bootstrap-generation.md`; the `gotk.Version` doc comment lists the steps. No script
 makes them yet, so the Flux group's bump PR fails `TestVendoredPinsMatchGoMod` until they
 are made: the test compares `GotkVersion` and `FluxOperatorVersion` with `go.mod`, and
 each controller image in the vendored gotk bundle that has a controller API module with
