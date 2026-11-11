@@ -366,8 +366,9 @@ fmt.Println(provider.Spec.SecretRef.Name, alert.Spec.EventSeverity, receiver.Spe
 ```
 <!-- doc-example:end -->
 
-`Alert` keeps four append helpers: `AddAlertEventSource`, `AddAlertInclusion`,
-`AddAlertExclusion` and `AddAlertEventMetadata`.
+`Alert` keeps three append helpers: `AddAlertEventSource`, `AddAlertInclusion` and
+`AddAlertExclusion`. `AddAlertEventMetadata` is a map setter. It replaces the value of an existing
+key.
 
 ## Image Automation
 

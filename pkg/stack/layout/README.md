@@ -385,7 +385,9 @@ Both skip an entry of an application's `Generate` result that is nil or holds no
 
 The tree below is what `GroupByName` on all three axes (`NodeGrouping`, `BundleGrouping`,
 `ApplicationGrouping`) writes. `DefaultLayoutRules` groups bundles and applications flat, so a
-default layout has no `bundle1/` and `app1/` levels. `clusters/` is `Config.ManifestsDir` (the
+default layout has no `bundle1/` and `app1/` levels. Two cases keep a directory: the root node's
+bundles share one directory inside the root's, and an application with a `LayoutAugmenter` keeps its
+own. `clusters/` is `Config.ManifestsDir` (the
 default of `DefaultLayoutConfig`), and `cluster-name` is `LayoutRules.ClusterName`.
 
 ```
