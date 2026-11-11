@@ -1,6 +1,6 @@
 module github.com/go-kure/kure
 
-go 1.27.3
+go 1.27.4
 
 // Replace directives: pin all k8s.io packages to the same patch release.
 //
