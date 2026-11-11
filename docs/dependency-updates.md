@@ -415,7 +415,7 @@ response, or a rewrite target that is missing or ambiguous leaves the tree untou
 than half-applied. It then stages all three files before renaming any of them into place,
 so a failed write cannot leave a new bundle beside an old constant. It refuses a `go.mod` pin that is not a plain `vX.Y.Z` tag (a
 pseudo-version has no release asset). It is idempotent, and exits before any network call
-when the constant and README already name the `go.mod` version, because Renovate runs it
+when the constant and bootstrap page already name the `go.mod` version, because Renovate runs it
 after *every* `gomod`/`mise` bump and most have nothing to do with flux-operator. That
 also means it does not overwrite a hand-edited bundle that is already at the right
 version; to force a refresh, follow the manual procedure in the `FluxOperatorVersion`
