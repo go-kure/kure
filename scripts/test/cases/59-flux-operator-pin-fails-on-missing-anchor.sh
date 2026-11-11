@@ -1,5 +1,5 @@
 #!/bin/bash
-# Row 59: if the constant or README line the script rewrites is gone (reworded,
+# Row 59: if the constant or bootstrap page line the script rewrites is gone (reworded,
 # reformatted) or ambiguous, the run must fail loudly with the tree untouched --
 # instead of matching nothing and reporting success (silently rewriting nothing
 # is how a lockstep pin drifts), or failing only after the bundle was already
@@ -7,7 +7,7 @@
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 
-# README anchor reworded.
+# Bootstrap page anchor reworded.
 new_pin_fixture v0.2.0
 printf 'The bundle is vendored at some version.\n' > "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md"
 pin_snapshot
@@ -15,7 +15,7 @@ run_pin
 assert_rc 1
 assert_err_contains 'expected exactly one line matching'
 assert_err_contains 'bootstrap-generation.md'
-assert_pin_tree_unchanged "missing README anchor still modified the tree"
+assert_pin_tree_unchanged "missing bootstrap page anchor still modified the tree"
 
 # Constant declared twice: ambiguous, so refuse rather than rewrite both.
 new_pin_fixture v0.2.0

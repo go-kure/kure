@@ -3,7 +3,7 @@
 # first and rewrote the constant and README afterwards, so a failure in the
 # later writes left a new bundle beside an old constant -- the exact split the
 # lockstep exists to prevent. It now stages every output before touching any
-# target. Make the LAST staged file (the README) unwritable by putting a
+# target. Make the LAST staged file (the bootstrap page) unwritable by putting a
 # directory where its scratch copy goes: the bundle and constant scratch copies
 # are already staged by then, so a regression to write-as-you-go replaces the
 # bundle and this case sees it.
