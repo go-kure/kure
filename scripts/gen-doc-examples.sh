@@ -100,6 +100,7 @@ ENABLED_PAGES=(
 	site/content/concepts/domain-model.md
 	site/content/concepts/oci-layout.md
 	site/content/contributing/_index.md
+	site/content/deliver-with-flux/_index.md
 	site/content/examples/_index.md
 	site/content/getting-started/_index.md
 	site/content/guides/_index.md
@@ -110,6 +111,8 @@ ENABLED_PAGES=(
 	site/content/guides/flux-workflow.md
 	site/content/guides/library-usage.md
 	site/content/guides/patching.md
+	site/content/reference/_index.md
+	site/content/start/_index.md
 )
 
 # Markdown that is not a page of this check; a trailing / exempts a tree.

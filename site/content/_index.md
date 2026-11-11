@@ -119,6 +119,9 @@ The [package status](/concepts/package-status/) page lists every package as supp
 
 ## Start Here
 
+By task: [Start](/start/) takes you from nothing to a cluster on disk, [Deliver with Flux](/deliver-with-flux/)
+turns it into a GitOps repository, and [Reference](/reference/) is for looking things up.
+
 Recommended reading order:
 
 1. [Quickstart](/getting-started/quickstart/) — generate your first Kubernetes manifest
