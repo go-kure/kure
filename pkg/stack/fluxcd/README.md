@@ -828,7 +828,7 @@ bundle's own objects, or give the bundles directories of their own (`NodeGroupin
 `BundleGrouping` `GroupByName`). Not covered: objects inside an `ExtraFiles` file (they are not
 kustomize resources) and objects without a kind. Under `FluxIntegratedPerLayout` the check counts
 no generated ConfigMap, and needs none: no walked tree has a shared directory that builds one. An
-augmenter application keeps a directory of its own, which its own Kustomization applies without
+augmenter application that wants its own layout keeps a directory, which its own Kustomization applies without
 patches, and `FlattenSingleTier` collapses no directory that renders a bundle (go-kure/kure#979).
 
 The generator computes no path, the integrator matches nothing by name, and `FlattenSingleTier`
@@ -2103,7 +2103,7 @@ integrator := fluxcd.NewLayoutIntegrator(gen)
 
 In `FluxIntegratedPerLayout` mode every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle gets a `Kustomization` CR in its parent's `Resources`, with `spec.path` set to `child.FullRepoPath()`. (A child that renders a bundle already has that bundle's CR there.) The CR's name is checked with `stack.ValidateKustomizationName` where the CR is created: one that is not a DNS-1123 subdomain of at most 63 characters is refused, and the error names what to set to change it (see [Per-layout name rule](#per-layout-name-rule)). This covers:
 
-- **Application layouts** — per-app layouts (`ApplicationGrouping: GroupByName`, or augmenter apps, which keep a directory under `GroupFlat`). The CR is named `<unit name>-<layout name>`.
+- **Application layouts** — per-app layouts (`ApplicationGrouping: GroupByName`, or augmenter apps that want their own layout, which keep a directory under `GroupFlat`). The CR is named `<unit name>-<layout name>`.
 - **Augmenter sub-layouts** — hook-group child layouts added by a `LayoutAugmenter` are children of an app layout. They are named `<unit name>-<layout name>` as well, and `spec.dependsOn` is populated from `ManifestLayout.DependsOn`, enabling ordered reconciliation between hook groups.
 - **Bundle-less node layouts** — a GroupByName node layout above its bundle layout, or a node without a bundle. The CR is named `<path with "/" replaced by "-">-node` (with `ClusterName: "."`, node `web`'s path is `web`, which is also its bundle's CR name when the bundle sets no `KustomizationName`), unless the node names it: see [Node Kustomizations](#node-kustomizations).
 

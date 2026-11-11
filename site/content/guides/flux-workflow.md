@@ -243,8 +243,8 @@ The [Layout Engine](/api-reference/layout) supports multiple grouping and file o
 | FilePer | `FilePerResource`, `FilePerKind` | One file per resource or group by kind |
 | FluxPlacement | `FluxSeparate`, `FluxIntegratedPerLayout`, `FluxIntegratedPerBundle` | Separate dir; a Flux CR per layout node; or Flux CRs at bundle boundaries with application children as directories |
 
-The three grouping axes are independent; umbrella child bundles and augmenter applications always get
-a directory of their own.
+The three grouping axes are independent; umbrella child bundles always get a directory of their own,
+and so do augmenter applications that want one (the default).
 
 ### Layout paths (breaking change in go-kure/kure#771)
 
