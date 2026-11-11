@@ -16,6 +16,30 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-rc.1] - 2026-11-11
+
+### Build
+
+- Update module github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring to v0.95.2
+- Update dependency external-secrets/external-secrets to v2.15.0
+- Widen the external-secrets range to 2.15
+- Update module github.com/cloudnative-pg/plugin-barman-cloud to v0.16.0
+- Widen the cnpg-barman-cloud-plugin range to 0.16
+- Move Go to 1.27.4 to clear GO-2026-6859
+
+### Documentation
+
+- Record the barman-cloud v0.7.0 API additions
+
+### Fixed
+
+- Allow the v1 source API in ValidatePackageRef
+
+### Maintenance
+
+- Update go-kure/.github digest to 44c7963
+- Update go-kure/.github digest to 7aaa544
+
 ## [0.2.0-rc.0] - 2026-11-07
 
 ### Build
