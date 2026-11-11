@@ -6,7 +6,7 @@
 
 This page tracks what the builder contract (ADR-038, the "thin core + admissible
 sugar" decision) changes for callers across its first release. The normative
-contract text is the [Kubernetes Builders](/api-reference/kubernetes-builders/)
+contract text is the [Kubernetes Builders](../pkg/kubernetes/README.md)
 page; this page is the ledger of removed behaviour, kept so each work item of the
 epic lists its own removals exactly once.
 

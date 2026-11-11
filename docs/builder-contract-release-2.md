@@ -12,7 +12,7 @@ Release 2 removes the one construction path that survived it: the `Kind(&Config)
 layer — a function per kind taking a kure-invented `Config` struct and translating
 it into the upstream spec — in the six packages that still carried one, together
 with the sealed-interface sum types and the values that layer used to inject. The
-normative contract text is the [Kubernetes Builders](/api-reference/kubernetes-builders/)
+normative contract text is the [Kubernetes Builders](../pkg/kubernetes/README.md)
 page.
 
 Every removed function, type and field is listed here once, with the upstream
