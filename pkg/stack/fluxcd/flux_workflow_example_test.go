@@ -19,10 +19,10 @@ import (
 	"github.com/go-kure/kure/pkg/stack/stacktest"
 )
 
-// The Go blocks of the "Generating Flux Manifests" guide
-// (site/content/guides/flux-workflow.md) are generated from these functions
-// (scripts/gen-doc-examples.sh), except the two bootstrap blocks it shares
-// with this package's README.
+// The Go blocks of the "Generating Flux Manifests" guide and its task pages
+// (site/content/guides/flux-*.md) are generated from these functions
+// (scripts/gen-doc-examples.sh), except the two bootstrap blocks that
+// flux-bootstrap.md shares with this package's README.
 
 // workloadApp is the stack.ApplicationConfig the guide's applications use: a
 // Deployment and a Service named after the application.

@@ -1,0 +1,580 @@
++++
+title = "Flux Layout Rules"
+weight = 21
++++
+
+How `layout.LayoutRules` decides directory names, file names and where the Flux Kustomizations land. Read the [tutorial](/guides/flux-workflow/) first for the four steps that produce a tree.
+
+The Go blocks on this page are the bodies of `Example` functions in `pkg/stack/fluxcd`, which `go test` runs. They use the imports and the helpers named in the [tutorial](/guides/flux-workflow/).
+
+The [Layout Engine](/api-reference/layout) supports multiple grouping and file organization strategies:
+
+| Option | Values | Effect |
+|--------|--------|--------|
+| NodeGrouping | `GroupByName`, `GroupFlat` | A directory per child node, or merge child nodes into their parent |
+| BundleGrouping | `GroupByName`, `GroupFlat` | A directory per bundle, or render bundles in their node's directory (the root node's bundle keeps a directory, see below) |
+| ApplicationGrouping | `GroupByName`, `GroupFlat` | A directory per app, or write apps into their bundle's directory |
+| FilePer | `FilePerResource`, `FilePerKind` | One file per resource or group by kind |
+| FluxPlacement | `FluxSeparate`, `FluxIntegratedPerLayout`, `FluxIntegratedPerBundle` | Separate dir; a Flux CR per layout node; or Flux CRs at bundle boundaries with application children as directories |
+
+The three grouping axes are independent; umbrella child bundles always get a directory of their own,
+and so do augmenter applications that want one (the default).
+
+## Layout paths (breaking change in go-kure/kure#771)
+
+A layout's directory is `FullRepoPath()`, which is `Namespace` joined with `Name`. `Namespace` is
+always the **parent's** directory, and `"."` is the root of the tree. The walkers build every layout
+this way. If you build `ManifestLayout` trees by hand, or add child layouts to a walked tree, set each
+child's `Namespace` to its parent's `FullRepoPath()`.
+
+What changed, and what to do:
+
+- **Hand-built children.** `FullRepoPath()` used to drop `Name` when `Namespace` already ended with
+  it. A caller that set a child's `Namespace` to the full path, including the child's own `Name`
+  (`Namespace: "apps/web", Name: "web"`), now gets that name twice (`apps/web/web`). Pass the
+  parent's path instead (`Namespace: "apps"`). Since go-kure/kure#979 the writers refuse such a
+  child where its parent's `kustomization.yaml` lists it: the entry `web` of the parent at `apps`
+  names `apps/web`, a directory without a `kustomization.yaml`. `WriteToDisk`, `WriteToTar` and
+  `WriteManifest` return an error that names both directories, before anything is written. A
+  `Namespace` that is the child's own path in another case (`apps/web` for a child named `Web`)
+  is refused the same way. A child its parent does not list, or one placed elsewhere on purpose,
+  is written as before; see the [Layout Engine reference](/api-reference/layout/) for the full
+  rule.
+- **Same-name and suffix-sharing layouts nest.** A bundle and an application with the same name
+  now give `web/web`. Before, they collapsed onto `web/`, and one of the two `kustomization.yaml`
+  files replaced the other. The same applies to a name that merely ends another as a string: `oo`
+  under `foo` now gives `foo/oo`.
+- **No `ClusterName`, named root.** The root node now sits at `<root>` instead of `cluster/<root>`,
+  and its child nodes stay at `<root>/<child>`. With `FluxSeparate`, the `flux-system/` layout now
+  sits inside the root's directory, at `<root>/flux-system`, where the root's `kustomization.yaml`
+  references it. Before, it was written beside the root, and that reference dangled. The ArgoCD
+  `argocd/` layout moved the same way. Point anything outside kure that reads these directories
+  (CI scripts, a hand-written sync path) at the new paths.
+- **No `ClusterName`, unnamed root.** The root and its child nodes stay at `cluster/` and
+  `cluster/<child>`. Deeper descendants move: a grandchild used to be written at
+  `<child>/<grandchild>`, outside `cluster/` and referenced by nothing. It now sits at
+  `cluster/<child>/<grandchild>`.
+- **With a `ClusterName`.** Most output is unchanged, and `flux-system/` stays at
+  `<ClusterName>/flux-system`. When the last segment of `ClusterName` is the root node's name
+  (`ClusterName: "platform"`, root `platform`), the root is still the cluster directory. When
+  `ClusterName` only ends with the root's name as a string (`ClusterName: "myprod"`, root `prod`),
+  the old rule collapsed the root onto `myprod`. It now nests at `myprod/prod`, so move any
+  external sync path that pointed at `myprod`.
+- **Collisions are refused.** `WriteToDisk`, `WriteToTar` and `WriteManifest` check the whole tree
+  before writing anything. They refuse two layouts that resolve to the same directory (compared
+  case-insensitively), and two `AppFileSingle` layouts that resolve to the same file. They also
+  refuse two layouts holding one object when one kustomize build takes in both: a
+  `kustomization.yaml` and the child directories it lists, or the Flux build of a marked
+  `KustomizationRecursive` directory. kustomize would refuse the second copy. The ConfigMap a
+  `configMapGenerator` generates counts as one of those objects.
+- **Empty Recursive targets are refused.** A marked `KustomizationRecursive` directory gets no
+  `kustomization.yaml`. When no other file lands at or below it (a bundle with no applications,
+  or applications that render nothing), every writer would leave it empty, and a Git tree drops
+  an empty directory, so the Flux Kustomization would name a path that is not committed. Give the
+  layout a resource, or write it `KustomizationExplicit`, which writes it `resources: []`.
+- **Directories nothing applies are refused.** In a tree with generated Flux Kustomizations, a
+  directory its parent's `kustomization.yaml` does not list is applied only by a Kustomization
+  whose `spec.path` names it. The integrator marks the root and every directory its
+  Kustomizations build (`SetFluxBuild`), so a tree it built passes. The check runs only when the
+  root is marked: a marked tree changed afterwards is refused where such a directory is not
+  marked, since its files would be committed and never applied. A tree you place Kustomizations
+  in yourself is checked once you mark its root, and then needs the mark on each directory a
+  Kustomization of yours builds.
+- **Kustomization names are unique in a tree.** Two Flux Kustomizations with one namespace and
+  name are refused wherever they sit, also in directories that are applied separately and inside
+  a `List`: they are one object in the cluster. One kustomize drops as local-config does not
+  count here, since it never reaches the cluster; in the same kustomize build as its namesake it
+  is still refused, as kustomize refuses it.
+- **Objects without a kind or an apiVersion are refused** (breaking change in go-kure/kure#1020).
+  Each resource, and each item of a `List` however deep, must be written with both; a typed
+  object whose `TypeMeta` is unset has neither. kustomize fails on a document without a kind, and
+  one without an apiVersion builds into an object nothing applies. Set the `TypeMeta`, as the
+  `Create*` constructors do, or the two fields of an unstructured object. A `List`'s own
+  apiVersion is not required, nor the apiVersion of an object with the
+  `config.kubernetes.io/local-config` annotation at any value but `false` (the string `"false"` or
+  the boolean `false`), which kustomize drops from the build.
+- **No `..` in a layout's name or namespace.** Every writer refuses a layout whose `Name` or
+  `Namespace` has a `..` path segment, with or without extra files.
+- **The walk validates its rules.** `WalkCluster` and `WalkClusterByPackage` run
+  `LayoutRules.Validate` on the rules they are given, and so does every entry point that walks
+  (`CreateLayoutWithResources`, `GenerateFromCluster`), also for an absent or empty cluster. An
+  unknown value of a grouping, `FilePer`, `FluxPlacement` or
+  `FileNaming` is now an error; before, it was walked as if it were another value. A `ClusterName`
+  with a `..` path segment is refused at the walk instead of at write, also one the walk would
+  have cleaned away (`x/../platform`). An unset value is still valid and takes its default. Fix
+  the value the error names. The Flux `IntegrateWithLayout` runs the same check in place of its
+  own placement check, so its error for an unknown placement now names the field `FluxPlacement`
+  (it was `fluxPlacement`).
+- **`LayoutRules` has no `ApplicationFileMode`.** No walk ever applied it, so a valid value set
+  there changed no layout and no file; the field is removed. Code that sets it no longer
+  compiles: delete the line, the layouts and the files written stay the same. A `LayoutRules`
+  value serialised as a whole no longer carries the key, and an unknown value there is no longer
+  an error. To write an application as one file, set `Config.ApplicationFileMode` for
+  `WriteManifest`, or the layout's own `ApplicationFileMode`.
+
+See the [Layout Engine reference](/api-reference/layout/) for the full rule.
+
+## Flux paths come from the layout (breaking change)
+
+Every Flux Kustomization `spec.path` (and ArgoCD Application `source.path`) is now the directory of
+the layout that renders the bundle, taken from the walked layout tree. Before, the generator
+derived it from bundle names alone, so a node-level bundle's path was just its name and pointed at
+a directory the layout never wrote whenever a node and its bundle were named differently, or a
+`ClusterName` prefixed the tree. See
+[Kustomization paths](/api-reference/flux-engine/#kustomization-paths) for the rule.
+
+What changed, and what to do:
+
+- **Removed APIs.** `GenerateFromBundle`, `GenerateFromNode`, `EngineWithMode`, `EngineWithConfig`,
+  `NewWorkflowEngineWithConfig`, `SetKustomizationMode` and `ResourceGenerator.Mode` are gone. <!-- doc-api-refs:ignore removed in this release -->
+  Generate from a walked layout (`ResourceGenerator.GenerateFromLayout`) or for one bundle at a path
+  you supply (`GenerateForBundle`).
+- **`GenerateFromCluster` takes the layout rules.** It walked with `layout.DefaultLayoutRules()`
+  whatever rules the caller wrote the tree with, so with a `ClusterName` or other groupings its
+  paths named directories the tree did not have. It now takes the rules as a second argument, on
+  `stack.Workflow` and on both engines, and each path is a directory a walk with those rules
+  writes. Pass the rules you write the tree with; `layout.DefaultLayoutRules()` keeps the paths it
+  returned before that change (the root node's bundle's path has moved since, in
+  go-kure/kure#979: see "The root node's bundle has its own directory" below). The Flux engine
+  refuses rules with `FluxIntegratedPerLayout`: that tree's child
+  directories are applied by Kustomizations only `CreateLayoutWithResources` places, so use that
+  entry point for the placement. `ResourceGenerator.GenerateFromLayout` refuses a tree in which
+  any layout carries that placement, for the same reason: use `CreateLayoutWithResources`, or
+  `IntegrateWithLayout` on the tree you walked. Before, it returned the bundle directories'
+  Kustomizations only. Rules the walk refuses are an error from both engines, whatever the
+  cluster is: an absent or empty cluster returns nothing only with valid rules.
+- **Integrate walked layouts only.** `IntegrateWithLayout` refuses a layout `layout.WalkCluster`
+  did not build from the same cluster — build the tree with `WalkCluster` instead of by hand.
+- **PerLayout hosts.** Under `FluxIntegratedPerLayout` a node bundle's CR now sits in the parent of
+  the layout that renders it, like every other PerLayout CR, and the parent's `kustomization.yaml`
+  lists it as a resource file. The writers no longer emit a `flux-system-kustomization-<child>.yaml`
+  reference guessed from a child's name. A bundle-less node layout gets its own CR named
+  `<path, "/" → "-">-node`.
+- **Sources live in the root.** Under both integrated placements, every GitRepository or
+  OCIRepository the integration derives from a `SourceRef` URL is written once, into the root
+  node's layout (the root node's directory, not a `ClusterName` wrapper above it). Before, each unit's parent layout held a copy, so a Source shared by several
+  builds had several owners, and pruning one unit deleted a Source the others still used. Golden
+  files move the Source to the root. `FluxSeparate` is unchanged.
+- **Refusals.** Two bundles with one name, a CR name used twice, a node or bundle layout written as
+  `AppFileSingle`, and a directory holding two objects with one identity are errors; a `List` is
+  read for the objects it holds, so the two are refused however many Lists deep one of them
+  sits. So are a Flux
+  Kustomization inside a `List` that takes another Kustomization's identity (kustomize builds a
+  List's items); a Source identity (kind, namespace, name) defined with different content
+  anywhere in the pass, in another layout or at another API version; and, under `FluxSeparate`,
+  any Source already in the tree with the identity of one the integration generates into
+  `flux-system`, even an identical one. Under `FluxIntegratedPerBundle`, a caller's copy of a
+  generated Source in a `ClusterName` wrapper above the root node is refused too: that build also
+  includes the root's copy, and kustomize refuses one object twice.
+  No Kustomization takes its source from inside what it applies (go-kure/kure#979): under
+  `FluxIntegratedPerLayout` with a `ClusterName` wrapper above a named root node, the root node's
+  directory has a Kustomization of its own, which applies the directory that hosts every
+  generated Source. It takes none of them; its source is the one `SourceRef` without a URL that
+  the bundles below share (where two of them differ, the root node's own bundle's, when that has
+  no URL), and a tree in which every `SourceRef` has a URL is refused, naming the
+  Kustomization and the Source. Give one bundle a `SourceRef` without a URL, naming a Source that
+  exists before the tree is applied, or use `FluxIntegratedPerBundle`. Before, the root bundle's
+  generated Source was accepted there; the bootstrap points Flux at the `ClusterName` directory,
+  the top of the written tree, so the Kustomization would have waited for a Source only its own
+  apply creates.
+  A Kustomization already in the tree that the integration keeps in place of its own (same name
+  and `spec.path`, in the layout that would host it) is held to the same refusals as a generated
+  one, whether it is typed, unstructured or inside a `List`: two copies of a generated Source
+  that the integration did not add, in the build of its directory; a `sourceRef` that names a
+  generated Source when its build holds the root node's directory; and a cycle through its
+  `dependsOn`, `wait` or health checks. One that cannot be read as a Flux Kustomization (a field
+  of the wrong type, for one) is refused, naming its layout. Its patches and postBuild are its
+  own: the one kept Kustomization that builds the directory hosting the generated Sources is the
+  root node's layout Kustomization below a `ClusterName` wrapper under
+  `FluxIntegratedPerLayout`, and since go-kure/kure#979 the bootstrap applies the wrapper, which
+  lists that Kustomization and not the directory, so it alone applies those Sources (before, a
+  patch or postBuild of it that changed one was refused).
+- **Grouping axes.** `NodeGrouping`, `BundleGrouping` and `ApplicationGrouping` are independent;
+  they used to take effect only when bundles and applications were both flat, and a `ClusterName`
+  always flattened the root bundle. Combinations that were silently rendered fully nested now
+  render as configured, and a merged node's umbrella children and augmenter layouts keep their own
+  directories and CRs.
+- **One Kustomization per directory.** Bundles merged into one directory share one Kustomization
+  (and one ArgoCD Application), named after the first of them; they must agree on the settings a
+  Kustomization holds once, and dependency cycles are refused. A patch is refused there when its
+  target would also select another merged bundle's objects: Flux patches everything the shared
+  Kustomization builds, so the merge would widen the patch. A target's `LabelSelector` and
+  `AnnotationSelector` are matched as kustomize reads the written file, each value as its text:
+  a label `tier: true` decoded from YAML as a boolean matches the selector `tier=true`. A
+  generated ConfigMap is matched with the annotations its generator entry sets
+  (go-kure/kure#1100).
+- **One owner per directory.** A directory that renders bundles is applied only by its own
+  Kustomization: no parent `kustomization.yaml` lists it, in any placement. Under
+  `FluxIntegratedPerBundle` a bundle's CR now sits in the parent directory (as under PerLayout),
+  and a parent bundle can no longer depend on a child node's bundle there — the child's CR only
+  exists once the parent has applied. Building a parent directory no longer includes its child
+  units.
+- **FlattenSingleTier** no longer rewrites Flux CRs a caller added to the tree; generated CRs
+  already name the surviving directory.
+
+## Kustomization names
+
+A bundle's Kustomization is named after the bundle. Set `Bundle.KustomizationName` to give it
+another name without renaming the bundle or moving its directory:
+
+<!-- doc-example: pkg/stack/fluxcd ExampleResourceGenerator_GenerateForBundle -->
+```go
+// The bundles keep their names and directories; their Kustomizations
+// get the names set here.
+db := &stack.Bundle{Name: "db", KustomizationName: "apps-db"}
+shop := &stack.Bundle{Name: "shop", KustomizationName: "apps-shop", DependsOn: []*stack.Bundle{db}}
+
+objects, err := fluxcd.NewResourceGenerator().GenerateForBundle(shop, "clusters/prod/shop")
+if err != nil {
+    panic(err)
+}
+kust := objects[0].(*kustv1.Kustomization)
+fmt.Println(kust.Name, kust.Spec.Path, kust.Spec.DependsOn[0].Name)
+```
+<!-- doc-example:end -->
+
+It prints `apps-shop clusters/prod/shop apps-db`: the Kustomization and its `dependsOn` entry carry
+the names set on the bundles, and `spec.path` is the directory, which did not move. Everything
+that refers to a bundle's Kustomization follows the name in effect (`Bundle.UnitName()`):
+`dependsOn` entries, an umbrella's health checks (it has none under
+[`UmbrellasDoNotWait`](/guides/flux-umbrella-bundles/#umbrellas-that-do-not-wait)), and the name a merged directory takes from its
+first bundle. A `NamedDependsOn` entry names a Kustomization, so it reaches a bundle that sets the
+field by that value, not by the bundle's name.
+
+A `DependsOn` entry that is a copy of a bundle of the cluster (another `Bundle` value with the same
+`Name`) is that bundle, and the dependency is on its Kustomization. Leave `KustomizationName` empty
+on the copy or set the name of the bundle's Kustomization: a copy that sets another name is
+refused, and so is a copy of a bundle whose Kustomization name is also in `NamedDependsOn`.
+
+Two bundles whose Kustomizations would get one name are refused, whether the name comes from the
+field or from the bundle's name. The field is also the way out when a bundle's payload contains a
+Flux Kustomization named like the bundle: give the bundle another `KustomizationName` and the two
+no longer collide. Without it the tree is refused, and the error names the application and bundle
+that hold the Kustomization in the tree, what the generated one is for, and the field to set. See
+the
+[Flux Engine reference](/api-reference/flux-engine/#kustomization-names).
+
+## The root node's bundle has its own directory (breaking change in go-kure/kure#979)
+
+The root node's directory renders no bundle. With a flat `BundleGrouping` (the default) the root
+node's bundle used to render in the root node's directory, which the bootstrap applies when there
+is no `ClusterName`, and the
+Flux Kustomization that applied that directory was hosted inside it: it was part of the build it
+applied. The bundle now has a directory inside the root node's, named after the bundle
+(`platform/platform-bundle` for root node `platform` with bundle `platform-bundle`) or by the
+bundle's `DirName` when it sets one (see [Directory names](#directory-names)), and its
+Kustomization sits in the root node's directory under the integrated placements, and in the
+`flux-system/` directory at the top of the tree under `FluxSeparate`. Bundles that a flat `NodeGrouping` merges into the root node share that directory, named
+after the first of them. With `BundleGrouping: GroupByName` nothing changes: the bundle already
+had its directory.
+
+What changed, and what to do:
+
+- **Paths move.** The root node's bundle's files, the `spec.path` of its Flux Kustomization and the
+  `source.path` of its ArgoCD Application are one directory lower. Golden files change, and so
+  does anything outside kure that names the old path. The bootstrap sync path is unchanged.
+- **On a deployed tree, expect a handover.** The bundle's objects used to be applied by the
+  bootstrap as well, as part of the root node's directory. They leave that build, so with prune
+  on, the objects can be deleted by the outer owner and re-created by the inner Kustomization.
+- **A child node named like that directory is refused.** A child node of the root node whose name
+  is the name of the root node's bundle's directory would render to the same path; the walk
+  refuses it, naming both, also when the names differ only in case (`WEB` for `web`). Rename the
+  node, or give the bundle's directory another name (its `DirName`, or its `Name` without one).
+  A name that is not one path segment is refused earlier, when the cluster is validated: a node
+  named `./web`, a bundle named `.`, `/` or `web/api`.
+- **A root node's bundle whose directory is `flux-system` is refused under `FluxSeparate`.** That
+  is a bundle with `DirName: "flux-system"`, or one named `flux-system` without a `DirName`.
+  Without a `ClusterName` its directory would be the one the Flux resources are written to. Give
+  the bundle's directory another name, or use an integrated placement. The ArgoCD engine refuses
+  the directory `argocd` the same way.
+- **`FlattenSingleTier` collapses no directory that renders a bundle.** A collapsed directory's
+  Kustomization would have no parent to sit in. On a walked tree the option now only collapses a
+  single child directory that renders no bundle and has no directory below it (a node with neither
+  a bundle nor child nodes, or one with bundle-less nodes merged into it by a flat
+  `NodeGrouping`); a tree that relied on it to put a single-bundle application at the top keeps
+  its directories.
+- **A tree whose top renders a bundle is not integrated.** `IntegrateWithLayout` refuses it in
+  every placement; integrate the whole tree `layout.WalkCluster` returns, not a subtree of it.
+
+The `SourceRef` of the root node's bundle is still the source of the Kustomizations of the root
+node's directory and of the bundle-less directories below it, as before (the Kustomization of the
+root node's directory itself takes it only when it has no URL, see "Refusals" above). A parent bundle still
+cannot depend on a child node's bundle under the integrated placements, except the root node's
+bundle, whose directory no longer holds the child's Kustomization. See
+[The root node's bundles](/api-reference/layout/#the-root-nodes-bundles) for the rule.
+
+## Directory names
+
+A bundle's directory is named after the bundle too. Set `Bundle.DirName` to give it another
+name, an ordering prefix for example, without renaming the bundle or its Kustomization:
+
+<!-- doc-example: pkg/stack/fluxcd ExampleEngine_dirName -->
+```go
+// The children's directories get the names set here; the bundles and
+// their Kustomizations keep theirs.
+infra := &stack.Bundle{Name: "shop-infra", DirName: "00-infra"}
+services := &stack.Bundle{Name: "shop-services", DirName: "10-services", DependsOn: []*stack.Bundle{infra}}
+shop := &stack.Bundle{Name: "shop", Children: []*stack.Bundle{infra, services}}
+cluster := &stack.Cluster{Name: "prod", Node: &stack.Node{Name: "apps", Bundle: shop}}
+
+objects, err := fluxcd.Engine().GenerateFromCluster(cluster, layout.DefaultLayoutRules())
+if err != nil {
+    panic(err)
+}
+for _, obj := range objects {
+    kust := obj.(*kustv1.Kustomization)
+    fmt.Println(kust.Name, kust.Spec.Path)
+}
+```
+<!-- doc-example:end -->
+
+It prints `shop apps/shop`, `shop-infra apps/shop/00-infra` and `shop-services
+apps/shop/10-services`: the children are written to `apps/shop/00-infra` and
+`apps/shop/10-services`, their Kustomizations are still `shop-infra` and `shop-services` with
+`spec.path` at those directories, and the `dependsOn` entry and the umbrella's health checks keep
+naming the Kustomizations. The disk and tar writers produce the same tree. (`shop` is the root
+node's bundle here, so it has its directory inside `apps`; a `DirName` on it would name that one.)
+
+The field applies wherever a bundle's name becomes a directory: for an umbrella child, for a node's
+bundle under `BundleGrouping: GroupByName`, and for the root node's bundle under the default rules.
+Below the root the default rules render a node's bundle in its node's directory, and `DirName` has
+no effect on it. Bundles a flat `NodeGrouping` merges into the root node share one directory: it
+takes the first merged bundle's `DirName`, and one on a later bundle has no effect. A `DirName` must
+be one path segment; it is no object name, so `00_Infra` is valid. Two bundles that would get one
+directory are refused, and the error names both. Name the directory on the bundle: a bundle's
+layout renamed after `WalkCluster` is refused by `IntegrateWithLayout`. See the
+[Flux Engine reference](/api-reference/flux-engine/#directory-names).
+
+## Node Kustomizations
+
+Under `FluxIntegratedPerLayout` a node whose directory renders no bundle, such as a group of
+nodes, is applied by a Kustomization of its own. `Node.KustomizationName` names it, and
+`Node.DependsOn` and `Node.NamedDependsOn` order it:
+
+<!-- doc-example: pkg/stack/fluxcd ExampleLayoutIntegrator_nodeKustomization -->
+```go
+// Two groups of nodes, neither with a bundle of its own. Each group gets
+// a Kustomization that applies its directory; the one for apps waits for
+// the one for platform.
+source := &stack.SourceRef{Kind: "GitRepository", Name: "flux-system", Namespace: "flux-system"}
+platform := &stack.Node{Name: "platform", KustomizationName: "platform", Children: []*stack.Node{
+    {Name: "cert-manager", Bundle: &stack.Bundle{Name: "cert-manager", SourceRef: source}},
+}}
+apps := &stack.Node{Name: "apps", KustomizationName: "apps", DependsOn: []*stack.Node{platform}, Children: []*stack.Node{
+    {Name: "shop", Bundle: &stack.Bundle{Name: "shop", SourceRef: source}},
+}}
+cluster := &stack.Cluster{Name: "prod", Node: &stack.Node{Name: "prod", Children: []*stack.Node{platform, apps}}}
+
+rules := layout.DefaultLayoutRules()
+rules.FluxPlacement = layout.FluxIntegratedPerLayout
+ml, err := fluxcd.NewLayoutIntegrator(fluxcd.NewResourceGenerator()).CreateLayoutWithResources(cluster, rules)
+if err != nil {
+    panic(err)
+}
+for _, obj := range ml.Resources {
+    kust, ok := obj.(*kustv1.Kustomization)
+    if !ok {
+        continue
+    }
+    var waitsFor []string
+    for _, dep := range kust.Spec.DependsOn {
+        waitsFor = append(waitsFor, dep.Name)
+    }
+    fmt.Println(kust.Name, kust.Spec.Path, waitsFor)
+}
+```
+<!-- doc-example:end -->
+
+It prints `platform prod/platform []` and `apps prod/apps [platform]`. Without the field the two
+would be named `prod-platform-node` and `prod-apps-node`, after their paths, and a `DependsOn`
+entry names its target either way. The fields are refused, not ignored, on a node that has no
+Kustomization of its own (its directory renders a bundle, a grouping rule merged it into another
+node's directory, or it is the top of the tree) and under every other placement. Set the name and
+the named dependencies before the cluster is walked: the walker copies them onto the node's
+layout, and a value the node gets after the walk is refused too. See the
+[Flux Engine reference](/api-reference/flux-engine/#node-kustomizations).
+
+## Application layout Kustomizations are named after their unit (breaking change)
+
+Under `FluxIntegratedPerLayout` the Kustomization of an application layout or of an augmenter's
+child layout is now named `<unit name>-<layout name>`, the unit name being the name of the
+Kustomization that applies the bundles it belongs to: the first bundle's where a grouping axis
+merged several into one directory, not necessarily that of the bundle holding the application.
+It used to be the layout's name alone, so an application named like its
+bundle gave two Kustomizations one name and was refused. What to do:
+
+- **Expect the rename on upgrade.** The application `web-app` of the bundle `web` is now applied
+  by the Kustomization `web-web-app`. With pruning on, Flux removes the old Kustomization once the
+  parent no longer lists it; with pruning off, delete it. A Kustomization that prunes deletes
+  what it applied when it is removed, so the layout's objects can be deleted and applied again
+  under the new one: keep the old name (last point) where that is not acceptable.
+- **`ManifestLayout.DependsOn` keeps working for layout names.** An entry that names a layout of
+  the same bundle is written as that layout's new Kustomization name.
+- **A Kustomization name written out by hand changes.** A `NamedDependsOn` entry, or a
+  `ManifestLayout.DependsOn` entry that names an application layout of another bundle, has to
+  carry the new name.
+- **A Kustomization you placed yourself under the old name stays.** A tree that already holds a
+  Kustomization named `<layout name>` for the layout's directory gets the new one beside it, and
+  both apply that directory until you remove the old one or set
+  `ManifestLayout.KustomizationName` on the layout to the old name, which keeps yours and
+  generates no second one.
+- **A new name over 63 characters is shortened.** The new name is longer than the old one by the
+  unit name, and Flux cannot reconcile a Kustomization whose name is over 63 characters, so the
+  integration shortens it to `<unit prefix>-<hash>-<layout name>`, keeping the layout's name. A
+  layout name over 54 characters leaves no room for the hash beside it, and the name is its first
+  54 bytes, without the hyphens and dots that end them, and the hash:
+  `<layout name prefix>-<hash>`, or the hash alone where nothing is left of those bytes
+  (go-kure/kure#1036; it was refused before). Set `ManifestLayout.KustomizationName` on the layout for a name of your own.
+- **Compute the default instead of composing it.** `fluxcd.DefaultLayoutKustomizationName(unit,
+  layoutName)` returns the name the integration gives a layout without `KustomizationName`,
+  shortened or not, so a check of your own Kustomization names (collisions, length) sees the name
+  kure writes (go-kure/kure#1040). `unit` is the unit name above (`Bundle.UnitName()` of the first
+  bundle in a merge), `layoutName` the layout's `Name`.
+- **A new name another Kustomization already has is refused.** The application `web` of the
+  bundle `platform` is now applied by `platform-web`. If a bundle, a node or another layout
+  already has a Kustomization of that name, the integration refuses the tree and names both,
+  where the old name `web` was free. One written with the `config.kubernetes.io/local-config`
+  annotation at any value but `false` (the string `"false"` or the boolean `false`) does not
+  count: kustomize drops it from the build
+  (go-kure/kure#1059). Set `ManifestLayout.KustomizationName` on the layout, or
+  `KustomizationName` on the other owner.
+- **Keep an old name** by setting `ManifestLayout.KustomizationName` on the layout.
+
+## Per-layout Kustomizations take the bundle's readiness settings and labels (breaking change)
+
+Under `FluxIntegratedPerLayout` the Kustomization of an application's directory, and of every
+layout below it, now carries `wait`, `timeout`, `retryInterval`, labels and annotations: those of
+the bundle that holds the application, unless the layout sets its own (`ManifestLayout.Wait`,
+`Timeout`, `RetryInterval`, `Labels`, `Annotations`). They used to carry none, so a bundle with
+`Wait` was Ready once those Kustomizations had applied their directories, not once the workloads
+were. Interval, prune and four more settings follow in the next section. What to do:
+
+- **Expect the new fields in the output.** A tree whose bundle sets one of the five gains it on
+  those Kustomizations. A tree that sets none renders as before.
+- **Give the layouts below a shorter timeout than their bundle.** With `wait`, the bundle's
+  Kustomization waits for the ones below it under its own timeout. Set `Timeout` on the layouts,
+  and keep the bundle's above theirs; Flux treats any timeout under 30 seconds as 30 seconds.
+- **A layout that depends on the application layout above it is refused once the bundle sets
+  `Wait`.** That application layout's Kustomization would wait for the one that depends on it.
+  Set `Wait` to a pointer to `false` on the application's layout; the layouts below keep the
+  bundle's.
+- **A label or annotation the Kubernetes API does not accept is refused** where a per-layout
+  Kustomization takes it, naming the layout and, for one it inherits, the bundle.
+- **A duration Flux does not take is refused**, on every placement and on the bootstrap: a
+  negative one (`"-1s"`) or a positive one under a millisecond (`"1us"`), in a bundle's `Interval`,
+  `Timeout` or `RetryInterval`, a layout's `Interval`, `Timeout` or `RetryInterval`, or a generator's
+  `DefaultInterval`. The Flux API refuses the object such a value is written into, so no
+  object it ever accepted changes. `Bundle.Validate` still accepts these values.
+- **A node's Kustomization inherits nothing.** Set the fields on the node's walked layout.
+
+What readiness through such a chain means, and where it stops, is in the
+[Flux Engine reference](/api-reference/flux-engine/#per-layout-settings).
+
+## Per-layout Kustomizations take the bundle's interval, prune, force, suspend, postBuild and patches (breaking change)
+
+Under `FluxIntegratedPerLayout` the same Kustomizations now also carry `interval`, `prune`,
+`force`, `suspend`, `postBuild` and `patches` (go-kure/kure#1021). Interval, prune, force and
+suspend are the layout's own (`ManifestLayout.Interval`, `Prune`, `Force`, `Suspend`), or else the
+bundle's; interval and prune fall back to the generator's. `postBuild` is the bundle's, copied
+whole, and the bundle's patches are placed by object. What to do:
+
+- **Expect the new fields in the output.** A tree that sets none of the six renders as before.
+  A bundle with `Prune` on turns garbage collection on for its applications' Kustomizations,
+  where the generator's `Prune` applied before.
+- **Expect a patch to move.** A patch with a target is on the bundle's own Kustomization and on
+  every per-layout one. A plain untargeted strategic-merge patch is on the Kustomizations whose
+  build holds every object it names, so the bundle's own loses one whose object it does not build;
+  its build failed on the cluster before. An untargeted JSON6902 patch, or one carrying a build
+  annotation, stays on the bundle's own Kustomization alone and fails there when only a layout
+  builds its object: give it a target.
+- **A plain untargeted patch no build can take is refused** at integration instead of failing on the
+  cluster: when no Kustomization of the bundle builds an object it names, give it a target or
+  place the object in a build of the bundle; when no one Kustomization builds all the objects it
+  names, write one patch per object. A target is for a patch of one object: kustomize refuses one
+  on an entry of several documents, or of a `List` of several items, so split such a patch first.
+- **After a JSON6902 patch, a patch with one of kustomize's build annotations**
+  (`internal.config.kubernetes.io/`) **or a patch that can remove an object from the build**
+  (`$patch: delete`, or `config.kubernetes.io/local-config` at any value but `"false"`),
+  the patches that follow are not placed by object and stay
+  on the bundle's own Kustomization as well; one whose object only a layout builds still fails
+  there. The integration refuses that build, naming the patch, the entry and the object
+  (go-kure/kure#1160). Put the patch before that entry, or give it a target (a patch of several
+  objects: one patch per object first, each with its target).
+- **Expect Flux's opt-out on a Kustomization whose postBuild or patches the parent would
+  change.** A per-layout Kustomization is in its parent's build, whose postBuild substitution runs
+  over its own postBuild and patches first. Where that would change either at all, a plain
+  `${VAR}` in a bundle patch included, it gets `kustomize.toolkit.fluxcd.io/substitute: disabled`
+  and applies them as if no parent had run. That also stops the parent substituting its labels,
+  annotations and path, so a tree where the parent's substitution changes a `${...}` in the
+  bundle's patches or substitute values and one in its labels, annotations or the layout's path
+  is refused, where it rendered before: drop one of the two. A tree whose annotations leave no
+  room for the opt-out under the Kubernetes API's total size is refused as well: shorten them.
+
+The full rules, the refusals and the limit are in the
+[Flux Engine reference](/api-reference/flux-engine/#per-layout-settings).
+
+## A layout's Kustomization settings are refused where it gets no Kustomization (breaking change)
+
+A layout's own Kustomization fields (`DependsOn`, `KustomizationName`, `Wait`, `Timeout`,
+`RetryInterval`, `Labels`, `Annotations`, `Interval`, `Prune`, `Force`, `Suspend`) used to be
+dropped without an error on a layout that gets no Flux Kustomization of its own. They are now
+refused (go-kure/kure#1032). That is every layout under `FluxIntegratedPerBundle` and
+`FluxSeparate` (and `GenerateFromLayout`), and, under `FluxIntegratedPerLayout`, the top of the
+tree, a layout that renders a bundle, an umbrella child and an `AppFileSingle` layout. The error
+names the first such layout, every field it sets and why it has no Kustomization. What to do:
+
+- **An augmenter that sets `DependsOn` (or any of the eleven fields) on a child layout under
+  `FluxSeparate` or `FluxIntegratedPerBundle` is now refused.** Use `FluxIntegratedPerLayout`,
+  which gives such a child layout its own Kustomization, or leave the fields unset.
+- **A node's own fields are refused on the node,** once: a value the walk copies from a node to
+  its layout is not refused a second time on the layout.
+
+## A bundle can name the service account Flux applies it with
+
+`Bundle.ServiceAccountName` (go-kure/kure#1034) is written to `spec.serviceAccountName` of the
+bundle's Kustomization in every placement, and kustomize-controller impersonates that account when
+it applies the bundle. Under `FluxIntegratedPerLayout` the Kustomization of each of the bundle's
+applications that has a directory of its own, and of each layout below it, carries the same
+account; a layout has no field to change it. Unset, nothing changes in the output.
+
+<!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowServiceAccount -->
+```go
+// The umbrella names an account for its own Kustomization; a child gets
+// one only where it names its own.
+infra := &stack.Bundle{Name: "shop-infra", ServiceAccountName: "infra-deployer"}
+services := &stack.Bundle{Name: "shop-services"}
+shop := &stack.Bundle{Name: "shop", ServiceAccountName: "shop-deployer", Children: []*stack.Bundle{infra, services}}
+cluster := &stack.Cluster{Name: "prod", Node: &stack.Node{Name: "apps", Bundle: shop}}
+
+objects, err := fluxcd.Engine().GenerateFromCluster(cluster, layout.DefaultLayoutRules())
+if err != nil {
+    panic(err)
+}
+for _, obj := range objects {
+    kust := obj.(*kustv1.Kustomization)
+    fmt.Printf("%s %q\n", kust.Name, kust.Spec.ServiceAccountName)
+}
+```
+<!-- doc-example:end -->
+
+It prints `shop "shop-deployer"`, `shop-infra "infra-deployer"` and `shop-services ""`: each
+bundle's Kustomization carries the account the bundle names, and the umbrella's is not passed to
+`shop-services`.
+
+- **Create the account and its RBAC yourself.** Flux looks it up in the Kustomization's own
+  namespace, the generator's `DefaultNamespace` (`flux-system` by default), and kure writes the
+  name only.
+- **Under the integrated placements the account also applies Kustomization objects.** A bundle's
+  directory holds the CRs of its umbrella children and, under `FluxIntegratedPerLayout`, of its
+  application layouts, so the bundle's account needs RBAC to manage Kustomizations in that
+  namespace.
+- **Set it on every bundle that needs one.** An umbrella's account is not passed to its children:
+  a child without its own is applied with the controller's own identity, or with the default
+  service account the controller is started with (`--default-service-account`), if any.
+- **Bundles that share a directory share one account.** Bundles a `GroupFlat` merge puts in one
+  directory must set the same value, or the integration is refused, naming both.
+- **The name is checked.** It must be a DNS-1123 subdomain; `Bundle.Validate` and the generator
+  refuse another, naming the bundle by its path.
+
+The table of which Kustomization carries which account is in the
+[Flux Engine reference](/api-reference/flux-engine/#service-account).

@@ -32,11 +32,11 @@ packages:
     mount: {target: api-reference/stacktest.md, title: Stack Test Helpers, weight: 15, group: Core Domain, desc: "Generation-contract checks for ApplicationConfig authors"}
   - path: pkg/stack/fluxcd
     readme: pkg/stack/fluxcd/README.md
-    guides: [guides/flux-workflow]
+    guides: [guides/flux-workflow, guides/flux-layout-rules, guides/flux-umbrella-bundles, guides/flux-augmenters-and-delivery, guides/flux-bootstrap]
     mount: {target: api-reference/flux-engine.md, title: Flux Engine, weight: 20, group: Core Domain, desc: "FluxCD workflow implementation"}
   - path: pkg/stack/layout
     readme: pkg/stack/layout/README.md
-    guides: [guides/flux-workflow]
+    guides: [guides/flux-workflow, guides/flux-layout-rules]
     mount: {target: api-reference/layout.md, title: Layout Engine, weight: 40, group: Core Domain, desc: "Manifest directory organization"}
 
   # ─── Resource Operations ───
