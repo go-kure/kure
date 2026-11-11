@@ -382,7 +382,7 @@ func TestStandIn_HeldCloneWithAPatchedGraphFieldDoesNotHideALostWaitOnTheFallbac
 // build of a hand-written Kustomization with a name prefix made, so it is not
 // the held object, however equal they are: the tree is refused. A deliberate
 // over-refusal, the price of not guessing which of the two the controller
-// applies, stated in the README.
+// applies, stated in docs/names-and-paths.md.
 func TestStandIn_HeldCloneEqualToTheCopyOfATransformingWriterIsRefusedOnTheFallback(t *testing.T) {
 	const keep = "- op: test\n  path: /spec/dependsOn/2/name\n  value: v\n"
 	for _, placement := range integratedPlacements {
@@ -494,8 +494,8 @@ func TestStandIn_HeldLeafOfAPostBuildOnlyWriterIsRefusedOnTheFallback(t *testing
 // against the umbrella as the tree holds it as well as against the umbrella as
 // applied. A patch of the copy that gives it an interval of its own (33m, which
 // equals neither the held 1m nor the applied 17m) makes it a leaf with a spec of
-// its own, and the loss is refused: that row pins the refusal the README
-// documents. With one that gives it the applied 17m it is a duplicate of the
+// its own, and the loss is refused: that row pins the refusal
+// docs/names-and-paths.md documents. With one that gives it the applied 17m it is a duplicate of the
 // umbrella as applied, and is admitted.
 func TestStandIn_UntouchedCopyOfAPatchedUmbrellaIsAdmitted(t *testing.T) {
 	t.Parallel()

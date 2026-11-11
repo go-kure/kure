@@ -1231,8 +1231,8 @@ check_removed_are_gone() {
 # (pkg/stack/fluxcd/docs/defaults.md's SetGitRepositoryReference, declared in
 # pkg/kubernetes/fluxcd) and inside its own Go examples through an import alias
 # (the same file's pubfluxcd.CreateGitRepository), and an alias is spelled exactly
-# like the variable receiver in engine.CreateLayoutWithResources two code blocks
-# later. Failing on those would buy one more catchable removal and cost three
+# like the variable receiver in engine.CreateLayoutWithResources in the layout
+# integration page. Failing on those would buy one more catchable removal and cost three
 # suppressions on pages that are correct, which is a worse check.
 report_unresolved() {
 	awk -v symfile="$symbols" -v typefile="$types" -v dirfile="$pkgdirs" \
