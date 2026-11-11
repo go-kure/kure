@@ -2060,7 +2060,7 @@ func unitLayoutCRName(unit, name string) string {
 // the per-layout Kustomization of an application or augmenter layout under
 // FluxIntegratedPerLayout when the layout sets no KustomizationName: the
 // default "<unit>-<layoutName>", shortened where it is longer than a Flux
-// Kustomization name may be (see the package README, "Per-layout name rule").
+// Kustomization name may be (see docs/child-layout-crs.md, "Per-layout name rule").
 // unit is the unit name: the name in effect (stack.Bundle.UnitName) of the
 // Kustomization that applies the bundles the layout belongs to, which is the
 // first bundle's where a grouping axis merged several into one directory, not

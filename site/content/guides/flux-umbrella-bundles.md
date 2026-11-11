@@ -157,7 +157,7 @@ A `wait` does not wait for a Flux Kustomization its apply skips
 waiting Kustomization's `spec.commonMetadata`, as its build makes the object),
 and a health check on the checker itself is dropped, as Flux drops it,
 unless it is written with no namespace, which never passes and is refused (see
-the [Flux Engine reference](/api-reference/flux-engine/)).
+the [Flux Umbrella Bundles reference](/api-reference/flux-umbrella-bundles/)).
 With or without the setting, every integration also judges the order of the
 Kustomizations of the tree, on each later integration too, each read as
 kustomize-controller builds its writer: patches, components, name prefix and
@@ -204,7 +204,7 @@ interface is none), up to 40,000, and
 its walk meets at most 4 million values (an interface is one of them). A field
 tagged `json:"-"` is walked like any other. A value past a bound is refused even where
 origin/main would accept it: the bounds are part of the contract, and
-the package README lists them.
+the [Flux Umbrella Bundles reference](/api-reference/flux-umbrella-bundles/) lists them.
 A type that embeds two such objects at the same depth, or that has a
 `DeepCopyObject` of its own (or one in a type it embeds, an embedded interface
 or a named type that is not a struct included, at the object's depth or
@@ -223,7 +223,7 @@ record still holds, which a caller took out of the layout: the integrator and
 differently on a later call, or never returns, is not covered. A setter that
 panics part-way, when an application's delivery intent sets its annotations, may
 leave the object changed, and then the undo cannot promise to restore it. The
-package README lists the accepted shapes. A Flux Kustomization you hand-write
+[Flux Umbrella Bundles reference](/api-reference/flux-umbrella-bundles/) lists the accepted shapes. A Flux Kustomization you hand-write
 as an unstructured object is read the way the API server reads it: a key
 matches a field only in its exact spelling, and a key the type does not have is
 dropped. A `Wait:` or `KubeConfig:` key therefore sets nothing, as it sets
@@ -282,8 +282,8 @@ merge cycle whose members offer different values of an `apiVersion`, `kind` or
 `items` that one of them lacks; a List nested more than eight
 deep that holds an object (a mapping with a `metadata` key, of its own or
 through merge keys); or an object with an `apiVersion` or `kind` of more than
-1024 bytes. The package README states the full contract, including what is not
-refused.
+1024 bytes. The [Flux Names and Paths reference](/api-reference/flux-names-and-paths/) states the
+full contract, including what is not refused.
 One
 without `wait` that health-checks any other object waits for the Kustomization
 that applies it, whatever its expression says, when that writer is certain,
