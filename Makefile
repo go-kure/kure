@@ -285,6 +285,10 @@ check-go-version: ## Verify Go version consistency across all files
 check-tool-versions: ## Verify golangci-lint pin parity (Makefile/ci.yml/docs) against mise.toml
 	sh scripts/check-tool-versions.sh
 
+.PHONY: check-consumer
+check-consumer: ## Build a module that imports kure and check its graph (go-kure/kure#1316)
+	sh scripts/check-consumer.sh
+
 .PHONY: sync-tool-versions
 sync-tool-versions: ## Sync golangci-lint pins (Makefile/ci.yml/docs) from mise.toml
 	sh scripts/sync-tool-versions.sh

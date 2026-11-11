@@ -83,17 +83,21 @@ Boxes are job ids from `ci.yml`; where a job's check name differs, it follows in
 No needs, start at once:  action-pins, forbidden-terms
 PR-only, no needs:        doc-gate, analyze-changes (Analyze Changes)
 PR and queue, no needs:   pin-impact
+needs changes:            consumer (check-consumer)
 
                  ┌───────┐
                  │ build │  ← aggregation gate (if: always()): validate, test, coverage-check,
                  └───────┘    security, docs-build, doc-gate, action-pins, forbidden-terms,
-                              pin-impact
+                              pin-impact, consumer
 ```
 
 The PR-only job `doc-gate` still feeds `build`; on a push or merge-queue run it is skipped, and
 `build` accepts `skipped` from every job except `forbidden-terms`. `pin-impact` is skipped on a
 push; on a merge-queue run it checks only that the merged tree's `go-kure/.github` pins agree (see
-the pin-impact gate below). `analyze-changes` is informational and feeds nothing.
+the pin-impact gate below). `analyze-changes` is informational and feeds nothing. `consumer` is
+skipped on a pull request that changes none of `go.mod`, `go.sum`, `scripts/check-consumer.sh` and
+`ci.yml` (the module graph that a consumer of kure sees changes only with `go.mod` and `go.sum`);
+it runs on every merge-queue, push, scheduled and manual run.
 
 On `merge_group` events (merge queue), `lint`/`test`/`build` run against the queue's
 temporary branch — the merged result — before the PR is allowed to land.
@@ -108,7 +112,8 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `test` | `test` | 50 min | changes | Unit tests with race detection and coverage; `go test -timeout 30m` bounds each test binary, and the 50 min job limit covers that plus the `-race` compile, the two cache restores and the cache save |
 | `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.9.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational; the accepted-risk entry (`GO-2026-5377`) carries its justification inline in `ci.yml` |
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment. The upload cannot fail the job: it stops after 2 min and a failure there is ignored, so a stalled upload does not hit the job's 5 min limit |
-| `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
+| `consumer` | `check-consumer` | 15 min | changes | Builds a throwaway module that imports kure, with none of kure's `replace` directives, and fails if its module graph holds `sigs.k8s.io/structured-merge-diff/v7` or if the selected `k8s.io/kube-openapi` is not the one kure requires — `scripts/check-consumer.sh` (go-kure/kure#1316). Runs on a PR only when `go.mod`, `go.sum`, the script or the workflow changed |
+| `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact, consumer | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, line counts against the PR's own base branch (for example `main` or a `release/vX.Y` branch), breaking change warnings (PR only) |
 | `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, the documented API references via `scripts/check-doc-api-refs.sh`, the Go blocks of every documentation page, generated from `Example` functions or marked as excerpts, via `scripts/gen-doc-examples.sh`, and absolute links to the site itself via `scripts/check-site-self-links.sh` |
 | `doc-gate` | `doc-gate` | 5 min | — | API changes need docs check (PR only; no `needs`, not path-filtered); runs the canonical `check-doc-gate` action from `go-kure/.github`. Bypass via the maintainer `docs-skip` label, or automatically for a generated-table row whose only change is a provenance field (`ModuleVersion` — pure version churn from a dependency bump); adding, removing, or re-scoping a kind is not exempt |

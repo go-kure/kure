@@ -73,6 +73,11 @@ jobs:
     outputs:
       go: ${{ github.event_name == 'merge_group' && 'true' || ((steps.nondocs.outputs.go == 'true' || steps.filter.outputs.go_docs_inputs == 'true') && 'true' || 'false') }}
       docs: ${{ github.event_name == 'merge_group' && 'true' || steps.filter.outputs.docs }}
+      # `consumer` gates the check-consumer job (go-kure/kure#1316). The module graph
+      # a consumer of kure sees changes only with go.mod or go.sum, so a pull request
+      # runs the job only then. Every other event (merge queue, push, schedule, manual
+      # run) runs it, so a graph that moved on the base branch is caught there.
+      consumer: ${{ github.event_name != 'pull_request' && 'true' || steps.filter.outputs.consumer }}
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -99,6 +104,11 @@ jobs:
             - 'docs/github-workflows.md'
             - 'docs/api-tables.md'
             - 'docs/api-tables.json'
+          consumer:
+            - 'go.mod'
+            - 'go.sum'
+            - 'scripts/check-consumer.sh'
+            - '.github/workflows/ci.yml'
           docs:
             - 'site/**'
             - 'docs/**'
@@ -368,6 +378,38 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
     - name: Check action pins
       uses: go-kure/.github/.github/actions/check-action-pins@d19909493dec167147f6635224b7a8541ad9493e # main
+
+  # A module that imports kure ignores kure's replace directives, so kure's own build
+  # cannot see a graph that breaks it (go-kure/kure#1316). This job builds that view.
+  consumer:
+    name: check-consumer
+    runs-on: autops-kube-kure
+    timeout-minutes: 15
+    needs: [changes]
+    if: needs.changes.outputs.consumer == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Install build tools
+      run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
+
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      with:
+        go-version-file: go.mod
+        cache: false
+
+    - name: Restore Go modules cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-gomod-
+
+    - name: Check a module that imports kure
+      run: make check-consumer
 
   forbidden-terms:
     name: forbidden-terms
@@ -1012,11 +1054,12 @@ jobs:
     name: build
     runs-on: autops-kube-kure
     timeout-minutes: 1
-    needs: [validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact]
+    needs: [validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact, consumer]
     if: always()
     steps:
     - name: Check build results
       run: |
+        co="${{ needs.consumer.result }}"
         vl="${{ needs.validate.result }}"
         tt="${{ needs.test.result }}"
         db="${{ needs.docs-build.result }}"
@@ -1030,7 +1073,7 @@ jobs:
           echo "Forbidden-terms job did not succeed (result: $ft)"
           exit 1
         fi
-        for result in "$vl" "$tt" "$db" "$cc" "$dg" "$ap" "$sc" "$pi"; do
+        for result in "$vl" "$tt" "$db" "$cc" "$dg" "$ap" "$sc" "$pi" "$co"; do
           if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
             echo "Required job failed or was cancelled (result: $result)"
             exit 1
