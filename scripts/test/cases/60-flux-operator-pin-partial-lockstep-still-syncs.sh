@@ -1,8 +1,8 @@
 #!/bin/bash
 # Row 60: the no-download fast path applies only when the constant AND the
-# README both already name the go.mod version. With the constant current but
-# the README stale (a half-applied earlier run, or a hand edit), the script
-# must go on to re-vendor and fix the README rather than declare the lockstep
+# bootstrap page both already name the go.mod version. With the constant current
+# but the page stale (a half-applied earlier run, or a hand edit), the script
+# must go on to re-vendor and fix the page rather than declare the lockstep
 # intact.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
@@ -14,7 +14,7 @@ run_pin
 assert_rc 0
 assert_out_not_contains 'constant and bootstrap page already'
 if ! grep -qF 'currently **v0.2.0**' "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md"; then
-    echo "FAIL: stale README not corrected:" >&2
+    echo "FAIL: stale bootstrap page not corrected:" >&2
     cat "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md" >&2
     exit 1
 fi

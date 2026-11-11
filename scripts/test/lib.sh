@@ -220,7 +220,7 @@ PIN_NEW_BUNDLE_BODY=$'apiVersion: v1\nkind: Namespace\n---\nkind: CustomResource
 # $PIN_MODULE at that version (inside a `require (` block, next to a `replace`
 # line naming a different module, so the awk that reads it is exercised on the
 # shapes it must skip), an "old" vendored bundle pinned at v0.1.0, and the
-# constant and README anchors the script rewrites. Sets STUB_PIN_LOG,
+# constant and bootstrap page anchors the script rewrites. Sets STUB_PIN_LOG,
 # STUB_PIN_BODY and STUB_PIN_MODE=ok. Call bare, like new_fixture.
 new_pin_fixture() {
     local gomod_version="$1"

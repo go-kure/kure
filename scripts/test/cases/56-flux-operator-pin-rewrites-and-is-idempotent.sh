@@ -1,6 +1,6 @@
 #!/bin/bash
 # Row 56: sync-flux-operator-pin.sh moves all three lockstep artifacts -- the
-# vendored bundle, the FluxOperatorVersion constant, and the README mention --
+# vendored bundle, the FluxOperatorVersion constant, and the bootstrap page mention --
 # to the go.mod version, downloading that exact release's install.yaml. A
 # second run must then change nothing (the idempotence contract Renovate's
 # postUpgradeTasks relies on, so a no-op bot re-run leaves no diff).
@@ -27,17 +27,17 @@ if ! grep -qxF 'const FluxOperatorVersion = "v0.2.0"' "$FIXTURE/pkg/stack/fluxcd
     cat "$FIXTURE/pkg/stack/fluxcd/flux_operator_install.go" >&2
     exit 1
 fi
-# The backticks are literal markdown in the README, not a command substitution.
+# The backticks are literal markdown in the bootstrap page, not a command substitution.
 # shellcheck disable=SC2016
 if ! grep -qF '`FluxOperatorVersion`, currently **v0.2.0**' "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md"; then
-    echo "FAIL: README mention not rewritten:" >&2
+    echo "FAIL: bootstrap page mention not rewritten:" >&2
     cat "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md" >&2
     exit 1
 fi
-# The rest of the README line must survive the rewrite.
+# The rest of the bootstrap page line must survive the rewrite.
 if ! grep -qF 'The bundle is vendored (' "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md" \
    || ! grep -qF '). See the source.' "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md"; then
-    echo "FAIL: README rewrite clobbered surrounding text:" >&2
+    echo "FAIL: bootstrap page rewrite clobbered surrounding text:" >&2
     cat "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md" >&2
     exit 1
 fi
