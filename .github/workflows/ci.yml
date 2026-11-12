@@ -377,7 +377,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
     - name: Check action pins
-      uses: go-kure/.github/.github/actions/check-action-pins@f124f2a59a8a216937e0dbc49953d01f406202a2 # main
+      uses: go-kure/.github/.github/actions/check-action-pins@047a3b7de2c441f7162811f03d9f03445bd1e77c # main
 
   # A module that imports kure ignores kure's replace directives, so kure's own build
   # cannot see a graph that breaks it (go-kure/kure#1316). This job builds that view.
@@ -422,7 +422,7 @@ jobs:
     # This job has no path or event filter: full-tree PR and merge-queue scans
     # must use identical scope.
     - name: Check for downstream references
-      uses: go-kure/.github/.github/actions/check-forbidden-terms@f124f2a59a8a216937e0dbc49953d01f406202a2 # main
+      uses: go-kure/.github/.github/actions/check-forbidden-terms@047a3b7de2c441f7162811f03d9f03445bd1e77c # main
 
     # Derives the canonical-guard checkout ref from the check-forbidden-terms
     # action pin above instead of carrying a second, independently-tracked
@@ -844,7 +844,7 @@ jobs:
         fi
 
     - name: Gate on reachable vulnerabilities
-      uses: go-kure/.github/.github/actions/govulncheck-gate@f124f2a59a8a216937e0dbc49953d01f406202a2 # main
+      uses: go-kure/.github/.github/actions/govulncheck-gate@047a3b7de2c441f7162811f03d9f03445bd1e77c # main
       with:
         report: govulncheck.json
         # Accepted-risk advisories: reachable under symbol scan but not exploitable in
@@ -1203,7 +1203,7 @@ jobs:
       run: echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Validate docs map (code↔docs sync)
-      uses: go-kure/.github/.github/actions/check-doc-sync@f124f2a59a8a216937e0dbc49953d01f406202a2 # main
+      uses: go-kure/.github/.github/actions/check-doc-sync@047a3b7de2c441f7162811f03d9f03445bd1e77c # main
 
     # check-doc-sync proves every package has a page; this proves the pages name
     # functions that still exist. The builder-contract epic removed several
@@ -1303,7 +1303,7 @@ jobs:
       run: hugo --baseURL "/" --destination .linkcheck --quiet
 
     - name: Check internal links (rendered site)
-      uses: go-kure/.github/.github/actions/check-links@f124f2a59a8a216937e0dbc49953d01f406202a2 # main
+      uses: go-kure/.github/.github/actions/check-links@047a3b7de2c441f7162811f03d9f03445bd1e77c # main
       with:
         built-dir: site/.linkcheck
 
@@ -1440,7 +1440,7 @@ jobs:
       run: echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Enforce docs-with-code (Layer 3)
-      uses: go-kure/.github/.github/actions/check-doc-gate@f124f2a59a8a216937e0dbc49953d01f406202a2 # main
+      uses: go-kure/.github/.github/actions/check-doc-gate@047a3b7de2c441f7162811f03d9f03445bd1e77c # main
       with:
         base-ref: origin/${{ github.base_ref }}
         skip: ${{ contains(github.event.pull_request.labels.*.name, 'docs-skip') }}
