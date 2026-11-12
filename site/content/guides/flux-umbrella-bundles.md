@@ -202,8 +202,8 @@ object is walked in steps (a pointer, a field, an element, a map value, a map
 key of interface type and an embedded struct are one step each, and an
 interface is none), up to 40,000, and
 its walk meets at most 4 million values (an interface is one of them). A field
-tagged `json:"-"` is walked like any other. A value past a bound is refused even where
-origin/main would accept it: the bounds are part of the contract, and
+tagged `json:"-"` is walked like any other. A value past a bound is refused:
+the bounds are part of the contract, and
 the [Flux Umbrella Bundles reference](/api-reference/flux-umbrella-bundles/) lists them.
 A type that embeds two such objects at the same depth, or that has a
 `DeepCopyObject` of its own (or one in a type it embeds, an embedded interface
