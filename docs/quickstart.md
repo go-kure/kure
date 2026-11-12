@@ -86,8 +86,10 @@ The program prints the Kustomization to stdout. To deploy it you need a Flux ins
 
 1. **Save the output into the repository Flux watches, then commit it**
 
+Save the file in the bootstrap path of your cluster, `clusters/<cluster>/`. That is the `--path` you gave to `flux bootstrap`. Do not use its `flux-system` subdirectory, because the `kustomization.yaml` there lists only the Flux components and Flux never applies other files in it.
+
 ```bash
-go run main.go > /path/to/your-repo/clusters/flux-system/hello-world.yaml
+go run main.go > /path/to/your-repo/clusters/<cluster>/hello-world.yaml
 cd /path/to/your-repo
 git add clusters/
 git commit -m "Add hello-world kustomization"

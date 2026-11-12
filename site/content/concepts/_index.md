@@ -23,7 +23,7 @@ both use the word *Application* for something different.
 | What it is | A Go library | An OAM-native package manager; its command line is `kurel` |
 | Its model | Cluster, Node, Bundle, Application: Go types in `pkg/stack` | Application, ClusterProfile and Package documents, written in YAML |
 | What an Application is | A Go struct with a name, a namespace and an `ApplicationConfig` that you implement to generate Kubernetes objects | A YAML document of kind `Application` in the API group `launcher.gokure.dev/v1alpha1` |
-| When it runs | In your build, which writes plain YAML | At install time, when a package config and a site config are resolved into manifests |
+| When it runs | In your build, which writes plain YAML | At compile time, in your build or pipeline, when a package config and a site config are resolved into static manifests. No launcher component runs in the cluster |
 
 The `launcher.gokure.dev/v1alpha1` API is launcher's own. OAM inspired it, and it is not
 `core.oam.dev/v1beta1`: launcher does not claim compatibility with that API. launcher uses kure to
