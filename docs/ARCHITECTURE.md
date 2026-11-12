@@ -798,8 +798,8 @@ internal/                     # Packages shared by the tests and generators; not
 The patch engine is not part of this module: it moved to go-kure/launcher (ADR-018). Three packages
 under `internal/` are not test support. `built` reads a resource as kustomize builds it, so the
 layout writers' pre-write checks and the Flux integration agree on which objects a resource holds.
-`kustomizeschema` parses kustomize's process-global OpenAPI schema before any use of kustomize reads
-it. `nilobj` tells whether a `client.Object` holds no object. The other four (`crds`, `crdvalidate`,
+`kustomizeschema` parses kustomize's process-global OpenAPI schema before any of kure's uses of
+kustomize reads it. `nilobj` tells whether a `client.Object` holds no object. The other four (`crds`, `crdvalidate`,
 `gotk`, `kuretest`) are described under [Testing Architecture](#testing-architecture); the
 builder-specific internals live under `pkg/kubernetes/internal/`.
 
