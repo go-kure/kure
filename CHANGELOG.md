@@ -16,6 +16,66 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://github.com/go-kure/kure/blob/main/docs/builder-contract-release-2.md).
+## [0.2.0-rc.2] - 2026-11-12
+
+### Build
+
+- Update dependency yq to v4.54.3
+- Update module golang.org/x/crypto to v0.59.0 [security]
+
+### Documentation
+
+- Fix commands, workflows and counts in the contributor docs
+- Make the quickstart runnable and fix the examples pages
+- Retire stale design text and mark historical records
+- Correct the stack and core package docs against the source
+- List every helper by kind and correct the builder docs
+- Fix navigation order, section indexes and the docs-map descriptions
+- Stop publishing the builder-contract migration ledgers
+- Say that the patch library belongs to launcher
+- Fix the homepage buttons and tabs, move the dev notice, one h1 per page
+- Add a package status page and a kure-and-launcher model map
+- Point the migration-note links at the repository files
+- Fix three statements the sweep review found
+- Say which applications and bundles keep a directory
+- Fix four statements the full review found
+- Say the same about make ci in the target list
+- Fix the manual reconcile step and the OAM table of contents
+- Keep the hello-world reconcile command in the manual step
+- Fetch the source before the manual reconcile
+- Fix the nine defects the sweep review found after its last round
+- Limit the kustomizeschema ordering claim to kure's own uses
+- Regenerate the fluxcd README example after the comment fix
+- Name an Alert helper in the example comment instead of a glob
+- Replace the OCI layout moved-notice with a scope page
+- Split the Flux workflow guide into a tutorial and four task pages
+- State the OCI layer-3 path and kustomization rules as the writer does, and mark the excerpts
+- Say the OCI root also has an empty name
+- Split the Flux engine README into focused pages
+- Add start, deliver and reference category pages
+- State the Go version the pinned release needs
+- Point the guide links at the pages that now hold the sections
+- Name the split pages where the package READMEs cite the Flux engine README
+- Link the remaining references to the split Flux engine pages
+- Update the last references to the old Flux engine README
+- Say bootstrap page, not README, in the pin script and its design note
+- Say bootstrap page in the dependency-updates guide and the Renovate rule
+- Say bootstrap page in the pin script test comments and messages
+- Drop the origin/main comparison from the umbrella bounds sentences
+
+### Fixed
+
+- Bound the Codecov upload so a stall cannot cancel coverage-check
+- Make a module that imports kure compile, and check it in CI
+- Quote the kure path in the consumer check's replace line
+- Stop the consumer check on INT and TERM, and describe the limit without a consumer name
+
+### Maintenance
+
+- Update go-kure/.github digest to d199094
+- Update go-kure/.github digest to f124f2a
+- Update go-kure/.github digest to 047a3b7
+
 ## [0.2.0-rc.1] - 2026-11-11
 
 ### Build
