@@ -14,7 +14,8 @@ what Kure does to produce the shape.
 Kure builds the tree with a `ManifestLayout` and writes it with `WriteToTar`. The design document names
 these conventions:
 
-- The root layout node sets `Namespace: "."`, so the tar root has no extra prefix directory.
+- The root layout node sets `Namespace: "."` and an empty `Name`, so the tar root has no extra prefix
+  directory. The writer joins `Name` onto `Namespace`, so a root with a name writes under that name.
 - Every node sets `FileNaming: layout.FileNamingKindName`, so each file is named `<Kind>-<name>.yaml`.
 - A caller that attaches a per-application payload layout as a child sets that layout's `Namespace` to
   the parent path `<group>` and its `Name` to `<appname>`. The layout directory is `Namespace` joined
