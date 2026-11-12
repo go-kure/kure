@@ -1054,11 +1054,12 @@ jobs:
     name: build
     runs-on: autops-kube-kure
     timeout-minutes: 1
-    needs: [validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact, consumer]
+    needs: [changes, validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact, consumer]
     if: always()
     steps:
     - name: Check build results
       run: |
+        ch="${{ needs.changes.result }}"
         co="${{ needs.consumer.result }}"
         vl="${{ needs.validate.result }}"
         tt="${{ needs.test.result }}"
@@ -1069,6 +1070,12 @@ jobs:
         ft="${{ needs.forbidden-terms.result }}"
         sc="${{ needs.security.result }}"
         pi="${{ needs.pin-impact.result }}"
+        # Every gated job needs `changes`, so a failed `changes` makes them all
+        # skipped, which the loop below accepts (go-kure/kure#1321).
+        if [ "$ch" != "success" ]; then
+          echo "Detect-changes job did not succeed (result: $ch)"
+          exit 1
+        fi
         if [ "$ft" != "success" ]; then
           echo "Forbidden-terms job did not succeed (result: $ft)"
           exit 1
