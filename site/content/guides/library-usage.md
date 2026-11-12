@@ -120,8 +120,8 @@ The per-kind config-struct builders (`certmanager.Certificate(&CertificateConfig
 `externalsecrets`, `prometheus`, `cilium` and `volsync`) are gone too: build
 those kinds with `Create<Kind>` and the upstream struct, exactly as above. The
 [Kubernetes Builders](/api-reference/kubernetes-builders/) page states the
-rule, and each per-kind builder page shows the upstream field that carries
-what a config field used to. The values the CNPG builders used to inject are
+rule, and the [release 2 migration notes](https://github.com/go-kure/kure/blob/main/docs/builder-contract-release-2.md)
+name the upstream field that carries what each config field used to. The values the CNPG builders used to inject are
 values you now write yourself.
 
 ### FluxCD Resources

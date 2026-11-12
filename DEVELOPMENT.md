@@ -11,7 +11,9 @@ make help
 # Quick development cycle (lint, vet, short tests, tool pins, generated builders)
 make check
 
-# The local CI checks (CI also enforces the coverage thresholds and the rendered-site link check)
+# The local CI checks (CI also runs `make check-go-version`, enforces the coverage thresholds and
+# the rendered-site link check, and runs the forbidden-terms, action-pins, pin-impact, doc-gate and
+# Analyze Changes jobs)
 make ci
 ```
 
@@ -224,8 +226,9 @@ The project uses several GitHub Actions workflows:
   `Analyze Changes`
 
 ### Documentation (`.github/workflows/deploy-docs.yml`, `.github/workflows/manage-docs.yml`)
-- **Deploy Docs**: publishes the site on a push to `main` that touches `site/`, `docs/`, package or
-  example READMEs, `README.md`, `CHANGELOG.md` or `DEVELOPMENT.md`, and on manual dispatch
+- **Deploy Docs**: publishes the site on a push to `main` that touches `site/`, `docs/`, `pkg/**/*.md`,
+  `examples/**/*.md`, `README.md`, `CHANGELOG.md`, `DEVELOPMENT.md` or `scripts/gen-versions-toml.sh`,
+  and on manual dispatch
 - **Manage Docs**: manual dispatch only; acts on a version slot (`dev` or `vX.Y`) of the published
   site
 
@@ -330,7 +333,7 @@ For the full dependency update process (review, bundling, version tracking), see
 ### CI/CD
 - `check` - Quick code quality check (lint, vet, short tests, tool pins, generated builders)
 - `precommit` - Fast pre-commit checks (see Pre-commit Workflow)
-- `ci` - The local CI checks (CI also enforces the coverage thresholds and the rendered-site link check)
+- `ci` - The local CI checks (CI also runs `make check-go-version`, enforces the coverage thresholds and the rendered-site link check, and runs the `forbidden-terms`, `action-pins`, `pin-impact`, `doc-gate` and `Analyze Changes` jobs)
 
 ### Release
 No target releases or previews a release: run the **Release** workflow, with **Dry run** ticked for

@@ -795,10 +795,13 @@ pkg/                          # Public APIs and interfaces
 internal/                     # Packages shared by the tests and generators; not importable by consumers
 ```
 
-The patch engine is not part of this module: it moved to go-kure/launcher (ADR-018). The packages
-under `internal/` (`built`, `crds`, `crdvalidate`, `gotk`, `kuretest`, `kustomizeschema`,
-`nilobj`) are described under [Testing Architecture](#testing-architecture); the builder-specific
-internals live under `pkg/kubernetes/internal/`.
+The patch engine is not part of this module: it moved to go-kure/launcher (ADR-018). Three packages
+under `internal/` are not test support. `built` reads a resource as kustomize builds it, so the
+layout writers' pre-write checks and the Flux integration agree on which objects a resource holds.
+`kustomizeschema` parses kustomize's process-global OpenAPI schema before any use of kustomize reads
+it. `nilobj` tells whether a `client.Object` holds no object. The other four (`crds`, `crdvalidate`,
+`gotk`, `kuretest`) are described under [Testing Architecture](#testing-architecture); the
+builder-specific internals live under `pkg/kubernetes/internal/`.
 
 ### File Naming Patterns
 
@@ -1647,7 +1650,7 @@ The builder contract removed the constructor defaults and the bare field forward
 breaking change for callers that relied on either, and it is the one migration this release asks
 for. Each removed function has a replacement expression, usually `obj.Spec.Field = value`. Three of
 those replacements change what the caller emits; every other one is mechanical and emits the same YAML the helper did.
-The three, all called out in the notes as well:
+The three, all called out in the [release 1 migration notes](https://github.com/go-kure/kure/blob/main/docs/builder-contract-release-1.md) as well:
 
 - A constructor no longer injects `app: <name>` labels or a per-kind spec default.
 - The removal of the container constructor takes a resource reservation with it.

@@ -175,7 +175,7 @@ func ExampleSetProviderSecretRef() {
 
 	alert := fluxcd.CreateAlert("slack-alert", "flux-system")
 	alert.Spec.ProviderRef = meta.LocalObjectReference{Name: "slack"}
-	alert.Spec.EventSeverity = "error" // plain field: assigned; the Alert setters are the Add* helpers below
+	alert.Spec.EventSeverity = "error" // plain field: assigned; the Alert list fields have AddAlert* helpers, which this example does not call
 
 	receiver := fluxcd.CreateReceiver("github-receiver", "flux-system")
 	receiver.Spec.Type = "github"

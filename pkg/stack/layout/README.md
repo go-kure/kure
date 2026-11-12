@@ -912,13 +912,14 @@ printFiles(out)
 | Field | Meaning |
 |-------|---------|
 | `ManifestsDir` | Directory under which Kubernetes manifests are written (default `clusters`) |
-| `FluxDir` | Directory under which Flux manifests are written (default `clusters`) |
+| `FluxDir` | Declared for the Flux directory (default `clusters`). `WriteManifest` does not read it |
 | `FilePer` | How resources are grouped into files |
 | `ApplicationFileMode` | Whether an application's resources are one file or one file per resource |
 | `KustomizationMode` | How `kustomization.yaml` files reference their children (default `KustomizationExplicit`) |
 | `FluxKustomizationMode` | Per-`FluxPlacement` override of `KustomizationMode` |
 | `FileNaming` | The file naming mode; `ManifestFileName` takes precedence when set |
-| `ManifestFileName`, `KustomizationFileName` | Functions that name resource and Kustomization files |
+| `ManifestFileName` | Function that names resource files |
+| `KustomizationFileName` | Function that names Flux Kustomization files (default `DefaultKustomizationFileName`). `WriteManifest` does not read it |
 
 ## Key Files
 
