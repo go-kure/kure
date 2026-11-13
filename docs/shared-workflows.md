@@ -173,7 +173,8 @@ The queue tests the real merged result, so the pull request does not need to be 
 | Setting | Value |
 |---------|-------|
 | Merge method | Rebase (linear history) |
-| Entries built and merged at once | 1 |
+| Entries built at once | Up to 3 |
+| Entries merged at once | Up to 3 |
 | Wait before merging | 0 minutes |
 | Grouping | All checks must pass; a failing entry is removed |
 | Check response timeout | 120 minutes |
