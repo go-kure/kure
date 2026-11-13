@@ -70,7 +70,7 @@ jobs:
     # and retries a push rejected because another slot's deploy landed first;
     # a slot that does not exist there fails the step.
     - name: Remove version directory
-      uses: go-kure/.github/.github/actions/deploy-docs-push@2161f999354ee7060b8cd316044617a301726fb9 # main
+      uses: go-kure/.github/.github/actions/deploy-docs-push@551cd4accb591c5432a350cef007a9a8e29b7a3b # main
       with:
         target-path: deploy-target
         site-subdir: kure
