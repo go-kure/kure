@@ -487,7 +487,11 @@ by hand once its provenance is settled.
   `orhun/git-cliff` release, and installs the binary only when the signature is good and its signing
   key's primary fingerprint equals the one pinned in the script (`1D2D410A…B6619297`, git-cliff's
   published release key, shipped next to the script as `git-cliff-signing-key.asc`). A failed check
-  fails the job before anything is installed. Renovate bumps only the version; if upstream rotates
+  fails the job before anything is installed. The version is `GIT_CLIFF_VERSION` in
+  `go-kure/.github`'s own `mise.toml`, never the calling repository's. The script reads it when
+  given no argument; the workflows pass none, so a release installs the version that `mise.toml`
+  held at the shared workflow's own commit. A bump therefore
+  changes the next release of every caller that uses `@main`. Renovate bumps only that line; if upstream rotates
   its signing key, the next bump fails this check until a pull request in `go-kure/.github` replaces
   both the key file and the pinned fingerprint, after checking the new fingerprint against
   git-cliff's own installation docs. The script installs into `GIT_CLIFF_INSTALL_DIR` (default
