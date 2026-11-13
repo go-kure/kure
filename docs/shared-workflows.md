@@ -89,13 +89,14 @@ must also pass `bot-login`.
 
 ### Configuration
 
-The defaults are set in `pr-review.yml`. The mode can be changed with a variable, and the
-standards file with the `standards-file` and `standards-source` inputs; changing any other value
-means editing `pr-review.yml` in `go-kure/.github`.
+The defaults are set in `pr-review.yml`. The mode and the proxy URL can be changed with a
+variable, and the standards file with the `standards-file` and `standards-source` inputs;
+changing any other value means editing `pr-review.yml` in `go-kure/.github`.
 
 | Setting | Default | Notes |
 |---------|---------|-------|
 | `PR_REVIEW_THREADS_MODE` | `enforce` | Overridable through the `PR_REVIEW_THREADS_MODE` variable |
+| `CCPROXY_URL` | `http://claude-proxy.claude-proxy.svc:3456` | Overridable through the `CCPROXY_URL` variable, read from the calling repository or its organization. An empty variable keeps the default. The name is historical |
 | `PR_REVIEW_MAX_FINDINGS_TOTAL` | `5` | Cap on new threads, after open and reopened ones are counted |
 | `PR_REVIEW_MAX_DIFF_CHARS` | `50000` | Soft size of one diff chunk: a hunk is never split, so a chunk can exceed it; a single hunk over 4 times this value is truncated and the review marked incomplete |
 | `PR_REVIEW_MAX_TOKENS` | `1500` | Review pass |
@@ -205,12 +206,18 @@ still create such a branch by hand from a stable tag.
 
 [`auto-rebase.yml`](https://github.com/go-kure/.github/blob/main/.github/workflows/auto-rebase.yml)
 is opt-in: it runs only in a repository whose own workflow calls it on `push` to `main`, with
-`secrets: inherit`. Each run rebases the open pull requests that target `main` onto it, drafts
-included, and pushes with the `AUTO_REBASE_PAT` secret. It skips pull requests labelled
+`secrets: inherit`. A pull request is rebased only if it carries the `auto-rebase` label, so a
+pull request without the label is never rewritten and its head-bound reviews stay valid. A labelled
+one is rewritten, and its head-bound reviews no longer match its head. Add the label to the pull
+request that is about to merge: `gh pr edit <n> --add-label auto-rebase`. Each run
+rebases the labelled open pull requests that target `main` onto it, drafts included, and pushes
+with the `AUTO_REBASE_PAT` secret. A run starts on a `push` to `main` and, if the caller also
+listens for `pull_request` `labeled` events and skips every label but `auto-rebase`, when the label
+is added to a pull request from the same repository. It skips pull requests labelled
 `dependencies`, those targeting any other branch (release or stacked branches), and those from a
-fork that does not allow maintainer edits. A newer run cancels
-one still in progress. The merge queue does not need it; it keeps open pull requests current for
-review.
+fork that does not allow maintainer edits. A newer run cancels one still in progress, and a
+labelled pull request is still rewritten at every later push to `main` until it merges. The merge
+queue does not need it; it keeps labelled pull requests current with `main`.
 
 ## Draft PRs
 
