@@ -58,9 +58,10 @@ jobs:
     name: detect-changes
     runs-on: autops-kube-kure
     timeout-minutes: 2
-    # On merge_group there is no PR base to diff against; dorny/paths-filter would
-    # error. Skip the filter and force both outputs to 'true' so every gating job
-    # runs in the queue — otherwise required checks never report and merges hang.
+    # The filters run on merge_group too, so a group that changes no Go-relevant path
+    # skips the gated jobs (go-kure/kure#1332). A job skipped by its own `if:` reports
+    # success, so the required checks still report; the `build` gate reads this job's
+    # result, so a failed filter cannot pass as a skip.
     #
     # `go` (lint/test/security) is a deny-list (go-kure/kure#800): it is true unless
     # every changed file is documentation, so a path nobody classified runs the Go
@@ -71,8 +72,8 @@ jobs:
     # govulncheck parity checks read docs/github-workflows.md; the builder
     # generator (gen-builders.sh check) writes and compares docs/api-tables.*.
     outputs:
-      go: ${{ github.event_name == 'merge_group' && 'true' || ((steps.nondocs.outputs.go == 'true' || steps.filter.outputs.go_docs_inputs == 'true') && 'true' || 'false') }}
-      docs: ${{ github.event_name == 'merge_group' && 'true' || steps.filter.outputs.docs }}
+      go: ${{ (steps.nondocs.outputs.go == 'true' || steps.filter.outputs.go_docs_inputs == 'true') && 'true' || 'false' }}
+      docs: ${{ steps.filter.outputs.docs }}
       # `consumer` gates the check-consumer job (go-kure/kure#1316). The module graph
       # a consumer of kure sees changes only with go.mod or go.sum, so a pull request
       # runs the job only then. Every other event (merge queue, push, schedule, manual
@@ -81,10 +82,29 @@ jobs:
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        # A merge group needs the history to find its merge base; other events keep depth 1.
+        fetch-depth: ${{ github.event_name == 'merge_group' && '0' || '1' }}
+    # The diff base is the merge base of the group head with the branch it merges into, so
+    # it covers every entry of the group that is not on the branch yet. The event's own
+    # base_sha is the group's parent commit, which can be the entry ahead and not the branch.
+    - name: Find the merge base of the merge group
+      id: base
+      if: github.event_name == 'merge_group'
+      env:
+        BASE_REF: ${{ github.event.merge_group.base_ref }}
+      run: |
+        # A missing base branch or an empty answer fails the job: an empty diff would skip
+        # every gated job, and build fails on a failed detect-changes.
+        set -euo pipefail
+        sha=$(git merge-base "origin/${BASE_REF#refs/heads/}" HEAD)
+        test -n "$sha"
+        echo "sha=$sha" >> "$GITHUB_OUTPUT"
     - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
-      if: github.event_name != 'merge_group'
       id: nondocs
       with:
+        # Empty on every event but merge_group, where it replaces the event's base_sha.
+        base: ${{ steps.base.outputs.sha }}
         # `every`: a file counts only if it matches all patterns, i.e. it is
         # outside all three docs paths.
         predicate-quantifier: 'every'
@@ -95,9 +115,9 @@ jobs:
             - '!docs/**'
             - '!**/*.md'
     - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
-      if: github.event_name != 'merge_group'
       id: filter
       with:
+        base: ${{ steps.base.outputs.sha }}
         filters: |
           go_docs_inputs:
             - 'docs/compatibility.md'
@@ -134,7 +154,7 @@ jobs:
     # 15 min was hit once with the linters themselves under a minute.
     timeout-minutes: 25
     needs: [changes]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.go == 'true'
+    if: (github.event_name != 'pull_request' && github.event_name != 'merge_group') || needs.changes.outputs.go == 'true'
 
     steps:
     - name: Checkout code
@@ -621,7 +641,7 @@ jobs:
     # cancels the run before completion with no test failure.
     timeout-minutes: 50
     needs: [changes]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.go == 'true'
+    if: (github.event_name != 'pull_request' && github.event_name != 'merge_group') || needs.changes.outputs.go == 'true'
 
     steps:
     - name: Checkout code
@@ -734,7 +754,7 @@ jobs:
     # expected runtime.
     timeout-minutes: 15
     needs: [changes]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.go == 'true'
+    if: (github.event_name != 'pull_request' && github.event_name != 'merge_group') || needs.changes.outputs.go == 'true'
 
     # GOMEMLIMIT keeps Go's GC under the runner pod memory limit so govulncheck (peaks ~3.8Gi
     # on large module graphs) doesn't get OOMKilled. Pairs with the 6Gi ARC runner limit.
@@ -1096,6 +1116,8 @@ jobs:
     runs-on: autops-kube-kure
     timeout-minutes: 15
     needs: [changes]
+    # Not gated on the filter for merge_group (go-kure/kure#1332): only lint, test and
+    # Security skip in the queue, so the site is built for every queue entry.
     if: github.event_name != 'pull_request' || needs.changes.outputs.docs == 'true'
 
     steps:
