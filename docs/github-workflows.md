@@ -99,8 +99,14 @@ skipped on a pull request that changes none of `go.mod`, `go.sum`, `scripts/chec
 `ci.yml` (the module graph that a consumer of kure sees changes only with `go.mod` and `go.sum`);
 it runs on every merge-queue, push, scheduled and manual run.
 
-On `merge_group` events (merge queue), `lint`/`test`/`build` run against the queue's
-temporary branch — the merged result — before the PR is allowed to land.
+On `merge_group` events (merge queue), the checks run against the queue's temporary branch —
+the merged result — before the PR is allowed to land. `detect-changes` diffs the group head
+against its merge base with the branch it merges into, so a group that changes only
+documentation skips `lint`, `test` and `Security`; any other group runs them, and so does a
+group that changes a documentation file `lint` reads (see [Path Filters](#path-filters)). A job skipped by
+its own `if:` reports success, so the required checks still report. If the merge base cannot be
+found, `detect-changes` fails and `build` fails with it. `docs-build` and `consumer` run on
+every group, as on a push.
 
 ### Jobs Detail
 
@@ -811,7 +817,7 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
 |----------|---------------------|---------------------|
 | PR opened | ~8 min (duplicate work) | ~4 min |
 | Push to main | ~5 min | ~4 min |
-| PR merge | ~5 min (full re-run) | a full run on the merge queue's branch, then the push run on `main` |
+| PR merge | ~5 min (full re-run) | a path-filtered run on the merge queue's branch, then the push run on `main` |
 
 ---
 
