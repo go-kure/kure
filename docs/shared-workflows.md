@@ -74,7 +74,7 @@ The default mode, `enforce`, turns each finding into a resolvable review thread:
 New review threads are capped at 5 across the pull request. Threads already open, or about to be
 reopened, count against the cap first and are never held back by it; new findings, most severe
 first, get whatever places remain. So more than 5 threads can be open when earlier ones return.
-New findings past the cap go into an overflow comment.
+New findings past the cap go into an overflow comment, which is split into parts when it is too long for one comment.
 
 The check is required on `main` and on `release/*` branches, so a failed review run blocks the
 merge. Separately, the rulesets require every review thread to be resolved before merge.
