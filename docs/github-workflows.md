@@ -116,7 +116,7 @@ every group, as on a push.
 | `action-pins` | `action-pins` | 2 min | — | Fails if any third-party `uses:` ref is not pinned to a 40-char commit SHA (`go-kure/.github` canonical checker) |
 | `forbidden-terms` | `forbidden-terms` | 2 min | — | Runs the canonical full-tree downstream-reference guard on every workflow event and verifies the vendored release guard and release guide against `go-kure/.github` at a ref derived from the guard action's own pin (go-kure/kure#813) |
 | `test` | `test` | 50 min | changes | Unit tests with race detection and coverage; `go test -timeout 30m` bounds each test binary, and the 50 min job limit covers that plus the `-race` compile, the two cache restores and the cache save |
-| `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.9.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational; the accepted-risk entry (`GO-2026-5377`) carries its justification inline in `ci.yml` |
+| `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.10.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational; the accepted-risk entry (`GO-2026-5377`) carries its justification inline in `ci.yml` |
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment. The upload cannot fail the job: it stops after 2 min and a failure there is ignored, so a stalled upload does not hit the job's 5 min limit |
 | `consumer` | `check-consumer` | 15 min | changes | Builds a throwaway module that imports kure, with none of kure's `replace` directives, and fails if its module graph holds `sigs.k8s.io/structured-merge-diff/v7` or if the selected `k8s.io/kube-openapi` is not the one kure requires — `scripts/check-consumer.sh` (go-kure/kure#1316). Runs on a PR only when `go.mod`, `go.sum`, the script or the workflow changed |
 | `build` | `build` | 1 min | changes, validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact, consumer | Aggregation gate — fails if any required job failed; `changes` and `forbidden-terms` must report success and may not be skipped |
@@ -129,7 +129,7 @@ every group, as on a push.
 
 - Go Version: read from `go.mod` (`go-version-file: go.mod`)
 - Golangci-lint Version: `v2.15.0`
-- govulncheck Version: `v1.9.0` (pinned, cached binary, `-scan symbol` mode)
+- govulncheck Version: `v1.10.0` (pinned, cached binary, `-scan symbol` mode)
 - Coverage Threshold (total): `90%` — the overall figure from `go tool cover -func`
 - Coverage Threshold (per-package): `90%` — checked separately for every package, and a single
   package below it fails the job even when the total passes. Packages whose import path contains
@@ -752,7 +752,7 @@ Tool binaries are also cached to avoid reinstalling on every run:
   version from `go.mod`
 - `yq`, `lychee` — keyed by the version a "Read `<tool>` version from mise.toml" step reads at run
   time (see [yq and lychee Versions](#yq-and-lychee-versions) below), never a hardcoded literal
-- `govulncheck` — keyed by pinned version (`v1.9.0`) plus the Go version from `go.mod`. A
+- `govulncheck` — keyed by pinned version (`v1.10.0`) plus the Go version from `go.mod`. A
   govulncheck built by Go 1.26 cannot load a module whose `go` directive says 1.27, so a key
   without the Go version restored a stale binary after the Go bump and failed the scan
 
