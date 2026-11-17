@@ -55,7 +55,7 @@ require (
 	github.com/cert-manager/cert-manager v1.21.3
 	github.com/cilium/cilium v1.20.4
 	github.com/cloudnative-pg/barman-cloud v0.7.0
-	github.com/cloudnative-pg/cloudnative-pg v1.30.1
+	github.com/cloudnative-pg/cloudnative-pg v1.30.2
 	github.com/cloudnative-pg/machinery v0.6.1
 	github.com/cloudnative-pg/plugin-barman-cloud v0.16.0
 	github.com/controlplaneio-fluxcd/flux-operator v0.62.1
@@ -91,7 +91,7 @@ require (
 	k8s.io/kube-aggregator v0.37.2
 	k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
-	sigs.k8s.io/controller-runtime v0.25.2
+	sigs.k8s.io/controller-runtime v0.25.3
 	sigs.k8s.io/gateway-api v1.7.0
 	sigs.k8s.io/json v0.0.0-20260909141634-11ed52e25bc5
 	sigs.k8s.io/kustomize/api v0.21.2
@@ -108,7 +108,7 @@ require (
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
 	github.com/ProtonMail/go-crypto v1.5.2 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
-	github.com/avast/retry-go/v5 v5.0.0 // indirect
+	github.com/avast/retry-go/v5 v5.1.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -173,7 +173,7 @@ require (
 	github.com/ianlancetaylor/demangle v0.0.0-20240805132620-81f5be970eca // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.6.0 // indirect
+	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.7.0 // indirect
 	github.com/lib/pq v1.12.3 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
 	github.com/mackerelio/go-osstat v0.2.7 // indirect
