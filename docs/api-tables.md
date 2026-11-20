@@ -92,11 +92,11 @@ for the kinds whose scope the API server defines.
 | `gateway.networking.k8s.io/v1` | `TCPRoute` | Namespaced | `marker` | `TCPRoute` | `sigs.k8s.io/gateway-api@v1.7.0` |
 | `gateway.networking.k8s.io/v1` | `TLSRoute` | Namespaced | `marker` | `TLSRoute` | `sigs.k8s.io/gateway-api@v1.7.0` |
 | `gateway.networking.k8s.io/v1` | `UDPRoute` | Namespaced | `marker` | `UDPRoute` | `sigs.k8s.io/gateway-api@v1.7.0` |
-| `helm.toolkit.fluxcd.io/v2` | `HelmRelease` | Namespaced | `marker` | `HelmRelease` | `github.com/fluxcd/helm-controller/api@v1.7.1` |
-| `image.toolkit.fluxcd.io/v1` | `ImagePolicy` | Namespaced | `marker` | `ImagePolicy` | `github.com/fluxcd/image-reflector-controller/api@v1.3.0` |
-| `image.toolkit.fluxcd.io/v1` | `ImageRepository` | Namespaced | `marker` | `ImageRepository` | `github.com/fluxcd/image-reflector-controller/api@v1.3.0` |
-| `image.toolkit.fluxcd.io/v1` | `ImageUpdateAutomation` | Namespaced | `marker` | `ImageUpdateAutomation` | `github.com/fluxcd/image-automation-controller/api@v1.3.0` |
-| `kustomize.toolkit.fluxcd.io/v1` | `Kustomization` | Namespaced | `marker` | `Kustomization` | `github.com/fluxcd/kustomize-controller/api@v1.10.1` |
+| `helm.toolkit.fluxcd.io/v2` | `HelmRelease` | Namespaced | `marker` | `HelmRelease` | `github.com/fluxcd/helm-controller/api@v1.7.2` |
+| `image.toolkit.fluxcd.io/v1` | `ImagePolicy` | Namespaced | `marker` | `ImagePolicy` | `github.com/fluxcd/image-reflector-controller/api@v1.3.1` |
+| `image.toolkit.fluxcd.io/v1` | `ImageRepository` | Namespaced | `marker` | `ImageRepository` | `github.com/fluxcd/image-reflector-controller/api@v1.3.1` |
+| `image.toolkit.fluxcd.io/v1` | `ImageUpdateAutomation` | Namespaced | `marker` | `ImageUpdateAutomation` | `github.com/fluxcd/image-automation-controller/api@v1.3.1` |
+| `kustomize.toolkit.fluxcd.io/v1` | `Kustomization` | Namespaced | `marker` | `Kustomization` | `github.com/fluxcd/kustomize-controller/api@v1.10.2` |
 | `metallb.io/v1beta1` | `BFDProfile` | Namespaced | `crd` | `BFDProfile` | `go.universe.tf/metallb@v0.16.2` |
 | `metallb.io/v1beta1` | `BGPAdvertisement` | Namespaced | `crd` | `BGPAdvertisement` | `go.universe.tf/metallb@v0.16.2` |
 | `metallb.io/v1beta1` | `BGPPeer` | Namespaced | `crd` | `BGPPeer` | `go.universe.tf/metallb@v0.16.2` |
@@ -120,11 +120,11 @@ for the kinds whose scope the API server defines.
 | `networking.k8s.io/v1` | `NetworkPolicy` | Namespaced | `builtin` | `NetworkPolicy` | `k8s.io/api@v0.37.2` |
 | `networking.k8s.io/v1` | `ServiceCIDR` | Cluster | `builtin` | `ServiceCIDR` | `k8s.io/api@v0.37.2` |
 | `node.k8s.io/v1` | `RuntimeClass` | Cluster | `builtin` | `RuntimeClass` | `k8s.io/api@v0.37.2` |
-| `notification.toolkit.fluxcd.io/v1` | `Alert` | Namespaced | `marker` | `Alert` | `github.com/fluxcd/notification-controller/api@v1.10.0` |
-| `notification.toolkit.fluxcd.io/v1beta3` | `Alert` | Namespaced | `marker` | `Alert` | `github.com/fluxcd/notification-controller/api@v1.10.0` |
-| `notification.toolkit.fluxcd.io/v1` | `Provider` | Namespaced | `marker` | `Provider` | `github.com/fluxcd/notification-controller/api@v1.10.0` |
-| `notification.toolkit.fluxcd.io/v1beta3` | `Provider` | Namespaced | `marker` | `Provider` | `github.com/fluxcd/notification-controller/api@v1.10.0` |
-| `notification.toolkit.fluxcd.io/v1` | `Receiver` | Namespaced | `marker` | `Receiver` | `github.com/fluxcd/notification-controller/api@v1.10.0` |
+| `notification.toolkit.fluxcd.io/v1` | `Alert` | Namespaced | `marker` | `Alert` | `github.com/fluxcd/notification-controller/api@v1.10.1` |
+| `notification.toolkit.fluxcd.io/v1beta3` | `Alert` | Namespaced | `marker` | `Alert` | `github.com/fluxcd/notification-controller/api@v1.10.1` |
+| `notification.toolkit.fluxcd.io/v1` | `Provider` | Namespaced | `marker` | `Provider` | `github.com/fluxcd/notification-controller/api@v1.10.1` |
+| `notification.toolkit.fluxcd.io/v1beta3` | `Provider` | Namespaced | `marker` | `Provider` | `github.com/fluxcd/notification-controller/api@v1.10.1` |
+| `notification.toolkit.fluxcd.io/v1` | `Receiver` | Namespaced | `marker` | `Receiver` | `github.com/fluxcd/notification-controller/api@v1.10.1` |
 | `policy/v1` | `Eviction` | Namespaced | `builtin` | `Eviction` | `k8s.io/api@v0.37.2` |
 | `policy/v1` | `PodDisruptionBudget` | Namespaced | `builtin` | `PodDisruptionBudget` | `k8s.io/api@v0.37.2` |
 | `postgresql.cnpg.io/v1` | `Backup` | Namespaced | `crd` | `Backup` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.2` |
@@ -144,12 +144,12 @@ for the kinds whose scope the API server defines.
 | `rbac.authorization.k8s.io/v1` | `RoleBinding` | Namespaced | `builtin` | `RoleBinding` | `k8s.io/api@v0.37.2` |
 | `scheduling.k8s.io/v1` | `PriorityClass` | Cluster | `builtin` | `PriorityClass` | `k8s.io/api@v0.37.2` |
 | `source.extensions.fluxcd.io/v1beta1` | `ArtifactGenerator` | Namespaced | `marker` | `ArtifactGenerator` | `github.com/fluxcd/source-watcher/api/v2@v2.3.1` |
-| `source.toolkit.fluxcd.io/v1` | `Bucket` | Namespaced | `marker` | `Bucket` | `github.com/fluxcd/source-controller/api@v1.10.1` |
-| `source.toolkit.fluxcd.io/v1` | `ExternalArtifact` | Namespaced | `marker` | `ExternalArtifact` | `github.com/fluxcd/source-controller/api@v1.10.1` |
-| `source.toolkit.fluxcd.io/v1` | `GitRepository` | Namespaced | `marker` | `GitRepository` | `github.com/fluxcd/source-controller/api@v1.10.1` |
-| `source.toolkit.fluxcd.io/v1` | `HelmChart` | Namespaced | `marker` | `HelmChart` | `github.com/fluxcd/source-controller/api@v1.10.1` |
-| `source.toolkit.fluxcd.io/v1` | `HelmRepository` | Namespaced | `marker` | `HelmRepository` | `github.com/fluxcd/source-controller/api@v1.10.1` |
-| `source.toolkit.fluxcd.io/v1` | `OCIRepository` | Namespaced | `marker` | `OCIRepository` | `github.com/fluxcd/source-controller/api@v1.10.1` |
+| `source.toolkit.fluxcd.io/v1` | `Bucket` | Namespaced | `marker` | `Bucket` | `github.com/fluxcd/source-controller/api@v1.10.2` |
+| `source.toolkit.fluxcd.io/v1` | `ExternalArtifact` | Namespaced | `marker` | `ExternalArtifact` | `github.com/fluxcd/source-controller/api@v1.10.2` |
+| `source.toolkit.fluxcd.io/v1` | `GitRepository` | Namespaced | `marker` | `GitRepository` | `github.com/fluxcd/source-controller/api@v1.10.2` |
+| `source.toolkit.fluxcd.io/v1` | `HelmChart` | Namespaced | `marker` | `HelmChart` | `github.com/fluxcd/source-controller/api@v1.10.2` |
+| `source.toolkit.fluxcd.io/v1` | `HelmRepository` | Namespaced | `marker` | `HelmRepository` | `github.com/fluxcd/source-controller/api@v1.10.2` |
+| `source.toolkit.fluxcd.io/v1` | `OCIRepository` | Namespaced | `marker` | `OCIRepository` | `github.com/fluxcd/source-controller/api@v1.10.2` |
 | `storage.k8s.io/v1` | `CSIDriver` | Cluster | `builtin` | `CSIDriver` | `k8s.io/api@v0.37.2` |
 | `storage.k8s.io/v1` | `CSINode` | Cluster | `builtin` | `CSINode` | `k8s.io/api@v0.37.2` |
 | `storage.k8s.io/v1` | `CSIStorageCapacity` | Namespaced | `builtin` | `CSIStorageCapacity` | `k8s.io/api@v0.37.2` |
@@ -187,9 +187,9 @@ by a caller.
 | `externalsecrets/v1.StoreSourceRef` | `generatorRef` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
 | `externalsecrets/v1.VaultKubernetesServiceAccountTokenAuth` | `audiences` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
 | `externalsecrets/v1.VaultKubernetesServiceAccountTokenAuth` | `expirationSeconds` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20261016092056-a82d14894fbc` |
-| `api/v2.Rollback` | `recreate` | deprecated | — | `github.com/fluxcd/helm-controller/api@v1.7.1` |
-| `api/v1beta3.AlertSpec` | `summary` | deprecated | — | `github.com/fluxcd/notification-controller/api@v1.10.0` |
-| `api/v1beta3.ProviderSpec` | `proxy` | deprecated | — | `github.com/fluxcd/notification-controller/api@v1.10.0` |
+| `api/v2.Rollback` | `recreate` | deprecated | — | `github.com/fluxcd/helm-controller/api@v1.7.2` |
+| `api/v1beta3.AlertSpec` | `summary` | deprecated | — | `github.com/fluxcd/notification-controller/api@v1.10.1` |
+| `api/v1beta3.ProviderSpec` | `proxy` | deprecated | — | `github.com/fluxcd/notification-controller/api@v1.10.1` |
 | `monitoring/v1.APIServerConfig` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.95.2` |
 | `monitoring/v1.AlertmanagerEndpoints` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.95.2` |
 | `monitoring/v1.AlertmanagerSpec` | `baseImage` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.95.2` |
