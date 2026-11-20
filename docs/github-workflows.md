@@ -457,7 +457,10 @@ What is specific to kure:
 
 - **What Publish produces:** a GitHub release object and nothing else. kure is a library, so
   `.goreleaser.yml` skips builds, disables checksums and declares no SBOM or signing stanza: **a
-  complete release carries zero assets**; the tag is the artifact.
+  complete release carries zero assets**; the tag is the artifact. It leaves GoReleaser's
+  changelog step enabled: GoReleaser loads `--release-notes` only inside that step, so with
+  `changelog.disable: true` the release body would be empty. With `--release-notes` set, the step
+  makes no changelog of its own, and the body is the notes the release workflow wrote.
 - **`guard-tag-ref`:** the wrapper's own job refuses a `workflow_dispatch` on anything but a `v*`
   tag before the privileged publisher starts. The check that a tag has no release yet runs inside
   the shared publisher.

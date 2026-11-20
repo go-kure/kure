@@ -19,7 +19,3 @@ release:
   # tag, so a prerelease, or a patch below a newer line's stable tag, never
   # becomes GitHub's Latest.
   make_latest: "{{ .Env.MAKE_LATEST }}"
-
-# Disable built-in changelog — we use git-cliff for CHANGELOG.md.
-changelog:
-  disable: true
