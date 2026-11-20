@@ -30,7 +30,7 @@ import (
 //  4. Update this constant, and the version named in
 //     pkg/stack/fluxcd/docs/bootstrap-generation.md ("currently **vX.Y.Z**").
 //  5. Run the tests under internal/ and pkg/stack/fluxcd.
-const Version = "v2.10.0"
+const Version = "v2.10.1"
 
 //go:embed manifests.tar.gz
 var manifests []byte

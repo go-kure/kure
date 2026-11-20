@@ -15,7 +15,7 @@ metadata:
 spec:
   distribution:
     registry: ghcr.io/fluxcd
-    version: v2.10.0
+    version: v2.10.1
   kustomize:
     patches:
       - patch: |
