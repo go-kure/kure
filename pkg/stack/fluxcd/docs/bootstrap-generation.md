@@ -37,7 +37,7 @@ The `"gotk"` components are built from the flux2 release's install manifests bas
 at the module root (`internal/gotk/manifests.tar.gz`, shared with the tests that read the
 toolkit's CustomResourceDefinitions out of it) in lockstep with the
 `github.com/fluxcd/flux2/v2` Go module
-(`GotkVersion`, currently **v2.10.0**), so gotk generation makes no network call and the same
+(`GotkVersion`, currently **v2.10.1**), so gotk generation makes no network call and the same
 input always produces the same manifests. That happens when `FluxVersion` is empty or names
 `GotkVersion` (with or without the leading `v`). Any other `FluxVersion`, `"latest"` included,
 is an explicit opt-in to the upstream behaviour: a manifests base is downloaded from GitHub at

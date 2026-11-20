@@ -61,19 +61,19 @@ require (
 	github.com/controlplaneio-fluxcd/flux-operator v0.62.1
 	github.com/envoyproxy/go-control-plane/envoy v1.40.0
 	github.com/external-secrets/external-secrets/apis v0.0.0-20261016092056-a82d14894fbc
-	github.com/fluxcd/flux2/v2 v2.10.0
-	github.com/fluxcd/helm-controller/api v1.7.1
-	github.com/fluxcd/image-automation-controller/api v1.3.0
-	github.com/fluxcd/image-reflector-controller/api v1.3.0
-	github.com/fluxcd/kustomize-controller/api v1.10.1
-	github.com/fluxcd/notification-controller/api v1.10.0
+	github.com/fluxcd/flux2/v2 v2.10.1
+	github.com/fluxcd/helm-controller/api v1.7.2
+	github.com/fluxcd/image-automation-controller/api v1.3.1
+	github.com/fluxcd/image-reflector-controller/api v1.3.1
+	github.com/fluxcd/kustomize-controller/api v1.10.2
+	github.com/fluxcd/notification-controller/api v1.10.1
 	github.com/fluxcd/pkg/apis/acl v0.12.0
 	github.com/fluxcd/pkg/apis/kustomize v1.23.0
 	github.com/fluxcd/pkg/apis/meta v1.38.0
 	github.com/fluxcd/pkg/envsubst v1.9.0
 	github.com/fluxcd/pkg/kustomize v1.44.0
 	github.com/fluxcd/pkg/tar v1.4.0
-	github.com/fluxcd/source-controller/api v1.10.1
+	github.com/fluxcd/source-controller/api v1.10.2
 	github.com/fluxcd/source-watcher/api/v2 v2.3.1
 	github.com/google/gnostic-models v0.7.1
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.95.2
