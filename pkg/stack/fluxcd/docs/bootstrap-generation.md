@@ -45,8 +45,10 @@ generation time — the named release for a `vX.Y.Z` value, the latest release f
 (upstream selects a release only for a `v`-prefixed version). `TestVendoredPinsMatchGoMod` fails when
 `GotkVersion` or `FluxOperatorVersion` differs from its `go.mod` require, or when a controller
 image in the gotk bundle differs from the matching `fluxcd/<controller>/api` require (a controller
-whose API module kure does not require is not compared); see
-`internal/gotk` for the refresh procedure after a flux2 bump.
+whose API module kure does not require is not compared). After a flux2 bump,
+`scripts/sync-gotk-pin.sh` re-vendors the archive, the constant and this mention, and
+regenerates the stored bootstrap outputs (Renovate runs it on the bump's branch); see
+`internal/gotk` for the procedure by hand.
 
 <!-- doc-example: pkg/stack/fluxcd ExampleWorkflowEngine_GenerateBootstrap -->
 ```go

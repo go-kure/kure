@@ -272,7 +272,7 @@ jobs:
     - name: Check generated builders
       run: ./scripts/gen-builders.sh check
 
-    # sync-eso-pin.sh, sync-flux-operator-pin.sh, sync-tool-versions.sh and sync-govulncheck-docs.sh have no other CI
+    # sync-eso-pin.sh, sync-flux-operator-pin.sh, sync-gotk-pin.sh, sync-tool-versions.sh and sync-govulncheck-docs.sh have no other CI
     # coverage: they're Renovate postUpgradeTasks commands, not something
     # `sync-versions.sh check`/`make check-tool-versions`/`make check-govulncheck-docs` ever
     # invokes or parses — a syntax error here would only surface the next time Renovate runs
@@ -287,7 +287,7 @@ jobs:
         for f in scripts/sync-tool-versions.sh scripts/sync-govulncheck-docs.sh scripts/sync-go-version.sh; do
           sh -n "$f"
         done
-        for f in scripts/sync-eso-pin.sh scripts/sync-flux-operator-pin.sh scripts/sync-versions.sh scripts/test/run-tests.sh scripts/test/lib.sh scripts/test/pin-impact-lib.sh scripts/test/cases/*.sh scripts/check-pin-impact.sh; do
+        for f in scripts/sync-eso-pin.sh scripts/sync-flux-operator-pin.sh scripts/sync-gotk-pin.sh scripts/sync-versions.sh scripts/test/run-tests.sh scripts/test/lib.sh scripts/test/pin-impact-lib.sh scripts/test/cases/*.sh scripts/check-pin-impact.sh; do
           bash -n "$f"
         done
 

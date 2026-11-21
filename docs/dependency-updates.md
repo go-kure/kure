@@ -239,6 +239,8 @@ The same harness also covers `scripts/sync-flux-operator-pin.sh` (the `flux-oper
 that script is a Renovate `postUpgradeTasks` command with no other coverage, and its
 contract is failure-shaped — leave the tree untouched on any bad input, and leave the
 stored bootstrap outputs as they were when it cannot accept their regeneration.
+`scripts/sync-gotk-pin.sh` has the `gotk-pin` cases (`new_gotk_fixture`/`run_gotk` and the stub
+`go` in `scripts/test/fixtures/stub-gotk/`, with the same stub `curl`).
 
 **Adding a case:** every case follows the same shape — see `scripts/test/lib.sh` for the
 full helper reference (`new_fixture`, `yq_set`, `gomod_sub`, `run_check`/`run_generate`,
@@ -468,13 +470,50 @@ Flux toolkit CustomResourceDefinitions it validates kure's Flux output against
 (`internal/kuretest`), so a bump also moves the schemas the fixtures are held to. A
 `flux2/v2` bump in `go.mod` therefore has three companion edits: the tarball (the release's
 `manifests.tar.gz` asset), the constant, and the "currently **vX.Y.Z**" mention in
-`pkg/stack/fluxcd/docs/bootstrap-generation.md`; the `gotk.Version` doc comment lists the steps. No script
-makes them yet, so the Flux group's bump PR fails `TestVendoredPinsMatchGoMod` until they
-are made: the test compares `GotkVersion` and `FluxOperatorVersion` with `go.mod`, and
-each controller image in the vendored gotk bundle that has a controller API module with
-that module's version. A Flux release moves those images, so a bundle left on the old
-release fails; it does not fingerprint the archive, so a bump that leaves every checked
-controller unchanged still relies on the refresh procedure.
+`pkg/stack/fluxcd/docs/bootstrap-generation.md`; the `gotk.Version` doc comment lists the steps.
+
+`scripts/sync-gotk-pin.sh` makes all three, with the same contract as
+`scripts/sync-flux-operator-pin.sh` above (go-kure/kure#1365): it reads the module path from
+`versions.yaml` and the version from `go.mod`, refuses a pin that is not a plain `vX.Y.Z` tag,
+checks every rewrite target exists exactly once and that the download is a gzip tar holding
+`source-controller.yaml` and `rbac.yaml` before it writes anything, stages the three files and
+then renames them, and exits before any network call when the constant and the page already
+name the `go.mod` version. It does not overwrite a hand-edited archive that is already at the
+right version.
+
+The stored bootstrap outputs change with a new bundle in two ways, and the script keeps
+the regeneration only when those are all that changed. Each `gotk-*.txt` file starts with the
+bundle summary line `=== install bundle: N objects, sha256 … ===`, so its first line takes the
+new archive's digest with the same object count. Each `flux-operator-*.txt` file carries a
+`    version:` line, the toolkit version the tests pass as the `FluxVersion`, which moves from
+the old version to the new one. Anything wider (a changed object count, a line further down, a
+new file) is a rendered-bootstrap change for a person: the script restores every stored
+output, prints the diff and exits non-zero, so the PR stays red on `test`. The same
+`go test -v` check as above applies: each golden test must have run and passed, and none of
+its subtests may have skipped (a skipped subtest leaves its stored output stale while the
+parent still passes).
+
+The script is listed before `sync-flux-operator-pin.sh` in the shared `gomod`/`mise` rule's
+`postUpgradeTasks`, by convention: when both succeed the order does not matter, because each
+script takes its own snapshot of the stored outputs and accepts only its own kind of change.
+Like the operator script, it stops the whole process group of the regeneration (`go` and the
+test binary) before it restores the stored outputs, so a cancelled run or a `go` killed on its
+own cannot leave a late write behind. The archive, the constant, the page and the stored
+outputs are all in that rule's `fileFilters`, and the script test matrix fails when a file it
+changes matches no glob. Run it by hand after bumping the module yourself:
+
+```bash
+./scripts/sync-gotk-pin.sh
+```
+
+**What this does not automate:** the `supported_range` widen for a flux2 minor (a
+compatibility assessment, see [Widening a supported_range](#widening-a-supported_range)), and
+a release that adds or removes a controller or otherwise changes the rendered bootstrap. Also
+not proven before the first real bump: that Renovate commits the binary archive byte for byte.
+If it did not, the archive would not open and `test` goes red, and the sha256 on line 1 of the
+`gotk-*.txt` outputs would not match the archive. `TestVendoredPinsMatchGoMod` compares the
+constant and each controller image in the bundle with `go.mod`; it does not fingerprint the
+archive.
 
 ### Kubernetes (`k8s.io/*`)
 
