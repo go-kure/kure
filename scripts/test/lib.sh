@@ -325,3 +325,143 @@ assert_pin_tree_unchanged() {
         exit 1
     fi
 }
+
+# ---------------------------------------------------------------------------
+# Fixture for scripts/sync-gotk-pin.sh (go-kure/kure#1365): the flux2 toolkit
+# bundle. It reads versions.yaml and go.mod, rewrites internal/gotk's archive and
+# constant and the bootstrap page, and regenerates the stored bootstrap outputs
+# through `go test -update` (stubbed by fixtures/stub-gotk/go). `curl` is the
+# stub-pin one: it serves $STUB_PIN_BODY, here a real tar.gz.
+# ---------------------------------------------------------------------------
+SYNC_GOTK_PIN="$TEST_DIR/../sync-gotk-pin.sh"
+GOTK_MODULE="github.com/example/flux2/v2"
+GOTK_FIXTURES=()
+
+# gotk_archive DEST ENTRY_BODY [ENTRY...] -- a gzip tar of flat manifest files
+# (default source-controller.yaml and rbac.yaml) whose content is ENTRY_BODY.
+gotk_archive() {
+    local dest="$1" body="$2" dir name
+    shift 2
+    dir=$(mktemp -d) || {
+        echo "gotk_archive: mktemp -d failed -- refusing to continue" >&2
+        exit 1
+    }
+    local names=("$@")
+    if [[ ${#names[@]} -eq 0 ]]; then
+        names=(source-controller.yaml rbac.yaml)
+    fi
+    for name in "${names[@]}"; do
+        printf 'kind: %s\n' "$body" > "$dir/$name"
+    done
+    if ! tar -czf "$dest" -C "$dir" "${names[@]}"; then
+        echo "gotk_archive: tar failed -- refusing to continue" >&2
+        exit 1
+    fi
+    rm -rf "$dir"
+}
+
+# new_gotk_fixture <go.mod-version> -- builds $FIXTURE with go.mod requiring
+# $GOTK_MODULE at that version (in a `require (` block next to a `replace` line
+# naming another module), an "old" archive, a constant and a bootstrap page
+# pinned at v0.1.0, and stored outputs: two gotk-*.txt files whose first line
+# is the bundle summary, and two flux-operator-*.txt files whose
+# `    version:` line names the toolkit version. $FIXTURE/new-manifests.tar.gz is
+# what the stub curl serves. Call bare, like new_fixture.
+new_gotk_fixture() {
+    local gomod_version="$1"
+    FIXTURE=$(mktemp -d) || {
+        echo "new_gotk_fixture: mktemp -d failed -- refusing to continue" >&2
+        exit 1
+    }
+    if [[ -z "$FIXTURE" || ! -d "$FIXTURE" ]]; then
+        echo "new_gotk_fixture: mktemp -d produced an unusable path ('$FIXTURE') -- refusing to continue" >&2
+        exit 1
+    fi
+    GOTK_FIXTURES+=("$FIXTURE")
+    trap 'rm -rf "${GOTK_FIXTURES[@]}"' EXIT
+
+    mkdir -p "$FIXTURE/internal/gotk" "$FIXTURE/pkg/stack/fluxcd/docs" "$FIXTURE/pkg/stack/fluxcd/testdata/bootstrap-output"
+    cat > "$FIXTURE/versions.yaml" <<YAML
+infrastructure:
+  fluxcd:
+    go_module: "$GOTK_MODULE"
+    supported_range: "2.4 - 2.10"
+YAML
+    cat > "$FIXTURE/go.mod" <<GOMOD
+module example.com/fixture
+
+go 1.26.0
+
+require (
+	github.com/example/other v9.9.9
+	$GOTK_MODULE $gomod_version
+)
+
+replace github.com/example/other => ../other
+GOMOD
+    gotk_archive "$FIXTURE/internal/gotk/manifests.tar.gz" old
+    gotk_archive "$FIXTURE/new-manifests.tar.gz" new
+    cat > "$FIXTURE/internal/gotk/gotk.go" <<'GO'
+package gotk
+
+// Version is the release the archive holds.
+const Version = "v0.1.0"
+GO
+    cat > "$FIXTURE/pkg/stack/fluxcd/docs/bootstrap-generation.md" <<'MD'
+The gotk bundle is vendored (`GotkVersion`, currently **v0.1.0**), so generation needs no network.
+MD
+    local golden name
+    for name in gotk-oci gotk-git; do
+        golden="$FIXTURE/pkg/stack/fluxcd/testdata/bootstrap-output/$name.txt"
+        printf '=== install bundle: 3 objects, sha256 %064d ===\n' 0 > "$golden"
+        printf 'ClusterRole: 1\nDeployment: 2\n=== generated: 1 objects ===\nkind: %s\n' "$name" >> "$golden"
+    done
+    for name in flux-operator-oci flux-operator-git; do
+        golden="$FIXTURE/pkg/stack/fluxcd/testdata/bootstrap-output/$name.txt"
+        printf '=== install bundle: 3 objects, sha256 %064d ===\nspec:\n  distribution:\n    registry: ghcr.io/fluxcd\n    version: v0.1.0\nkind: %s\n' 1 "$name" > "$golden"
+    done
+
+    export SYNC_GOTK_PIN_REPO_ROOT="$FIXTURE"
+    export STUB_PIN_MODE="${STUB_PIN_MODE:-ok}"
+    export STUB_PIN_BODY="$FIXTURE/new-manifests.tar.gz"
+    export STUB_PIN_LOG="$FIXTURE/curl.log"
+    export STUB_GOTK_GO_MODE="${STUB_GOTK_GO_MODE:-ok}"
+    export STUB_GOTK_GO_LOG="$FIXTURE/go.log"
+    export PATH="$FIXTURES_DIR/stub-gotk:$FIXTURES_DIR/stub-pin:$PATH"
+}
+
+# run_gotk -- run sync-gotk-pin.sh against $FIXTURE, capturing stdout, stderr and
+# exit code into $out / $err / $rc like run_pin does.
+run_gotk() {
+    local errfile
+    errfile=$(mktemp) || {
+        echo "run_gotk: mktemp failed -- refusing to run without a place to capture stderr" >&2
+        exit 1
+    }
+    rc=0
+    out=$("$SYNC_GOTK_PIN" 2>"$errfile") || rc=$?
+    err=$(cat "$errfile")
+    rm -f "$errfile"
+}
+
+# gotk_snapshot / assert_gotk_tree_unchanged -- "left untouched" over the two
+# trees the script writes in (internal/ and pkg/), a stray *.new counts.
+gotk_snapshot() {
+    rm -rf "$FIXTURE/snap"
+    mkdir "$FIXTURE/snap"
+    if ! cp -R "$FIXTURE/internal" "$FIXTURE/pkg" "$FIXTURE/snap/"; then
+        echo "gotk_snapshot: could not snapshot $FIXTURE -- refusing to continue" >&2
+        exit 1
+    fi
+}
+
+assert_gotk_tree_unchanged() {
+    local tree
+    for tree in internal pkg; do
+        if ! diff -r "$FIXTURE/snap/$tree" "$FIXTURE/$tree" >/dev/null 2>&1; then
+            echo "FAIL: $1" >&2
+            diff -r "$FIXTURE/snap/$tree" "$FIXTURE/$tree" >&2
+            exit 1
+        fi
+    done
+}

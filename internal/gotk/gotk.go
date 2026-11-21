@@ -20,16 +20,21 @@ import (
 // compiles against; pkg/stack/fluxcd's TestVendoredPinsMatchGoMod fails when
 // the two differ, or when a controller image tag in the bundle differs from
 // the matching fluxcd/<controller>/api require. The archive itself is not
-// fingerprinted, so replacing it stays on the refresh procedure. To refresh
-// after a flux2 bump:
+// fingerprinted. After a flux2 bump, scripts/sync-gotk-pin.sh makes the
+// companion edits (Renovate runs it on the bump's own branch); by hand:
 //  1. Bump github.com/fluxcd/flux2/v2 (and the fluxcd/* controller APIs, which
 //     move together) in go.mod.
-//  2. Download the matching asset from the flux2 release page:
-//     https://github.com/fluxcd/flux2/releases/download/{version}/manifests.tar.gz
-//  3. Replace internal/gotk/manifests.tar.gz with it.
-//  4. Update this constant, and the version named in
-//     pkg/stack/fluxcd/docs/bootstrap-generation.md ("currently **vX.Y.Z**").
-//  5. Run the tests under internal/ and pkg/stack/fluxcd.
+//  2. Run ./scripts/sync-gotk-pin.sh. It downloads the matching asset from the
+//     flux2 release page
+//     (https://github.com/fluxcd/flux2/releases/download/{version}/manifests.tar.gz),
+//     replaces internal/gotk/manifests.tar.gz, updates this constant and the
+//     version named in pkg/stack/fluxcd/docs/bootstrap-generation.md
+//     ("currently **vX.Y.Z**"), and regenerates the stored bootstrap outputs
+//     when only their bundle digest and version lines change.
+//  3. Run the tests under internal/ and pkg/stack/fluxcd. The script exits
+//     before the download when the constant and the page already name the
+//     go.mod version, so to force a refresh of the archive alone, replace it
+//     by hand and run `GOWORK=off go test ./pkg/stack/fluxcd/ -update`.
 const Version = "v2.10.1"
 
 //go:embed manifests.tar.gz

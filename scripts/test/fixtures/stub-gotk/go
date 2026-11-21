@@ -1,0 +1,158 @@
+#!/bin/bash
+# Stub `go` for scripts/test/'s sync-gotk-pin.sh cases. The script runs
+# `go test ./pkg/stack/fluxcd/ -run <tests> -count=1 -v -update` from the fixture
+# root to regenerate the stored bootstrap outputs. This records the arguments to
+# $STUB_GOTK_GO_LOG and, by $STUB_GOTK_GO_MODE, rewrites the files under
+# pkg/stack/fluxcd/testdata/bootstrap-output the way a real run would:
+#
+#   ok       (default) the first line of every gotk-*.txt file gets the sha256 of
+#            internal/gotk/manifests.tar.gz, the object count kept, and the
+#            `    version:` line of every flux-operator-*.txt file gets the
+#            version of internal/gotk/gotk.go
+#   body     as ok, plus one changed line further down a gotk file
+#   count    as ok, but with the object count of a gotk file changed
+#   opbody   as ok, plus one changed line (not the version) in a flux-operator file
+#   added    as ok, plus a new gotk-*.txt file
+#   fail     as ok, then exits 1, like a test that failed half way
+#   missing  as ok, but the first test of the -run alternation prints no
+#            "=== RUN" line, like a renamed test: go matches none and exits 0
+#   skipped  as ok, but the first test prints "=== RUN" and "--- SKIP" and no
+#            "--- PASS", like a test that calls t.Skip: go exits 0
+#   term     as ok -- a change the script would accept -- then sends SIGTERM to
+#            the sync script, like a Renovate run cancelled while `go test` ran,
+#            and exits 0, leaving a child that after the cancel appends to a
+#            gotk file for 8 s unless stopped
+#   orphan   as ok, then exits 1 leaving that same child, like go killed on its
+#            own while its test binary carries on
+#   subskip  as ok, but gotk-oci.txt is not rewritten and an indented
+#            "--- SKIP: <test>/gotk-oci" line follows the passing parent, like a
+#            golden subtest that skips while its parent reports PASS
+#
+# Any other invocation -- another subcommand or package, no -update, a working
+# directory that is not the fixture root, or GOWORK other than off -- writes
+# nothing and exits 2, so a script that regenerates the wrong thing fails its case.
+set -euo pipefail
+
+if [[ -n "${STUB_GOTK_GO_LOG:-}" ]]; then
+    printf '%s\n' "$*" >> "$STUB_GOTK_GO_LOG"
+fi
+
+if [[ "${1:-}" != test || "${2:-}" != ./pkg/stack/fluxcd/ || " $* " != *" -update "* \
+      || "$PWD" != "${SYNC_GOTK_PIN_REPO_ROOT:-}" || "${GOWORK:-}" != off ]]; then
+    echo "stub-gotk go: unexpected invocation 'go $*' in $PWD" >&2
+    exit 2
+fi
+
+mode="${STUB_GOTK_GO_MODE:-ok}"
+dir="pkg/stack/fluxcd/testdata/bootstrap-output"
+
+run_re=""
+go_args=("$@")
+for ((i = 0; i < ${#go_args[@]} - 1; i++)); do
+    if [[ "${go_args[i]}" == -run ]]; then
+        run_re="${go_args[i + 1]}"
+    fi
+done
+run_names="${run_re#^(}"
+run_names="${run_names%)\$}"
+IFS='|' read -ra want <<< "$run_names"
+skip=0
+if [[ "$mode" == missing ]]; then
+    skip=1
+fi
+for name in "${want[@]:skip}"; do
+    printf '=== RUN   %s\n' "$name"
+    if [[ "$mode" == skipped && "$name" == "${want[0]}" ]]; then
+        printf -- '--- SKIP: %s (0.00s)\n' "$name"
+    else
+        printf -- '--- PASS: %s (0.00s)\n' "$name"
+    fi
+done
+
+digest="$(sha256sum internal/gotk/manifests.tar.gz | cut -d' ' -f1)"
+version="$(sed -nE 's/^const Version = "([^"]*)".*/\1/p' internal/gotk/gotk.go)"
+
+# set_header FILE COUNT -- replace FILE's first line with the summary line.
+set_header() {
+    local file="$1" count="$2"
+    { printf '=== install bundle: %s objects, sha256 %s ===\n' "$count" "$digest"; tail -n +2 "$file"; } > "$file.tmp"
+    mv "$file.tmp" "$file"
+}
+
+if [[ "$mode" == subskip ]]; then
+    printf -- '    --- SKIP: %s/gotk-oci (0.00s)\n' "${want[0]}"
+fi
+
+for f in "$dir"/gotk-*.txt; do
+    if [[ "$mode" == subskip && "$f" == "$dir/gotk-oci.txt" ]]; then
+        continue
+    fi
+    count="$(head -n 1 "$f" | sed -nE 's/^=== install bundle: ([0-9]+) objects.*/\1/p')"
+    if [[ "$mode" == count && "$f" == "$dir/gotk-oci.txt" ]]; then
+        count=$((count + 1))
+    fi
+    set_header "$f" "$count"
+done
+for f in "$dir"/flux-operator-*.txt; do
+    sed -E "s/^    version: .*/    version: ${version}/" "$f" > "$f.tmp"
+    mv "$f.tmp" "$f"
+done
+
+# late_writer -- a background child that appends to a gotk file every 0.2 s for
+# 8 s, unless it is stopped first: longer than a 5 s grace before SIGKILL, so it
+# still writes after a restore unless the script signals the whole group.
+late_writer() {
+    (
+        for ((i = 0; i < 40; i++)); do
+            sleep 0.2
+            printf 'kind: Deployment written late\n' >> "$dir/gotk-oci.txt"
+        done
+    ) &
+}
+
+case "$mode" in
+    ok | count | missing | skipped | subskip) ;;
+    term)
+        # The sync script is the outermost ancestor still running it: a subshell
+        # it forks for `cd && go test` shows the same command line.
+        target=""
+        pid="$PPID"
+        while [[ -n "$pid" && "$pid" -gt 1 ]]; do
+            args="$(ps -o args= -p "$pid" 2>/dev/null || true)"
+            if [[ "$args" == *sync-gotk-pin.sh* ]]; then
+                target="$pid"
+            elif [[ -n "$target" ]]; then
+                break
+            fi
+            pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
+        done
+        if [[ -z "$target" ]]; then
+            echo "stub-gotk go: could not find the sync script to signal" >&2
+            exit 1
+        fi
+        # Started before the signal, so it exists whatever the script does next.
+        late_writer
+        kill -TERM "$target"
+        ;;
+    orphan)
+        late_writer
+        exit 1
+        ;;
+    body)
+        printf 'kind: Deployment changed\n' >> "$dir/gotk-oci.txt"
+        ;;
+    opbody)
+        printf 'kind: FluxInstance changed\n' >> "$dir/flux-operator-oci.txt"
+        ;;
+    added)
+        cp "$dir/gotk-oci.txt" "$dir/gotk-extra.txt"
+        ;;
+    fail)
+        exit 1
+        ;;
+    *)
+        echo "stub-gotk go: unknown STUB_GOTK_GO_MODE '$mode'" >&2
+        exit 1
+        ;;
+esac
+printf 'ok  \tfixture/pkg/stack/fluxcd\t0.01s\n'
