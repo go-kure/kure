@@ -152,6 +152,45 @@ fmt.Print(string(manifests))
 ```
 <!-- doc-example:end -->
 
+**Content source (optional):**
+
+`WithContentSource` lets a caller that keeps the charts it has fetched serve one again without the
+network, and learn which hosts a fetch touched. `RenderChart` asks the source's `Lookup` before
+any network call; on a miss it fetches as usual and hands the archive, the OCI manifest and every
+host a request went to (the registry, the host of its token service when it answers with a bearer
+challenge, each blob redirect, an HTTP repository's index and archive hosts, each redirect hop) to
+`Store`. A failing `Lookup` is a miss and a failing `Store` is
+ignored, so a source never fails a render and never changes its output: a stored copy renders
+byte for byte as the fetched one. kure keeps no store and applies no host policy; the caller
+checks `Hosts` against its own before it serves a stored copy, and decides for itself whether a
+token service host counts.
+
+A stored OCI copy is checked as a pulled child is: its manifest is no index, names no subject and
+no manifest as its config or a layer; its config is a Helm chart config; it has one chart layer, whose digest is the archive's; the
+archive loads; and with `WithDigest` its manifest has the pinned digest, so the pin is the trust
+root. The checks of an unpinned tag's root cannot run, because the root is not stored: the source
+vouches for which bytes belong to an unpinned tag. A call with `WithDigestVersion` and no
+`WithDigest` is never served from the source, because a tag that resolves to an image index naming
+one image manifest is versioned from the index digest, which the stored child does not carry; it
+is fetched and still stored. Any failed check is a miss and the fetch runs. A URL scheme other than
+`oci://`, `http://` and `https://` is refused as before and never asked of the source.
+
+`RenderChartFromArchive` renders the bytes of a chart's `.tgz` and fetches nothing; it refuses
+`WithDigest` and `WithDigestVersion`, as an archive has no manifest digest. This holds for a render
+served from a source too: a chart is fetched only by a miss. Every render validates the values
+against the chart's `values.schema.json`, and Helm resolves a remote `$ref` in that schema over the
+network, outside `Hosts`; a chart whose schema has no remote reference renders with the network
+closed.
+
+<!-- doc-example:excerpt a source's two methods; the caller supplies the store -->
+```go
+out, err := helm.RenderChart(
+    "oci://registry.example.com/charts/cilium", "1.16.5", nil,
+    helm.WithDigest(pin),
+    helm.WithContentSource(store), // store implements helm.ContentSource
+)
+```
+
 ## API
 
 <!-- doc-example:excerpt the declarations from render.go, not calls -->
@@ -202,6 +241,34 @@ func WithDigest(digest string) RenderOption
 // from its own digest, the single child of a one-manifest index from the
 // index digest.
 func WithDigestVersion() RenderOption
+
+// ContentKey names a chart a ContentSource is asked for: Kind "chart", the
+// URL (an OCI chart URL as given, an HTTP repository URL without the chart
+// name), Chart (HTTP only), Version and, for a pinned call, Digest.
+type ContentKey struct {
+	Kind, URL, Chart, Version, Digest string
+}
+
+// Content is a fetched chart: its archive, an OCI chart's manifest (empty for
+// an HTTP chart) and every host a request went to during the fetch.
+type Content struct {
+	Data, Manifest []byte
+	Hosts          []string
+}
+
+// ContentSource is a caller's store of fetched charts. A Lookup error is a
+// miss; a Store error is ignored.
+type ContentSource interface {
+	Lookup(ctx context.Context, key ContentKey) (c Content, ok bool, err error)
+	Store(ctx context.Context, key ContentKey, c Content) error
+}
+
+// WithContentSource serves a chart from src when it holds a copy that passes
+// the checks of a fetched one, and hands src each chart it fetched.
+func WithContentSource(src ContentSource) RenderOption
+
+// RenderChartFromArchive renders a chart archive with no network access.
+func RenderChartFromArchive(archive []byte, values map[string]any, opts ...RenderOption) ([]byte, error)
 ```
 
 ## SplitByHookWeight

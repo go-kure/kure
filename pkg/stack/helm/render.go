@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"maps"
+	"net/http"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -36,6 +37,7 @@ type renderOptions struct {
 	digest        string
 	digestSet     bool
 	digestVersion bool
+	source        ContentSource
 }
 
 // RenderOption customizes how a chart is rendered: the release identity, the
@@ -49,8 +51,11 @@ type RenderOption func(*renderOptions)
 var digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 // newRegistryClient creates the client renderOCI pulls with. It is a variable
-// so tests can point it at a plain-HTTP registry served in-process.
-var newRegistryClient = func() (*registry.Client, error) { return registry.NewClient() }
+// so tests can point it at a plain-HTTP registry served in-process. opts are
+// the options the render itself needs, such as a recording HTTP client.
+var newRegistryClient = func(opts ...registry.ClientOption) (*registry.Client, error) {
+	return registry.NewClient(opts...)
+}
 
 // WithReleaseName sets the release name used during rendering (e.g. for
 // {{ .Release.Name }} and the generated resource name helpers).
@@ -119,7 +124,9 @@ func WithDigestVersion() RenderOption {
 // opts customizes the release identity (name, namespace); see WithReleaseName
 // and WithNamespace. Without opts, rendering uses release "release" in
 // namespace "default". WithDigest pins an OCI chart to a manifest digest;
-// WithDigestVersion renders it at its digest-qualified version.
+// WithDigestVersion renders it at its digest-qualified version;
+// WithContentSource serves a chart from a caller's store instead of the
+// network, and hands that store each chart fetched.
 //
 // An OCI reference that resolves to an image index is rendered only when the
 // index names exactly one image manifest, whether or not the index carries
@@ -156,14 +163,30 @@ func RenderChart(chartURL, version string, values map[string]any, opts ...Render
 		if ro.digestVersion {
 			return nil, errors.Errorf("chart digest version is not supported for HTTP repository %q: only OCI charts have a manifest digest", chartURL)
 		}
-		return renderHTTP(chartURL, version, values, opts...)
+		return renderHTTP(chartURL, version, values, ro, opts...)
 	default:
 		return nil, errors.Errorf("unsupported chart URL %q: must start with oci://, http://, or https://", chartURL)
 	}
 }
 
 func renderOCI(chartURL, version string, values map[string]any, ro renderOptions, opts ...RenderOption) ([]byte, error) {
-	client, err := newRegistryClient()
+	key := ContentKey{Kind: "chart", URL: chartURL, Version: version, Digest: ro.digest}
+	if ro.asksSourceForOCI() {
+		if c, ok := ro.lookup(key); ok {
+			if chrt, ok := ociHit(c, version, ro); ok {
+				return renderChart(chrt, values, opts...)
+			}
+		}
+	}
+	var hosts *hostSet
+	var clientOpts []registry.ClientOption
+	if ro.source != nil {
+		hosts = &hostSet{}
+		clientOpts = append(clientOpts, registry.ClientOptHTTPClient(&http.Client{
+			Transport: &recordingTransport{hosts: hosts, base: registry.NewTransport(false)},
+		}))
+	}
+	client, err := newRegistryClient(clientOpts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "create registry client")
 	}
@@ -194,6 +217,9 @@ func renderOCI(chartURL, version string, values map[string]any, ro renderOptions
 	chrt, err := loader.LoadArchive(bytes.NewReader(result.Chart.Data))
 	if err != nil {
 		return nil, errors.Wrap(err, "load chart archive")
+	}
+	if ro.source != nil {
+		ro.store(key, Content{Data: result.Chart.Data, Manifest: result.Manifest.Data, Hosts: hosts.list()})
 	}
 	if ro.digestVersion {
 		if err := setDigestVersion(chrt, version, versionDigest); err != nil {
@@ -489,7 +515,7 @@ func subjectError(what string, d manifestDoc) error {
 		what, d.Subject.MediaType, d.Subject.Digest)
 }
 
-func renderHTTP(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error) {
+func renderHTTP(chartURL, version string, values map[string]any, ro renderOptions, opts ...RenderOption) ([]byte, error) {
 	last := strings.LastIndex(chartURL, "/")
 	if last <= 0 {
 		return nil, errors.Errorf("invalid HTTP chart URL %q: expected https://repo-base/chart-name", chartURL)
@@ -499,7 +525,20 @@ func renderHTTP(chartURL, version string, values map[string]any, opts ...RenderO
 		return nil, errors.Errorf("invalid HTTP chart URL %q: missing chart name after last /", chartURL)
 	}
 
+	key := ContentKey{Kind: "chart", URL: repoURL, Chart: chartName, Version: version}
 	getters := getter.Getters()
+	var hosts *hostSet
+	if ro.source != nil {
+		if c, ok := ro.lookup(key); ok {
+			if chrt, err := loader.LoadArchive(bytes.NewReader(c.Data)); err == nil {
+				return renderChart(chrt, values, opts...)
+			}
+		}
+		hosts = &hostSet{}
+		transport := recordingHTTPTransport(hosts)
+		defer transport.CloseIdleConnections()
+		getters = getter.Getters(getter.WithTransport(transport))
+	}
 	archiveURL, err := repov1.FindChartInRepoURL(repoURL, chartName, getters,
 		repov1.WithChartVersion(version))
 	if err != nil {
@@ -519,9 +558,13 @@ func renderHTTP(chartURL, version string, values map[string]any, opts ...RenderO
 		return nil, errors.Wrapf(err, "download chart %s", archiveURL)
 	}
 
-	chrt, err := loader.LoadArchive(buf)
+	data := buf.Bytes()
+	chrt, err := loader.LoadArchive(bytes.NewReader(data))
 	if err != nil {
 		return nil, errors.Wrap(err, "load chart archive")
+	}
+	if ro.source != nil {
+		ro.store(key, Content{Data: data, Hosts: hosts.list()})
 	}
 	return renderChart(chrt, values, opts...)
 }
