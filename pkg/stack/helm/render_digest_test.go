@@ -42,7 +42,14 @@ type fakeRegistry struct {
 	headerDigest string
 	// omitChildDigestHeader serves the children without Docker-Content-Digest.
 	omitChildDigestHeader bool
-	requests              atomic.Int64
+	// blobRedirect, when set, answers a blob GET with a redirect to
+	// blobRedirect/<digest>, as a registry does to its blob store.
+	blobRedirect string
+	// tokenRealm, when set, makes the registry answer a request without its
+	// token with a bearer challenge naming tokenRealm, as a registry whose
+	// token service runs on another host does.
+	tokenRealm string
+	requests   atomic.Int64
 	// blobGets counts the GET requests for each blob, by digest.
 	blobGetsMu sync.Mutex
 	blobGets   map[string]int
@@ -189,6 +196,11 @@ func newFakeRegistryWithChart(t *testing.T, annotation, tag, chartVersion string
 
 func (fr *fakeRegistry) serve(w http.ResponseWriter, r *http.Request) {
 	fr.requests.Add(1)
+	if fr.tokenRealm != "" && r.Header.Get("Authorization") != "Bearer "+fakeToken {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="`+fr.tokenRealm+`",service="fake"`)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 	manifestPrefix := "/v2/" + fr.repo + "/manifests/"
 	blobPrefix := "/v2/" + fr.repo + "/blobs/"
 	switch {
@@ -229,6 +241,10 @@ func (fr *fakeRegistry) serve(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
+		if r.Method == http.MethodGet && fr.blobRedirect != "" {
+			http.Redirect(w, r, fr.blobRedirect+"/"+d, http.StatusTemporaryRedirect)
+			return
+		}
 		if r.Method == http.MethodGet {
 			fr.blobGetsMu.Lock()
 			if fr.blobGets == nil {
@@ -246,6 +262,20 @@ func (fr *fakeRegistry) serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// fakeToken is the bearer token the fake token service issues.
+const fakeToken = "fake-token"
+
+// newFakeTokenService serves the bearer token a challenged fakeRegistry asks
+// for, and returns its realm URL.
+func newFakeTokenService(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"token":"` + fakeToken + `","access_token":"` + fakeToken + `"}`))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
 func (fr *fakeRegistry) chartURL() string {
 	return "oci://" + strings.TrimPrefix(fr.srv.URL, "http://") + "/" + fr.repo
 }
@@ -255,8 +285,8 @@ func (fr *fakeRegistry) chartURL() string {
 func usePlainHTTPRegistry(t *testing.T) {
 	t.Helper()
 	orig := newRegistryClient
-	newRegistryClient = func() (*registry.Client, error) {
-		return registry.NewClient(registry.ClientOptPlainHTTP(), registry.ClientOptWriter(io.Discard))
+	newRegistryClient = func(opts ...registry.ClientOption) (*registry.Client, error) {
+		return registry.NewClient(append(opts, registry.ClientOptPlainHTTP(), registry.ClientOptWriter(io.Discard))...)
 	}
 	t.Cleanup(func() { newRegistryClient = orig })
 }
