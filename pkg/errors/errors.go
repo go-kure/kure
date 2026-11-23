@@ -3,7 +3,9 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"strings"
+	"syscall"
 )
 
 // Wrap wraps an error with a message using Go's standard error wrapping.
@@ -334,15 +336,16 @@ func getFileErrorSuggestion(operation string, cause error) string {
 		return "Check file path and permissions"
 	}
 
-	errMsg := cause.Error()
+	// The hint follows the kind of the cause, never its text: a cause that only
+	// says "permission denied" gets the default.
 	switch {
-	case strings.Contains(errMsg, "permission denied"):
+	case errors.Is(cause, fs.ErrPermission):
 		return "Check file permissions and ensure you have appropriate access"
-	case strings.Contains(errMsg, "no such file"):
+	case errors.Is(cause, fs.ErrNotExist):
 		return "Verify the file path exists and is spelled correctly"
-	case strings.Contains(errMsg, "is a directory"):
+	case errors.Is(cause, syscall.EISDIR):
 		return "The path points to a directory, specify a file instead"
-	case strings.Contains(errMsg, "disk") || strings.Contains(errMsg, "space"):
+	case errors.Is(cause, syscall.ENOSPC), errors.Is(cause, syscall.EDQUOT):
 		return "Check available disk space"
 	default:
 		return "Check file path and permissions"

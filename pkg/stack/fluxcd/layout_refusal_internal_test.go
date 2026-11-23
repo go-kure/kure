@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	stderrors "errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,6 +61,34 @@ func laterRecord() ownPatches {
 			at: 1, index: 1, after: 0,
 			ids: []resid.ResId{resid.NewResIdWithNamespace(resid.Gvk{Version: "v1", Kind: "ConfigMap"}, "pre", "default")},
 		}},
+	}
+}
+
+// TestLaterPatchMissing_ReadsKustomizesNoMatchError: laterPatch.missing finds
+// the object a build does not hold by the text of kustomize's no-match error,
+// because that error is a plain fmt.Errorf in the pinned kustomize api (v0.21.1,
+// resmap/reswrangler.go), with no type or sentinel to test. So the text is the
+// only handle there is, and this test is what fails, with the real error in its
+// message, when a kustomize bump rewords it.
+func TestLaterPatchMissing_ReadsKustomizesNoMatchError(t *testing.T) {
+	b := laterTree(t)
+	_, cause := b.build(laterShop(laterEntry, laterPre))
+	if cause == nil {
+		t.Fatal("the build succeeded; want it to fail on patch 1")
+	}
+	lp := laterRecord().later[0]
+
+	id, ok := lp.missing(cause)
+	if !ok || id.Name != "pre" {
+		t.Fatalf("missing found (%v, %v) in the real build error %q, want the ConfigMap pre", id, ok, cause)
+	}
+	if _, ok := lp.missing(fmt.Errorf("outer: %w", cause)); !ok {
+		t.Errorf("missing did not reach the no-match error through a wrap")
+	}
+
+	other := laterPatch{ids: []resid.ResId{resid.NewResIdWithNamespace(resid.Gvk{Version: "v1", Kind: "ConfigMap"}, "other", "default")}}
+	if id, ok := other.missing(cause); ok {
+		t.Errorf("missing matched %v for a patch that names another object", id)
 	}
 }
 
