@@ -40,6 +40,7 @@ cd "$repo_root"
 ENABLED_PAGES=(
 	.claude/CLAUDE.md
 	AGENTS.md
+	ARCHITECTURE.md
 	DEVELOPMENT.md
 	OAM-helm-alternative.md
 	README.md

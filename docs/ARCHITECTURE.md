@@ -1,5 +1,9 @@
 # Kure Architecture Documentation
 
+This is the long reference. For a one-to-two page map of the code (what lives where, how data moves, the
+rules the code keeps and where each is enforced), read [ARCHITECTURE.md](https://github.com/go-kure/kure/blob/main/ARCHITECTURE.md)
+at the repository root first.
+
 ## Executive Summary
 
 Kure is a GitOps domain model and layout engine on a thin Kubernetes foundation. The domain model
@@ -792,16 +796,18 @@ pkg/                          # Public APIs and interfaces
 │   ├── layout/             # Layout generation and writing
 │   └── stacktest/          # Checks an ApplicationConfig against the generation contract
 └── versions/               # Machine-readable ranges of deployed tool versions
-internal/                     # Packages shared by the tests and generators; not importable by consumers
+internal/                     # Library-internal and test-support packages; not importable by consumers
 ```
 
-The patch engine is not part of this module: it moved to go-kure/launcher (ADR-018). Three packages
+The patch engine is not part of this module: it moved to go-kure/launcher (ADR-018). Four packages
 under `internal/` are not test support. `built` reads a resource as kustomize builds it, so the
 layout writers' pre-write checks and the Flux integration agree on which objects a resource holds.
 `kustomizeschema` parses kustomize's process-global OpenAPI schema before any of kure's uses of
-kustomize reads it. `nilobj` tells whether a `client.Object` holds no object. The other four (`crds`, `crdvalidate`,
-`gotk`, `kuretest`) are described under [Testing Architecture](#testing-architecture); the
-builder-specific internals live under `pkg/kubernetes/internal/`.
+kustomize reads it. `nilobj` tells whether a `client.Object` holds no object. `gotk` embeds the Flux
+toolkit install manifests that `pkg/stack/fluxcd` reads for gotk-mode bootstrap generation. The other
+three (`crds`, `crdvalidate`, `kuretest`) are test support, described under
+[Testing Architecture](#testing-architecture); `crds` is also read by the builder generator, to find the
+scope of a kind that carries no marker. `releaseconfig` holds only a test of the release configuration. The builder-specific internals live under `pkg/kubernetes/internal/`.
 
 ### File Naming Patterns
 
