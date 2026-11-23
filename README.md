@@ -54,6 +54,8 @@ New here? Follow the [quickstart](docs/quickstart.md), then run the complete
 ## Documentation
 
 - [Website](https://www.gokure.dev) — guides, architecture, and tutorials
+- [Architecture map](ARCHITECTURE.md) — what lives where, how data moves, the rules the code keeps
+  (the long reference is [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
 - [Builder contract](pkg/kubernetes/README.md) — normative: construction, sugar admission, purity,
   and where scope and maturity come from
 - [Supported kinds and field maturity](docs/api-tables.md) — generated from the pinned modules

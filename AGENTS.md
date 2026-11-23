@@ -38,7 +38,7 @@ kure/
 │   │   ├── layout/   # Manifest organization
 │   │   └── stacktest/ # Conformance helpers for ApplicationConfig tests
 │   └── versions/     # Machine-readable ranges of deployed tool versions
-├── internal/         # Packages shared by the module's tests and generators
+├── internal/         # Library-internal and test-support packages (see ARCHITECTURE.md)
 ├── examples/         # Sample configurations
 ├── docs/             # Documentation
 ├── .claude/          # Claude Code configuration
