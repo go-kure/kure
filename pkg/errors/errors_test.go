@@ -3,7 +3,9 @@ package errors_test
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"strings"
+	"syscall"
 	"testing"
 
 	kerrors "github.com/go-kure/kure/pkg/errors"
@@ -214,29 +216,57 @@ func TestFileError(t *testing.T) {
 			name:               "permission denied",
 			operation:          "read",
 			path:               "/etc/secret",
-			cause:              errors.New("permission denied"),
+			cause:              &fs.PathError{Op: "open", Path: "/etc/secret", Err: syscall.EACCES},
 			expectedSuggestion: "Check file permissions",
 		},
 		{
 			name:               "file not found",
 			operation:          "open",
 			path:               "/nonexistent/file",
-			cause:              errors.New("no such file"),
+			cause:              &fs.PathError{Op: "open", Path: "/nonexistent/file", Err: syscall.ENOENT},
 			expectedSuggestion: "Verify the file path exists",
 		},
 		{
 			name:               "is directory",
 			operation:          "read",
 			path:               "/some/dir",
-			cause:              errors.New("is a directory"),
+			cause:              &fs.PathError{Op: "read", Path: "/some/dir", Err: syscall.EISDIR},
 			expectedSuggestion: "specify a file instead",
 		},
 		{
 			name:               "disk space",
 			operation:          "write",
 			path:               "/tmp/file",
-			cause:              errors.New("no space left on device"),
+			cause:              &fs.PathError{Op: "write", Path: "/tmp/file", Err: syscall.ENOSPC},
 			expectedSuggestion: "Check available disk space",
+		},
+		{
+			name:               "disk quota",
+			operation:          "write",
+			path:               "/tmp/file",
+			cause:              &fs.PathError{Op: "write", Path: "/tmp/file", Err: syscall.EDQUOT},
+			expectedSuggestion: "Check available disk space",
+		},
+		{
+			name:               "a wrapped cause",
+			operation:          "read",
+			path:               "/etc/secret",
+			cause:              fmt.Errorf("while loading: %w", fs.ErrPermission),
+			expectedSuggestion: "Check file permissions",
+		},
+		{
+			name:               "a cause that says it in words only gets the default",
+			operation:          "read",
+			path:               "/etc/secret",
+			cause:              errors.New("permission denied"),
+			expectedSuggestion: "Check file path and permissions",
+		},
+		{
+			name:               "no space in words only gets the default",
+			operation:          "write",
+			path:               "/tmp/file",
+			cause:              errors.New("no space left on device"),
+			expectedSuggestion: "Check file path and permissions",
 		},
 	}
 
