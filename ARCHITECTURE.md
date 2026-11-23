@@ -80,7 +80,7 @@ version data).
 | `pkg/stack` never imports `pkg/stack/layout`. | The Go compiler (an import cycle). |
 | The layout refuses two layouts in one directory before it writes anything. | `checkLayoutTree` in `pkg/stack/layout/treecheck.go`, called from `WriteToDisk` in `manifest.go`. |
 | Emitted objects are valid against the CRDs of the pinned API modules. This holds for the Flux, Cilium, cert-manager, CloudNativePG, MetalLB and VolSync families. The built-in Kubernetes types, External Secrets and Prometheus Operator have no definitions to read: only their metadata is checked. | Tests that use `internal/kuretest`. |
-| An `ApplicationConfig` returns objects nothing else shares. | `stacktest.CheckGeneration`, but only in the tests of whoever calls it. |
+| An `ApplicationConfig` returns objects nothing else shares. | `stacktest.AssertGeneration`, which fails the test, but only in the tests of whoever calls it. (`CheckGeneration` returns a report and a nil error even when objects are shared.) |
 | Every public package has an entry in `site/docs-map.yaml`. | CI job `docs-build` (`check-doc-sync`). |
 | A non-test source change to a mapped package touches that package's README or a mapped guide. | CI job `doc-gate`. Test files and a generated change that only moves a module version are exempt, the maintainer `docs-skip` label bypasses it, and the `internal/` packages at the module root are not mapped. The wider rule, code and documentation in one pull request, is review policy. |
 | Coverage is at least 90 percent in total and for each package outside `examples/`. | CI job `coverage-check`. |
