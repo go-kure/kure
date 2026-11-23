@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"runtime"
 	"strings"
 	"syscall"
 )
@@ -345,11 +346,30 @@ func getFileErrorSuggestion(operation string, cause error) string {
 		return "Verify the file path exists and is spelled correctly"
 	case errors.Is(cause, syscall.EISDIR):
 		return "The path points to a directory, specify a file instead"
-	case errors.Is(cause, syscall.ENOSPC), errors.Is(cause, syscall.EDQUOT):
+	case isDiskFull(cause, runtime.GOOS):
 		return "Check available disk space"
 	default:
 		return "Check file path and permissions"
 	}
+}
+
+// Windows reports a full disk with its own codes, ERROR_HANDLE_DISK_FULL and
+// ERROR_DISK_FULL, which none of the syscall constants equals there.
+const (
+	winErrorHandleDiskFull syscall.Errno = 39
+	winErrorDiskFull       syscall.Errno = 112
+)
+
+// isDiskFull reports whether err says the disk or the quota is full. goos is
+// the platform the error came from: the same numbers mean other errors on
+// Unix, so the Windows codes are read only there.
+func isDiskFull(err error, goos string) bool {
+	if errors.Is(err, syscall.ENOSPC) || errors.Is(err, syscall.EDQUOT) {
+		return true
+	}
+	var errno syscall.Errno
+	return goos == "windows" && errors.As(err, &errno) &&
+		(errno == winErrorHandleDiskFull || errno == winErrorDiskFull)
 }
 
 // ConfigError represents configuration errors

@@ -128,10 +128,11 @@ for _, err := range []error{validation, notFound, patch, parse, file, config} {
 `NewFileError` chooses its suggestion from the kind of the cause, found with `errors.Is`, and never
 from the cause's text: `fs.ErrPermission` (permissions), `fs.ErrNotExist` (the path), `syscall.EISDIR`
 (a directory where a file is wanted) and `syscall.ENOSPC` or `syscall.EDQUOT` (disk space or quota).
-On Linux and macOS the errors the `os` package returns are of these kinds, wrapped or not. On
-Windows a full disk comes back as a native error code (112 or 39) that none of them matches, so it
-gets the default suggestion. A cause that only says "permission denied" in words, or a nil cause,
-gets the default suggestion too, "Check file path and permissions".
+The errors the `os` package returns are of these kinds, wrapped or not. On Windows a full disk
+comes back as a native error code, 112 (`ERROR_DISK_FULL`) or 39 (`ERROR_HANDLE_DISK_FULL`), and
+those two are matched there too; on other platforms the same numbers mean other errors and are not.
+A cause that only says "permission denied" in words, or a nil cause, gets the default suggestion,
+"Check file path and permissions".
 
 ### Inspecting Errors
 

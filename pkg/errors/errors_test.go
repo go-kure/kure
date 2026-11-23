@@ -291,6 +291,37 @@ func TestFileError(t *testing.T) {
 	}
 }
 
+// TestIsDiskFull pins the full-disk test: the portable errors match anywhere, and
+// the two native Windows codes (112 and 39) match only on Windows, where they
+// mean a full disk. On Unix the same numbers mean other errors.
+func TestIsDiskFull(t *testing.T) {
+	pathErr := func(code syscall.Errno) error {
+		return fmt.Errorf("write: %w", &fs.PathError{Op: "write", Path: "/x", Err: code})
+	}
+	tests := []struct {
+		name string
+		err  error
+		goos string
+		want bool
+	}{
+		{name: "ENOSPC on linux", err: pathErr(syscall.ENOSPC), goos: "linux", want: true},
+		{name: "EDQUOT on linux", err: pathErr(syscall.EDQUOT), goos: "linux", want: true},
+		{name: "ERROR_DISK_FULL on windows", err: pathErr(112), goos: "windows", want: true},
+		{name: "ERROR_HANDLE_DISK_FULL on windows", err: pathErr(39), goos: "windows", want: true},
+		{name: "112 on linux is another error", err: pathErr(112), goos: "linux"},
+		{name: "39 on linux is another error", err: pathErr(39), goos: "linux"},
+		{name: "another Windows code", err: pathErr(5), goos: "windows"},
+		{name: "no errno", err: errors.New("no space left on device"), goos: "windows"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := kerrors.IsDiskFull(test.err, test.goos); got != test.want {
+				t.Errorf("IsDiskFull(%v, %q) = %v, want %v", test.err, test.goos, got, test.want)
+			}
+		})
+	}
+}
+
 func TestConfigError(t *testing.T) {
 	validValues := []string{"option1", "option2"}
 	err := kerrors.NewConfigError("config.yaml", "mode", "invalid", "unsupported value", validValues)
