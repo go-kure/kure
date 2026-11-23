@@ -48,8 +48,10 @@ version data).
 4. `CreateLayoutWithResources(cluster, rules)` first calls `layout.WalkCluster`, which validates the cluster, asks
    each application's config for its objects (`ApplicationConfig.Generate`) and builds the directory tree. Then
    the Flux integrator (`IntegrateWithLayout` in `pkg/stack/fluxcd`) adds the Flux Kustomizations to it.
-5. `WriteToDisk(basePath)` first refuses a tree in which two layouts land in one directory, then writes each
-   directory. Each gets a `kustomization.yaml`, except a recursive one, where Flux generates it.
+5. `WriteToDisk(basePath)` first refuses a tree in which two layouts collide on a directory or a file, then
+   writes each directory. A directory normally gets a `kustomization.yaml`. A recursive layout, where Flux
+   generates it, and a single-file application layout, which writes into its parent's directory, are the
+   exceptions (see the [layout README](pkg/stack/layout/README.md)).
 6. Resource files are written with `io.EncodeObjectsToYAML`. The layout writer writes each `kustomization.yaml`
    as text, and writes the extra files an augmenter supplies byte for byte. `WriteToTar` writes the tree into a
    stream. `GenerateBootstrap` produces the manifests that install Flux itself.
@@ -78,7 +80,7 @@ version data).
 | A constructor sets identity and nothing else; every registered kind has a wrapper, except three deprecated kinds that a newer version of the same kind replaces (MetalLB `BGPPeer` v1beta1, Flux `Alert` and `Provider` v1beta3, listed in `pkg/kubernetes/internal/kinds/skips.go`). | `TestIdentity_ConstructorsEmitIdentityOnly` and `TestIdentity_EveryRegisteredKindHasAWrapper` in `pkg/kubernetes/identity_test.go`. |
 | Generated files match their generator. | CI job `validate`: `gen-builders.sh check` and `sync-versions.sh check`. |
 | `pkg/stack` never imports `pkg/stack/layout`. | The Go compiler (an import cycle). |
-| The layout refuses two layouts in one directory before it writes anything. | `checkLayoutTree` in `pkg/stack/layout/treecheck.go`, called from `WriteToDisk` in `manifest.go`. |
+| The layout refuses two layouts that collide on a directory or a file before it writes anything. | `checkLayoutTree` in `pkg/stack/layout/treecheck.go`, called from `WriteToDisk` in `manifest.go`. |
 | Emitted objects are valid against the CRDs of the pinned API modules. This holds for the Flux, Cilium, cert-manager, CloudNativePG, MetalLB and VolSync families. The built-in Kubernetes types, External Secrets and Prometheus Operator have no definitions to read: only their metadata is checked. | Tests that use `internal/kuretest`. |
 | An `ApplicationConfig` returns objects nothing else shares. | `stacktest.AssertGeneration`, which fails the test, but only in the tests of whoever calls it. (`CheckGeneration` returns a report and a nil error even when objects are shared.) |
 | Every public package has an entry in `site/docs-map.yaml`. | CI job `docs-build` (`check-doc-sync`). |
@@ -93,9 +95,10 @@ version data).
 
 - **Import paths.** The packages in the Map without `internal` are the public surface. Each has an entry in
   `site/docs-map.yaml`.
-- **Files written.** The layout tree: one directory per level the rules choose, a `kustomization.yaml` in each
-  except a recursive layout, where Flux generates it (`pkg/stack/layout/manifest.go`), the resource files, any
-  extra files an augmenter supplies, and optionally one tar stream (`pkg/stack/layout/tar.go`).
+- **Files written.** The layout tree: one directory per level the rules choose, normally with a
+  `kustomization.yaml` in each (the exceptions are in flow 1, step 5), the resource files, any extra files an
+  augmenter supplies, and optionally one tar stream (`pkg/stack/layout/tar.go`). The writer is
+  `pkg/stack/layout/manifest.go`.
 - **Files and data read.** YAML through `pkg/io`; the Flux toolkit manifests embedded from
   `internal/gotk/manifests.tar.gz`; the Flux Operator install file embedded in `pkg/stack/fluxcd`; Helm charts
   from an OCI registry or an HTTP repository, in `pkg/stack/helm`.
