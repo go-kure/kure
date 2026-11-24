@@ -1075,7 +1075,14 @@ jobs:
     runs-on: autops-kube-kure
     timeout-minutes: 1
     needs: [changes, validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact, consumer]
-    if: always()
+    # Not `always()`: that runs this job in a run that concurrency cancelled, where
+    # `changes` reads cancelled and the check below exits 1. A bot PR starts a run for
+    # opened and for each label it adds, so the superseded runs left a red `build` until
+    # the surviving run finished. `!cancelled()` still runs after a failed or skipped
+    # job, and a run cancelled before this job starts reports `build` as cancelled,
+    # which satisfies no required check. A `build` that already finished keeps its
+    # result (go-kure/.github#398).
+    if: ${{ !cancelled() }}
     steps:
     - name: Check build results
       run: |
