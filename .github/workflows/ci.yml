@@ -638,8 +638,12 @@ jobs:
     # The job holds the race compile, two cache restores, the test run and a cache
     # save. pkg/stack/fluxcd takes most of the run. This limit must stay above the
     # -timeout of the test step plus that other work: a limit that is too low
-    # cancels the run before completion with no test failure.
-    timeout-minutes: 50
+    # cancels the run before completion with no test failure. The work with a cold
+    # Go build cache (go-kure/kure#1377): 384 s of setup, about 908 s of race
+    # compile, the 1800 s -timeout, and two cache saves of up to 71 s each, which is
+    # 3234 s. 60 minutes is 3600 s, so a stuck binary ends at its -timeout with a
+    # goroutine dump before the job is cancelled.
+    timeout-minutes: 60
     needs: [changes]
     if: (github.event_name != 'pull_request' && github.event_name != 'merge_group') || needs.changes.outputs.go == 'true'
 
