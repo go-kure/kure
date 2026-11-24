@@ -60,6 +60,14 @@ concurrency:
   cancel-in-progress: true
 ```
 
+A bot pull request starts one run when it opens and one for each label added right after (`labeled`
+is a trigger, so the `pin-impact-ack` label re-runs the pin-impact job), so the earlier runs are
+cancelled within seconds. The `build` gate does not start in a run cancelled before it (`if: ${{ !cancelled() }}`),
+so a superseded run reports `build` as cancelled and not failed; a `build` that already finished keeps
+its result. A failed job still runs the gate
+and it still fails; a job skipped where the script allows it stays accepted, as before
+(go-kure/.github#398).
+
 ### Job Dependency Graph
 
 Boxes are job ids from `ci.yml`; where a job's check name differs, it follows in parentheses.
@@ -84,7 +92,7 @@ PR and queue, no needs:   pin-impact
 needs changes:            consumer (check-consumer)
 
                  ┌───────┐
-                 │ build │  ← aggregation gate (if: always()): changes, validate, test,
+                 │ build │  ← aggregation gate (if: !cancelled()): changes, validate, test,
                  └───────┘    coverage-check, security, docs-build, doc-gate, action-pins,
                               forbidden-terms, pin-impact, consumer
 ```
@@ -119,7 +127,7 @@ every group, as on a push.
 | `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.10.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational; the accepted-risk entry (`GO-2026-5377`) carries its justification inline in `ci.yml` |
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment. The upload cannot fail the job: it stops after 2 min and a failure there is ignored, so a stalled upload does not hit the job's 5 min limit |
 | `consumer` | `check-consumer` | 15 min | changes | Builds a throwaway module that imports kure, with none of kure's `replace` directives, and fails if its module graph holds `sigs.k8s.io/structured-merge-diff/v7` or if the selected `k8s.io/kube-openapi` is not the one kure requires — `scripts/check-consumer.sh` (go-kure/kure#1316). Runs on a PR only when `go.mod`, `go.sum`, the script or the workflow changed |
-| `build` | `build` | 1 min | changes, validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact, consumer | Aggregation gate — fails if any required job failed; `changes` and `forbidden-terms` must report success and may not be skipped |
+| `build` | `build` | 1 min | changes, validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact, consumer | Aggregation gate (`if: ${{ !cancelled() }}`, so it does not run in a run that concurrency cancelled) — fails if any required job failed; `changes` and `forbidden-terms` must report success and may not be skipped |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, line counts against the PR's own base branch (for example `main` or a `release/vX.Y` branch), breaking change warnings (PR only) |
 | `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, the documented API references via `scripts/check-doc-api-refs.sh`, the Go blocks of every documentation page, generated from `Example` functions or marked as excerpts, via `scripts/gen-doc-examples.sh`, and absolute links to the site itself via `scripts/check-site-self-links.sh` |
 | `doc-gate` | `doc-gate` | 5 min | — | API changes need docs check (PR only; no `needs`, not path-filtered); runs the canonical `check-doc-gate` action from `go-kure/.github`. Bypass via the maintainer `docs-skip` label, or automatically for a generated-table row whose only change is a provenance field (`ModuleVersion` — pure version churn from a dependency bump); adding, removing, or re-scoping a kind is not exempt |
