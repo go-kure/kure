@@ -361,7 +361,12 @@ jobs:
       if: github.event_name == 'pull_request'
       run: git fetch origin ${{ github.base_ref }} --depth=1
 
+    # GOMEMLIMIT keeps Go's GC under the 6Gi ARC runner pod limit so a full golangci-lint run
+    # (merge queue, push) is not OOM-killed (go-kure/kure#1383). Set on this step only: the
+    # lint run is what peaked near the limit. Same value as the security job's govulncheck.
     - name: Run linters
+      env:
+        GOMEMLIMIT: 5GiB
       run: |
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           make lint LINT_FLAGS="--new-from-rev=origin/${{ github.base_ref }}"
