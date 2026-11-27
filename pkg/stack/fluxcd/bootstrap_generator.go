@@ -684,7 +684,7 @@ func (bg *BootstrapGenerator) syncKustomizationTarget(config *stack.BootstrapCon
 // spec.prune on the Kustomization flux-operator generates for the sync to
 // prune. The sync has no field for it, and the operator renders that
 // Kustomization with prune: true whatever the FluxInstance says (flux-operator
-// v0.62.1 internal/builder/templates.go:475). The patch is emitted only for an
+// v0.64.0 internal/builder/templates.go:511). The patch is emitted only for an
 // explicit BootstrapConfig.Prune: unset keeps the operator's prune: true
 // (go-kure/kure#1088).
 func (bg *BootstrapGenerator) syncPrunePatch(config *stack.BootstrapConfig, prune bool) kustomize.Patch {
@@ -702,8 +702,8 @@ func (bg *BootstrapGenerator) syncPrunePatch(config *stack.BootstrapConfig, prun
 // config means the same in either.
 //
 //   - app.kubernetes.io/managed-by, instance, version and part-of:
-//     flux-operator's LabelTransformer (flux-operator v0.62.1
-//     internal/builder/templates.go:371-383, labelsTmpl) sets them with
+//     flux-operator's LabelTransformer (flux-operator v0.64.0
+//     internal/builder/templates.go:407-419, labelsTmpl) sets them with
 //     create: true on every object it builds, the sync source and
 //     Kustomization included. The builder's kustomization lists that
 //     transformer under transformers: (:24-26) and the FluxInstance's
@@ -712,11 +712,11 @@ func (bg *BootstrapGenerator) syncPrunePatch(config *stack.BootstrapConfig, prun
 //     the last word (TestBootstrapLabels_OperatorTransformerRunsLast).
 //   - fluxcd.controlplane.io/name and namespace: flux-operator's owner labels.
 //     After the build its FluxInstance reconciler has the ssa resource manager
-//     set owner labels on every object it applies (internal/controller/fluxinstance_controller.go:484-488,
+//     set owner labels on every object it applies (internal/controller/fluxinstance_controller.go:490-494,
 //     group fluxcd.controlplane.io from api/v1/groupversion_info.go:17), which
 //     sets <group>/name and <group>/namespace unconditionally (fluxcd/pkg/ssa
 //     v0.83.0 manager.go:66-77) and selects stale objects for garbage
-//     collection by them (fluxinstance_controller.go:571).
+//     collection by them (fluxinstance_controller.go:577).
 //   - kustomize.toolkit.fluxcd.io/name and namespace: kustomize-controller's
 //     owner labels, set the same way on every object a Kustomization applies
 //     (kustomize-controller v1.10.1 internal/controller/kustomization_controller.go:485-489,

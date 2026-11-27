@@ -35,8 +35,8 @@ func bootstrapLabelsInput() map[string]string {
 	}
 }
 
-// operatorLabels are the labels flux-operator v0.62.1's LabelTransformer
-// stamps (internal/builder/templates.go:371-383, labelsTmpl), for the
+// operatorLabels are the labels flux-operator v0.64.0's LabelTransformer
+// stamps (internal/builder/templates.go:407-419, labelsTmpl), for the
 // namespace and version the tests build with.
 func operatorLabels(namespace string) map[string]string {
 	return map[string]string{
@@ -349,8 +349,8 @@ func TestBootstrapLabels_RefusalIsDeterministic(t *testing.T) {
 	}
 }
 
-// operatorLabelsTransformer is flux-operator v0.62.1's labelsTmpl
-// (internal/builder/templates.go:371-383) rendered for namespace and the
+// operatorLabelsTransformer is flux-operator v0.64.0's labelsTmpl
+// (internal/builder/templates.go:407-419) rendered for namespace and the
 // vendored Flux version.
 func operatorLabelsTransformer(namespace string) string {
 	return strings.NewReplacer("NS", namespace, "VERSION", fluxstack.GotkVersion).Replace(`apiVersion: builtin
