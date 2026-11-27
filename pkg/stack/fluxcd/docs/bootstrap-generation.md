@@ -312,7 +312,7 @@ of those keys would be overwritten:
 | `kustomize.toolkit.fluxcd.io/name`, `kustomize.toolkit.fluxcd.io/namespace` | kustomize-controller's owner labels, on every object a Kustomization applies |
 
 flux-operator's builder lists its `LabelTransformer` under `transformers:`, where the
-`FluxInstance` patches go under `patches:` (flux-operator v0.62.1 `internal/builder/templates.go`),
+`FluxInstance` patches go under `patches:` (flux-operator v0.64.0 `internal/builder/templates.go`),
 and kustomize runs the transformers after the patches, so the sync objects carry both sets. Both
 controllers set their owner labels after any build, on what they apply, and use them to find
 stale objects to garbage-collect. kustomize-controller's reach the `gotk` source and

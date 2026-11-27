@@ -45,9 +45,9 @@ var infrastructure = []Dependency{
 	{
 		Name:           "flux-operator",
 		GoModule:       "github.com/controlplaneio-fluxcd/flux-operator",
-		SupportedRange: "0.23 - 0.62",
+		SupportedRange: "0.23 - 0.64",
 		Min:            "0.23",
-		Max:            "0.62",
+		Max:            "0.64",
 		VersionBasis:   "semver",
 		FloorModule:    "",
 	},
