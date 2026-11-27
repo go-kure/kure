@@ -112,6 +112,8 @@ retypes `WebTLSConfig.ClientAuthType` from `*string` to `*ClientAuthType`). The 
 
 A widening can also change nothing a caller sees. external-secrets v2.15.0 changes only the comments of its `apis` module, so the widening's note says that and nothing else moves.
 
+A widening can also add optional API that kure neither sets nor emits. flux-operator v0.64.0 adds an optional `FluxInstance` field `spec.cluster.sourceWatcher` and an optional `namespaceSelector` on a `ResourceSetInputProvider` external-artifact selector, each with a validation rule that applies only when the field is set. The Go types gain a pointer field on each of two structs, one new struct (`SourceWatcher`) and two constants. The install inventory is unchanged, and the widening's note in `docs/compatibility.md` says so.
+
 An MVS-floor entry (`FloorModule != ""`) moves on a different trigger: its pin tracks
 whichever version `floor_module` itself currently requires, tag or pseudo-version, whether
 or not that's kure's own dependency bump (see `docs/dependency-updates.md`'s "MVS-floor
